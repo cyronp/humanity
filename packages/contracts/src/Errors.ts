@@ -52,3 +52,28 @@ export class GitCommandFailed extends Schema.TaggedError<GitCommandFailed>()("Gi
     return `git ${this.args.join(" ")} failed: ${detail}`
   }
 }
+
+export class GitBranchExists extends Schema.TaggedError<GitBranchExists>()("GitBranchExists", {
+  name: Schema.String,
+}) {
+  override get message() {
+    return `A branch named "${this.name}" already exists. Pick another name.`
+  }
+}
+
+export class GitInvalidBranchName extends Schema.TaggedError<GitInvalidBranchName>()(
+  "GitInvalidBranchName",
+  { name: Schema.String },
+) {
+  override get message() {
+    return `"${this.name}" is not a valid branch name. Avoid spaces, "..", "~", "^", ":" and a leading "-".`
+  }
+}
+
+export class GitRefNotFound extends Schema.TaggedError<GitRefNotFound>()("GitRefNotFound", {
+  ref: Schema.String,
+}) {
+  override get message() {
+    return `The branch or commit "${this.ref}" does not exist in this repository.`
+  }
+}

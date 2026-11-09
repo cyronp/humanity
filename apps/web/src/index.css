@@ -132,3 +132,14 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Shiki emits both theme colours on every token as CSS variables; the same
+ * `dark` class that drives shadcn picks which one applies, in diffs and chat.
+ */
+.shiki-token {
+  color: var(--shiki-light);
+}
+.dark .shiki-token {
+  color: var(--shiki-dark);
+}

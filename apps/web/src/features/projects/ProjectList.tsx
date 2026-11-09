@@ -1,5 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
+import { Link } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { GitBranch, Link2, Trash2 } from "lucide-react"
@@ -63,7 +64,13 @@ function ProjectCard({ project }: { readonly project: Project }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {project.name}
+          <Link
+            to="/projects/$projectId"
+            params={{ projectId: project.id }}
+            className="underline-offset-4 hover:underline"
+          >
+            {project.name}
+          </Link>
           <Badge variant="secondary">
             <GitBranch />
             {project.defaultBranch}
@@ -80,7 +87,12 @@ function ProjectCard({ project }: { readonly project: Project }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/projects/$projectId" params={{ projectId: project.id }}>
+              Open
+            </Link>
+          </Button>
           <Button variant="ghost" size="sm" onClick={onRemove}>
             <Trash2 />
             Remove

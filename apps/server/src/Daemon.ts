@@ -6,6 +6,7 @@ import { createServer } from "node:http"
 import { AuthToken } from "./AuthToken.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { HttpApp } from "./http/HttpApp.ts"
+import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { GitService } from "./services/GitService.ts"
@@ -14,7 +15,7 @@ import { ProjectService } from "./services/ProjectService.ts"
 /** Domain services, built on whatever config, database and platform they are given. */
 export const Services = ProjectService.layer.pipe(Layer.provideMerge(GitService.layer))
 
-export const RpcHandlers = ProjectsHandlers
+export const RpcHandlers = Layer.mergeAll(ProjectsHandlers, GitHandlers)
 
 /** Routes plus handlers and services. Still needs config, token, database, platform and an HTTP server. */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provide(Services))

@@ -24,4 +24,6 @@ export class HumanityClient extends AtomRpc.Service<HumanityClient>()("HumanityC
 /** Reactivity keys: a mutation that names one refreshes every query that names it too. */
 export const keys = {
   projects: "projects",
+  /** Branches, status and diff of one project's repository. */
+  git: (projectId: string) => `git:${projectId}`,
 } as const
