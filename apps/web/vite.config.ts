@@ -24,6 +24,7 @@ export default defineConfig({
     proxy: {
       // The RPC WebSocket is served by the daemon; the dev server only forwards it.
       "/rpc": { target: `ws://127.0.0.1:${daemonPort}`, ws: true },
+      "/api": { target: `http://127.0.0.1:${daemonPort}` },
     },
   },
 })

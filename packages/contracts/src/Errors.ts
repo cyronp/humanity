@@ -1,0 +1,54 @@
+import { Schema } from "effect"
+
+export class ProjectNotFound extends Schema.TaggedError<ProjectNotFound>()("ProjectNotFound", {
+  projectId: Schema.String,
+}) {
+  override get message() {
+    return `Project ${this.projectId} does not exist.`
+  }
+}
+
+export class ProjectAlreadyExists extends Schema.TaggedError<ProjectAlreadyExists>()(
+  "ProjectAlreadyExists",
+  { localPath: Schema.String },
+) {
+  override get message() {
+    return `A project for ${this.localPath} was already added.`
+  }
+}
+
+export class PathNotFound extends Schema.TaggedError<PathNotFound>()("PathNotFound", {
+  path: Schema.String,
+}) {
+  override get message() {
+    return `The path ${this.path} does not exist or is not a directory.`
+  }
+}
+
+export class GitNotARepository extends Schema.TaggedError<GitNotARepository>()(
+  "GitNotARepository",
+  { path: Schema.String },
+) {
+  override get message() {
+    return `${this.path} is not a git repository. Run "git init" there or pick another folder.`
+  }
+}
+
+export class GitNotInstalled extends Schema.TaggedError<GitNotInstalled>()("GitNotInstalled", {
+  detail: Schema.String,
+}) {
+  override get message() {
+    return `The git CLI could not be started. Install git and make sure it is on PATH. (${this.detail})`
+  }
+}
+
+export class GitCommandFailed extends Schema.TaggedError<GitCommandFailed>()("GitCommandFailed", {
+  args: Schema.Array(Schema.String),
+  exitCode: Schema.Number,
+  stderr: Schema.String,
+}) {
+  override get message() {
+    const detail = this.stderr.trim() || `exit code ${this.exitCode}`
+    return `git ${this.args.join(" ")} failed: ${detail}`
+  }
+}

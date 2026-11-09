@@ -1,14 +1,17 @@
-import { NodeRuntime } from "@effect/platform-node"
-import { Effect } from "effect"
-import { HunkStatus } from "@humanity/contracts"
-import { packageName } from "@humanity/diff"
+import { NodeRuntime, NodeServices } from "@effect/platform-node"
+import { Layer } from "effect"
+import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { Daemon } from "./Daemon.ts"
+import { ServerConfig } from "./ServerConfig.ts"
 
-const program = Effect.gen(function* () {
-  yield* Effect.logInfo("Humanity daemon scaffold is running", {
-    diff: packageName,
-    statuses: HunkStatus.literals,
-  })
-  return yield* Effect.never
-})
+// `npm run dev` passes --dev: Vite serves the web app and proxies /rpc to the daemon.
+const isDev = process.argv.includes("--dev")
+const builtWeb = fileURLToPath(new URL("../../web/dist", import.meta.url))
 
-NodeRuntime.runMain(program)
+const Config = ServerConfig.fromEnv({
+  webDist: !isDev && existsSync(builtWeb) ? builtWeb : undefined,
+  webOrigin: isDev ? "http://127.0.0.1:5173" : undefined,
+}).pipe(Layer.provide(NodeServices.layer))
+
+Daemon.pipe(Layer.provide(Config), Layer.launch, NodeRuntime.runMain)
