@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { projectsAtom, removeProjectAtom } from "./atoms.ts"
+import { ProjectIcon } from "./ProjectIcon.tsx"
 
 export function ProjectList() {
   const result = useAtomValue(projectsAtom)
@@ -64,6 +65,7 @@ function ProjectCard({ project }: { readonly project: Project }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
+          <ProjectIcon project={project} />
           <Link
             to="/projects/$projectId"
             params={{ projectId: project.id }}

@@ -65,7 +65,7 @@ export function MessageList({
           <MessageScrollerContent
             aria-label="Conversation"
             aria-busy={draft !== "" || working}
-            className="mx-auto w-full max-w-3xl gap-4 p-4"
+            className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16 pb-4"
           >
             {items.length === 0 && draft === "" && empty !== undefined && (
               <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>

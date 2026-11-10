@@ -135,7 +135,7 @@ export function Workspace({
           </div>
         </div>
         {panelOpen && (
-          <aside className="flex min-h-0 w-full flex-col border-l lg:w-[55%] lg:max-w-4xl">
+          <aside className="flex min-h-0 w-full flex-col border-l pt-12 lg:w-[55%] lg:max-w-4xl">
             <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
               <TabsList className="m-2">
                 <TabsTrigger value="review">

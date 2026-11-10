@@ -1,35 +1,26 @@
+import { ProjectId } from "@humanity/contracts"
 import { createFileRoute, redirect } from "@tanstack/react-router"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CloneFromGitHubCard } from "@/features/github/CloneFromGitHubCard"
+import { NewChat } from "@/features/home/NewChat"
 import { hasCompletedOnboarding } from "@/features/onboarding/onboarding"
-import { AddLocalProjectForm } from "@/features/projects/AddLocalProjectForm"
-import { ProjectList } from "@/features/projects/ProjectList"
+
+/** `?project=<id>` opens the new thread in that project instead of the last prompted one. */
+interface HomeSearch {
+  readonly project?: ProjectId | undefined
+}
 
 export const Route = createFileRoute("/")({
-  // First visit in this browser: show the setup guide before the empty project list.
+  validateSearch: (search: Record<string, unknown>): HomeSearch =>
+    typeof search["project"] === "string" && search["project"] !== ""
+      ? { project: ProjectId.make(search["project"]) }
+      : {},
+  // First visit in this browser: show the setup guide before anything else.
   beforeLoad: () => {
     if (!hasCompletedOnboarding()) throw redirect({ to: "/welcome" })
   },
-  component: ProjectsPage,
+  component: HomePage,
 })
 
-function ProjectsPage() {
-  return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6">
-      <section className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
-        <ProjectList />
-      </section>
-      <Card>
-        <CardHeader>
-          <CardTitle>Add a local project</CardTitle>
-          <CardDescription>Point Humanity at a git repository on this machine.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AddLocalProjectForm />
-        </CardContent>
-      </Card>
-      <CloneFromGitHubCard />
-    </main>
-  )
+function HomePage() {
+  const { project } = Route.useSearch()
+  return <NewChat projectId={project} />
 }

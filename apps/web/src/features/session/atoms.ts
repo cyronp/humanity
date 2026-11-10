@@ -13,6 +13,18 @@ export const sessionsAtom = Atom.family((projectId: ProjectId) =>
 )
 
 /**
+ * Every session of every project, most recently active first, kept live by
+ * `Sessions.watchAll`. Feeds the sidebar and the home page's project choice.
+ */
+export const allSessionsAtom = HumanityClient.runtime
+  .atom(() =>
+    Stream.unwrap(
+      HumanityClient.use((client) => Effect.succeed(client("Sessions.watchAll", undefined))),
+    ).pipe(Stream.retry(Schedule.spaced("1 second"))),
+  )
+  .pipe(Atom.keepAlive)
+
+/**
  * The live view of one session: the subscription's snapshot plus every event
  * since, folded by `reduceSessionEvent`. A dropped connection resubscribes and
  * the fresh snapshot replaces the old state.

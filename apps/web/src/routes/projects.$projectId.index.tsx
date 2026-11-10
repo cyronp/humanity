@@ -1,11 +1,13 @@
 import type { Project } from "@humanity/contracts"
-import { createFileRoute, Link } from "@tanstack/react-router"
-import { ChevronLeft } from "lucide-react"
+import { createFileRoute } from "@tanstack/react-router"
+import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
 import { BranchesCard } from "@/features/git/BranchesCard"
 import { GitHubBranchesCard } from "@/features/github/GitHubBranchesCard"
-import { PolicyCard } from "@/features/policy/PolicyCard"
 import { StatusCard } from "@/features/git/StatusCard"
+import { AppHeader } from "@/features/layout/AppHeader"
+import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { PolicyCard } from "@/features/policy/PolicyCard"
 import { useProject } from "@/features/projects/useProject"
 import { DecisionHistoryCard } from "@/features/session/DecisionHistoryCard"
 import { SessionsCard } from "@/features/session/SessionsCard"
@@ -18,14 +20,13 @@ function ProjectPage() {
   const { projectId } = Route.useParams()
   const project = useProject(projectId)
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
-      <Link
-        to="/"
-        className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" />
-        Projects
-      </Link>
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 pt-14 pb-6">
+      <AppHeader>
+        <ProjectBreadcrumb
+          project={AsyncResult.isSuccess(project) ? (project.value ?? undefined) : undefined}
+          page="Settings"
+        />
+      </AppHeader>
       <AsyncView result={project} errorTitle="Could not load the project">
         {(value) =>
           value === null ? (
