@@ -7,6 +7,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
     const sessions = yield* SessionService
     return SessionsRpcs.of({
       "Sessions.list": ({ projectId }) => sessions.list(projectId),
+      "Sessions.watchAll": () => sessions.watchAll,
       "Sessions.get": ({ sessionId }) => sessions.get(sessionId),
       "Sessions.create": (payload) => sessions.create(payload),
       "Sessions.sendMessage": ({ sessionId, text }) => sessions.sendMessage(sessionId, text),

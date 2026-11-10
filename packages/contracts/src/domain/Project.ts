@@ -15,3 +15,12 @@ export const Project = Schema.Struct({
   createdAt: Schema.String,
 })
 export type Project = typeof Project.Type
+
+/** A project's favicon, found in its repository and sent inline. */
+export const ProjectIcon = Schema.Struct({
+  /** `image/svg+xml`, `image/png`, `image/x-icon`, ... */
+  mimeType: Schema.String,
+  /** The file's bytes, base64-encoded. */
+  base64: Schema.String,
+})
+export type ProjectIcon = typeof ProjectIcon.Type

@@ -24,6 +24,15 @@ export const SessionsRpcs = RpcGroup.make(
     success: Schema.Array(Session),
     error: ProjectNotFound,
   }),
+  /**
+   * Every session of every project, most recently active first: once on
+   * subscribe, then again whenever a session is created, changes status or is
+   * removed with its project.
+   */
+  Rpc.make("Sessions.watchAll", {
+    success: Schema.Array(Session),
+    stream: true,
+  }),
   Rpc.make("Sessions.get", {
     payload: { sessionId: SessionId },
     success: Session,

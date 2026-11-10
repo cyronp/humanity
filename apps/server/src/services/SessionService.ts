@@ -116,6 +116,8 @@ export class SessionService extends Context.Service<
       message: string,
     ) => Effect.Effect<string, SessionNotFound | SessionBusy | NothingToCommit | GitError>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
+    /** Every session of every project, again after each change. Most recently active first. */
+    readonly watchAll: Stream.Stream<ReadonlyArray<Session>>
   }
 >()("humanity/SessionService") {
   static readonly layer = Layer.effect(
@@ -149,6 +151,7 @@ export class SessionService extends Context.Service<
         Effect.gen(function* () {
           yield* repo.update(sessionId, { status, updatedAt: yield* now })
           yield* events.publish(sessionId, { _tag: "SessionStatusChanged", status, error })
+          yield* events.publishListChanged
         })
 
       const addMessage = (sessionId: string, content: MessageContent, raw?: unknown) =>
@@ -486,7 +489,7 @@ export class SessionService extends Context.Service<
         readonly title?: string | undefined
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
-      }) {
+        }) {
         const project: Project = yield* projects.get(options.projectId)
         const id = SessionId.make(randomUUID())
         const title =
@@ -512,6 +515,7 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
+        yield* events.publishListChanged
         const prompt = options.prompt?.trim()
         if (prompt) yield* sendMessage(id, prompt).pipe(Effect.orDie)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
@@ -591,6 +595,16 @@ export class SessionService extends Context.Service<
           }),
         )
 
+      const watchAll: Stream.Stream<ReadonlyArray<Session>> = Stream.unwrap(
+        Effect.gen(function* () {
+          // Subscribe before the first read, so no change falls in between.
+          const changes = yield* events.subscribeListChanged
+          return Stream.concat(Stream.succeed(undefined), Stream.fromSubscription(changes)).pipe(
+            Stream.mapEffect(() => repo.listAll),
+          )
+        }),
+      )
+
       // Agent processes do not survive a daemon restart; say so instead of showing "running".
       const orphaned = yield* repo.listByStatus(["running", "waiting_for_human"])
       yield* Effect.forEach(
@@ -626,6 +640,7 @@ export class SessionService extends Context.Service<
         diff,
         commit,
         subscribe,
+        watchAll,
       })
     }),
   )

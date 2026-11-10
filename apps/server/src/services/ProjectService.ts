@@ -5,6 +5,7 @@ import {
   PathNotFound,
   type Project,
   ProjectAlreadyExists,
+  type ProjectIcon,
   ProjectId,
   ProjectNotFound,
   ToolPolicy,
@@ -27,6 +28,7 @@ import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitError, GitService, parseGitHubFullName } from "./GitService.ts"
+import { iconCandidates, iconMimeType, MAX_ICON_BYTES, WORKSPACE_ROOTS } from "./projectIcon.ts"
 
 const ProjectRow = Schema.Struct({
   id: ProjectId,
@@ -63,6 +65,11 @@ export class ProjectService extends Context.Service<
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
     /** Deletes Humanity's records and session worktrees. The repository itself is left alone. */
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
+    /**
+     * The project's favicon, looked up in the usual places of its working copy
+     * (including `apps/*` and `packages/*` in a monorepo). Only reads.
+     */
+    readonly icon: (projectId: string) => Effect.Effect<ProjectIcon | null, ProjectNotFound>
     /**
      * Clones `owner/repo` into `<home>/repos/<owner>/<repo>`, streaming git's
      * progress, and adds the clone as a project when it finishes.
@@ -176,6 +183,48 @@ export class ProjectService extends Context.Service<
         yield* sql`DELETE FROM projects WHERE id = ${projectId}`.pipe(Effect.orDie)
       })
 
+      /** The icon file at `relativePath`, if it is a small image inside the repository. */
+      const readIcon = (root: string, relativePath: string) =>
+        Effect.gen(function* () {
+          const mimeType = iconMimeType(relativePath)
+          if (mimeType === undefined) return undefined
+          const path = join(root, ...relativePath.split("/"))
+          const info = yield* fs.stat(path).pipe(Effect.option)
+          if (Option.isNone(info) || info.value.type !== "File") return undefined
+          if (Number(info.value.size) > MAX_ICON_BYTES) return undefined
+          // A symlink must not lead the daemon to read files outside the repository.
+          const real = yield* fs.realPath(path).pipe(Effect.option)
+          const realRoot = yield* fs.realPath(root).pipe(Effect.option)
+          if (
+            Option.isNone(real) ||
+            Option.isNone(realRoot) ||
+            !isInsideDir(realRoot.value, real.value)
+          ) {
+            return undefined
+          }
+          const bytes = yield* fs.readFile(path).pipe(Effect.option)
+          if (Option.isNone(bytes)) return undefined
+          return { mimeType, base64: Buffer.from(bytes.value).toString("base64") }
+        })
+
+      const workspaceNames = (root: string, folder: string) =>
+        fs.readDirectory(join(root, folder)).pipe(
+          Effect.map((names) => names.slice(0, 50)),
+          Effect.orElseSucceed((): ReadonlyArray<string> => []),
+        )
+
+      const icon = Effect.fn("ProjectService.icon")(function* (projectId: string) {
+        const project = yield* get(projectId)
+        const workspaces = yield* Effect.forEach(WORKSPACE_ROOTS, (root) =>
+          Effect.map(workspaceNames(project.localPath, root), (names) => ({ root, names })),
+        )
+        for (const candidate of iconCandidates(workspaces)) {
+          const found = yield* readIcon(project.localPath, candidate)
+          if (found !== undefined) return found
+        }
+        return null
+      })
+
       /**
        * Git reads this header from the environment of the one clone process, so
        * the token is never written into the clone's config or shown in `ps`.
@@ -229,7 +278,7 @@ export class ProjectService extends Context.Service<
           }),
         )
 
-      return ProjectService.of({ list, get, addLocal, remove, cloneFromGitHub })
+      return ProjectService.of({ list, get, addLocal, remove, icon, cloneFromGitHub })
     }),
   )
 }

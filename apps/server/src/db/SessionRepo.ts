@@ -95,6 +95,8 @@ export class SessionRepo extends Context.Service<
     readonly insert: (session: Session) => Effect.Effect<void>
     readonly get: (sessionId: string) => Effect.Effect<Option.Option<Session>>
     readonly listByProject: (projectId: string) => Effect.Effect<ReadonlyArray<Session>>
+    /** Every session of every project, most recently active first. */
+    readonly listAll: Effect.Effect<ReadonlyArray<Session>>
     readonly listByStatus: (
       statuses: ReadonlyArray<SessionStatus>,
     ) => Effect.Effect<ReadonlyArray<Session>>
@@ -141,6 +143,11 @@ export class SessionRepo extends Context.Service<
         Result: SessionRow,
         execute: (projectId) =>
           sql`SELECT * FROM sessions WHERE project_id = ${projectId} ORDER BY created_at DESC, rowid DESC`,
+      })
+      const findAll = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: SessionRow,
+        execute: () => sql`SELECT * FROM sessions ORDER BY updated_at DESC, rowid DESC`,
       })
       const findByStatus = SqlSchema.findAll({
         Request: Schema.Array(Schema.String),
@@ -191,6 +198,11 @@ export class SessionRepo extends Context.Service<
           Effect.map((rows) => rows.map(toSession)),
           Effect.orDie,
         )
+
+      const listAll = findAll().pipe(
+        Effect.map((rows) => rows.map(toSession)),
+        Effect.orDie,
+      )
 
       const listByStatus = (statuses: ReadonlyArray<SessionStatus>) =>
         statuses.length === 0
@@ -308,6 +320,7 @@ export class SessionRepo extends Context.Service<
         insert,
         get,
         listByProject,
+        listAll,
         listByStatus,
         update,
         insertMessage,

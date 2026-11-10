@@ -9,7 +9,15 @@ import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService, sessionBranchName, slugify } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
-import { addProject, contents, services, setup, tags, waitForStatus } from "./sessionHelpers.ts"
+import {
+  addProject,
+  contents,
+  eventually,
+  services,
+  setup,
+  tags,
+  waitForStatus,
+} from "./sessionHelpers.ts"
 
 describe("session naming", () => {
   it("slugifies titles into branch-safe names", () => {
@@ -49,6 +57,46 @@ describe("SessionService", () => {
           (yield* sessions.list(project.id)).map((s) => s.id),
           [session.id],
         )
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("streams every project's sessions again after each change", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const seen = yield* Ref.make<ReadonlyArray<ReadonlyArray<string>>>([])
+        const watcher = yield* sessions.watchAll.pipe(
+          Stream.runForEach((list) =>
+            Ref.update(seen, (all) => [
+              ...all,
+              list.map((session) => `${session.title}:${session.status}`),
+            ]),
+          ),
+          Effect.forkChild,
+        )
+
+        const lastIs = (expected: ReadonlyArray<string>) =>
+          eventually(
+            `the list ${expected.join(", ")}`,
+            Effect.map(Ref.get(seen), (all) => {
+              const last = all.at(-1)
+              return last !== undefined && last.join() === expected.join() ? last : undefined
+            }),
+          )
+
+        yield* lastIs([])
+        const session = yield* sessions.create({ projectId: project.id, title: "First" })
+        yield* lastIs(["First:idle"])
+        yield* sessions.sendMessage(session.id, "Hello")
+        yield* waitForStatus(session.id, "idle")
+        yield* lastIs(["First:idle"])
+        yield* sessions.end(session.id, { removeWorktree: false })
+        yield* lastIs(["First:ended"])
+        yield* Fiber.interrupt(watcher)
       }).pipe(Effect.provide(services(home, () => [])))
     }),
   )

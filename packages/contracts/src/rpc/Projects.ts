@@ -2,7 +2,7 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
 import { ToolPolicy } from "../domain/Policy.ts"
-import { Project, ProjectId } from "../domain/Project.ts"
+import { Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
 import {
   CloneTargetExists,
   GitCommandFailed,
@@ -50,6 +50,12 @@ export const ProjectsRpcs = RpcGroup.make(
   }),
   Rpc.make("Projects.remove", {
     payload: { projectId: ProjectId },
+    error: ProjectNotFound,
+  }),
+  /** The project's favicon, looked up in its repository, or `null` when it has none. Read-only. */
+  Rpc.make("Projects.icon", {
+    payload: { projectId: ProjectId },
+    success: Schema.NullOr(ProjectIcon),
     error: ProjectNotFound,
   }),
   Rpc.make("Projects.getPolicy", {
