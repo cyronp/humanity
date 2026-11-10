@@ -223,7 +223,6 @@ function TurnFooter({ content }: { readonly content: Content<"result"> }) {
   const details = [
     content.numTurns > 0 ? `${content.numTurns} turn${content.numTurns === 1 ? "" : "s"}` : null,
     content.durationMs > 0 ? formatDuration(content.durationMs) : null,
-    content.costUsd > 0 ? `$${content.costUsd.toFixed(4)}` : null,
   ].filter((part) => part !== null)
 
   if (content.isError) {
