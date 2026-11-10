@@ -26,3 +26,11 @@
 - RPC group `Git`: `branches`, `createBranch`, `status`, `diff`.
 - Web: project page at `/projects/$projectId` with branches (and a create form), working-copy status and the uncommitted diff, rendered by the shared `HunkView` with Shiki dual-theme highlighting.
 - Tests: `GitService` integration tests on temp repos (worktrees, argument safety, tagged errors) and unit tests for the porcelain parsers.
+
+## Claude account connection and onboarding (2026-11-10, between M2 and M3)
+
+- Agent sessions are meant to run on the human's Claude subscription, the way T3 Code does it: Humanity runs the Claude Code CLI bundled with the Agent SDK, which signs in with the login from `claude auth login`. Humanity never holds the credential.
+- Server: `ClaudeCode` service (bundled executable, config dir, a cleaned environment for the CLI, and an account probe through `initializationResult()` that sends nothing to Anthropic), `classifyAccount` (subscription / API key / cloud provider / signed out, including an API key that shadows the subscription), `ClaudeAccountService` (cached, refreshable) and the `Claude.status` RPC. The daemon banner prints the account it will run as.
+- Web: first-run guide at `/welcome` in four steps (what Humanity is, how the pieces connect, the live Claude connection with sign-in instructions and auto-detection, what a session looks like), a Claude badge in the header and a help button to reopen it. The Claude icon goes in `apps/web/public/claude.svg`.
+- Tests: the classifier on the observed account shapes, environment helpers, the service's caching and failure handling, `Claude.status` over the real WebSocket, and the UI summary helpers. Checked live against this machine's subscription and an empty config dir.
+- Fix: `npm run dev` never started the daemon on Windows. `tsx watch` always reads stdin (for its "press Return to rerun"), and under turbo stdin is a pipe; the restarted child inherits that pipe and blocks inside Node's startup before any code runs, so no banner and no port. The server's `dev` script now uses Node's own watcher with the tsx loader (`node --watch --conditions=source --import tsx`), which reloads on changes in the server and in the workspace packages alike.

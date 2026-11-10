@@ -6,12 +6,22 @@ import { HttpClient, HttpRouter, HttpServer } from "effect/http"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 import { Socket } from "effect/socket"
 import { AuthToken } from "../src/AuthToken.ts"
+import { ClaudeCode } from "../src/claude/ClaudeCode.ts"
 import { App } from "../src/Daemon.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
+
+/** A Claude Code that reports a Max subscription. Nothing is spawned. */
+const ScriptedClaude = ClaudeCode.layerTest(
+  Effect.succeed({
+    cliVersion: "2.1.321",
+    account: { email: "dev@example.com", subscriptionType: "max", apiProvider: "firstParty" },
+  }),
+)
 
 /** The real routes and handlers on an ephemeral port, over a temp data directory. */
 const daemon = (home: string) =>
   HttpRouter.serve(App, { disableLogger: true, disableListenLog: true }).pipe(
+    Layer.provide(ScriptedClaude),
     Layer.provideMerge(AuthToken.layer),
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(baseLayer(home)),
@@ -67,6 +77,26 @@ describe("daemon", () => {
         // Tagged errors cross the wire intact.
         const error = yield* Effect.flip(client("Projects.addLocal", { path: repo }))
         assert.strictEqual(error._tag, "ProjectAlreadyExists")
+      }).pipe(Effect.provide(ClientProtocol.pipe(Layer.provideMerge(daemon(home)))))
+    }),
+  )
+
+  it.live("reports the Claude account the agent will run as", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+
+      yield* Effect.gen(function* () {
+        const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
+        const status = yield* client("Claude.status", { refresh: false })
+        assert.strictEqual(status.cliVersion, "2.1.321")
+        assert.deepStrictEqual(status.connection, {
+          _tag: "Connected",
+          method: "subscription",
+          label: "Claude Max",
+          email: "dev@example.com",
+          organization: null,
+          subscriptionShadowed: false,
+        })
       }).pipe(Effect.provide(ClientProtocol.pipe(Layer.provideMerge(daemon(home)))))
     }),
   )
