@@ -2,46 +2,42 @@ import type { Approval, ToolCall } from "@humanity/contracts"
 import { cn } from "cn"
 import { Ban, Check, ChevronRight, LoaderCircle, X } from "lucide-react"
 import { useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import { findRenderer, type ToolCallProps } from "./registry.ts"
+import { toolRenderers } from "./renderers/index.ts"
 
-/** The one input value that best describes a call, for its summary line. */
-export const describeInput = (input: unknown): string => {
-  if (input === null || typeof input !== "object") return ""
-  const record = input as Record<string, unknown>
-  for (const key of ["command", "file_path", "notebook_path", "pattern", "url", "query", "skill"]) {
-    const value = record[key]
-    if (typeof value === "string" && value !== "") return value
-  }
-  const first = Object.values(record).find((value) => typeof value === "string")
-  return typeof first === "string" ? first : ""
-}
+export { describeInput } from "./inputs.ts"
 
 const STATUS_ICON = {
-  running: <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />,
-  succeeded: <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />,
-  failed: <X className="size-3.5 text-red-600 dark:text-red-400" />,
-  denied: <Ban className="size-3.5 text-amber-600 dark:text-amber-400" />,
+  running: <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />,
+  succeeded: <Check className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />,
+  failed: <X className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />,
+  denied: <Ban className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />,
 } as const
 
-/**
- * A tool call inline in the chat: one line, expandable to the full input and
- * output. Per-tool renderers replace the expanded view later; this is the
- * fallback every call gets.
- */
+/** The one-line summary of a call, from its renderer. Shared by the chat and the timeline. */
+export function ToolSummary(props: ToolCallProps) {
+  const { Summary } = findRenderer(toolRenderers, props.toolName, props.input)
+  return <Summary {...props} />
+}
+
+/** A tool call inline in the chat: one line, expandable to its renderer's detail view. */
 export function ToolCallCard({
   toolName,
   input,
   call,
   approval,
+  worktreePath,
 }: {
   readonly toolName: string
   readonly input: unknown
   readonly call: ToolCall | undefined
   readonly approval?: Approval | undefined
+  readonly worktreePath?: string | undefined
 }) {
   const [open, setOpen] = useState(false)
   const status = call?.status ?? "running"
-  const summary = describeInput(input)
+  const props: ToolCallProps = { toolName, input, call, approval, worktreePath }
+  const { Summary, Detail } = findRenderer(toolRenderers, toolName, input)
 
   return (
     <div className="rounded-md border bg-card text-xs">
@@ -55,33 +51,16 @@ export function ToolCallCard({
           className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
         />
         {STATUS_ICON[status]}
-        <Badge variant="outline" className="font-mono">
-          {toolName}
-        </Badge>
-        <span className="truncate font-mono text-muted-foreground">{summary}</span>
+        <span className="min-w-0 flex-1">
+          <Summary {...props} />
+        </span>
         <ApprovalBadge approval={approval} denied={status === "denied"} />
       </button>
       {open && (
-        <div className="flex flex-col gap-2 border-t p-2.5">
-          <Section title="Input">{JSON.stringify(input, null, 2)}</Section>
-          {call?.output != null && (
-            <Section title={call.output.isError ? "Error" : "Output"}>
-              {call.output.content}
-            </Section>
-          )}
+        <div className="border-t p-2.5">
+          <Detail {...props} />
         </div>
       )}
-    </div>
-  )
-}
-
-function Section({ title, children }: { readonly title: string; readonly children: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="font-medium text-muted-foreground">{title}</span>
-      <pre className="max-h-80 overflow-auto rounded bg-muted/60 p-2 font-mono whitespace-pre-wrap break-all">
-        {children === "" ? "(empty)" : children}
-      </pre>
     </div>
   )
 }
@@ -97,7 +76,7 @@ const OUTCOME_LABEL: Record<string, string> = {
 }
 
 /** Where the human's decision on this call stands, if it needed one. */
-function ApprovalBadge({
+export function ApprovalBadge({
   approval,
   denied,
 }: {
@@ -116,7 +95,7 @@ function ApprovalBadge({
   return (
     <span
       className={cn(
-        "ml-auto shrink-0",
+        "shrink-0",
         status === "pending" && "animate-pulse font-medium text-amber-600",
         (status === "applied" || status === "allowed") && "text-emerald-600 dark:text-emerald-400",
         (status === "rejected" || status === "denied") && "text-red-600 dark:text-red-400",

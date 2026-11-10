@@ -13,16 +13,18 @@ export function MessageList({
   toolCalls,
   draft,
   approvalFor,
+  worktreePath,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly draft: string
   readonly approvalFor: (toolUseId: string) => Approval | undefined
+  readonly worktreePath: string
 }) {
   return (
     <ol className="flex flex-col gap-4" aria-label="Conversation">
       {messages.map((message) => {
-        const rendered = renderContent(message.content, toolCalls, approvalFor)
+        const rendered = renderContent(message.content, toolCalls, approvalFor, worktreePath)
         return rendered === null ? null : <li key={message.id}>{rendered}</li>
       })}
       {draft !== "" && (
@@ -38,12 +40,20 @@ const renderContent = (
   content: MessageContent,
   toolCalls: Readonly<Record<string, ToolCall>>,
   approvalFor: (toolUseId: string) => Approval | undefined,
+  worktreePath: string,
 ) => {
   switch (content._tag) {
     case "user":
       return <UserMessage text={content.text} />
     case "assistant":
-      return <AssistantMessage content={content} toolCalls={toolCalls} approvalFor={approvalFor} />
+      return (
+        <AssistantMessage
+          content={content}
+          toolCalls={toolCalls}
+          approvalFor={approvalFor}
+          worktreePath={worktreePath}
+        />
+      )
     case "result":
       return <TurnFooter content={content} />
     case "system_init":
@@ -69,10 +79,12 @@ function AssistantMessage({
   content,
   toolCalls,
   approvalFor,
+  worktreePath,
 }: {
   readonly content: Content<"assistant">
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly approvalFor: (toolUseId: string) => Approval | undefined
+  readonly worktreePath: string
 }) {
   const nested = content.parentToolUseId !== null
   return (
@@ -96,6 +108,7 @@ function AssistantMessage({
                 input={block.input}
                 call={toolCalls[block.toolUseId]}
                 approval={approvalFor(block.toolUseId)}
+                worktreePath={worktreePath}
               />
             )
         }

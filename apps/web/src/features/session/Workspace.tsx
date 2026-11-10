@@ -1,7 +1,7 @@
 import type { Project } from "@humanity/contracts"
 import { cn } from "cn"
 import { PanelRightClose, PanelRightOpen } from "lucide-react"
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
 import { ReviewPanel } from "@/features/review/ReviewPanel"
+import { TimelinePanel } from "@/features/timeline/TimelinePanel"
 import { SessionHeader } from "./SessionHeader.tsx"
 import {
   approvalForToolUse,
@@ -24,23 +25,17 @@ export interface WorkspaceSearch {
   readonly hunk?: number | undefined
 }
 
-/** Chat in the middle; review (and later the timeline) on the right. */
+/** Chat in the middle; review and timeline tabs on the right. */
 export function Workspace({
   project,
   view,
   search,
   onSearchChange,
-  extraTabs = [],
 }: {
   readonly project: Project
   readonly view: SessionView
   readonly search: WorkspaceSearch
   readonly onSearchChange: (search: WorkspaceSearch) => void
-  readonly extraTabs?: ReadonlyArray<{
-    readonly value: string
-    readonly label: string
-    readonly content: ReactNode
-  }>
 }) {
   const { session } = view
   const changes = pendingChanges(view)
@@ -113,6 +108,7 @@ export function Workspace({
                 toolCalls={view.toolCalls}
                 draft={view.draft}
                 approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
+                worktreePath={session.worktreePath}
               />
               {view.error !== null && <ErrorNote title="The agent stopped" message={view.error} />}
               <div ref={bottom} />
@@ -151,11 +147,7 @@ export function Workspace({
                     <Badge className="ml-1 bg-amber-500 text-black">{changes.length}</Badge>
                   )}
                 </TabsTrigger>
-                {extraTabs.map((extra) => (
-                  <TabsTrigger key={extra.value} value={extra.value}>
-                    {extra.label}
-                  </TabsTrigger>
-                ))}
+                <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
               <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto">
                 <ReviewPanel
@@ -165,15 +157,9 @@ export function Workspace({
                   onFocusChange={(file, hunk) => onSearchChange({ file, hunk })}
                 />
               </TabsContent>
-              {extraTabs.map((extra) => (
-                <TabsContent
-                  key={extra.value}
-                  value={extra.value}
-                  className="min-h-0 flex-1 overflow-y-auto"
-                >
-                  {extra.content}
-                </TabsContent>
-              ))}
+              <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto">
+                <TimelinePanel view={view} />
+              </TabsContent>
             </Tabs>
           </aside>
         )}

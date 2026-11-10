@@ -37,3 +37,6 @@ Decisions that the spec does not cover. Entries marked **confirmed** were answer
 - **M4 — "Always allow" sets the exact tool name to `auto`.** For MCP tools that is the full `mcp__<server>__<tool>` name, not the whole server.
 - **M4 — Keyboard model.** Shortcuts act on the focused hunk across all pending changes; `Enter` submits the change that hunk belongs to and only works once every hunk of it has a verdict. Inside a comment field, `Escape` leaves the field and `Ctrl+Enter` submits.
 - **M4 — Review panel placement.** On wide screens the panel takes the right ~55% next to the chat; on narrow screens it replaces the chat while open. It opens by itself whenever a new change arrives.
+- **M5 — No ANSI library.** Bash output colours are handled by a ~90-line parser in `features/tools/ansi.ts`. Standard and bright foreground colours, bold, dim and underline are kept; other escape sequences are dropped.
+- **M5 — Subagents get a renderer.** `Task`/`Agent` calls show the subagent type, task and final report. Their inner messages remain indented in the chat rather than nested inside the card.
+- **M5 — Edit/Write without a review** (only possible if a project sets them to `auto`) show a diff of `old_string` → `new_string` or the written content, labelled as a snippet, since the original file is not known to the UI.
