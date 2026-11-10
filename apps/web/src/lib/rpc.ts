@@ -26,4 +26,6 @@ export const keys = {
   projects: "projects",
   /** Branches, status and diff of one project's repository. */
   git: (projectId: string) => `git:${projectId}`,
+  /** The session list of one project. */
+  sessions: (projectId: string) => `sessions:${projectId}`,
 } as const

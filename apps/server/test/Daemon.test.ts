@@ -1,18 +1,20 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { assert, describe, it } from "@effect/vitest"
 import { HumanityRpcs, RPC_PATH, TOKEN_PARAM } from "@humanity/contracts"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { HttpClient, HttpRouter, HttpServer } from "effect/http"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 import { Socket } from "effect/socket"
+import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { AuthToken } from "../src/AuthToken.ts"
 import { App } from "../src/Daemon.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
-/** The real routes and handlers on an ephemeral port, over a temp data directory. */
-const daemon = (home: string) =>
+/** The real routes and handlers on an ephemeral port, over a temp data directory and a scripted agent. */
+const daemon = (home: string, script: FakeScript = () => []) =>
   HttpRouter.serve(App, { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provideMerge(AuthToken.layer),
+    Layer.provide(AgentRunnerFake(script)),
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(baseLayer(home)),
   )
@@ -68,6 +70,60 @@ describe("daemon", () => {
         const error = yield* Effect.flip(client("Projects.addLocal", { path: repo }))
         assert.strictEqual(error._tag, "ProjectAlreadyExists")
       }).pipe(Effect.provide(ClientProtocol.pipe(Layer.provideMerge(daemon(home)))))
+    }),
+  )
+
+  it.live("streams a session's events over the socket", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo()
+
+      yield* Effect.gen(function* () {
+        const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
+        const project = yield* client("Projects.addLocal", { path: repo })
+        const session = yield* client("Sessions.create", {
+          projectId: project.id,
+          prompt: "Summarize the repo",
+        })
+
+        const events = yield* client("Sessions.subscribe", { sessionId: session.id }).pipe(
+          Stream.takeUntil(
+            (event) =>
+              (event._tag === "SessionStatusChanged" && event.status === "idle") ||
+              (event._tag === "Snapshot" && event.session.status === "idle"),
+          ),
+          Stream.runCollect,
+        )
+        assert.strictEqual(events[0]?._tag, "Snapshot")
+
+        const after = yield* client("Sessions.subscribe", { sessionId: session.id }).pipe(
+          Stream.take(1),
+          Stream.runCollect,
+        )
+        const snapshot = after[0]
+        assert.strictEqual(snapshot?._tag, "Snapshot")
+        if (snapshot?._tag === "Snapshot") {
+          assert.deepStrictEqual(
+            snapshot.messages.map((message) => message.content._tag),
+            ["user", "system_init", "assistant", "tool_results", "assistant", "result"],
+          )
+          assert.deepStrictEqual(snapshot.toolCalls[0]?.input, { pattern: "**/*.md" })
+        }
+
+        const missing = yield* Effect.flip(client("Sessions.get", { sessionId: "nope" as never }))
+        assert.strictEqual(missing._tag, "SessionNotFound")
+      }).pipe(
+        Effect.provide(
+          ClientProtocol.pipe(
+            Layer.provideMerge(
+              daemon(home, () => [
+                { tool: "Glob", input: { pattern: "**/*.md" }, output: "README.md" },
+                { text: "One README." },
+              ]),
+            ),
+          ),
+        ),
+      )
     }),
   )
 

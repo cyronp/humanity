@@ -39,6 +39,7 @@ export const DEFAULT_TOOL_POLICY: ToolPolicy = {
     { pattern: "NotebookEdit", mode: "review" },
     // Anything with side effects beyond the worktree's files.
     { pattern: "Bash", mode: "confirm" },
+    { pattern: "PowerShell", mode: "confirm" },
     { pattern: "WebFetch", mode: "confirm" },
     { pattern: "WebSearch", mode: "confirm" },
     { pattern: "mcp__*", mode: "confirm" },

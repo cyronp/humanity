@@ -26,3 +26,14 @@
 - RPC group `Git`: `branches`, `createBranch`, `status`, `diff`.
 - Web: project page at `/projects/$projectId` with branches (and a create form), working-copy status and the uncommitted diff, rendered by the shared `HunkView` with Shiki dual-theme highlighting.
 - Tests: `GitService` integration tests on temp repos (worktrees, argument safety, tagged errors) and unit tests for the porcelain parsers.
+
+## M3 — Agent chat (2026-11-09)
+
+- Contracts: `Session`, normalized `ChatMessage` contents (user, assistant blocks, tool results, turn result, init, notice, other), `ToolCall`, the `SessionEvent` union and the `Sessions` RPC group (`list`, `get`, `create`, `sendMessage`, `interrupt`, `end`, streaming `subscribe`).
+- `AgentRunner` service with a live layer over the SDK's `query()` in streaming input mode and a scripted fake for tests. The live runner uses `permissionMode: "default"`, puts only the project's exact `auto` tools in `allowedTools`, loads `settingSources: ["project"]`, adds a `PreToolUse` guard that forces every non-`auto` tool into `canUseTool`, and keeps the SDK's state in `<home>/claude` via `CLAUDE_CONFIG_DIR`.
+- `SessionService`: creates `humanity/<short-id>-<slug>` branches and worktrees under `<home>/worktrees/<projectId>/<sessionId>`; one agent run per session, resumed with the stored SDK session id after a restart; interrupt; end (optionally removing the worktree, keeping the branch); sessions left `running` by a crash become `interrupted` with a notice. Raw SDK messages are stored next to the normalized ones.
+- As the milestone asks, every non-`auto` tool is denied with an explanatory message for now.
+- `Projects.remove` now stops the project's agents and removes its session worktrees (only paths inside the data directory).
+- Web: sessions list and "start session" form on the project page; the workspace at `/projects/$projectId/sessions/$sessionId` with header (branch, worktree, status, interrupt, end), Streamdown chat with Shiki-highlighted code (sharing the diff highlighter), streamed drafts, tool call cards and a composer. The `?file=&hunk=` search params are typed already.
+- Tests: SDK message normalizer, session lifecycle with the fake agent (transcript, denials, snapshot + live events, resume after restart, crash recovery, interrupt, end, project removal), sessions over a real WebSocket, and the web reducer.
+- Smoke-tested the live runner once against the real CLI with an invalid API key (no billable call): the CLI started in the worktree, accepted the options, wrote its transcript under `<home>/claude`, and the auth failure surfaced as an `error` status with the CLI's message. A real conversation has not been run by the agent.

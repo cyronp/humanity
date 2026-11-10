@@ -5,6 +5,7 @@ import { AsyncView } from "@/components/AsyncView"
 import { BranchesCard } from "@/features/git/BranchesCard"
 import { StatusCard } from "@/features/git/StatusCard"
 import { useProject } from "@/features/projects/useProject"
+import { SessionsCard } from "@/features/session/SessionsCard"
 
 export const Route = createFileRoute("/projects/$projectId/")({
   component: ProjectPage,
@@ -46,6 +47,7 @@ function ProjectOverview({ project }: { readonly project: Project }) {
           {project.localPath}
         </code>
       </header>
+      <SessionsCard project={project} />
       <BranchesCard project={project} />
       <StatusCard project={project} />
     </>

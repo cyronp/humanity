@@ -71,3 +71,12 @@ Import paths are the stable ones from the spec (`effect/rpc`, `effect/sql`, `eff
 3. **Token check happens at the WebSocket upgrade, not inside the RPC protocol.** Browsers cannot set headers on a WebSocket, so the token travels as `?token=` on the `/rpc` URL and is compared before `toHttpEffectWebsocket` upgrades the connection. Invalid or missing tokens get `401` and no socket.
 4. **`PreToolUse` hook in addition to `canUseTool`.** The spec routes approvals through `canUseTool` only. But `canUseTool` is skipped for anything matched by an `allow` rule in a loaded settings file, so a repository's `.claude/settings.json` could let an edit through unreviewed. A `PreToolUse` hook therefore returns `ask` for every tool whose policy mode is not `auto` (and `deny` for `deny`), forcing the call into `canUseTool`. The approval logic itself still lives only in `canUseTool`.
 5. **No real-API verification.** Per spec section 11 nothing in this repo calls the real Anthropic API. The SDK behaviour above is taken from its type declarations and doc comments; the approval flow is tested against a scripted fake `AgentRunner`.
+
+## Observed with the real CLI (M3 smoke run, invalid API key, no billable call)
+
+- The CLI bundled with SDK 0.3.321 started in the session worktree and accepted every option Humanity passes (`hooks` with `onFailure: "block"`, the `claude_code` preset with `append`, `settingSources: ["project"]`, `includePartialMessages`, `CLAUDE_CONFIG_DIR`).
+- It printed `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED`: bare `allowedTools` entries auto-approve the whole tool and `canUseTool` is never consulted for them. That is the intended behavior for `auto` tools, and it confirms that only `auto` tools may go in `allowedTools`. The SDK names a `PreToolUse` hook as the way to gate tools that settings files could pre-approve, which is what the policy guard does.
+- The init message listed more tools than `sdk-tools.d.ts` documents, including `PowerShell`, `Task`, `EnterWorktree`, `Cron*` and `Monitor`. Anything without an explicit rule falls back to `confirm`.
+- The default model reported was `claude-opus-5-5`.
+- An authentication failure arrives as an assistant text message followed by a `result` with `subtype: "success"` and `is_error: true`. Humanity treats any `is_error` result as an error turn.
+- Transcripts were written to `$CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<sdk session id>.jsonl`, inside the data directory.

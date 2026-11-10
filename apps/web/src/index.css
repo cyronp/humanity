@@ -3,6 +3,9 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/* Streamdown ships Tailwind classes; the root node_modules is three levels up. */
+@source "../../../node_modules/streamdown/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

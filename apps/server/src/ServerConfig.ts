@@ -13,6 +13,8 @@ export interface ServerConfigShape {
   readonly worktreesDir: string
   readonly reposDir: string
   readonly authTokenPath: string
+  /** `CLAUDE_CONFIG_DIR` for the Agent SDK, so its transcripts stay inside the data directory. */
+  readonly claudeConfigDir: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
   /** Origin the human should open. Differs from the daemon's own in development (Vite). */
@@ -34,6 +36,7 @@ const make = (options: {
     worktreesDir: join(home, "worktrees"),
     reposDir: join(home, "repos"),
     authTokenPath: join(home, "auth-token"),
+    claudeConfigDir: join(home, "claude"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }
@@ -51,6 +54,7 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         const config = make(options)
         yield* fs.makeDirectory(config.worktreesDir, { recursive: true })
         yield* fs.makeDirectory(config.reposDir, { recursive: true })
+        yield* fs.makeDirectory(config.claudeConfigDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

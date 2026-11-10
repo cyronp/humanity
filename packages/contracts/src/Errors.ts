@@ -77,3 +77,19 @@ export class GitRefNotFound extends Schema.TaggedError<GitRefNotFound>()("GitRef
     return `The branch or commit "${this.ref}" does not exist in this repository.`
   }
 }
+
+export class SessionNotFound extends Schema.TaggedError<SessionNotFound>()("SessionNotFound", {
+  sessionId: Schema.String,
+}) {
+  override get message() {
+    return `Session ${this.sessionId} does not exist.`
+  }
+}
+
+export class SessionEnded extends Schema.TaggedError<SessionEnded>()("SessionEnded", {
+  sessionId: Schema.String,
+}) {
+  override get message() {
+    return "This session has ended. Start a new session to keep working."
+  }
+}

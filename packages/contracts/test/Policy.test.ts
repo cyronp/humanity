@@ -16,6 +16,9 @@ describe("resolveToolMode", () => {
     expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Write")).toBe("review")
     expect(resolveToolMode(DEFAULT_TOOL_POLICY, "NotebookEdit")).toBe("review")
     expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Bash")).toBe("confirm")
+    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "PowerShell")).toBe("confirm")
+    // Subagents and anything else the CLI adds later need a human too.
+    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Task")).toBe("confirm")
     expect(resolveToolMode(DEFAULT_TOOL_POLICY, "WebFetch")).toBe("confirm")
   })
 

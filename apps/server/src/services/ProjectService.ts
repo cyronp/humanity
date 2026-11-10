@@ -11,6 +11,8 @@ import { Context, DateTime, Effect, FileSystem, Layer, Option, Schema } from "ef
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
 import { basename } from "node:path"
+import { isInsideDir } from "../paths.ts"
+import { ServerConfig } from "../ServerConfig.ts"
 import { type GitError, GitService, parseGitHubFullName } from "./GitService.ts"
 
 const ProjectRow = Schema.Struct({
@@ -46,7 +48,7 @@ export class ProjectService extends Context.Service<
     readonly addLocal: (
       path: string,
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
-    /** Deletes Humanity's records for the project. The repository on disk is left alone. */
+    /** Deletes Humanity's records and session worktrees. The repository itself is left alone. */
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
   }
 >()("humanity/ProjectService") {
@@ -56,6 +58,7 @@ export class ProjectService extends Context.Service<
       const sql = yield* SqlClient.SqlClient
       const fs = yield* FileSystem.FileSystem
       const git = yield* GitService
+      const config = yield* ServerConfig
 
       const selectAll = SqlSchema.findAll({
         Request: Schema.Void,
@@ -122,8 +125,30 @@ export class ProjectService extends Context.Service<
         return project
       })
 
+      const sessionWorktrees = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({ worktree_path: Schema.String }),
+        execute: (projectId) =>
+          sql`SELECT worktree_path FROM sessions WHERE project_id = ${projectId}`,
+      })
+
       const remove = Effect.fn("ProjectService.remove")(function* (projectId: string) {
-        yield* get(projectId)
+        const project = yield* get(projectId)
+        // Only worktrees Humanity created under its data directory are removed.
+        const worktrees = yield* sessionWorktrees(projectId).pipe(Effect.orDie)
+        yield* Effect.forEach(
+          worktrees.filter((row) => isInsideDir(config.worktreesDir, row.worktree_path)),
+          (row) =>
+            git.worktreeRemove(project.localPath, row.worktree_path).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning("could not remove a session worktree", {
+                  path: row.worktree_path,
+                  error: error.message,
+                }),
+              ),
+            ),
+          { discard: true },
+        )
         yield* sql`DELETE FROM projects WHERE id = ${projectId}`.pipe(Effect.orDie)
       })
 
