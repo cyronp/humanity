@@ -46,6 +46,8 @@ export const SessionsRpcs = RpcGroup.make(
       /** Branch to start from. Defaults to the project's default branch. */
       baseBranch: Schema.optional(Schema.String),
       prompt: Schema.optional(Schema.String),
+      /** A model value from `Claude.status`. Claude Code's default when absent. */
+      model: Schema.optional(Schema.String),
     },
     success: Session,
     error: Schema.Union([

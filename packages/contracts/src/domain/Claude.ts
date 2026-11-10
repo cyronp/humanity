@@ -36,8 +36,19 @@ export const ClaudeConnection = Schema.TaggedUnion({
 })
 export type ClaudeConnection = typeof ClaudeConnection.Type
 
+/** A model Claude Code offers, as it reports it. */
+export const ClaudeModel = Schema.Struct({
+  /** What to pass as the session's model, e.g. `opus` or `default`. */
+  value: Schema.String,
+  displayName: Schema.String,
+  description: Schema.String,
+})
+export type ClaudeModel = typeof ClaudeModel.Type
+
 export const ClaudeStatus = Schema.Struct({
   connection: ClaudeConnection,
+  /** The models Claude Code offers to this account, in its order. Empty when it could not be asked. */
+  models: Schema.Array(ClaudeModel),
   /** Version of the Claude Code CLI that runs the sessions, when it reported one. */
   cliVersion: Schema.NullOr(Schema.String),
   /** Where Claude Code keeps its login (`CLAUDE_CONFIG_DIR`, else `~/.claude`). */

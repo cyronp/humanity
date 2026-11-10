@@ -3,10 +3,12 @@ import { Effect, Layer } from "effect"
 import { SqlClient } from "effect/sql"
 import { ServerConfig } from "../ServerConfig.ts"
 import initial from "./migrations/0001_initial.ts"
+import sessionModel from "./migrations/0002_session_model.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
   "0001_initial": initial,
+  "0002_session_model": sessionModel,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

@@ -23,6 +23,8 @@ export const Session = Schema.Struct({
   branch: Schema.String,
   /** Absolute path of this session's git worktree under the data directory. */
   worktreePath: Schema.String,
+  /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
+  model: Schema.NullOr(Schema.String),
   status: SessionStatus,
   createdAt: Schema.String,
   updatedAt: Schema.String,

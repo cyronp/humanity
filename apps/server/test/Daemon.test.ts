@@ -15,6 +15,7 @@ import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 const ScriptedClaude = ClaudeCode.layerTest(
   Effect.succeed({
     cliVersion: "2.1.321",
+    models: [{ value: "default", displayName: "Default (recommended)", description: "" }],
     account: { email: "dev@example.com", subscriptionType: "max", apiProvider: "firstParty" },
   }),
 )

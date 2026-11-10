@@ -61,6 +61,45 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live("runs the agent on the chosen model and keeps it after a restart", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      const sessionId = yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const chosen = yield* sessions.create({
+          projectId: project.id,
+          model: "opus",
+          prompt: "hi",
+        })
+        const unchosen = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(chosen.id, "idle")
+        yield* waitForStatus(unchosen.id, "idle")
+
+        assert.strictEqual(chosen.model, "opus")
+        assert.isNull(unchosen.model)
+        const models = (yield* Ref.get(log.runs)).map((run) => run.model)
+        assert.sameMembers(models, ["opus", undefined])
+        return chosen.id
+      }).pipe(Effect.provide(services(home, () => [])))
+
+      // A new "daemon" over the same data directory resumes on the same model.
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        assert.strictEqual((yield* sessions.get(sessionId)).model, "opus")
+        yield* sessions.sendMessage(sessionId, "again")
+        yield* waitForStatus(sessionId, "idle")
+        assert.deepStrictEqual(
+          (yield* Ref.get(log.runs)).map((run) => run.model),
+          ["opus"],
+        )
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
   it.live("streams every project's sessions again after each change", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

@@ -7,6 +7,10 @@ import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 
 const SUBSCRIPTION: ReportedAccount = { email: "dev@example.com", subscriptionType: "pro" }
 const SIGNED_OUT: ReportedAccount = { tokenSource: "none" }
+const MODELS = [
+  { value: "default", displayName: "Default (recommended)", description: "Opus for this plan" },
+  { value: "sonnet", displayName: "Sonnet", description: "Fast everyday model" },
+]
 
 /** A scripted Claude Code that reports `account` and counts how often it was started. */
 const scripted = (account: Ref.Ref<ReportedAccount | "fail">, probes: Ref.Ref<number>) =>
@@ -17,7 +21,7 @@ const scripted = (account: Ref.Ref<ReportedAccount | "fail">, probes: Ref.Ref<nu
       if (current === "fail") {
         return yield* new ClaudeProbeFailed({ reason: "spawn claude ENOENT" })
       }
-      return { cliVersion: "2.1.321", account: current } satisfies ProbeResult
+      return { cliVersion: "2.1.321", account: current, models: MODELS } satisfies ProbeResult
     }),
     { configDir: "/home/me/.claude", bundledExecutable: "/sdk/claude" },
   )
@@ -41,6 +45,7 @@ describe("ClaudeAccountService", () => {
       assert.strictEqual(status.cliVersion, "2.1.321")
       assert.strictEqual(status.configDir, "/home/me/.claude")
       assert.strictEqual(status.bundledExecutable, "/sdk/claude")
+      assert.deepStrictEqual(status.models, MODELS)
     }),
   )
 
@@ -99,6 +104,7 @@ describe("ClaudeAccountService", () => {
         reason: "spawn claude ENOENT",
       })
       assert.isNull(status.cliVersion)
+      assert.deepStrictEqual(status.models, [])
     }),
   )
 })

@@ -32,12 +32,14 @@ export class ClaudeAccountService extends Context.Service<
           return {
             ...base,
             connection: { _tag: "Unavailable", reason: result.failure.reason },
+            models: [],
             cliVersion: null,
           } satisfies ClaudeStatus
         }
         return {
           ...base,
           connection: classifyAccount(result.success.account),
+          models: result.success.models,
           cliVersion: result.success.cliVersion ?? null,
         } satisfies ClaudeStatus
       }).pipe(Effect.withSpan("ClaudeAccountService.check"))

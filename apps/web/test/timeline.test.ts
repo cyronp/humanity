@@ -72,6 +72,7 @@ const view = (
     title: "t",
     branch: "b",
     worktreePath: "/w",
+    model: null,
     status: "idle",
     createdAt: "",
     updatedAt: "",

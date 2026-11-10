@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk"
+import type { ClaudeModel } from "@humanity/contracts"
 import { Context, Data, Effect, Layer } from "effect"
 import { homedir } from "node:os"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -8,6 +9,8 @@ import { bundledClaudeExecutable, claudeConfigDir, claudeEnvironment } from "./e
 export interface ProbeResult {
   readonly cliVersion: string | undefined
   readonly account: ReportedAccount | undefined
+  /** The models Claude Code offers this account, in its own order. */
+  readonly models: ReadonlyArray<ClaudeModel>
 }
 
 export class ClaudeProbeFailed extends Data.TaggedError("ClaudeProbeFailed")<{
@@ -57,7 +60,15 @@ const probe = (cwd: string, env: Record<string, string>) =>
         })
         try {
           const init = await session.initializationResult()
-          return { cliVersion: init.claude_code_version, account: init.account }
+          return {
+            cliVersion: init.claude_code_version,
+            account: init.account,
+            models: (init.models ?? []).map(({ value, displayName, description }) => ({
+              value,
+              displayName,
+              description,
+            })),
+          }
         } finally {
           signal.removeEventListener("abort", stop)
           session.close()

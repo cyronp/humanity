@@ -16,6 +16,8 @@ export interface AgentRunOptions {
   readonly cwd: string
   /** SDK session id to resume, if the conversation already exists. */
   readonly resume: string | undefined
+  /** The model to run on, or `undefined` for Claude Code's default. */
+  readonly model: string | undefined
   /** Tools that run without asking: exactly the project's `auto` tools. */
   readonly allowedTools: ReadonlyArray<string>
   /**

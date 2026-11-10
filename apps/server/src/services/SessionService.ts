@@ -90,6 +90,7 @@ export class SessionService extends Context.Service<
       readonly title?: string | undefined
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
+      readonly model?: string | undefined
     }) => Effect.Effect<
       Session,
       ProjectNotFound | GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound
@@ -421,6 +422,7 @@ export class SessionService extends Context.Service<
               .start({
                 cwd: session.worktreePath,
                 resume: session.sdkSessionId ?? undefined,
+                model: session.model ?? undefined,
                 // Only exact `auto` names. If the policy later tightens one of them, the
                 // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
                 allowedTools: policy.rules
@@ -489,7 +491,8 @@ export class SessionService extends Context.Service<
         readonly title?: string | undefined
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
-        }) {
+        readonly model?: string | undefined
+      }) {
         const project: Project = yield* projects.get(options.projectId)
         const id = SessionId.make(randomUUID())
         const title =
@@ -510,6 +513,7 @@ export class SessionService extends Context.Service<
           title,
           branch,
           worktreePath,
+          model: options.model?.trim() || null,
           status: "idle",
           createdAt: timestamp,
           updatedAt: timestamp,

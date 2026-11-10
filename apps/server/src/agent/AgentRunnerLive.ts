@@ -106,6 +106,7 @@ export const AgentRunnerLive = Layer.effect(
           options: {
             cwd: options.cwd,
             ...(options.resume === undefined ? {} : { resume: options.resume }),
+            ...(options.model === undefined ? {} : { model: options.model }),
             // Every non-auto call must reach canUseTool. Never bypassPermissions.
             permissionMode: "default",
             allowedTools: [...options.allowedTools],
