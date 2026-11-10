@@ -1,0 +1,51 @@
+import { cn } from "cn"
+import { Check, Copy } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+
+/** A shell command the human is asked to run, with a copy button. */
+export function CopyCommand({
+  command,
+  className,
+}: {
+  readonly command: string
+  readonly className?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+
+  const copy = () => {
+    void navigator.clipboard?.writeText(command).then(
+      () => setCopied(true),
+      () => setCopied(false),
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 items-center gap-2 rounded-lg border bg-muted/50 py-1 pr-1 pl-3 font-mono text-sm",
+        className,
+      )}
+    >
+      <span className="text-muted-foreground select-none" aria-hidden="true">
+        $
+      </span>
+      <code className="min-w-0 flex-1 overflow-x-auto py-1 whitespace-pre">{command}</code>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={copy}
+        aria-label={copied ? "Copied" : `Copy "${command}"`}
+      >
+        {copied ? <Check /> : <Copy />}
+      </Button>
+    </div>
+  )
+}
