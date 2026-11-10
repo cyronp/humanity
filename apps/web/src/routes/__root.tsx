@@ -45,7 +45,7 @@ function RootLayout() {
   return (
     <SidebarProvider className="h-svh" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
       <AppSidebar />
-      <SidebarInset className="relative min-h-0 overflow-hidden">
+      <SidebarInset className="relative min-h-0 overflow-hidden [--background:var(--chat)]">
         <AppHeaderHost>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <Outlet />
