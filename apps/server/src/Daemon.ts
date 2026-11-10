@@ -83,7 +83,8 @@ const HttpServerLive = Layer.unwrap(
 )
 
 /** The whole daemon as one layer. Needs only a `ServerConfig`. */
-export const Daemon = HttpRouter.serve(Layer.merge(App, Banner)).pipe(
+// No per-request log: the RPC socket URL carries the auth token in its query string.
+export const Daemon = HttpRouter.serve(Layer.merge(App, Banner), { disableLogger: true }).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
   Layer.provide(GitHubLive),

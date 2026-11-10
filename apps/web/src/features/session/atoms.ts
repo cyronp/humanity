@@ -35,3 +35,21 @@ export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 
 export const decideChangeAtom = HumanityClient.mutation("Approvals.decideChange")
 export const decideConfirmationAtom = HumanityClient.mutation("Approvals.decideConfirmation")
+
+export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
+  HumanityClient.query(
+    "Sessions.diff",
+    { sessionId },
+    { reactivityKeys: [keys.sessionDiff(sessionId)] },
+  ),
+)
+
+export const commitAtom = HumanityClient.mutation("Sessions.commit")
+
+export const historyAtom = Atom.family((projectId: ProjectId) =>
+  HumanityClient.query(
+    "Approvals.history",
+    { projectId },
+    { reactivityKeys: [keys.history(projectId)] },
+  ),
+)

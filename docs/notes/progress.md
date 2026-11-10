@@ -65,3 +65,13 @@
 - Web: "Clone from GitHub" on the home page (signed-in user, filterable repository list, clone by `owner/repo` or URL for public repositories, live progress, then straight to the new project); "On GitHub" branches on the project page. Sessions can start from any `origin/<branch>`, which covers "switch branch" without touching a checkout.
 - Tests: the GitHub service against a mocked `HttpClient` (multi-page `Link` pagination, laziness, rate limiting, missing vs rejected token, 403, schema mismatches, unauthenticated public reads) and the clone flow end to end against a local repository (progress, project registration, remote branches present, token absent from `.git/config`, refusal to overwrite, cleanup after a failed clone, GitHub errors before any disk access).
 - Smoke-tested against the real GitHub API with the local `gh` login (read-only: user, repository list, public branches) and a real clone of `octocat/Hello-World` into a throwaway directory.
+
+## M7 — Polish (2026-11-09)
+
+- Decision history per project (`Approvals.history`): every review and confirmation across the project's sessions, newest first, on the project page. A change still under review links straight to its hunk.
+- Commit from the UI: a **Changes** tab in the workspace shows the session worktree's uncommitted diff with the shared diff view and commits it to the session branch (`Sessions.diff`, `Sessions.commit`). Commits are refused while the agent is working (`SessionBusy`) or when there is nothing to commit (`NothingToCommit`), and are noted in the transcript.
+- "Always allow" from confirmation cards shipped in M4.
+- README with requirements, setup, the review model, policies, configuration, the data directory and development commands.
+- The daemon no longer logs every HTTP request: the RPC socket URL carries the auth token, which must not end up in logs.
+- Verified the production build end to end: `npm run build` then the built daemon serves the web app (SPA routes included), accepts the token and rejects `/rpc` without it; the token appears in the output only in the printed link.
+- Not done: creating pull requests (spec: "nice to have only if everything else is done").

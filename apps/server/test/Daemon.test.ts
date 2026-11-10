@@ -164,6 +164,15 @@ describe("daemon", () => {
         )
         assert.strictEqual(again._tag, "ApprovalAlreadyDecided")
 
+        const history = yield* client("Approvals.history", { projectId: project.id })
+        assert.lengthOf(history, 1)
+        assert.strictEqual(history[0]?.sessionTitle, "edit")
+        assert.strictEqual(history[0]?.sessionBranch, session.branch)
+        assert.strictEqual(
+          history[0]?.approval._tag === "change" ? history[0].approval.change.status : "",
+          "rejected",
+        )
+
         const policy = yield* client("Projects.getPolicy", { projectId: project.id })
         const saved = yield* client("Projects.setPolicy", {
           projectId: project.id,

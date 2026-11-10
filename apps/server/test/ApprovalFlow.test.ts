@@ -20,6 +20,7 @@ import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ApprovalService } from "../src/services/ApprovalService.ts"
 import { PolicyService } from "../src/services/PolicyService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
+import { git } from "./helpers.ts"
 import {
   addProject,
   contents,
@@ -598,3 +599,64 @@ describe("restart", () => {
 
 // Type-only guards: the snapshot exposes both approval shapes.
 export type _Shapes = [ProposedChange, PendingConfirmation]
+
+describe("committing approved work", () => {
+  it.live("commits the approved changes to the session branch, never the user's checkout", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup({ "app.ts": "const a = 1\n" })
+      const script: FakeScript = (_prompt, turn) =>
+        turn === 1
+          ? [
+              {
+                tool: "Edit",
+                input: { file_path: "app.ts", old_string: "a = 1", new_string: "a = 2" },
+              },
+              { text: "Changed." },
+            ]
+          : [{ hang: true }]
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const approvals = yield* ApprovalService
+        const { session } = yield* createSession(repo)
+
+        const nothingYet = yield* Effect.flip(sessions.commit(session.id, "too early"))
+        assert.strictEqual(nothingYet._tag, "SessionBusy")
+
+        const change = yield* pendingChange(session.id)
+        yield* approvals.decideChange(change.id, [{ index: 1, decision: "approved" }])
+        yield* waitForStatus(session.id, "idle")
+
+        const preview = yield* sessions.diff(session.id)
+        assert.deepStrictEqual(
+          preview.files.map((file) => file.filePath),
+          ["app.ts"],
+        )
+
+        const hash = yield* sessions.commit(session.id, "Bump a to 2\n\nApproved in Humanity.")
+        assert.match(hash, /^[0-9a-f]{7,}$/)
+        assert.strictEqual(
+          git(session.worktreePath, "log", "-1", "--format=%s").trim(),
+          "Bump a to 2",
+        )
+        assert.strictEqual(git(session.worktreePath, "status", "--porcelain").trim(), "")
+        // The user's checkout and its branch are untouched.
+        assert.strictEqual(git(repo, "log", "-1", "--format=%s", "main").trim(), "initial")
+        assert.strictEqual(readFileSync(join(repo, "app.ts"), "utf8"), "const a = 1\n")
+
+        const empty = yield* Effect.flip(sessions.commit(session.id, "again"))
+        assert.strictEqual(empty._tag, "NothingToCommit")
+
+        const snapshot = yield* contents(session.id)
+        const notice = snapshot.messages.at(-1)?.content
+        assert.match(notice?._tag === "notice" ? notice.text : "", new RegExp(`^Committed ${hash}`))
+
+        // Busy again: a commit must wait for the agent.
+        yield* sessions.sendMessage(session.id, "keep going")
+        yield* waitForStatus(session.id, "running")
+        const busy = yield* Effect.flip(sessions.commit(session.id, "mid-turn"))
+        assert.strictEqual(busy._tag, "SessionBusy")
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+})

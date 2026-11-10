@@ -11,11 +11,14 @@ import {
   type ProjectNotFound,
   type ProposedChange,
   type Session,
+  SessionBusy,
   SessionEnded,
   type SessionEvent,
   SessionId,
   SessionNotFound,
   type SessionStatus,
+  NothingToCommit,
+  type WorkingTreeDiff,
   type ToolCall,
 } from "@humanity/contracts"
 import { changeKind } from "@humanity/diff"
@@ -102,6 +105,16 @@ export class SessionService extends Context.Service<
     ) => Effect.Effect<Session, SessionNotFound | GitError>
     /** Stops every running agent of a project, before the project is removed. */
     readonly stopProject: (projectId: string) => Effect.Effect<void>
+    /** Uncommitted changes in the session's worktree. */
+    readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
+    /**
+     * Commits everything in the worktree to the session's branch. Every change
+     * in it was approved by the human, hunk by hunk, or made by the human.
+     */
+    readonly commit: (
+      sessionId: string,
+      message: string,
+    ) => Effect.Effect<string, SessionNotFound | SessionBusy | NothingToCommit | GitError>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
   }
 >()("humanity/SessionService") {
@@ -531,6 +544,30 @@ export class SessionService extends Context.Service<
         return yield* get(sessionId)
       })
 
+      const diff = (sessionId: string) =>
+        Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
+
+      const commit = Effect.fn("SessionService.commit")(function* (
+        sessionId: string,
+        message: string,
+      ) {
+        const session = yield* get(sessionId)
+        // A commit in the middle of a turn could capture half of the agent's work.
+        if (session.status === "running" || session.status === "waiting_for_human") {
+          return yield* new SessionBusy({ sessionId })
+        }
+        const status = yield* git.status(session.worktreePath)
+        if (status.entries.length === 0) return yield* new NothingToCommit({ sessionId })
+        const hash = yield* git.commit(session.worktreePath, message.trim())
+        const subject = message.trim().split("\n")[0] ?? ""
+        yield* addMessage(sessionId, {
+          _tag: "notice",
+          level: "info",
+          text: `Committed ${hash} to ${session.branch}: ${subject}`,
+        })
+        return hash
+      })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
@@ -586,6 +623,8 @@ export class SessionService extends Context.Service<
         interrupt,
         end,
         stopProject,
+        diff,
+        commit,
         subscribe,
       })
     }),

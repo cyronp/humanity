@@ -58,6 +58,14 @@ export const Approval = Schema.Union([
 ])
 export type Approval = typeof Approval.Type
 
+/** An approval with the session it belongs to, for a project-wide history. */
+export const ApprovalRecord = Schema.Struct({
+  approval: Approval,
+  sessionTitle: Schema.String,
+  sessionBranch: Schema.String,
+})
+export type ApprovalRecord = typeof ApprovalRecord.Type
+
 export const HunkDecisionInput = Schema.Struct({
   /** The hunk's 1-based index. */
   index: Schema.Int,

@@ -45,3 +45,7 @@ Decisions that the spec does not cover. Entries marked **confirmed** were answer
 - **M6 — Public repositories without a token.** `getRepo` and `listBranches` work unauthenticated for public repositories, so "clone by name" works even when no token is configured. Listing "your repositories" requires a token.
 - **M6 — Existing folders are never overwritten.** If `<home>/repos/<owner>/<repo>` exists (for example after removing its project), cloning stops with `CloneTargetExists`; the human removes the folder or adds it as a local project.
 - **M6 — "Switch project and branch".** Projects are switched by navigating between them. Branches are "switched" by starting a session from a branch (local or `origin/*`); nothing ever checks out a branch in the user's own working copy.
+- **M7 — Commits include everything in the worktree.** `Sessions.commit` stages all changes in the session worktree (`git add --all`), which are the hunks the human approved plus anything the human edited there by hand. The Changes tab shows exactly that diff before committing.
+- **M7 — No commits mid-turn.** Committing is refused while the session is `running` or `waiting_for_human`.
+- **M7 — No HTTP request log.** The default per-request log printed full URLs, including `?token=` on the RPC socket, so it is disabled.
+- **M7 — Pull requests not implemented.** Listed as a nice-to-have; it would need write access on the token and a push, which the MVP otherwise avoids.

@@ -11,6 +11,7 @@ import { MessageList } from "@/features/chat/MessageList"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
 import { ReviewPanel } from "@/features/review/ReviewPanel"
 import { TimelinePanel } from "@/features/timeline/TimelinePanel"
+import { ChangesPanel } from "./ChangesPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
 import {
   approvalForToolUse,
@@ -148,6 +149,7 @@ export function Workspace({
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                <TabsTrigger value="changes">Changes</TabsTrigger>
               </TabsList>
               <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto">
                 <ReviewPanel
@@ -159,6 +161,12 @@ export function Workspace({
               </TabsContent>
               <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto">
                 <TimelinePanel view={view} />
+              </TabsContent>
+              <TabsContent value="changes" className="min-h-0 flex-1 overflow-y-auto">
+                <ChangesPanel
+                  session={session}
+                  activity={Object.keys(view.toolCalls).length + view.approvals.length}
+                />
               </TabsContent>
             </Tabs>
           </aside>

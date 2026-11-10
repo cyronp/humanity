@@ -7,6 +7,7 @@ import { GitHubBranchesCard } from "@/features/github/GitHubBranchesCard"
 import { PolicyCard } from "@/features/policy/PolicyCard"
 import { StatusCard } from "@/features/git/StatusCard"
 import { useProject } from "@/features/projects/useProject"
+import { DecisionHistoryCard } from "@/features/session/DecisionHistoryCard"
 import { SessionsCard } from "@/features/session/SessionsCard"
 
 export const Route = createFileRoute("/projects/$projectId/")({
@@ -56,6 +57,7 @@ function ProjectOverview({ project }: { readonly project: Project }) {
       )}
       <StatusCard project={project} />
       <PolicyCard project={project} />
+      <DecisionHistoryCard project={project} />
     </>
   )
 }

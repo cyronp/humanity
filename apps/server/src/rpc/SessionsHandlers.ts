@@ -13,6 +13,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),
+      "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),
+      "Sessions.commit": ({ sessionId, message }) => sessions.commit(sessionId, message),
       "Sessions.subscribe": ({ sessionId }) => sessions.subscribe(sessionId),
     })
   }),

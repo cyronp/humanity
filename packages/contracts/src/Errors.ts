@@ -161,3 +161,19 @@ export class CloneTargetExists extends Schema.TaggedError<CloneTargetExists>()(
     return `${this.path} already exists. Add it as a local project instead, or remove the folder first.`
   }
 }
+
+export class SessionBusy extends Schema.TaggedError<SessionBusy>()("SessionBusy", {
+  sessionId: Schema.String,
+}) {
+  override get message() {
+    return "The agent is still working. Wait until it is idle, or interrupt it, before committing."
+  }
+}
+
+export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("NothingToCommit", {
+  sessionId: Schema.String,
+}) {
+  override get message() {
+    return "There are no changes in this session's worktree to commit."
+  }
+}

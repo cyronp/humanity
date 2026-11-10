@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { ProjectId } from "../domain/Project.ts"
 import { Session, SessionId } from "../domain/Session.ts"
+import { WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
   GitBranchExists,
@@ -10,7 +11,9 @@ import {
   GitNotARepository,
   GitNotInstalled,
   GitRefNotFound,
+  NothingToCommit,
   ProjectNotFound,
+  SessionBusy,
   SessionEnded,
   SessionNotFound,
 } from "../Errors.ts"
@@ -59,6 +62,25 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId, removeWorktree: Schema.Boolean },
     success: Session,
     error: Schema.Union([SessionNotFound, GitNotInstalled, GitCommandFailed, GitNotARepository]),
+  }),
+  /** Uncommitted changes in the session's worktree: what a commit would contain. */
+  Rpc.make("Sessions.diff", {
+    payload: { sessionId: SessionId },
+    success: WorkingTreeDiff,
+    error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
+  }),
+  /** Commits everything in the session's worktree to the session's branch. Returns the short hash. */
+  Rpc.make("Sessions.commit", {
+    payload: { sessionId: SessionId, message: Schema.NonEmptyString },
+    success: Schema.String,
+    error: Schema.Union([
+      SessionNotFound,
+      SessionBusy,
+      NothingToCommit,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+    ]),
   }),
   /** A snapshot of the session, then every event as it happens. */
   Rpc.make("Sessions.subscribe", {
