@@ -46,7 +46,13 @@ export function OutputText({
 }
 
 /** Any value as highlighted JSON: the fallback view of inputs and outputs. */
-export function JsonBlock({ value }: { readonly value: unknown }) {
+export function JsonBlock({
+  value,
+  className = "max-h-80",
+}: {
+  readonly value: unknown
+  readonly className?: string
+}) {
   const json = useMemo(() => {
     try {
       return JSON.stringify(value, null, 2) ?? "undefined"
@@ -54,5 +60,5 @@ export function JsonBlock({ value }: { readonly value: unknown }) {
       return String(value)
     }
   }, [value])
-  return <CodeBlock code={json} language="json" className="max-h-80" />
+  return <CodeBlock code={json} language="json" className={className} />
 }

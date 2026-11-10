@@ -1,7 +1,15 @@
 import type { Approval, ToolCall } from "@humanity/contracts"
 import { cn } from "cn"
-import { Ban, Check, ChevronRight, LoaderCircle, X } from "lucide-react"
-import { useState } from "react"
+import { Ban, Check, LoaderCircle, X } from "lucide-react"
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace"
 import { findRenderer, type ToolCallProps } from "./registry.ts"
 import { toolRenderers } from "./renderers/index.ts"
 
@@ -20,7 +28,10 @@ export function ToolSummary(props: ToolCallProps) {
   return <Summary {...props} />
 }
 
-/** A tool call inline in the chat: one line, expandable to its renderer's detail view. */
+/**
+ * A tool call inline in the chat, on shadcn's Trace: one line that shimmers
+ * while the call runs, expandable to its renderer's detail view.
+ */
 export function ToolCallCard({
   toolName,
   input,
@@ -34,36 +45,45 @@ export function ToolCallCard({
   readonly approval?: Approval | undefined
   readonly worktreePath?: string | undefined
 }) {
-  const [open, setOpen] = useState(false)
   const status = call?.status ?? "running"
   const props: ToolCallProps = { toolName, input, call, approval, worktreePath }
   const { Summary, Detail } = findRenderer(toolRenderers, toolName, input)
+  // A call waiting for the human is not running; its badge says so instead.
+  const waiting = approvalStatus(approval, false) === "pending"
+  const line =
+    status === "failed" ? "error" : status === "running" && !waiting ? "running" : undefined
 
   return (
-    <div className="rounded-md border bg-card text-xs">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-muted/50"
-      >
-        <ChevronRight
-          className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
-        />
-        {STATUS_ICON[status]}
-        <span className="min-w-0 flex-1">
-          <Summary {...props} />
-        </span>
-        <ApprovalBadge approval={approval} denied={status === "denied"} />
-      </button>
-      {open && (
-        <div className="border-t p-2.5">
+    <Trace>
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger className="w-full text-xs">
+          <TraceLine
+            {...(line === undefined ? {} : { status: line })}
+            className="min-w-0 flex-1 text-xs"
+          >
+            <TraceIcon>{STATUS_ICON[status]}</TraceIcon>
+            <TraceTitle>
+              <Summary {...props} />
+            </TraceTitle>
+          </TraceLine>
+          <ApprovalBadge approval={approval} denied={status === "denied"} />
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="text-xs text-foreground">
           <Detail {...props} />
-        </div>
-      )}
-    </div>
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
   )
 }
+
+const approvalStatus = (approval: Approval | undefined, denied: boolean) =>
+  approval === undefined
+    ? denied
+      ? "denied"
+      : undefined
+    : approval._tag === "change"
+      ? approval.change.status
+      : approval.confirmation.status
 
 const OUTCOME_LABEL: Record<string, string> = {
   pending: "waiting for you",
@@ -83,14 +103,7 @@ export function ApprovalBadge({
   readonly approval: Approval | undefined
   readonly denied: boolean
 }) {
-  const status =
-    approval === undefined
-      ? denied
-        ? "denied"
-        : undefined
-      : approval._tag === "change"
-        ? approval.change.status
-        : approval.confirmation.status
+  const status = approvalStatus(approval, denied)
   if (status === undefined) return null
   return (
     <span

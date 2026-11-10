@@ -1,38 +1,110 @@
 import type { Approval, ChatMessage, MessageContent, ToolCall } from "@humanity/contracts"
-import { Brain, Info, TriangleAlert } from "lucide-react"
+import { Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import type { ReactNode } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
+import { Message, MessageContent as MessageBody, MessageHeader } from "@/components/ui/message"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller"
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { Markdown } from "./Markdown.tsx"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
-/** The transcript: what the human said, what the agent said and did. */
+/**
+ * The transcript: what the human said, what the agent said and did. Built on
+ * shadcn's Message Scroller, which follows the reply while it streams unless
+ * the human scrolls up, and offers a button back to the end.
+ */
 export function MessageList({
   messages,
   toolCalls,
   draft,
+  working,
   approvalFor,
   worktreePath,
+  empty,
+  footer,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly draft: string
+  /** The agent is mid-turn: shows a working line while no text is streaming. */
+  readonly working: boolean
   readonly approvalFor: (toolUseId: string) => Approval | undefined
   readonly worktreePath: string
+  /** Shown while the transcript is empty. */
+  readonly empty?: ReactNode
+  /** Shown after the last message, such as the reason the agent stopped. */
+  readonly footer?: ReactNode
 }) {
+  const items = messages.flatMap((message) => {
+    const rendered = renderContent(message.content, toolCalls, approvalFor, worktreePath)
+    return rendered === null ? [] : [{ message, rendered }]
+  })
   return (
-    <ol className="flex flex-col gap-4" aria-label="Conversation">
-      {messages.map((message) => {
-        const rendered = renderContent(message.content, toolCalls, approvalFor, worktreePath)
-        return rendered === null ? null : <li key={message.id}>{rendered}</li>
-      })}
-      {draft !== "" && (
-        <li aria-live="polite">
-          <Markdown text={draft} streaming />
-        </li>
-      )}
-    </ol>
+    <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+      <MessageScroller>
+        <MessageScrollerViewport>
+          <MessageScrollerContent
+            aria-label="Conversation"
+            aria-busy={draft !== "" || working}
+            className="mx-auto w-full max-w-3xl gap-4 p-4"
+          >
+            {items.length === 0 && draft === "" && empty !== undefined && (
+              <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
+            )}
+            {items.map(({ message, rendered }) => (
+              <MessageScrollerItem
+                key={message.id}
+                messageId={message.id}
+                scrollAnchor={message.content._tag === "user"}
+              >
+                {rendered}
+              </MessageScrollerItem>
+            ))}
+            {draft !== "" && (
+              <MessageScrollerItem messageId="draft">
+                <Message>
+                  <MessageBody>
+                    <Markdown text={draft} streaming />
+                  </MessageBody>
+                </Message>
+              </MessageScrollerItem>
+            )}
+            {draft === "" && working && (
+              <MessageScrollerItem messageId="working">
+                <Trace>
+                  <TraceLine status="running" className="text-xs">
+                    <TraceTitle>Working…</TraceTitle>
+                  </TraceLine>
+                </Trace>
+              </MessageScrollerItem>
+            )}
+            {footer !== undefined && (
+              <MessageScrollerItem messageId="footer">{footer}</MessageScrollerItem>
+            )}
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton />
+      </MessageScroller>
+    </MessageScrollerProvider>
   )
 }
 
@@ -69,9 +141,13 @@ const renderContent = (
 
 function UserMessage({ text }: { readonly text: string }) {
   return (
-    <div className="ml-auto w-fit max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
-      {text}
-    </div>
+    <Message align="end">
+      <MessageBody>
+        <Bubble align="end" className="max-w-[85%]">
+          <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
+        </Bubble>
+      </MessageBody>
+    </Message>
   )
 }
 
@@ -88,46 +164,51 @@ function AssistantMessage({
 }) {
   const nested = content.parentToolUseId !== null
   return (
-    <div
-      className={
-        nested ? "ml-4 flex flex-col gap-2 border-l pl-3 opacity-80" : "flex flex-col gap-2"
-      }
-    >
-      {nested && <span className="text-xs text-muted-foreground">subagent</span>}
-      {content.blocks.map((block, position) => {
-        switch (block._tag) {
-          case "text":
-            return <Markdown key={position} text={block.text} />
-          case "thinking":
-            return block.text === "" ? null : <Thinking key={position} text={block.text} />
-          case "tool_use":
-            return (
-              <ToolCallCard
-                key={block.toolUseId}
-                toolName={block.toolName}
-                input={block.input}
-                call={toolCalls[block.toolUseId]}
-                approval={approvalFor(block.toolUseId)}
-                worktreePath={worktreePath}
-              />
-            )
-        }
-      })}
-    </div>
+    <Message className={nested ? "ml-4 border-l pl-3 opacity-80" : undefined}>
+      <MessageBody className="gap-2">
+        {nested && <MessageHeader className="px-0">subagent</MessageHeader>}
+        {content.blocks.map((block, position) => {
+          switch (block._tag) {
+            case "text":
+              return <Markdown key={position} text={block.text} />
+            case "thinking":
+              return block.text === "" ? null : <Thinking key={position} text={block.text} />
+            case "tool_use":
+              return (
+                <ToolCallCard
+                  key={block.toolUseId}
+                  toolName={block.toolName}
+                  input={block.input}
+                  call={toolCalls[block.toolUseId]}
+                  approval={approvalFor(block.toolUseId)}
+                  worktreePath={worktreePath}
+                />
+              )
+          }
+        })}
+      </MessageBody>
+    </Message>
   )
 }
 
+/** The agent's thinking, collapsed to one line, as shadcn's Reasoning element does it. */
 function Thinking({ text }: { readonly text: string }) {
   return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <Brain className="size-3.5" />
-        Thinking
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 border-l pl-3 text-xs whitespace-pre-wrap text-muted-foreground">
-        {text}
-      </CollapsibleContent>
-    </Collapsible>
+    <Trace>
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger className="text-xs">
+          <TraceLine className="text-xs">
+            <TraceIcon>
+              <Brain className="size-3.5" />
+            </TraceIcon>
+            <TraceTitle>Thought</TraceTitle>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="text-xs whitespace-pre-wrap">
+          {text}
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
   )
 }
 
@@ -151,19 +232,27 @@ function TurnFooter({ content }: { readonly content: Content<"result"> }) {
         ? "Stopped before finishing."
         : (content.text ?? content.subtype)
     return (
-      <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-        <TriangleAlert className="size-3.5" />
-        {reason}
-        {details.length > 0 && (
-          <span className="text-muted-foreground">· {details.join(" · ")}</span>
-        )}
-      </p>
+      <Trace>
+        <TraceLine status="error" className="text-xs">
+          <TraceIcon>
+            <TriangleAlert className="size-3.5" />
+          </TraceIcon>
+          <TraceTitle title={reason}>{reason}</TraceTitle>
+          {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
+        </TraceLine>
+      </Trace>
     )
   }
   return (
-    <p className="border-t pt-2 text-xs text-muted-foreground">
-      Done{details.length > 0 && ` · ${details.join(" · ")}`}
-    </p>
+    <Trace className="border-t pt-2">
+      <TraceLine className="text-xs">
+        <TraceIcon>
+          <CircleCheck className="size-3.5" />
+        </TraceIcon>
+        <TraceTitle>Done</TraceTitle>
+        {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
+      </TraceLine>
+    </Trace>
   )
 }
 
@@ -176,11 +265,16 @@ function InitLine({ content }: { readonly content: Content<"system_init"> }) {
       ? `MCP: ${content.mcpServers.map((server) => `${server.name} (${server.status})`).join(", ")}`
       : null,
   ].filter((part) => part !== null)
+  const summary = `Agent started · ${parts.join(" · ")}`
   return (
-    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Info className="size-3.5" />
-      Agent started · {parts.join(" · ")}
-    </p>
+    <Trace>
+      <TraceLine className="text-xs">
+        <TraceIcon>
+          <Info className="size-3.5" />
+        </TraceIcon>
+        <TraceTitle title={summary}>{summary}</TraceTitle>
+      </TraceLine>
+    </Trace>
   )
 }
 

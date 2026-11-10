@@ -1,7 +1,7 @@
 import type { Project } from "@humanity/contracts"
 import { cn } from "cn"
 import { PanelRightClose, PanelRightOpen } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -44,7 +44,6 @@ export function Workspace({
   const waiting = changes.length + confirmations.length
   const [panelOpen, setPanelOpen] = useState(changes.length > 0 || search.file !== undefined)
   const [tab, setTab] = useState("review")
-  const bottom = useRef<HTMLDivElement>(null)
 
   // A new change to review opens the panel on the review tab.
   const pendingCount = changes.length
@@ -56,11 +55,6 @@ export function Workspace({
       setTab("review")
     }
   }
-
-  // Keep the newest output in view as it streams in.
-  useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" })
-  }, [view.messages.length, view.draft, confirmations.length])
 
   // A blocked agent is visible from other tabs too.
   useEffect(() => {
@@ -96,24 +90,26 @@ export function Workspace({
       />
       <div className="flex min-h-0 flex-1">
         <div className={cn("flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
-              {view.messages.length === 0 && view.draft === "" && (
+          <div className="min-h-0 flex-1">
+            <MessageList
+              messages={view.messages}
+              toolCalls={view.toolCalls}
+              draft={view.draft}
+              working={session.status === "running"}
+              approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
+              worktreePath={session.worktreePath}
+              empty={
                 <p className="py-12 text-center text-sm text-muted-foreground">
                   Ask the agent about this repository. It reads freely; every change it proposes
                   waits for you.
                 </p>
-              )}
-              <MessageList
-                messages={view.messages}
-                toolCalls={view.toolCalls}
-                draft={view.draft}
-                approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
-                worktreePath={session.worktreePath}
-              />
-              {view.error !== null && <ErrorNote title="The agent stopped" message={view.error} />}
-              <div ref={bottom} />
-            </div>
+              }
+              footer={
+                view.error !== null ? (
+                  <ErrorNote title="The agent stopped" message={view.error} />
+                ) : undefined
+              }
+            />
           </div>
           <div className="border-t bg-background">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4">

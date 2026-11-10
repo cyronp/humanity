@@ -6,9 +6,24 @@ import { useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+} from "@/components/ui/code-block"
 import { Input } from "@/components/ui/input"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemFooter,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item"
 import { Label } from "@/components/ui/label"
 import { decideConfirmationAtom } from "@/features/session/atoms"
+import { JsonBlock } from "@/features/tools/renderers/common"
 import { describeCause } from "@/lib/errors"
 
 const asRecord = (input: unknown): Record<string, unknown> =>
@@ -25,18 +40,21 @@ function CallPreview({ confirmation }: { readonly confirmation: PendingConfirmat
         {typeof description === "string" && description !== "" && (
           <p className="text-sm">{description}</p>
         )}
-        <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-all">
-          <span className="text-muted-foreground select-none">$ </span>
-          {command}
-        </pre>
+        <CodeBlock size="sm" className="bg-muted">
+          <CodeBlockActions>
+            <CodeBlockCopyButton value={command} />
+          </CodeBlockActions>
+          <CodeBlockContent wrap className="break-all">
+            <span>
+              <span className="text-muted-foreground select-none">$ </span>
+              {command}
+            </span>
+          </CodeBlockContent>
+        </CodeBlock>
       </div>
     )
   }
-  return (
-    <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-all">
-      {JSON.stringify(confirmation.input, null, 2)}
-    </pre>
-  )
+  return <JsonBlock value={confirmation.input} className="max-h-48" />
 }
 
 function ToolName({ name }: { readonly name: string }) {
@@ -78,24 +96,30 @@ export function ConfirmationCard({ confirmation }: { readonly confirmation: Pend
   }
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border-2 border-amber-500 bg-amber-500/5 p-3"
+    <Item
+      variant="outline"
+      className="items-start border-2 border-amber-500 bg-amber-500/5"
       role="alertdialog"
       aria-label={`The agent wants to run ${confirmation.toolName}`}
     >
-      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-        <Hand className="size-4 text-amber-600" />
-        The agent wants to run
-        <ToolName name={confirmation.toolName} />
-      </div>
-      <CallPreview confirmation={confirmation} />
-      <Input
-        value={comment}
-        onChange={(event) => setComment(event.target.value)}
-        placeholder="Optional comment (sent to the agent if you deny)"
-        aria-label="Comment for the agent"
-      />
-      <div className="flex flex-wrap items-center gap-3">
+      <ItemMedia variant="icon">
+        <Hand className="text-amber-600" />
+      </ItemMedia>
+      <ItemContent className="min-w-0 gap-3">
+        <ItemTitle className="line-clamp-none flex-wrap">
+          The agent wants to run
+          <ToolName name={confirmation.toolName} />
+        </ItemTitle>
+        <CallPreview confirmation={confirmation} />
+        <Input
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder="Optional comment (sent to the agent if you deny)"
+          aria-label="Comment for the agent"
+        />
+        {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
+      </ItemContent>
+      <ItemFooter className="flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <input
             id={`always-${confirmation.id}`}
@@ -108,7 +132,7 @@ export function ConfirmationCard({ confirmation }: { readonly confirmation: Pend
             Always allow {confirmation.toolName} in this project
           </Label>
         </div>
-        <div className="ml-auto flex gap-2">
+        <ItemActions className="ml-auto">
           <Button variant="outline" onClick={() => submit("deny")} disabled={pending}>
             <X />
             Deny
@@ -117,9 +141,8 @@ export function ConfirmationCard({ confirmation }: { readonly confirmation: Pend
             <Check />
             Allow
           </Button>
-        </div>
-      </div>
-      {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
-    </div>
+        </ItemActions>
+      </ItemFooter>
+    </Item>
   )
 }
