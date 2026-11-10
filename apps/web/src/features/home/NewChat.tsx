@@ -3,16 +3,11 @@ import type { Project, ProjectId, Session } from "@humanity/contracts"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { ArrowUp, FolderPlus, GitBranch } from "lucide-react"
+import { FolderPlus, GitBranch } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@/components/ui/input-group"
+import { InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,10 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { branchesAtom } from "@/features/git/atoms"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { projectsAtom } from "@/features/projects/atoms"
+import { ModelPicker } from "@/features/providers/ModelPicker"
 import { allSessionsAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
@@ -101,6 +98,7 @@ function NoProjects() {
 function NewChatForm({ project }: { readonly project: Project }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
+  const [model, setModel] = useState<string | null>(null)
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
@@ -116,7 +114,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
     setPending(true)
     setError(undefined)
     const exit = await create({
-      payload: { projectId: project.id, baseBranch, prompt },
+      payload: { projectId: project.id, baseBranch, prompt, ...(model === null ? {} : { model }) },
       reactivityKeys: [keys.sessions(project.id), keys.git(project.id)],
     })
     setPending(false)
@@ -140,7 +138,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
 
   return (
     <form onSubmit={submit} className="flex w-full max-w-2xl flex-col gap-3">
-      <InputGroup className="rounded-2xl">
+      <ChatBox>
         <InputGroupTextarea
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -152,24 +150,22 @@ function NewChatForm({ project }: { readonly project: Project }) {
           className="max-h-72 min-h-20 px-4 pt-3.5"
           aria-label="First message to the agent"
         />
-        <InputGroupAddon align="block-end">
+        <ChatBoxFooter>
           <BranchPicker
             project={project}
             value={baseBranch}
             onChange={(name) => setChosenBranch({ projectId: project.id, name })}
           />
-          <InputGroupButton
-            type="submit"
-            size="icon-sm"
-            variant="default"
-            className="ml-auto rounded-full"
-            disabled={pending || text.trim() === ""}
-            aria-label={pending ? "Creating the session" : "Start the session"}
-          >
-            <ArrowUp />
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
+          <div className="ml-auto flex items-center gap-1">
+            <ModelPicker value={model} onChange={setModel} />
+            <SendButton
+              ready={text.trim() !== "" && !pending}
+              disabled={pending || text.trim() === ""}
+              label={pending ? "Creating the session" : "Start the session"}
+            />
+          </div>
+        </ChatBoxFooter>
+      </ChatBox>
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
           Creating a branch and worktree for this session…

@@ -1,21 +1,14 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
-import { ArrowUp } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupText,
-  InputGroupTextarea,
-} from "@/components/ui/input-group"
-import { Kbd } from "@/components/ui/kbd"
+import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
 import { sendMessageAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
+import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
 
-/** The message box, on shadcn's Input Group as the Prompt Input element uses it. Enter sends, Shift+Enter adds a line. Follow-ups are queued while the agent works. */
+/** The message box of an open thread. Enter sends, Shift+Enter adds a line. Follow-ups are queued while the agent works. */
 export function Composer({
   sessionId,
   disabled,
@@ -52,7 +45,7 @@ export function Composer({
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       {error !== undefined && <ErrorNote title="The message was not sent" message={error} />}
-      <InputGroup>
+      <ChatBox>
         <InputGroupTextarea
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -66,31 +59,24 @@ export function Composer({
           }
           disabled={disabled}
           rows={3}
-          className="max-h-60 min-h-20 px-3"
+          className="max-h-60 min-h-16 px-4 pt-3.5"
           aria-label="Message to the agent"
         />
-        <InputGroupAddon align="block-end">
-          <InputGroupText className="text-xs font-normal">
-            {busy ? (
-              "Queued until the agent finishes"
-            ) : (
-              <span>
-                <Kbd>Enter</Kbd> to send, <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd> for a new line
-              </span>
-            )}
-          </InputGroupText>
-          <InputGroupButton
-            type="submit"
-            size="icon-sm"
-            variant="default"
-            className="ml-auto rounded-full"
-            disabled={disabled || pending || text.trim() === ""}
-            aria-label="Send"
-          >
-            <ArrowUp />
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
+        <ChatBoxFooter>
+          {busy && (
+            <InputGroupText className="px-1.5 text-xs font-normal">
+              Queued until the agent finishes
+            </InputGroupText>
+          )}
+          <div className="ml-auto">
+            <SendButton
+              ready={!disabled && !pending && text.trim() !== ""}
+              disabled={disabled || pending || text.trim() === ""}
+              label="Send"
+            />
+          </div>
+        </ChatBoxFooter>
+      </ChatBox>
     </form>
   )
 }
