@@ -1,4 +1,6 @@
 import {
+  type CloneEvent,
+  CloneTargetExists,
   DEFAULT_TOOL_POLICY,
   PathNotFound,
   type Project,
@@ -7,12 +9,23 @@ import {
   ProjectNotFound,
   ToolPolicy,
 } from "@humanity/contracts"
-import { Context, DateTime, Effect, FileSystem, Layer, Option, Schema } from "effect"
+import {
+  Context,
+  DateTime,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  Stream,
+} from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
-import { basename } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
+import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitError, GitService, parseGitHubFullName } from "./GitService.ts"
 
 const ProjectRow = Schema.Struct({
@@ -50,6 +63,16 @@ export class ProjectService extends Context.Service<
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
     /** Deletes Humanity's records and session worktrees. The repository itself is left alone. */
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
+    /**
+     * Clones `owner/repo` into `<home>/repos/<owner>/<repo>`, streaming git's
+     * progress, and adds the clone as a project when it finishes.
+     */
+    readonly cloneFromGitHub: (
+      fullName: string,
+    ) => Stream.Stream<
+      CloneEvent,
+      GitHubError | CloneTargetExists | ProjectAlreadyExists | PathNotFound | GitError
+    >
   }
 >()("humanity/ProjectService") {
   static readonly layer = Layer.effect(
@@ -59,6 +82,7 @@ export class ProjectService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const git = yield* GitService
       const config = yield* ServerConfig
+      const github = yield* GitHubService
 
       const selectAll = SqlSchema.findAll({
         Request: Schema.Void,
@@ -152,7 +176,60 @@ export class ProjectService extends Context.Service<
         yield* sql`DELETE FROM projects WHERE id = ${projectId}`.pipe(Effect.orDie)
       })
 
-      return ProjectService.of({ list, get, addLocal, remove })
+      /**
+       * Git reads this header from the environment of the one clone process, so
+       * the token is never written into the clone's config or shown in `ps`.
+       */
+      const credentialEnv = (token: Option.Option<Redacted.Redacted<string>>) =>
+        Option.match(token, {
+          onNone: (): Record<string, string> => ({}),
+          onSome: (value): Record<string, string> => ({
+            GIT_CONFIG_COUNT: "1",
+            GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+            GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(
+              `x-access-token:${Redacted.value(value)}`,
+            ).toString("base64")}`,
+          }),
+        })
+
+      const cloneFromGitHub = (fullName: string) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const repo = yield* github.getRepo(fullName)
+            const target = join(config.reposDir, repo.owner, repo.name)
+            if (!isInsideDir(config.reposDir, target)) {
+              return yield* new CloneTargetExists({ path: target })
+            }
+            const projects = yield* list
+            if (projects.some((project) => samePath(project.localPath, target))) {
+              return yield* new ProjectAlreadyExists({ localPath: target })
+            }
+            if (yield* fs.exists(target).pipe(Effect.orElseSucceed(() => true))) {
+              return yield* new CloneTargetExists({ path: target })
+            }
+            yield* fs.makeDirectory(dirname(target), { recursive: true }).pipe(Effect.orDie)
+            const env = credentialEnv(yield* github.token)
+
+            const progress = git
+              .clone(repo.cloneUrl, target, env)
+              .pipe(Stream.map((line): CloneEvent => ({ _tag: "Progress", line })))
+            const added = Stream.fromEffect(
+              addLocal(target).pipe(
+                Effect.map((project): CloneEvent => ({ _tag: "Cloned", project })),
+              ),
+            )
+            return Stream.concat(progress, added).pipe(
+              // A failed or abandoned clone leaves nothing behind; the folder did not exist before.
+              Stream.onExit((exit) =>
+                exit._tag === "Success"
+                  ? Effect.void
+                  : fs.remove(target, { recursive: true }).pipe(Effect.ignore),
+              ),
+            )
+          }),
+        )
+
+      return ProjectService.of({ list, get, addLocal, remove, cloneFromGitHub })
     }),
   )
 }

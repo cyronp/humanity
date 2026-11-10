@@ -1,11 +1,14 @@
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
+import { HttpClient } from "effect/http"
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { DatabaseLive } from "../src/db/Database.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
+import { GitHubService } from "../src/services/GitHubService.ts"
+import { GitHubToken } from "../src/services/GitHubToken.ts"
 
 /** A temp directory removed when the scope closes. */
 export const tempDir = (prefix = "humanity-test-") =>
@@ -51,9 +54,21 @@ export const tempRepo = (files: Record<string, string> = { "README.md": "# fixtu
     return dir
   })
 
-/** Config, platform and an on-disk database rooted at `home`. */
+/** Tests never reach the network: any request fails the test that made it. */
+export const offlineHttp = Layer.succeed(
+  HttpClient.HttpClient,
+  HttpClient.make((request) => Effect.die(`unexpected network request: ${request.url}`)),
+)
+
+/** GitHub without a token and without a network, unless a test provides its own. */
+export const offlineGitHub = GitHubService.layer.pipe(
+  Layer.provide(GitHubToken.layerTest(undefined)),
+  Layer.provide(offlineHttp),
+)
+
+/** Config, platform, an on-disk database rooted at `home`, and an offline GitHub. */
 export const baseLayer = (home: string) =>
-  DatabaseLive.pipe(
+  Layer.mergeAll(DatabaseLive, offlineGitHub).pipe(
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
     Layer.provideMerge(NodeServices.layer),
   )

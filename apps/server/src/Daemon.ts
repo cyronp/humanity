@@ -1,7 +1,7 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { TOKEN_PARAM } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
-import { HttpRouter } from "effect/http"
+import { FetchHttpClient, HttpRouter } from "effect/http"
 import { createServer } from "node:http"
 import { AgentRunnerLive } from "./agent/AgentRunnerLive.ts"
 import { AuthToken } from "./AuthToken.ts"
@@ -10,10 +10,13 @@ import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
+import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
+import { GitHubService } from "./services/GitHubService.ts"
+import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
 import { PolicyService } from "./services/PolicyService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
@@ -36,11 +39,15 @@ export const Services = SessionService.layer.pipe(
 export const RpcHandlers = Layer.mergeAll(
   ProjectsHandlers,
   GitHandlers,
+  GitHubHandlers,
   SessionsHandlers,
   ApprovalsHandlers,
 )
 
-/** Routes, handlers and services. Still needs config, token, database, platform, agent runner and an HTTP server. */
+/**
+ * Routes, handlers and services. Still needs config, auth token, database,
+ * platform, agent runner, GitHub and an HTTP server.
+ */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provide(Services))
 
 const Banner = Layer.effectDiscard(
@@ -62,6 +69,12 @@ const Banner = Layer.effectDiscard(
   }),
 )
 
+/** GitHub over the real network, with the token from `gh` or `GITHUB_TOKEN`. */
+const GitHubLive = GitHubService.layer.pipe(
+  Layer.provide(GitHubToken.layer),
+  Layer.provide(FetchHttpClient.layer),
+)
+
 const HttpServerLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig
@@ -73,6 +86,7 @@ const HttpServerLive = Layer.unwrap(
 export const Daemon = HttpRouter.serve(Layer.merge(App, Banner)).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
+  Layer.provide(GitHubLive),
   Layer.provide(HttpServerLive),
   Layer.provide(DatabaseLive),
   Layer.provide(NodeServices.layer),

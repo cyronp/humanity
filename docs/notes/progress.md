@@ -56,3 +56,12 @@
 - Timeline tab next to Review: every tool call (Skill loads included) and every human decision in order, with call durations and how long the agent waited for each decision.
 - A small ANSI parser (colours, bold, dim, underline; other escape sequences dropped) instead of a new dependency.
 - Tests: ANSI parsing, the input/output helpers, registry routing for every MVP tool, and timeline ordering and wording.
+
+## M6 — GitHub (2026-11-09)
+
+- `GitHubToken`: `gh auth token` when the GitHub CLI is logged in, else `GITHUB_TOKEN`; looked up on demand (cached for a minute), held as `Redacted`, never stored.
+- `GitHubService` on Effect `HttpClient` + `Schema` (only the fields used): `whoami`, `repos` (a `Stream` that follows `Link: rel="next"`), `listRepos`, `getRepo`, `listBranches`. Rate limits (`x-ratelimit-remaining: 0`, or 429) become `GitHubRateLimited` with the reset time; 401 and a missing token become `GitHubNotAuthenticated`; everything else `GitHubRequestFailed` with GitHub's message.
+- `GitService.clone` streams git's `--progress` output line by line. `Projects.cloneFromGitHub` (a streaming RPC) checks the repository exists, refuses to overwrite an existing folder or project, clones into `<home>/repos/<owner>/<repo>` with the token passed as an HTTP header through `GIT_CONFIG_*` environment variables (never in argv or the clone's config), removes a partial clone on failure, and adds the result as a project.
+- Web: "Clone from GitHub" on the home page (signed-in user, filterable repository list, clone by `owner/repo` or URL for public repositories, live progress, then straight to the new project); "On GitHub" branches on the project page. Sessions can start from any `origin/<branch>`, which covers "switch branch" without touching a checkout.
+- Tests: the GitHub service against a mocked `HttpClient` (multi-page `Link` pagination, laziness, rate limiting, missing vs rejected token, 403, schema mismatches, unauthenticated public reads) and the clone flow end to end against a local repository (progress, project registration, remote branches present, token absent from `.git/config`, refusal to overwrite, cleanup after a failed clone, GitHub errors before any disk access).
+- Smoke-tested against the real GitHub API with the local `gh` login (read-only: user, repository list, public branches) and a real clone of `octocat/Hello-World` into a throwaway directory.

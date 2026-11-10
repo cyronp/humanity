@@ -1,9 +1,14 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
+import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
 import { ToolPolicy } from "../domain/Policy.ts"
 import { Project, ProjectId } from "../domain/Project.ts"
 import {
+  CloneTargetExists,
   GitCommandFailed,
+  GitHubNotAuthenticated,
+  GitHubRateLimited,
+  GitHubRequestFailed,
   GitNotARepository,
   GitNotInstalled,
   PathNotFound,
@@ -25,6 +30,23 @@ export const ProjectsRpcs = RpcGroup.make(
       GitCommandFailed,
       ProjectAlreadyExists,
     ]),
+  }),
+  /** Clones into the data directory with live progress, then adds the clone as a project. */
+  Rpc.make("Projects.cloneFromGitHub", {
+    payload: { fullName: GitHubFullName },
+    success: CloneEvent,
+    error: Schema.Union([
+      GitHubNotAuthenticated,
+      GitHubRateLimited,
+      GitHubRequestFailed,
+      CloneTargetExists,
+      ProjectAlreadyExists,
+      PathNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+    ]),
+    stream: true,
   }),
   Rpc.make("Projects.remove", {
     payload: { projectId: ProjectId },

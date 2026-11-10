@@ -118,3 +118,46 @@ export class IncompleteReview extends Schema.TaggedError<IncompleteReview>()("In
     return `Decide every hunk before submitting. Still undecided: ${this.missing.join(", ")}.`
   }
 }
+
+export class GitHubNotAuthenticated extends Schema.TaggedError<GitHubNotAuthenticated>()(
+  "GitHubNotAuthenticated",
+  { reason: Schema.Literals(["no_token", "rejected"]) },
+) {
+  override get message() {
+    return this.reason === "no_token"
+      ? "No GitHub token found. Run `gh auth login`, or export GITHUB_TOKEN (a fine-grained token with read access to your repositories), then restart the daemon."
+      : "GitHub rejected the token. Run `gh auth login` again or replace GITHUB_TOKEN."
+  }
+}
+
+export class GitHubRateLimited extends Schema.TaggedError<GitHubRateLimited>()(
+  "GitHubRateLimited",
+  { resetAt: Schema.NullOr(Schema.String) },
+) {
+  override get message() {
+    return this.resetAt === null
+      ? "GitHub's API rate limit was reached. Try again in a few minutes."
+      : `GitHub's API rate limit was reached. It resets at ${new Date(this.resetAt).toLocaleTimeString()}.`
+  }
+}
+
+export class GitHubRequestFailed extends Schema.TaggedError<GitHubRequestFailed>()(
+  "GitHubRequestFailed",
+  { status: Schema.Number, detail: Schema.String },
+) {
+  override get message() {
+    if (this.status === 404) return `GitHub could not find that repository (${this.detail}).`
+    return this.status === 0
+      ? `Could not reach GitHub: ${this.detail}`
+      : `GitHub answered ${this.status}: ${this.detail}`
+  }
+}
+
+export class CloneTargetExists extends Schema.TaggedError<CloneTargetExists>()(
+  "CloneTargetExists",
+  { path: Schema.String },
+) {
+  override get message() {
+    return `${this.path} already exists. Add it as a local project instead, or remove the folder first.`
+  }
+}

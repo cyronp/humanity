@@ -86,6 +86,16 @@ export class GitService extends Context.Service<
     readonly worktreeList: (cwd: string) => Effect.Effect<ReadonlyArray<Worktree>, GitError>
     /** Stages everything in `cwd` and commits it. Returns the new commit's short hash. */
     readonly commit: (cwd: string, message: string) => Effect.Effect<string, GitError>
+    /**
+     * Clones `url` into `target`, streaming git's progress lines. `env` adds
+     * variables for this one process only, such as a credential header, so
+     * nothing secret ends up in the clone's config or on the command line.
+     */
+    readonly clone: (
+      url: string,
+      target: string,
+      env?: Readonly<Record<string, string>>,
+    ) => Stream.Stream<string, GitError>
   }
 >()("humanity/GitService") {
   static readonly layer = Layer.effect(
@@ -320,6 +330,56 @@ export class GitService extends Context.Service<
         return (yield* exec(cwd, ["rev-parse", "--short", "HEAD"])).trim()
       })
 
+      const clone = (url: string, target: string, env: Readonly<Record<string, string>> = {}) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const args = ["clone", "--progress", "--", url, target]
+            const handle = yield* spawner.spawn(
+              ChildProcess.make("git", args, {
+                extendEnv: true,
+                env: { GIT_TERMINAL_PROMPT: "0", LC_ALL: "C", ...env },
+                stdout: "ignore",
+              }),
+            )
+            // Kept for the error message if the clone fails.
+            const recent: Array<string> = []
+            const progress = handle.stderr.pipe(
+              Stream.decodeText(),
+              // git redraws its progress with carriage returns.
+              Stream.map((chunk) => chunk.replace(/\r/g, "\n")),
+              Stream.splitLines,
+              Stream.map((line) => line.trim()),
+              Stream.filter((line) => line !== ""),
+              Stream.tap((line) =>
+                Effect.sync(() => {
+                  recent.push(line)
+                  if (recent.length > 20) recent.shift()
+                }),
+              ),
+            )
+            const finish = Stream.fromEffect(handle.exitCode).pipe(
+              Stream.flatMap((exitCode) =>
+                Number(exitCode) === 0
+                  ? Stream.empty
+                  : Stream.fail(
+                      new GitCommandFailed({
+                        args: ["clone", "--progress", "--", url, target],
+                        exitCode: Number(exitCode),
+                        stderr: recent.join("\n"),
+                      }),
+                    ),
+              ),
+            )
+            return Stream.concat(progress, finish)
+          }).pipe(Effect.mapError((cause) => new GitNotInstalled({ detail: String(cause) }))),
+        ).pipe(
+          Stream.mapError((error) =>
+            error._tag === "GitCommandFailed" || error._tag === "GitNotInstalled"
+              ? error
+              : new GitNotInstalled({ detail: String(error) }),
+          ),
+        )
+
       return GitService.of({
         exec,
         execResult,
@@ -336,6 +396,7 @@ export class GitService extends Context.Service<
         worktreeRemove,
         worktreeList,
         commit,
+        clone,
       })
     }),
   )

@@ -12,6 +12,7 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
     return ProjectsRpcs.of({
       "Projects.list": () => projects.list,
       "Projects.addLocal": ({ path }) => projects.addLocal(path),
+      "Projects.cloneFromGitHub": ({ fullName }) => projects.cloneFromGitHub(fullName),
       // Stop the project's agents before their worktrees disappear.
       "Projects.remove": ({ projectId }) =>
         Effect.andThen(sessions.stopProject(projectId), projects.remove(projectId)),

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CloneFromGitHubCard } from "@/features/github/CloneFromGitHubCard"
 import { AddLocalProjectForm } from "@/features/projects/AddLocalProjectForm"
 import { ProjectList } from "@/features/projects/ProjectList"
 
@@ -23,6 +24,7 @@ function ProjectsPage() {
           <AddLocalProjectForm />
         </CardContent>
       </Card>
+      <CloneFromGitHubCard />
     </main>
   )
 }
