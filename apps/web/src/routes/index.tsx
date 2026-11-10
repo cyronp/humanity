@@ -1,10 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CloneFromGitHubCard } from "@/features/github/CloneFromGitHubCard"
+import { hasCompletedOnboarding } from "@/features/onboarding/onboarding"
 import { AddLocalProjectForm } from "@/features/projects/AddLocalProjectForm"
 import { ProjectList } from "@/features/projects/ProjectList"
 
 export const Route = createFileRoute("/")({
+  // First visit in this browser: show the setup guide before the empty project list.
+  beforeLoad: () => {
+    if (!hasCompletedOnboarding()) throw redirect({ to: "/welcome" })
+  },
   component: ProjectsPage,
 })
 

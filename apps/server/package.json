@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --conditions=source src/main.ts --dev",
+    "dev": "node --watch --conditions=source --import tsx src/main.ts --dev",
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",

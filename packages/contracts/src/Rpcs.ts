@@ -1,11 +1,18 @@
 import { ApprovalsRpcs } from "./rpc/Approvals.ts"
+import { ClaudeRpcs } from "./rpc/Claude.ts"
 import { GitRpcs } from "./rpc/Git.ts"
 import { GitHubRpcs } from "./rpc/GitHub.ts"
 import { ProjectsRpcs } from "./rpc/Projects.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
 
 /** Every RPC the daemon serves, merged into the single group the socket speaks. */
-export const HumanityRpcs = ProjectsRpcs.merge(GitRpcs, GitHubRpcs, SessionsRpcs, ApprovalsRpcs)
+export const HumanityRpcs = ProjectsRpcs.merge(
+  GitRpcs,
+  GitHubRpcs,
+  SessionsRpcs,
+  ApprovalsRpcs,
+  ClaudeRpcs,
+)
 
 /** Path of the RPC WebSocket on the daemon (and on the Vite dev proxy). */
 export const RPC_PATH = "/rpc"

@@ -64,6 +64,17 @@ Import paths are the stable ones from the spec (`effect/rpc`, `effect/sql`, `eff
   - `Skill`: `{ skill, args? }`
   - There is no `MultiEdit` tool in this version.
 
+### Account and authentication (verified 2026-11-10, Claude Code 2.1.321 bundled with the SDK)
+
+- The SDK ships the CLI as an optional platform package: `@anthropic-ai/claude-agent-sdk-<platform>-<arch>[-musl]/claude[.exe]`. Without `pathToClaudeCodeExecutable` it runs that one. It reads the same login as a global `claude` (`CLAUDE_CONFIG_DIR`, else `~/.claude`).
+- `Query.initializationResult()` resolves with `SDKControlInitializeResponse`, which carries `account: AccountInfo` (`email`, `organization`, `subscriptionType`, `tokenSource`, `apiKeySource`, `apiProvider`) and `claude_code_version`. It answers even when the prompt iterable never yields, so no request reaches Anthropic. `Query.accountInfo()` returns the same `AccountInfo`.
+- Shapes observed with real runs (personal fields omitted):
+  - signed in with a subscription: `{ email, organization, subscriptionType: "Claude Pro", apiProvider: "firstParty" }`. There is no `tokenSource`.
+  - signed out (empty config dir): `{ tokenSource: "none", apiProvider: "firstParty" }`.
+  - `ANTHROPIC_API_KEY` set while signed in: `{ tokenSource: "claude.ai", apiKeySource: "ANTHROPIC_API_KEY", apiProvider: "firstParty" }`, with no email. The key wins over the subscription, and it is not validated at this point.
+- `ApiKeySource` is `"ANTHROPIC_API_KEY" | "apiKeyHelper" | "/login managed key" | "none" | "user" | "project" | "org" | "temporary" | "oauth"`. `apiProvider` is `"firstParty" | "bedrock" | "vertex" | "foundry" | "anthropicAws" | "anthropicGoogleCloud" | "mantle" | "gateway"`.
+- `claude auth status` prints JSON (`loggedIn`, `authMethod`, `subscriptionType`, `email`, `configDirectory`, ...). It is not used: the SDK probe reports what the session process itself will use, as T3 Code does. `claude auth login` takes `--claudeai` (default), `--console`, `--sso` and `--email`.
+
 ## Deviations from the spec
 
 1. **TypeScript 6.0.3 instead of the latest 7.0.2.** `typescript-eslint@8.72.2` (required by the spec's lint stack) declares `typescript >=4.8.4 <6.1.0`. TypeScript 7 would break linting, so the newest version inside that range is pinned.

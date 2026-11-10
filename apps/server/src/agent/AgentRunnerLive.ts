@@ -6,7 +6,7 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
 import { Effect, Layer, Stream } from "effect"
-import { ServerConfig } from "../ServerConfig.ts"
+import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { type AgentRunOptions, AgentRunError, AgentRunner } from "./AgentRunner.ts"
 
 /** An async iterable fed from outside: the SDK's streaming input. */
@@ -79,7 +79,7 @@ const policyGuard =
 export const AgentRunnerLive = Layer.effect(
   AgentRunner,
   Effect.gen(function* () {
-    const config = yield* ServerConfig
+    const claude = yield* ClaudeCode
 
     const start = (options: AgentRunOptions) =>
       Effect.gen(function* () {
@@ -115,10 +115,10 @@ export const AgentRunnerLive = Layer.effect(
             settingSources: ["project"],
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
-            // Keeps the SDK's transcripts and state inside Humanity's data directory.
+            // Claude Code's own environment and config directory, so it signs in
+            // with the human's login (`claude auth login`), like the account check.
             env: {
-              ...process.env,
-              CLAUDE_CONFIG_DIR: config.claudeConfigDir,
+              ...claude.environment,
               CLAUDE_AGENT_SDK_CLIENT_APP: "humanity/0.1.0",
             },
             stderr: (data) => {

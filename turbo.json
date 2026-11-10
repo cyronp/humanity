@@ -8,7 +8,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["ANTHROPIC_*", "CLAUDE_CONFIG_DIR", "GITHUB_TOKEN", "HUMANITY_*"]
     },
     "lint": {},
     "typecheck": {

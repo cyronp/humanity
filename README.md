@@ -8,14 +8,14 @@ The agent (Claude, through the Claude Agent SDK) proposes; you decide, change by
 
 - **Node.js 22.13 or newer** (24 LTS recommended). The database uses Node's built-in `node:sqlite`; Node prints an "experimental" warning for it, which is harmless.
 - **git** on your `PATH`.
-- **An Anthropic API key** in `ANTHROPIC_API_KEY`.
+- **A Claude login.** Run `claude auth login` once with your Claude Pro, Max, Team or Enterprise account (or the bundled CLI's own `auth login` command, shown in the first-run guide). An `ANTHROPIC_API_KEY` in the environment also works, but Claude Code then bills that key instead of your plan.
 - Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
 
 ## Getting started
 
 ```sh
 npm install
-export ANTHROPIC_API_KEY=sk-ant-...   # PowerShell: $env:ANTHROPIC_API_KEY = "sk-ant-..."
+claude auth login   # once, if you are not signed in to Claude Code yet
 npm run dev
 ```
 
@@ -26,6 +26,8 @@ npm run dev
 ```
 
 Open it. The token is kept by the browser; without it the daemon refuses connections. It is also stored in `~/.humanity/auth-token` if you need to paste it again.
+
+The daemon also prints which Claude account the agent will run as. The first visit opens a short setup guide at `/welcome` that shows the same connection live.
 
 Then:
 
@@ -70,7 +72,7 @@ npm start          # serves the web app and the API on http://127.0.0.1:7420
 
 | Variable            | Default       | Purpose                                     |
 | ------------------- | ------------- | ------------------------------------------- |
-| `ANTHROPIC_API_KEY` | (required)    | Used by the agent                           |
+| `ANTHROPIC_API_KEY` | (none)        | Optional. Overrides your Claude login       |
 | `HUMANITY_HOME`     | `~/.humanity` | Data directory                              |
 | `HUMANITY_PORT`     | `7420`        | Daemon port. It always binds to `127.0.0.1` |
 | `GITHUB_TOKEN`      | (none)        | Used when `gh` is not logged in             |
@@ -82,9 +84,10 @@ Everything Humanity writes lives in the data directory:
 ├─ humanity.db                       projects, sessions, messages, tool calls, decisions
 ├─ auth-token                        the daemon's access token
 ├─ worktrees/<project>/<session>/    one git worktree per session
-├─ repos/<owner>/<repo>/             clones made from GitHub
-└─ claude/                           the Agent SDK's own state, used to resume sessions
+└─ repos/<owner>/<repo>/             clones made from GitHub
 ```
+
+Claude Code itself keeps its login and its session transcripts (used to resume sessions) in its own config directory, `~/.claude` or `CLAUDE_CONFIG_DIR`, as it does for your terminal sessions. Humanity never reads or stores your Claude credentials.
 
 API keys and tokens are never stored in the database. The GitHub token is passed to `git clone` only as a header for that one process, so it never ends up in a clone's configuration.
 

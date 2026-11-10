@@ -1,20 +1,23 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
-import { TOKEN_PARAM } from "@humanity/contracts"
+import { type ClaudeStatus, TOKEN_PARAM } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { createServer } from "node:http"
 import { AgentRunnerLive } from "./agent/AgentRunnerLive.ts"
 import { AuthToken } from "./AuthToken.ts"
+import { ClaudeCode } from "./claude/ClaudeCode.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
+import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
+import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
@@ -24,16 +27,19 @@ import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 
 /**
- * Domain services, built on whatever config, database, platform and agent
- * runner they are given. Tests swap in the fake runner here.
+ * Domain services, built on whatever config, database, platform, agent runner
+ * and Claude Code runtime they are given. Tests swap in the fake runner here.
  */
-export const Services = SessionService.layer.pipe(
-  Layer.provideMerge(ApprovalService.layer),
-  Layer.provideMerge(PolicyService.layer),
-  Layer.provideMerge(ProjectService.layer),
-  Layer.provideMerge(GitService.layer),
-  Layer.provideMerge(SessionRepo.layer),
-  Layer.provideMerge(SessionEvents.layer),
+export const Services = Layer.mergeAll(
+  SessionService.layer.pipe(
+    Layer.provideMerge(ApprovalService.layer),
+    Layer.provideMerge(PolicyService.layer),
+    Layer.provideMerge(ProjectService.layer),
+    Layer.provideMerge(GitService.layer),
+    Layer.provideMerge(SessionRepo.layer),
+    Layer.provideMerge(SessionEvents.layer),
+  ),
+  ClaudeAccountService.layer,
 )
 
 export const RpcHandlers = Layer.mergeAll(
@@ -42,23 +48,19 @@ export const RpcHandlers = Layer.mergeAll(
   GitHubHandlers,
   SessionsHandlers,
   ApprovalsHandlers,
+  ClaudeHandlers,
 )
 
 /**
  * Routes, handlers and services. Still needs config, auth token, database,
- * platform, agent runner, GitHub and an HTTP server.
+ * platform, agent runner, the Claude Code runtime, GitHub and an HTTP server.
  */
-export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provide(Services))
+export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
 
 const Banner = Layer.effectDiscard(
   Effect.gen(function* () {
     const config = yield* ServerConfig
     const token = yield* AuthToken
-    if (!process.env["ANTHROPIC_API_KEY"]) {
-      yield* Effect.logWarning(
-        "ANTHROPIC_API_KEY is not set. Agent sessions will fail to start until it is exported.",
-      )
-    }
     yield* Effect.logInfo(
       `Humanity daemon listening on http://${config.host}:${config.port} (data: ${config.home})`,
     )
@@ -67,6 +69,33 @@ const Banner = Layer.effectDiscard(
       console.log(`\n  Open Humanity:  ${config.webOrigin}/?${TOKEN_PARAM}=${token.value}\n`),
     )
   }),
+)
+
+/** One line for the terminal: which Claude account the agent will run as. */
+export const describeClaudeForBanner = (status: ClaudeStatus): string => {
+  const connection = status.connection
+  switch (connection._tag) {
+    case "Connected": {
+      const who = connection.email === null ? "" : ` (${connection.email})`
+      const warning = connection.subscriptionShadowed
+        ? " — overrides your Claude subscription; unset it to use your plan"
+        : ""
+      return `${connection.label}${who}${warning}`
+    }
+    case "SignedOut":
+      return 'not signed in. Run "claude auth login", then open Humanity.'
+    case "Unavailable":
+      return `unavailable: ${connection.reason.split("\n")[0] ?? ""}`
+  }
+}
+
+/** Checks the Claude account in the background; the result is the one the UI then reads. */
+const ClaudeBanner = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const account = yield* ClaudeAccountService
+    const status = yield* account.status({ refresh: false })
+    yield* Effect.sync(() => console.log(`  Claude account: ${describeClaudeForBanner(status)}\n`))
+  }).pipe(Effect.forkScoped),
 )
 
 /** GitHub over the real network, with the token from `gh` or `GITHUB_TOKEN`. */
@@ -84,9 +113,14 @@ const HttpServerLive = Layer.unwrap(
 
 /** The whole daemon as one layer. Needs only a `ServerConfig`. */
 // No per-request log: the RPC socket URL carries the auth token in its query string.
-export const Daemon = HttpRouter.serve(Layer.merge(App, Banner), { disableLogger: true }).pipe(
+export const Daemon = HttpRouter.serve(
+  Layer.merge(Banner, ClaudeBanner).pipe(Layer.provideMerge(App)),
+  { disableLogger: true },
+).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
+  // After the runner: both it and the account check run on this Claude Code.
+  Layer.provide(ClaudeCode.layer),
   Layer.provide(GitHubLive),
   Layer.provide(HttpServerLive),
   Layer.provide(DatabaseLive),

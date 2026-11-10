@@ -2,14 +2,24 @@ import { assert } from "@effect/vitest"
 import type { MessageContent, SessionStatus } from "@humanity/contracts"
 import { Effect, Layer, Stream } from "effect"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
+import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { Services } from "../src/Daemon.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
 /** A full set of services over `home`, with a scripted agent instead of the SDK. */
+/** Session tests never reach Claude Code: the account check is never asked and fails if it is. */
+const NoClaude = ClaudeCode.layerTest(
+  Effect.fail(new ClaudeProbeFailed({ reason: "Claude Code is not used by session tests." })),
+)
+
 export const services = (home: string, script: FakeScript) =>
-  Services.pipe(Layer.provideMerge(AgentRunnerFake(script)), Layer.provideMerge(baseLayer(home)))
+  Services.pipe(
+    Layer.provideMerge(AgentRunnerFake(script)),
+    Layer.provide(NoClaude),
+    Layer.provideMerge(baseLayer(home)),
+  )
 
 /** Polls until `check` returns a value, failing the test after about four seconds. */
 export const eventually = <A, E, R>(
