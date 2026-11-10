@@ -32,3 +32,6 @@ export const createSessionAtom = HumanityClient.mutation("Sessions.create")
 export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const interruptAtom = HumanityClient.mutation("Sessions.interrupt")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")
+
+export const decideChangeAtom = HumanityClient.mutation("Approvals.decideChange")
+export const decideConfirmationAtom = HumanityClient.mutation("Approvals.decideConfirmation")

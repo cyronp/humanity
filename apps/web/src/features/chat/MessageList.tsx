@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageContent, ToolCall } from "@humanity/contracts"
+import type { Approval, ChatMessage, MessageContent, ToolCall } from "@humanity/contracts"
 import { Brain, Info, TriangleAlert } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -12,15 +12,17 @@ export function MessageList({
   messages,
   toolCalls,
   draft,
+  approvalFor,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly draft: string
+  readonly approvalFor: (toolUseId: string) => Approval | undefined
 }) {
   return (
     <ol className="flex flex-col gap-4" aria-label="Conversation">
       {messages.map((message) => {
-        const rendered = renderContent(message.content, toolCalls)
+        const rendered = renderContent(message.content, toolCalls, approvalFor)
         return rendered === null ? null : <li key={message.id}>{rendered}</li>
       })}
       {draft !== "" && (
@@ -32,12 +34,16 @@ export function MessageList({
   )
 }
 
-const renderContent = (content: MessageContent, toolCalls: Readonly<Record<string, ToolCall>>) => {
+const renderContent = (
+  content: MessageContent,
+  toolCalls: Readonly<Record<string, ToolCall>>,
+  approvalFor: (toolUseId: string) => Approval | undefined,
+) => {
   switch (content._tag) {
     case "user":
       return <UserMessage text={content.text} />
     case "assistant":
-      return <AssistantMessage content={content} toolCalls={toolCalls} />
+      return <AssistantMessage content={content} toolCalls={toolCalls} approvalFor={approvalFor} />
     case "result":
       return <TurnFooter content={content} />
     case "system_init":
@@ -62,9 +68,11 @@ function UserMessage({ text }: { readonly text: string }) {
 function AssistantMessage({
   content,
   toolCalls,
+  approvalFor,
 }: {
   readonly content: Content<"assistant">
   readonly toolCalls: Readonly<Record<string, ToolCall>>
+  readonly approvalFor: (toolUseId: string) => Approval | undefined
 }) {
   const nested = content.parentToolUseId !== null
   return (
@@ -87,6 +95,7 @@ function AssistantMessage({
                 toolName={block.toolName}
                 input={block.input}
                 call={toolCalls[block.toolUseId]}
+                approval={approvalFor(block.toolUseId)}
               />
             )
         }

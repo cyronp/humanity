@@ -1,51 +1,15 @@
 import { assert, describe, it } from "@effect/vitest"
-import type { MessageContent, SessionEvent, SessionStatus } from "@humanity/contracts"
-import { Effect, Fiber, Layer, Ref, Stream } from "effect"
+import { type MessageContent, type SessionEvent, setToolRule } from "@humanity/contracts"
+import { Effect, Fiber, Ref, Stream } from "effect"
 import { SqlClient } from "effect/sql"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { AgentRunnerFake, FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
-import { Services } from "../src/Daemon.ts"
+import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
+import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService, sessionBranchName, slugify } from "../src/services/SessionService.ts"
-import { baseLayer, git, tempDir, tempRepo } from "./helpers.ts"
-
-/** A full set of services over `home`, with a scripted agent instead of the SDK. */
-const services = (home: string, script: FakeScript) =>
-  Services.pipe(Layer.provideMerge(AgentRunnerFake(script)), Layer.provideMerge(baseLayer(home)))
-
-const waitForStatus = (sessionId: string, status: SessionStatus) =>
-  Effect.gen(function* () {
-    const sessions = yield* SessionService
-    for (let attempt = 0; attempt < 400; attempt++) {
-      const session = yield* sessions.get(sessionId)
-      if (session.status === status) return session
-      yield* Effect.sleep("10 millis")
-    }
-    const session = yield* sessions.get(sessionId)
-    return assert.fail(`session stayed ${session.status}, expected ${status}`)
-  })
-
-const contents = (sessionId: string) =>
-  Effect.gen(function* () {
-    const sessions = yield* SessionService
-    const snapshot = yield* sessions.subscribe(sessionId).pipe(Stream.take(1), Stream.runCollect)
-    const first = snapshot[0]
-    if (first?._tag !== "Snapshot") return assert.fail("expected a snapshot first")
-    return first
-  })
-
-const tags = (messages: ReadonlyArray<{ readonly content: MessageContent }>) =>
-  messages.map((message) => message.content._tag)
-
-const setup = (files?: Record<string, string>) =>
-  Effect.gen(function* () {
-    const home = yield* tempDir()
-    const repo = yield* tempRepo(files)
-    return { home, repo }
-  })
-
-const addProject = (repo: string) => ProjectService.use((projects) => projects.addLocal(repo))
+import { git } from "./helpers.ts"
+import { addProject, contents, services, setup, tags, waitForStatus } from "./sessionHelpers.ts"
 
 describe("session naming", () => {
   it("slugifies titles into branch-safe names", () => {
@@ -122,7 +86,7 @@ describe("SessionService", () => {
     }),
   )
 
-  it.live("runs only auto tools and denies everything else with an explanation", () =>
+  it.live("runs auto tools without asking and denies deny-mode tools outright", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup({ "app.ts": "export const a = 1\n" })
 
@@ -130,6 +94,10 @@ describe("SessionService", () => {
         const sessions = yield* SessionService
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
+        const policy = yield* PolicyService.use((policies) => policies.get(project.id))
+        yield* PolicyService.use((policies) =>
+          policies.set(project.id, setToolRule(policy, "WebFetch", "deny")),
+        )
         const session = yield* sessions.create({ projectId: project.id, prompt: "go" })
         yield* waitForStatus(session.id, "idle")
 
@@ -138,23 +106,13 @@ describe("SessionService", () => {
           snapshot.toolCalls.map((call) => [call.toolName, call.status]),
           [
             ["Read", "succeeded"],
-            ["Bash", "denied"],
-            ["Edit", "denied"],
+            ["WebFetch", "denied"],
           ],
         )
-        const denial = snapshot.toolCalls[2]?.output
-        assert.isTrue(denial?.isError)
-        assert.match(denial?.content ?? "", /Humanity denied Edit/)
-
-        // Read never asked; Bash and Edit both went through canUseTool.
-        const asked = (yield* Ref.get(log.permissions)).map((entry) => entry.toolName)
-        assert.deepStrictEqual(asked, ["Bash", "Edit"])
-        // Nothing reached disk.
-        assert.strictEqual(
-          readFileSync(join(session.worktreePath, "app.ts"), "utf8"),
-          "export const a = 1\n",
-        )
-        // The project's auto tools are the ones pre-approved for the SDK.
+        assert.match(snapshot.toolCalls[1]?.output?.content ?? "", /policy/)
+        // Neither call reached a human.
+        assert.deepStrictEqual(yield* Ref.get(log.permissions), [])
+        assert.deepStrictEqual(snapshot.approvals, [])
         const [run] = yield* Ref.get(log.runs)
         assert.includeMembers([...(run?.allowedTools ?? [])], ["Read", "Glob", "Grep"])
         assert.notInclude([...(run?.allowedTools ?? [])], "Edit")
@@ -163,12 +121,8 @@ describe("SessionService", () => {
         Effect.provide(
           services(home, () => [
             { tool: "Read", input: { file_path: "app.ts" }, output: "export const a = 1" },
-            { tool: "Bash", input: { command: "rm -rf /" } },
-            {
-              tool: "Edit",
-              input: { file_path: "app.ts", old_string: "a = 1", new_string: "a = 2" },
-            },
-            { text: "I could not change the file." },
+            { tool: "WebFetch", input: { url: "https://example.com" } },
+            { text: "Done." },
           ]),
         ),
       )

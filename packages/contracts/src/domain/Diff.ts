@@ -27,7 +27,7 @@ export const Hunk = Schema.Struct({
   id: Schema.String,
   ...hunkRange,
   status: HunkStatus,
-  comment: Schema.optional(Schema.String),
+  comment: Schema.optionalKey(Schema.String),
   // post-MVP: editedLines: Schema.optional(Schema.Array(Schema.String))
 })
 export type Hunk = typeof Hunk.Type

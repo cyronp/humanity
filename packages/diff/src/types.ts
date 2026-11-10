@@ -20,7 +20,7 @@ export interface DiffHunk {
 export interface Hunk extends DiffHunk {
   readonly id: string
   readonly status: HunkStatus
-  readonly comment?: string | undefined
+  readonly comment?: string
   // post-MVP: readonly editedLines?: ReadonlyArray<string>
 }
 

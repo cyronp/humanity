@@ -3,7 +3,7 @@ import type { Project, Session } from "@humanity/contracts"
 import { Link } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { CircleStop, FolderGit2, GitBranch, Square } from "lucide-react"
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,9 +27,11 @@ import { StatusBadge } from "./StatusBadge.tsx"
 export function SessionHeader({
   project,
   session,
+  actions,
 }: {
   readonly project: Project
   readonly session: Session
+  readonly actions?: ReactNode
 }) {
   const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
   const [error, setError] = useState<string>()
@@ -53,6 +55,7 @@ export function SessionHeader({
         <h1 className="truncate font-semibold">{session.title}</h1>
         <StatusBadge status={session.status} />
         <div className="ml-auto flex items-center gap-2">
+          {actions}
           {isBusy(session.status) && (
             <Button variant="outline" size="sm" onClick={onInterrupt}>
               <Square />

@@ -1,9 +1,14 @@
-import type {
-  ChatMessage,
-  Session,
-  SessionEvent,
-  SessionStatus,
-  ToolCall,
+import {
+  type Approval,
+  approvalKey,
+  type ChatMessage,
+  isPendingApproval,
+  type PendingConfirmation,
+  type ProposedChange,
+  type Session,
+  type SessionEvent,
+  type SessionStatus,
+  type ToolCall,
 } from "@humanity/contracts"
 
 export interface SkillLoad {
@@ -19,6 +24,8 @@ export interface SessionView {
   /** Tool calls by `toolUseId`, so tool_use blocks can find their status and output. */
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly skills: ReadonlyArray<SkillLoad>
+  /** Every approval of the session in request order, pending and decided. */
+  readonly approvals: ReadonlyArray<Approval>
   /** Assistant text streamed so far for the message being written. */
   readonly draft: string
   /** Why the session last stopped with an error, if it did. */
@@ -60,6 +67,7 @@ export const reduceSessionEvent = (
       messages: event.messages,
       toolCalls: byToolUseId(event.toolCalls),
       skills: skillsFrom(event.toolCalls),
+      approvals: event.approvals,
       draft: "",
       error: null,
     }
@@ -101,6 +109,19 @@ export const reduceSessionEvent = (
         ...view,
         toolCalls: { ...view.toolCalls, [event.toolCall.toolUseId]: event.toolCall },
       }
+    case "ApprovalRequested":
+    case "ApprovalResolved": {
+      const key = approvalKey(event.approval)
+      const exists = view.approvals.some((approval) => approvalKey(approval) === key)
+      return {
+        ...view,
+        approvals: exists
+          ? view.approvals.map((approval) =>
+              approvalKey(approval) === key ? event.approval : approval,
+            )
+          : [...view.approvals, event.approval],
+      }
+    }
     case "SkillLoaded":
       return view.skills.some((skill) => skill.toolUseId === event.toolUseId)
         ? view
@@ -117,3 +138,23 @@ export const reduceSessionEvent = (
 /** Statuses in which the agent is doing something and can be interrupted. */
 export const isBusy = (status: SessionStatus): boolean =>
   status === "running" || status === "waiting_for_human"
+
+/** File changes still waiting for the human, oldest first. */
+export const pendingChanges = (view: SessionView): Array<ProposedChange> =>
+  view.approvals.flatMap((approval) =>
+    approval._tag === "change" && isPendingApproval(approval) ? [approval.change] : [],
+  )
+
+/** Tool calls still waiting for an allow or deny, oldest first. */
+export const pendingConfirmations = (view: SessionView): Array<PendingConfirmation> =>
+  view.approvals.flatMap((approval) =>
+    approval._tag === "confirmation" && isPendingApproval(approval) ? [approval.confirmation] : [],
+  )
+
+/** The approval attached to a tool call, if the call needed one. */
+export const approvalForToolUse = (view: SessionView, toolUseId: string): Approval | undefined =>
+  view.approvals.findLast((approval) =>
+    approval._tag === "change"
+      ? approval.change.toolUseId === toolUseId
+      : approval.confirmation.toolUseId === toolUseId,
+  )

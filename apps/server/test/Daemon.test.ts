@@ -127,6 +127,66 @@ describe("daemon", () => {
     }),
   )
 
+  it.live("reviews a change over the socket, end to end", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo({ "app.ts": "const a = 1\nconst b = 2\n" })
+
+      yield* Effect.gen(function* () {
+        const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
+        const project = yield* client("Projects.addLocal", { path: repo })
+        const session = yield* client("Sessions.create", { projectId: project.id, prompt: "edit" })
+
+        const requested = yield* client("Sessions.subscribe", { sessionId: session.id }).pipe(
+          Stream.filter((event) => event._tag === "ApprovalRequested"),
+          Stream.take(1),
+          Stream.runCollect,
+        )
+        const event = requested[0]
+        if (event?._tag !== "ApprovalRequested" || event.approval._tag !== "change") {
+          return assert.fail("expected a change to review")
+        }
+        const pending = yield* client("Approvals.listPending", { sessionId: session.id })
+        assert.lengthOf(pending, 1)
+
+        const resolved = yield* client("Approvals.decideChange", {
+          changeId: event.approval.change.id,
+          decisions: [{ index: 1, decision: "rejected", comment: "keep b" }],
+        })
+        assert.strictEqual(resolved.status, "rejected")
+        assert.strictEqual(resolved.hunks[0]?.comment, "keep b")
+
+        const again = yield* Effect.flip(
+          client("Approvals.decideChange", {
+            changeId: event.approval.change.id,
+            decisions: [{ index: 1, decision: "approved" }],
+          }),
+        )
+        assert.strictEqual(again._tag, "ApprovalAlreadyDecided")
+
+        const policy = yield* client("Projects.getPolicy", { projectId: project.id })
+        const saved = yield* client("Projects.setPolicy", {
+          projectId: project.id,
+          policy: { rules: [...policy.rules, { pattern: "mcp__docs__*", mode: "auto" }] },
+        })
+        assert.deepStrictEqual(saved.rules.at(-1), { pattern: "mcp__docs__*", mode: "auto" })
+      }).pipe(
+        Effect.provide(
+          ClientProtocol.pipe(
+            Layer.provideMerge(
+              daemon(home, () => [
+                {
+                  tool: "Edit",
+                  input: { file_path: "app.ts", old_string: "b = 2", new_string: "b = 3" },
+                },
+              ]),
+            ),
+          ),
+        ),
+      )
+    }),
+  )
+
   it.live("rejects WebSocket connections without a valid token", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()

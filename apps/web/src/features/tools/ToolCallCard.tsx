@@ -1,4 +1,4 @@
-import type { ToolCall } from "@humanity/contracts"
+import type { Approval, ToolCall } from "@humanity/contracts"
 import { cn } from "cn"
 import { Ban, Check, ChevronRight, LoaderCircle, X } from "lucide-react"
 import { useState } from "react"
@@ -32,10 +32,12 @@ export function ToolCallCard({
   toolName,
   input,
   call,
+  approval,
 }: {
   readonly toolName: string
   readonly input: unknown
   readonly call: ToolCall | undefined
+  readonly approval?: Approval | undefined
 }) {
   const [open, setOpen] = useState(false)
   const status = call?.status ?? "running"
@@ -57,7 +59,7 @@ export function ToolCallCard({
           {toolName}
         </Badge>
         <span className="truncate font-mono text-muted-foreground">{summary}</span>
-        {status === "denied" && <span className="ml-auto shrink-0 text-amber-600">denied</span>}
+        <ApprovalBadge approval={approval} denied={status === "denied"} />
       </button>
       {open && (
         <div className="flex flex-col gap-2 border-t p-2.5">
@@ -81,5 +83,47 @@ function Section({ title, children }: { readonly title: string; readonly childre
         {children === "" ? "(empty)" : children}
       </pre>
     </div>
+  )
+}
+
+const OUTCOME_LABEL: Record<string, string> = {
+  pending: "waiting for you",
+  applied: "applied",
+  partially_applied: "partially applied",
+  rejected: "rejected",
+  expired: "expired",
+  allowed: "allowed",
+  denied: "denied",
+}
+
+/** Where the human's decision on this call stands, if it needed one. */
+function ApprovalBadge({
+  approval,
+  denied,
+}: {
+  readonly approval: Approval | undefined
+  readonly denied: boolean
+}) {
+  const status =
+    approval === undefined
+      ? denied
+        ? "denied"
+        : undefined
+      : approval._tag === "change"
+        ? approval.change.status
+        : approval.confirmation.status
+  if (status === undefined) return null
+  return (
+    <span
+      className={cn(
+        "ml-auto shrink-0",
+        status === "pending" && "animate-pulse font-medium text-amber-600",
+        (status === "applied" || status === "allowed") && "text-emerald-600 dark:text-emerald-400",
+        (status === "rejected" || status === "denied") && "text-red-600 dark:text-red-400",
+        (status === "partially_applied" || status === "expired") && "text-amber-600",
+      )}
+    >
+      {OUTCOME_LABEL[status] ?? status}
+    </span>
   )
 }

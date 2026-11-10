@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { ChevronLeft } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
 import { BranchesCard } from "@/features/git/BranchesCard"
+import { PolicyCard } from "@/features/policy/PolicyCard"
 import { StatusCard } from "@/features/git/StatusCard"
 import { useProject } from "@/features/projects/useProject"
 import { SessionsCard } from "@/features/session/SessionsCard"
@@ -50,6 +51,7 @@ function ProjectOverview({ project }: { readonly project: Project }) {
       <SessionsCard project={project} />
       <BranchesCard project={project} />
       <StatusCard project={project} />
+      <PolicyCard project={project} />
     </>
   )
 }

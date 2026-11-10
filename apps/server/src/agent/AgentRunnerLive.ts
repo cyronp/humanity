@@ -60,9 +60,9 @@ const errorMessage = (cause: unknown) =>
  */
 const policyGuard =
   (options: AgentRunOptions): HookCallback =>
-  async (input) => {
+  async (input, toolUseId) => {
     if (input.hook_event_name !== "PreToolUse") return {}
-    const mode = options.toolMode(input.tool_name)
+    const mode = options.toolMode(input.tool_name, toolUseId)
     if (mode === "auto") return {}
     return {
       hookSpecificOutput: {

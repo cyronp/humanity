@@ -1,12 +1,15 @@
 import {
+  ChangeId,
   type ChatMessage,
+  ConfirmationId,
   type GitBranchExists,
   type GitInvalidBranchName,
   type GitRefNotFound,
   type MessageContent,
+  type PendingConfirmation,
   type Project,
   type ProjectNotFound,
-  resolveToolMode,
+  type ProposedChange,
   type Session,
   SessionEnded,
   type SessionEvent,
@@ -15,7 +18,19 @@ import {
   type SessionStatus,
   type ToolCall,
 } from "@humanity/contracts"
-import { Context, DateTime, Effect, Exit, Layer, Option, Scope, Semaphore, Stream } from "effect"
+import { changeKind } from "@humanity/diff"
+import {
+  Context,
+  DateTime,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  Scope,
+  Semaphore,
+  Stream,
+} from "effect"
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
 import {
@@ -25,10 +40,13 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
+import { planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
+import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
+import { PolicyService } from "./PolicyService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
@@ -48,7 +66,7 @@ export const slugify = (title: string): string =>
   title
     .normalize("NFKD")
     // Drop the accents NFKD split off: `Ü` becomes `U`, not `u-`.
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -58,9 +76,6 @@ export const slugify = (title: string): string =>
 /** `humanity/<short-id>-<slug>` */
 export const sessionBranchName = (sessionId: string, title: string): string =>
   `humanity/${sessionId.slice(0, 8)}-${slugify(title)}`
-
-const deniedMessage = (toolName: string) =>
-  `Humanity denied ${toolName}: in this version only read-only tools run, and changes need human review, which is not enabled yet. Use Read, Glob and Grep, and describe the change you would make instead.`
 
 export class SessionService extends Context.Service<
   SessionService,
@@ -99,6 +114,9 @@ export class SessionService extends Context.Service<
       const projects = yield* ProjectService
       const git = yield* GitService
       const config = yield* ServerConfig
+      const fs = yield* FileSystem.FileSystem
+      const policies = yield* PolicyService
+      const approvals = yield* ApprovalService
       const serviceScope = yield* Effect.scope
 
       const active = new Map<string, ActiveRun>()
@@ -133,19 +151,117 @@ export class SessionService extends Context.Service<
           return message
         })
 
-      /** M3: only `auto` tools run. Everything else is denied with an explanation. */
+      /** Shows the agent as blocked on the human while `waitForHuman` runs. */
+      const whileWaiting = <A>(sessionId: string, waitForHuman: Effect.Effect<A>) =>
+        Effect.gen(function* () {
+          yield* setStatus(sessionId, "waiting_for_human")
+          return yield* waitForHuman
+        }).pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              const pending = yield* approvals.pendingCount(sessionId)
+              const session = yield* repo.get(sessionId)
+              // An interrupt or a crash sets its own status; only an answered request resumes.
+              if (
+                pending === 0 &&
+                Option.isSome(session) &&
+                session.value.status === "waiting_for_human"
+              ) {
+                yield* setStatus(sessionId, "running")
+              }
+            }),
+          ),
+        )
+
+      const confirm = (session: Session, request: ToolPermissionRequest) =>
+        Effect.gen(function* () {
+          const confirmation: PendingConfirmation = {
+            id: ConfirmationId.make(randomUUID()),
+            sessionId: session.id,
+            toolUseId: request.toolUseId,
+            toolName: request.toolName,
+            input: request.input,
+            status: "pending",
+            createdAt: yield* now,
+          }
+          return yield* whileWaiting(session.id, approvals.requestConfirmation(confirmation))
+        })
+
+      /** The review flow: simulate the edit, split it into hunks, wait for the human's verdict. */
+      const review = (session: Session, request: ToolPermissionRequest) =>
+        Effect.gen(function* () {
+          const target = reviewTarget(request.toolName, request.input, session.worktreePath)
+          if (target._tag === "Confirm") return yield* confirm(session, request)
+          if (target._tag === "Deny") {
+            return { behavior: "deny", message: target.message } satisfies PermissionDecision
+          }
+
+          const exists = yield* fs
+            .exists(target.absolutePath)
+            .pipe(Effect.orElseSucceed(() => false))
+          const originalContent = exists
+            ? yield* fs.readFileString(target.absolutePath).pipe(Effect.orElseSucceed(() => null))
+            : ""
+          if (originalContent === null) {
+            return {
+              behavior: "deny",
+              message: `NOT APPLIED: Humanity could not read ${target.filePath} to review the change.`,
+            } satisfies PermissionDecision
+          }
+
+          const id = ChangeId.make(randomUUID())
+          const plan = planChange({
+            toolName: request.toolName,
+            input: request.input,
+            filePath: target.filePath,
+            originalContent,
+            idPrefix: id,
+          })
+          if (plan._tag === "Deny") {
+            return { behavior: "deny", message: plan.message } satisfies PermissionDecision
+          }
+
+          const change: ProposedChange = {
+            id,
+            sessionId: session.id,
+            toolUseId: request.toolUseId,
+            toolName: request.toolName,
+            filePath: target.filePath,
+            kind: changeKind(exists),
+            originalContent,
+            proposedContent: plan.proposedContent,
+            hunks: plan.hunks,
+            status: "pending",
+            createdAt: yield* now,
+          }
+          return yield* whileWaiting(session.id, approvals.requestChange(change))
+        })
+
+      /**
+       * Every tool call that is not pre-approved lands here. The policy is read
+       * fresh on each call, so a change in settings applies to running agents.
+       */
       const decide =
         (session: Session, state: { readonly denied: Set<string> }) =>
         (request: ToolPermissionRequest): Effect.Effect<PermissionDecision> =>
           Effect.gen(function* () {
-            const project = yield* projects.get(session.projectId).pipe(Effect.option)
-            const mode = Option.match(project, {
-              onNone: () => "deny" as const,
-              onSome: (value) => resolveToolMode(value.policy, request.toolName),
+            const decision: PermissionDecision = yield* Effect.gen(function* () {
+              switch (policies.modeFor(session.projectId, request.toolName)) {
+                case "auto":
+                  return { behavior: "allow" } as const
+                case "deny":
+                  return {
+                    behavior: "deny",
+                    message: `DENIED: this project's Humanity policy does not allow ${request.toolName}.`,
+                  } as const
+                case "review":
+                  return yield* review(session, request)
+                case "confirm":
+                  return yield* confirm(session, request)
+              }
             })
-            if (mode === "auto") return { behavior: "allow" } as const
-            state.denied.add(request.toolUseId)
-            return { behavior: "deny", message: deniedMessage(request.toolName) } as const
+            if (decision.behavior === "deny") state.denied.add(request.toolUseId)
+            return decision
           })
 
       const startToolCalls = (session: Session, content: MessageContent) =>
@@ -265,6 +381,8 @@ export class SessionService extends Context.Service<
           if (state === undefined) return
           active.delete(sessionId)
           yield* Scope.close(state.scope, Exit.void)
+          // Anything the agent was still waiting on can no longer be answered.
+          yield* approvals.expireSession(sessionId)
         })
 
       const ensureRun = (session: Session) =>
@@ -273,7 +391,8 @@ export class SessionService extends Context.Service<
             const existing = active.get(session.id)
             if (existing !== undefined) return existing
 
-            const project = yield* projects.get(session.projectId).pipe(Effect.orDie)
+            // Loads the policy into the cache that every tool call reads synchronously.
+            const policy = yield* policies.get(session.projectId).pipe(Effect.orDie)
             const scope = yield* Scope.fork(serviceScope)
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
@@ -286,10 +405,17 @@ export class SessionService extends Context.Service<
               .start({
                 cwd: session.worktreePath,
                 resume: session.sdkSessionId ?? undefined,
-                allowedTools: project.policy.rules
+                // Only exact `auto` names. If the policy later tightens one of them, the
+                // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
+                allowedTools: policy.rules
                   .filter((rule) => rule.mode === "auto" && !rule.pattern.endsWith("*"))
                   .map((rule) => rule.pattern),
-                toolMode: (toolName) => resolveToolMode(project.policy, toolName),
+                toolMode: (toolName, toolUseId) => {
+                  const mode = policies.modeFor(session.projectId, toolName)
+                  // Denied before canUseTool runs: still shown as a denial, not a failure.
+                  if (mode === "deny" && toolUseId !== undefined) state.denied.add(toolUseId)
+                  return mode
+                },
                 canUseTool: decide(session, state),
               })
               .pipe(Scope.provide(scope))
@@ -385,6 +511,8 @@ export class SessionService extends Context.Service<
         state.interrupted = true
         yield* setStatus(sessionId, "interrupted")
         yield* state.run.interrupt
+        // The SDK aborts pending permission requests itself; this is the safety net.
+        yield* approvals.expireSession(sessionId)
       })
 
       const end = Effect.fn("SessionService.end")(function* (
@@ -420,6 +548,7 @@ export class SessionService extends Context.Service<
               session,
               messages: yield* repo.listMessages(sessionId),
               toolCalls: yield* repo.listToolCalls(sessionId),
+              approvals: yield* approvals.listForSession(sessionId),
             }
             return Stream.concat(Stream.make(snapshot), Stream.fromSubscription(subscription))
           }),

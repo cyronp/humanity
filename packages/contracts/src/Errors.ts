@@ -93,3 +93,28 @@ export class SessionEnded extends Schema.TaggedError<SessionEnded>()("SessionEnd
     return "This session has ended. Start a new session to keep working."
   }
 }
+
+export class ApprovalNotFound extends Schema.TaggedError<ApprovalNotFound>()("ApprovalNotFound", {
+  id: Schema.String,
+}) {
+  override get message() {
+    return "This approval request no longer exists. The agent may have been interrupted or the daemon restarted."
+  }
+}
+
+export class ApprovalAlreadyDecided extends Schema.TaggedError<ApprovalAlreadyDecided>()(
+  "ApprovalAlreadyDecided",
+  { id: Schema.String, status: Schema.String },
+) {
+  override get message() {
+    return `This request was already resolved (${this.status}).`
+  }
+}
+
+export class IncompleteReview extends Schema.TaggedError<IncompleteReview>()("IncompleteReview", {
+  missing: Schema.Array(Schema.Int),
+}) {
+  override get message() {
+    return `Decide every hunk before submitting. Still undecided: ${this.missing.join(", ")}.`
+  }
+}

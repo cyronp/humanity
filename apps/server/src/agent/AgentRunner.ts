@@ -18,8 +18,11 @@ export interface AgentRunOptions {
   readonly resume: string | undefined
   /** Tools that run without asking: exactly the project's `auto` tools. */
   readonly allowedTools: ReadonlyArray<string>
-  /** The project's policy, consulted before any permission rule from settings files. */
-  readonly toolMode: (toolName: string) => ToolMode
+  /**
+   * The project's policy, consulted before any permission rule from settings
+   * files. `toolUseId` identifies the call when the SDK provides it.
+   */
+  readonly toolMode: (toolName: string, toolUseId: string | undefined) => ToolMode
   /**
    * Decides every tool call that is not in `allowedTools`. The effect is
    * interrupted if the agent aborts the call (for example on interrupt), so

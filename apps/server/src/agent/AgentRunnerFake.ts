@@ -101,7 +101,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           const decide = (step: Extract<FakeStep, { tool: string }>, toolUseId: string) =>
             Effect.gen(function* () {
-              const mode = options.toolMode(step.tool)
+              const mode = options.toolMode(step.tool, toolUseId)
               if (mode === "deny") {
                 return {
                   behavior: "deny",

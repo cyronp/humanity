@@ -1,7 +1,8 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { ProjectId } from "../domain/Project.ts"
-import { Session, SessionEvent, SessionId } from "../domain/Session.ts"
+import { Session, SessionId } from "../domain/Session.ts"
+import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
   GitBranchExists,
   GitCommandFailed,

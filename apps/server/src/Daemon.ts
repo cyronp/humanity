@@ -8,11 +8,14 @@ import { AuthToken } from "./AuthToken.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
+import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
+import { ApprovalService } from "./services/ApprovalService.ts"
 import { GitService } from "./services/GitService.ts"
+import { PolicyService } from "./services/PolicyService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
@@ -22,13 +25,20 @@ import { SessionService } from "./services/SessionService.ts"
  * runner they are given. Tests swap in the fake runner here.
  */
 export const Services = SessionService.layer.pipe(
+  Layer.provideMerge(ApprovalService.layer),
+  Layer.provideMerge(PolicyService.layer),
   Layer.provideMerge(ProjectService.layer),
   Layer.provideMerge(GitService.layer),
   Layer.provideMerge(SessionRepo.layer),
   Layer.provideMerge(SessionEvents.layer),
 )
 
-export const RpcHandlers = Layer.mergeAll(ProjectsHandlers, GitHandlers, SessionsHandlers)
+export const RpcHandlers = Layer.mergeAll(
+  ProjectsHandlers,
+  GitHandlers,
+  SessionsHandlers,
+  ApprovalsHandlers,
+)
 
 /** Routes, handlers and services. Still needs config, token, database, platform, agent runner and an HTTP server. */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provide(Services))

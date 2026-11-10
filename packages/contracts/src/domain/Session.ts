@@ -123,33 +123,3 @@ export const ToolCall = Schema.Struct({
   finishedAt: Schema.NullOr(Schema.String),
 })
 export type ToolCall = typeof ToolCall.Type
-
-// ---------------------------------------------------------------------------
-// Events streamed by `Sessions.subscribe`.
-// ---------------------------------------------------------------------------
-
-export const SessionEvent = Schema.Union([
-  /** First event of every subscription: the whole current state. */
-  Schema.TaggedStruct("Snapshot", {
-    session: Session,
-    messages: Schema.Array(ChatMessage),
-    toolCalls: Schema.Array(ToolCall),
-  }),
-  Schema.TaggedStruct("SessionStatusChanged", {
-    status: SessionStatus,
-    /** Why the session stopped, when it stopped because of an error. */
-    error: Schema.NullOr(Schema.String),
-  }),
-  Schema.TaggedStruct("SessionUpdated", { session: Session }),
-  Schema.TaggedStruct("AgentMessage", { message: ChatMessage }),
-  /** Streamed text of the assistant message being written. Not persisted. */
-  Schema.TaggedStruct("TextDelta", { text: Schema.String }),
-  Schema.TaggedStruct("ToolCallStarted", { toolCall: ToolCall }),
-  Schema.TaggedStruct("ToolCallFinished", { toolCall: ToolCall }),
-  Schema.TaggedStruct("SkillLoaded", {
-    toolUseId: Schema.String,
-    skill: Schema.String,
-    at: Schema.String,
-  }),
-])
-export type SessionEvent = typeof SessionEvent.Type

@@ -1,5 +1,8 @@
 import {
+  type Approval,
+  ChangeId,
   type ChatMessage,
+  ConfirmationId,
   ProjectId,
   type Session,
   type SessionEvent,
@@ -7,7 +10,14 @@ import {
   type ToolCall,
 } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { isBusy, reduceSessionEvent, type SessionView } from "@/features/session/state"
+import {
+  approvalForToolUse,
+  isBusy,
+  pendingChanges,
+  pendingConfirmations,
+  reduceSessionEvent,
+  type SessionView,
+} from "@/features/session/state"
 
 const sessionId = SessionId.make("s1")
 
@@ -48,6 +58,7 @@ const snapshot = (overrides: Partial<Extract<SessionEvent, { _tag: "Snapshot" }>
     session,
     messages: [],
     toolCalls: [],
+    approvals: [],
     ...overrides,
   }) satisfies SessionEvent
 
@@ -151,5 +162,57 @@ describe("reduceSessionEvent", () => {
   it("adds each skill load once", () => {
     const event: SessionEvent = { _tag: "SkillLoaded", toolUseId: "t9", skill: "pdf", at: "x" }
     expect(fold([snapshot(), event, event])?.skills).toHaveLength(1)
+  })
+
+  it("tracks approvals as they are requested and resolved", () => {
+    const change: Approval = {
+      _tag: "change",
+      change: {
+        id: ChangeId.make("c1"),
+        sessionId,
+        toolUseId: "toolu_edit",
+        toolName: "Edit",
+        filePath: "a.ts",
+        kind: "modify",
+        originalContent: "a",
+        proposedContent: "b",
+        hunks: [],
+        status: "pending",
+        createdAt: "t1",
+      },
+    }
+    const confirmation: Approval = {
+      _tag: "confirmation",
+      confirmation: {
+        id: ConfirmationId.make("k1"),
+        sessionId,
+        toolUseId: "toolu_bash",
+        toolName: "Bash",
+        input: { command: "ls" },
+        status: "pending",
+        createdAt: "t2",
+      },
+    }
+    const waiting = fold([
+      snapshot(),
+      { _tag: "ApprovalRequested", approval: change },
+      { _tag: "ApprovalRequested", approval: confirmation },
+    ])
+    expect(waiting && pendingChanges(waiting).map((c) => c.id)).toEqual(["c1"])
+    expect(waiting && pendingConfirmations(waiting).map((c) => c.id)).toEqual(["k1"])
+    expect(waiting && approvalForToolUse(waiting, "toolu_bash")?._tag).toBe("confirmation")
+
+    const decided = fold(
+      [
+        {
+          _tag: "ApprovalResolved",
+          approval: { _tag: "change", change: { ...change.change, status: "partially_applied" } },
+        },
+      ],
+      waiting,
+    )
+    expect(decided?.approvals).toHaveLength(2)
+    expect(decided && pendingChanges(decided)).toEqual([])
+    expect(decided && pendingConfirmations(decided)).toHaveLength(1)
   })
 })
