@@ -43,10 +43,9 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center gap-2 pl-2">
+        <div className="mb-2 flex items-center gap-2 pl-2">
           <Link to="/" onClick={close} className="flex min-w-0 flex-1 items-baseline gap-2">
             <span className="font-semibold tracking-tight">Humanity</span>
-            <span className="truncate text-xs text-muted-foreground">human in the loop</span>
           </Link>
           <SidebarTrigger className="text-muted-foreground" />
         </div>
