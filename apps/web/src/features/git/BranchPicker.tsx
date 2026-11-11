@@ -5,6 +5,7 @@ import { Cloud, GitBranch } from "lucide-react"
 import { useState } from "react"
 import {
   Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,
@@ -13,7 +14,6 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { InputGroupButton } from "@/components/ui/input-group"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { describeCause } from "@/lib/errors"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
@@ -25,7 +25,8 @@ const byRecentCommit = (a: Branch, b: Branch) =>
 
 /**
  * Picks the branch the project's checkout switches to for a new thread: a
- * searchable popup listing local and remote branches with their last commit.
+ * searchable palette floating at the top of the page, like VS Code's quick
+ * pick, listing local and remote branches with their last commit.
  */
 export function BranchPicker({
   project,
@@ -64,18 +65,26 @@ export function BranchPicker({
     ))
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <InputGroupButton
-          size="sm"
-          className="max-w-52 text-muted-foreground hover:text-foreground"
-          aria-label={`Work on branch ${value}`}
-        >
-          <GitBranch />
-          <span className="truncate font-mono text-xs">{value}</span>
-        </InputGroupButton>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[30rem] max-w-[calc(100vw-2rem)] p-0">
+    <>
+      <InputGroupButton
+        size="sm"
+        className="max-w-52 text-muted-foreground hover:text-foreground"
+        aria-label={`Work on branch ${value}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        <GitBranch />
+        <span className="truncate font-mono text-xs">{value}</span>
+      </InputGroupButton>
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Select a branch"
+        description="Search for a branch to work on"
+        className="top-3 sm:max-w-xl"
+      >
         <Command>
           <CommandInput placeholder="Select a branch to work on" />
           <CommandList className="max-h-96">
@@ -101,8 +110,8 @@ export function BranchPicker({
             )}
           </CommandList>
         </Command>
-      </PopoverContent>
-    </Popover>
+      </CommandDialog>
+    </>
   )
 }
 
