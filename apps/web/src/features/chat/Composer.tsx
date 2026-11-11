@@ -8,6 +8,12 @@ import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import { sendMessageAtom, setAutonomyAtom, setModelAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
+import {
+  AttachButton,
+  AttachmentTray,
+  dropTargetClass,
+  useAttachmentDraft,
+} from "./attachments.tsx"
 import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
 
 /** The message box of an open thread. Enter sends, Shift+Enter adds a line. Follow-ups are queued while the agent works. */
@@ -34,17 +40,26 @@ export function Composer({
   const [error, setError] = useState<string>()
   const [autonomyError, setAutonomyError] = useState<string>()
   const [modelError, setModelError] = useState<string>()
+  const files = useAttachmentDraft()
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
     const trimmed = text.trim()
-    if (trimmed === "" || pending || disabled) return
+    if (trimmed === "" || pending || disabled || files.reading) return
     setPending(true)
     setError(undefined)
-    const exit = await send({ payload: { sessionId, text: trimmed } })
+    const exit = await send({
+      payload: {
+        sessionId,
+        text: trimmed,
+        ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
+      },
+    })
     setPending(false)
-    if (Exit.isSuccess(exit)) setText("")
-    else setError(describeCause(exit.cause))
+    if (Exit.isSuccess(exit)) {
+      setText("")
+      files.clear()
+    } else setError(describeCause(exit.cause))
   }
 
   // The session's `SessionUpdated` event brings the new value back into `autonomy`.
@@ -77,11 +92,16 @@ export function Composer({
       {modelError !== undefined && (
         <ErrorNote title="The model was not changed" message={modelError} />
       )}
-      <ChatBox>
+      {files.error !== undefined && (
+        <ErrorNote title="Some files were not attached" message={files.error} />
+      )}
+      <ChatBox className={dropTargetClass} {...(disabled ? {} : files.dropProps)}>
+        <AttachmentTray draft={files} />
         <InputGroupTextarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={disabled ? undefined : files.onPaste}
           placeholder={
             disabled
               ? "This session has ended."
@@ -95,6 +115,7 @@ export function Composer({
           aria-label="Message to the agent"
         />
         <ChatBoxFooter>
+          <AttachButton onFiles={(picked) => void files.add(picked)} disabled={disabled} />
           <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
           {busy && (
             <InputGroupText className="px-1.5 text-xs font-normal">
@@ -104,8 +125,8 @@ export function Composer({
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker value={model} onChange={changeModel} disabled={disabled} />
             <SendButton
-              ready={!disabled && !pending && text.trim() !== ""}
-              disabled={disabled || pending || text.trim() === ""}
+              ready={!disabled && !pending && !files.reading && text.trim() !== ""}
+              disabled={disabled || pending || files.reading || text.trim() === ""}
               label="Send"
             />
           </div>

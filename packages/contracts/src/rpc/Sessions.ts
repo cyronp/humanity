@@ -1,11 +1,14 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
+import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { Session, SessionId } from "../domain/Session.ts"
 import { WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
+  AttachmentNotFound,
+  AttachmentRejected,
   GitBranchExists,
   GitCommandFailed,
   GitInvalidBranchName,
@@ -47,6 +50,8 @@ export const SessionsRpcs = RpcGroup.make(
       /** Branch to start from. Defaults to the project's default branch. */
       baseBranch: Schema.optional(Schema.String),
       prompt: Schema.optional(Schema.String),
+      /** Files sent with `prompt`. */
+      attachments: Schema.optional(Schema.Array(AttachmentUpload)),
       /** A model value from `Claude.status`. Claude Code's default when absent. */
       model: Schema.optional(Schema.String),
       /** `ask` (the project's policy as it is) when absent. */
@@ -61,6 +66,7 @@ export const SessionsRpcs = RpcGroup.make(
       GitBranchExists,
       GitInvalidBranchName,
       GitRefNotFound,
+      AttachmentRejected,
     ]),
   }),
   /** Changes how much the agent may do without asking. Applies from the next tool call. */
@@ -80,8 +86,18 @@ export const SessionsRpcs = RpcGroup.make(
     error: Schema.Union([SessionNotFound, SessionEnded]),
   }),
   Rpc.make("Sessions.sendMessage", {
-    payload: { sessionId: SessionId, text: Schema.NonEmptyString },
-    error: Schema.Union([SessionNotFound, SessionEnded]),
+    payload: {
+      sessionId: SessionId,
+      text: Schema.NonEmptyString,
+      attachments: Schema.optional(Schema.Array(AttachmentUpload)),
+    },
+    error: Schema.Union([SessionNotFound, SessionEnded, AttachmentRejected]),
+  }),
+  /** The bytes of a file attached to one of the session's messages. */
+  Rpc.make("Sessions.attachment", {
+    payload: { sessionId: SessionId, attachmentId: Schema.String },
+    success: AttachmentContent,
+    error: Schema.Union([SessionNotFound, AttachmentNotFound]),
   }),
   Rpc.make("Sessions.interrupt", {
     payload: { sessionId: SessionId },

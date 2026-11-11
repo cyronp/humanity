@@ -33,12 +33,30 @@ export interface AgentRunOptions {
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
 }
 
+export type AgentImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+
+/** A file sent with a user message, in the form the Messages API takes it. */
+export type AgentAttachment =
+  | {
+      readonly kind: "image"
+      readonly name: string
+      readonly mediaType: AgentImageMediaType
+      readonly base64: string
+    }
+  | { readonly kind: "pdf"; readonly name: string; readonly base64: string }
+  | { readonly kind: "text"; readonly name: string; readonly text: string }
+
+export interface AgentUserMessage {
+  readonly text: string
+  readonly attachments: ReadonlyArray<AgentAttachment>
+}
+
 /** One running agent conversation in streaming input mode. */
 export interface AgentRun {
   /** Raw SDK messages, in order. Ends when the run is closed. */
   readonly messages: Stream.Stream<unknown, AgentRunError>
   /** Queues a user message; the agent answers when its current turn is over. */
-  readonly send: (text: string) => Effect.Effect<void>
+  readonly send: (message: AgentUserMessage) => Effect.Effect<void>
   /** Stops the current turn. The run stays open for the next message. */
   readonly interrupt: Effect.Effect<void>
   /** Switches the model for the rest of the run; `undefined` is Claude Code's default. */

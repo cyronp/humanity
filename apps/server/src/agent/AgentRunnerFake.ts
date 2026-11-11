@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import {
   type AgentRunOptions,
   AgentRunner,
+  type AgentUserMessage,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
@@ -34,6 +35,8 @@ export class FakeAgentLog extends Context.Service<
   {
     readonly runs: Ref.Ref<ReadonlyArray<AgentRunOptions>>
     readonly prompts: Ref.Ref<ReadonlyArray<string>>
+    /** Every user message as the agent received it, files included. */
+    readonly sent: Ref.Ref<ReadonlyArray<AgentUserMessage>>
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
     /** Every `setModel` on a running agent, in order. */
     readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
@@ -231,10 +234,11 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           return {
             messages: Stream.fromQueue(outbox),
-            send: (text: string) =>
-              Ref.update(log.prompts, (all) => [...all, text]).pipe(
+            send: (message: AgentUserMessage) =>
+              Ref.update(log.prompts, (all) => [...all, message.text]).pipe(
+                Effect.andThen(Ref.update(log.sent, (all) => [...all, message])),
                 Effect.tap(() => Effect.sync(() => pending++)),
-                Effect.andThen(Queue.offer(prompts, text)),
+                Effect.andThen(Queue.offer(prompts, message.text)),
                 Effect.asVoid,
               ),
             interrupt: Ref.get(current).pipe(
@@ -263,6 +267,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
           return FakeAgentLog.of({
             runs: yield* Ref.make<ReadonlyArray<AgentRunOptions>>([]),
             prompts: yield* Ref.make<ReadonlyArray<string>>([]),
+            sent: yield* Ref.make<ReadonlyArray<AgentUserMessage>>([]),
             permissions: yield* Ref.make<ReadonlyArray<PermissionLogEntry>>([]),
             modelChanges: yield* Ref.make<ReadonlyArray<string | undefined>>([]),
           })

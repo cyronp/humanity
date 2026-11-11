@@ -12,6 +12,8 @@ export interface ServerConfigShape {
   readonly databasePath: string
   readonly worktreesDir: string
   readonly reposDir: string
+  /** Files attached to messages: `<attachmentsDir>/<sessionId>/<attachmentId>`. */
+  readonly attachmentsDir: string
   readonly authTokenPath: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
@@ -33,6 +35,7 @@ const make = (options: {
     databasePath: join(home, "humanity.db"),
     worktreesDir: join(home, "worktrees"),
     reposDir: join(home, "repos"),
+    attachmentsDir: join(home, "attachments"),
     authTokenPath: join(home, "auth-token"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
@@ -51,6 +54,7 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         const config = make(options)
         yield* fs.makeDirectory(config.worktreesDir, { recursive: true })
         yield* fs.makeDirectory(config.reposDir, { recursive: true })
+        yield* fs.makeDirectory(config.attachmentsDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

@@ -13,7 +13,10 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.setAutonomy": ({ sessionId, autonomy }) =>
         sessions.setAutonomy(sessionId, autonomy),
       "Sessions.setModel": ({ sessionId, model }) => sessions.setModel(sessionId, model),
-      "Sessions.sendMessage": ({ sessionId, text }) => sessions.sendMessage(sessionId, text),
+      "Sessions.sendMessage": ({ sessionId, text, attachments }) =>
+        sessions.sendMessage(sessionId, text, attachments ?? []),
+      "Sessions.attachment": ({ sessionId, attachmentId }) =>
+        sessions.attachment(sessionId, attachmentId),
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),

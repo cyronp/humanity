@@ -7,7 +7,12 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 import { Effect, Layer, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
-import { type AgentRunOptions, AgentRunError, AgentRunner } from "./AgentRunner.ts"
+import {
+  type AgentRunOptions,
+  AgentRunError,
+  AgentRunner,
+  type AgentUserMessage,
+} from "./AgentRunner.ts"
 
 /** An async iterable fed from outside: the SDK's streaming input. */
 class Inbox<T> implements AsyncIterable<T> {
@@ -76,6 +81,42 @@ const policyGuard =
     }
   }
 
+/**
+ * A user message for the Messages API. Files go first, each document titled
+ * with its name, then the text, as the API recommends for images and documents.
+ */
+const userContent = (message: AgentUserMessage): SDKUserMessage["message"]["content"] => {
+  if (message.attachments.length === 0) return message.text
+  return [
+    ...message.attachments.map((file) => {
+      switch (file.kind) {
+        case "image":
+          return {
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: file.mediaType, data: file.base64 },
+          }
+        case "pdf":
+          return {
+            type: "document" as const,
+            title: file.name,
+            source: {
+              type: "base64" as const,
+              media_type: "application/pdf" as const,
+              data: file.base64,
+            },
+          }
+        case "text":
+          return {
+            type: "document" as const,
+            title: file.name,
+            source: { type: "text" as const, media_type: "text/plain" as const, data: file.text },
+          }
+      }
+    }),
+    { type: "text" as const, text: message.text },
+  ]
+}
+
 export const AgentRunnerLive = Layer.effect(
   AgentRunner,
   Effect.gen(function* () {
@@ -140,11 +181,11 @@ export const AgentRunnerLive = Layer.effect(
             handle,
             (cause) => new AgentRunError({ message: errorMessage(cause) }),
           ),
-          send: (text: string) =>
+          send: (message: AgentUserMessage) =>
             Effect.sync(() =>
               inbox.push({
                 type: "user",
-                message: { role: "user", content: text },
+                message: { role: "user", content: userContent(message) },
                 parent_tool_use_id: null,
               }),
             ),

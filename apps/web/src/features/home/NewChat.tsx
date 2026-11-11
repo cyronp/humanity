@@ -9,6 +9,12 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { InputGroupTextarea } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  AttachButton,
+  AttachmentTray,
+  dropTargetClass,
+  useAttachmentDraft,
+} from "@/features/chat/attachments"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
@@ -96,6 +102,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
+  const files = useAttachmentDraft()
 
   const baseBranch =
     chosenBranch?.projectId === project.id ? chosenBranch.name : project.defaultBranch
@@ -103,7 +110,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
     const prompt = text.trim()
-    if (prompt === "" || pending) return
+    if (prompt === "" || pending || files.reading) return
     setPending(true)
     setError(undefined)
     const exit = await create({
@@ -111,6 +118,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
         projectId: project.id,
         baseBranch,
         prompt,
+        ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
         autonomy,
         ...(model === null ? {} : { model }),
       },
@@ -122,6 +130,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
       return
     }
     setText("")
+    files.clear()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",
       params: { projectId: project.id, sessionId: exit.value.id },
@@ -137,11 +146,16 @@ function NewChatForm({ project }: { readonly project: Project }) {
 
   return (
     <form onSubmit={submit} className="flex w-full max-w-2xl flex-col gap-3">
-      <ChatBox>
+      {files.error !== undefined && (
+        <ErrorNote title="Some files were not attached" message={files.error} />
+      )}
+      <ChatBox className={dropTargetClass} {...(pending ? {} : files.dropProps)}>
+        <AttachmentTray draft={files} />
         <InputGroupTextarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={pending ? undefined : files.onPaste}
           placeholder={`Ask the agent to work on ${project.name}…`}
           disabled={pending}
           rows={3}
@@ -150,6 +164,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
           aria-label="First message to the agent"
         />
         <ChatBoxFooter>
+          <AttachButton onFiles={(picked) => void files.add(picked)} disabled={pending} />
           <BranchPicker
             project={project}
             value={baseBranch}
@@ -160,8 +175,8 @@ function NewChatForm({ project }: { readonly project: Project }) {
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker value={model} onChange={setModel} />
             <SendButton
-              ready={text.trim() !== "" && !pending}
-              disabled={pending || text.trim() === ""}
+              ready={text.trim() !== "" && !pending && !files.reading}
+              disabled={pending || files.reading || text.trim() === ""}
               label={pending ? "Creating the session" : "Start the session"}
             />
           </div>

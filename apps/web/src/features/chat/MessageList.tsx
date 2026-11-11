@@ -1,4 +1,11 @@
-import type { Approval, ChatMessage, MessageContent, ToolCall } from "@humanity/contracts"
+import type {
+  Approval,
+  Attachment,
+  ChatMessage,
+  MessageContent,
+  SessionId,
+  ToolCall,
+} from "@humanity/contracts"
 import { Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
 import type { ReactNode } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -23,6 +30,7 @@ import {
   TraceTitle,
 } from "@/components/ui/trace"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
+import { MessageAttachments } from "./attachments.tsx"
 import { Markdown } from "./Markdown.tsx"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
@@ -55,7 +63,13 @@ export function MessageList({
   readonly footer?: ReactNode
 }) {
   const items = messages.flatMap((message) => {
-    const rendered = renderContent(message.content, toolCalls, approvalFor, worktreePath)
+    const rendered = renderContent(
+      message.sessionId,
+      message.content,
+      toolCalls,
+      approvalFor,
+      worktreePath,
+    )
     return rendered === null ? [] : [{ message, rendered }]
   })
   return (
@@ -109,6 +123,7 @@ export function MessageList({
 }
 
 const renderContent = (
+  sessionId: SessionId,
   content: MessageContent,
   toolCalls: Readonly<Record<string, ToolCall>>,
   approvalFor: (toolUseId: string) => Approval | undefined,
@@ -116,7 +131,13 @@ const renderContent = (
 ) => {
   switch (content._tag) {
     case "user":
-      return <UserMessage text={content.text} />
+      return (
+        <UserMessage
+          sessionId={sessionId}
+          text={content.text}
+          attachments={content.attachments ?? []}
+        />
+      )
     case "assistant":
       return (
         <AssistantMessage
@@ -139,10 +160,21 @@ const renderContent = (
   }
 }
 
-function UserMessage({ text }: { readonly text: string }) {
+function UserMessage({
+  sessionId,
+  text,
+  attachments,
+}: {
+  readonly sessionId: SessionId
+  readonly text: string
+  readonly attachments: ReadonlyArray<Attachment>
+}) {
   return (
     <Message align="end">
       <MessageBody>
+        {attachments.length > 0 && (
+          <MessageAttachments sessionId={sessionId} attachments={attachments} />
+        )}
         <Bubble align="end" className="max-w-[85%]">
           <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
         </Bubble>

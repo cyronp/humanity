@@ -1,4 +1,5 @@
 export * from "./domain/Approval.ts"
+export * from "./domain/Attachment.ts"
 export * from "./domain/Claude.ts"
 export * from "./domain/Diff.ts"
 export * from "./domain/Git.ts"

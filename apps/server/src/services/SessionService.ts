@@ -1,5 +1,10 @@
 import {
   applyAutonomy,
+  type Attachment,
+  type AttachmentContent,
+  AttachmentNotFound,
+  AttachmentRejected,
+  type AttachmentUpload,
   type Autonomy,
   ChangeId,
   DEFAULT_AUTONOMY,
@@ -48,6 +53,7 @@ import {
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
+import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
@@ -93,11 +99,17 @@ export class SessionService extends Context.Service<
       readonly title?: string | undefined
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
+      readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
       readonly model?: string | undefined
       readonly autonomy?: Autonomy | undefined
     }) => Effect.Effect<
       Session,
-      ProjectNotFound | GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound
+      | ProjectNotFound
+      | GitError
+      | GitBranchExists
+      | GitInvalidBranchName
+      | GitRefNotFound
+      | AttachmentRejected
     >
     /** Changes how much the agent may do without asking, from its next tool call on. */
     readonly setAutonomy: (
@@ -112,10 +124,17 @@ export class SessionService extends Context.Service<
       sessionId: string,
       model: string | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
+    /** Sends a message, with files the agent receives inline (images, PDFs, text). */
     readonly sendMessage: (
       sessionId: string,
       text: string,
-    ) => Effect.Effect<void, SessionNotFound | SessionEnded>
+      attachments?: ReadonlyArray<AttachmentUpload>,
+    ) => Effect.Effect<void, SessionNotFound | SessionEnded | AttachmentRejected>
+    /** A stored attachment's bytes. */
+    readonly attachment: (
+      sessionId: string,
+      attachmentId: string,
+    ) => Effect.Effect<AttachmentContent, SessionNotFound | AttachmentNotFound>
     readonly interrupt: (sessionId: string) => Effect.Effect<void, SessionNotFound>
     readonly end: (
       sessionId: string,
@@ -510,17 +529,72 @@ export class SessionService extends Context.Service<
       const list = (projectId: string) =>
         Effect.flatMap(projects.get(projectId), () => repo.listByProject(projectId))
 
+      /** Writes each file under `<attachmentsDir>/<sessionId>/` and records it. */
+      const storeAttachments = (sessionId: string, files: ReadonlyArray<PreparedAttachment>) =>
+        Effect.gen(function* () {
+          if (files.length === 0) return []
+          const dir = join(config.attachmentsDir, sessionId)
+          yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.orDie)
+          const createdAt = yield* now
+          return yield* Effect.forEach(files, (file) =>
+            Effect.gen(function* () {
+              const attachment: Attachment = {
+                id: randomUUID(),
+                name: file.name,
+                kind: file.kind,
+                mediaType: file.mediaType,
+                size: file.bytes.length,
+              }
+              yield* fs.writeFile(join(dir, attachment.id), file.bytes).pipe(Effect.orDie)
+              yield* repo.insertAttachment(sessionId, attachment, createdAt)
+              return attachment
+            }),
+          )
+        })
+
+      /** Records the human's message with its files, then hands both to the agent. */
+      const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
+        Effect.gen(function* () {
+          const stored = yield* storeAttachments(session.id, files)
+          yield* addMessage(
+            session.id,
+            stored.length === 0
+              ? { _tag: "user", text }
+              : { _tag: "user", text, attachments: stored },
+          )
+          const state = yield* ensureRun(session)
+          state.interrupted = false
+          yield* setStatus(session.id, "running")
+          yield* state.run.send({ text, attachments: files.map(toAgentAttachment) })
+        })
+
       const sendMessage = Effect.fn("SessionService.sendMessage")(function* (
         sessionId: string,
         text: string,
+        uploads: ReadonlyArray<AttachmentUpload> = [],
       ) {
         const session = yield* get(sessionId)
         if (session.status === "ended") return yield* new SessionEnded({ sessionId })
-        yield* addMessage(sessionId, { _tag: "user", text })
-        const state = yield* ensureRun(session)
-        state.interrupted = false
-        yield* setStatus(sessionId, "running")
-        yield* state.run.send(text)
+        const files = yield* prepareAttachments(uploads)
+        yield* deliver(session, text, files)
+      })
+
+      const attachment = Effect.fn("SessionService.attachment")(function* (
+        sessionId: string,
+        attachmentId: string,
+      ) {
+        yield* get(sessionId)
+        const found = yield* repo.getAttachment(sessionId, attachmentId)
+        const missing = new AttachmentNotFound({ attachmentId })
+        if (Option.isNone(found)) return yield* missing
+        const path = join(config.attachmentsDir, sessionId, found.value.id)
+        if (!isInsideDir(config.attachmentsDir, path)) return yield* missing
+        const bytes = yield* fs.readFile(path).pipe(Effect.mapError(() => missing))
+        return {
+          name: found.value.name,
+          mediaType: found.value.mediaType,
+          data: Buffer.from(bytes).toString("base64"),
+        } satisfies AttachmentContent
       })
 
       const create = Effect.fn("SessionService.create")(function* (options: {
@@ -528,10 +602,20 @@ export class SessionService extends Context.Service<
         readonly title?: string | undefined
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
+        readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
         readonly model?: string | undefined
         readonly autonomy?: Autonomy | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
+        // Checked before anything is created, so a bad file leaves no branch or worktree behind.
+        const files = yield* prepareAttachments(options.attachments ?? [])
+        const prompt = options.prompt?.trim()
+        if (files.length > 0 && !prompt) {
+          return yield* new AttachmentRejected({
+            name: "",
+            reason: "Write a message to send the files with.",
+          })
+        }
         const id = SessionId.make(randomUUID())
         const title =
           options.title?.trim() ||
@@ -559,8 +643,7 @@ export class SessionService extends Context.Service<
         }
         yield* repo.insert(session)
         yield* events.publishListChanged
-        const prompt = options.prompt?.trim()
-        if (prompt) yield* sendMessage(id, prompt).pipe(Effect.orDie)
+        if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
       })
 
@@ -734,6 +817,7 @@ export class SessionService extends Context.Service<
         setAutonomy,
         setModel,
         sendMessage,
+        attachment,
         interrupt,
         end,
         stopProject,

@@ -158,9 +158,9 @@ export class ProjectService extends Context.Service<
 
       const sessionWorktrees = SqlSchema.findAll({
         Request: Schema.String,
-        Result: Schema.Struct({ worktree_path: Schema.String }),
+        Result: Schema.Struct({ id: Schema.String, worktree_path: Schema.String }),
         execute: (projectId) =>
-          sql`SELECT worktree_path FROM sessions WHERE project_id = ${projectId}`,
+          sql`SELECT id, worktree_path FROM sessions WHERE project_id = ${projectId}`,
       })
 
       const remove = Effect.fn("ProjectService.remove")(function* (projectId: string) {
@@ -181,6 +181,17 @@ export class ProjectService extends Context.Service<
           { discard: true },
         )
         yield* sql`DELETE FROM projects WHERE id = ${projectId}`.pipe(Effect.orDie)
+        // The database rows go with the project; the attached files are Humanity's to delete too.
+        yield* Effect.forEach(
+          worktrees,
+          (row) => {
+            const dir = join(config.attachmentsDir, row.id)
+            return isInsideDir(config.attachmentsDir, dir)
+              ? fs.remove(dir, { recursive: true }).pipe(Effect.ignore)
+              : Effect.void
+          },
+          { discard: true },
+        )
       })
 
       /** The icon file at `relativePath`, if it is a small image inside the repository. */

@@ -1,4 +1,6 @@
 import {
+  type Attachment,
+  AttachmentKind,
   Autonomy,
   type ChatMessage,
   MessageContent,
@@ -39,6 +41,22 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+})
+
+const AttachmentRow = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  kind: AttachmentKind,
+  media_type: Schema.String,
+  size: Schema.Number,
+})
+
+const toAttachment = (row: typeof AttachmentRow.Type): Attachment => ({
+  id: row.id,
+  name: row.name,
+  kind: row.kind,
+  mediaType: row.media_type,
+  size: row.size,
 })
 
 const MessageJson = Schema.fromJsonString(MessageContent)
@@ -134,6 +152,15 @@ export class SessionRepo extends Context.Service<
       toolUseId: string,
     ) => Effect.Effect<Option.Option<ToolCall>>
     readonly listToolCalls: (sessionId: string) => Effect.Effect<ReadonlyArray<ToolCall>>
+    readonly insertAttachment: (
+      sessionId: string,
+      attachment: Attachment,
+      createdAt: string,
+    ) => Effect.Effect<void>
+    readonly getAttachment: (
+      sessionId: string,
+      attachmentId: string,
+    ) => Effect.Effect<Option.Option<Attachment>>
   }
 >()("humanity/SessionRepo") {
   static readonly layer = Layer.effect(
@@ -243,6 +270,32 @@ export class SessionRepo extends Context.Service<
           WHERE id = ${sessionId}
         `.pipe(Effect.asVoid, Effect.orDie)
 
+      const findAttachment = SqlSchema.findOneOption({
+        Request: Schema.Struct({ sessionId: Schema.String, attachmentId: Schema.String }),
+        Result: AttachmentRow,
+        execute: ({ sessionId, attachmentId }) =>
+          sql`SELECT id, name, kind, media_type, size FROM attachments WHERE id = ${attachmentId} AND session_id = ${sessionId}`,
+      })
+
+      const insertAttachment = (sessionId: string, attachment: Attachment, createdAt: string) =>
+        sql`
+          INSERT INTO attachments ${sql.insert({
+            id: attachment.id,
+            session_id: sessionId,
+            name: attachment.name,
+            kind: attachment.kind,
+            media_type: attachment.mediaType,
+            size: attachment.size,
+            created_at: createdAt,
+          })}
+        `.pipe(Effect.asVoid, Effect.orDie)
+
+      const getAttachment = (sessionId: string, attachmentId: string) =>
+        findAttachment({ sessionId, attachmentId }).pipe(
+          Effect.map(Option.map(toAttachment)),
+          Effect.orDie,
+        )
+
       const insertMessage = (message: ChatMessage, raw: unknown) =>
         Effect.gen(function* () {
           const normalized = yield* encodeMessage(message.content)
@@ -343,6 +396,8 @@ export class SessionRepo extends Context.Service<
         finishToolCall,
         getToolCall,
         listToolCalls,
+        insertAttachment,
+        getAttachment,
       })
     }),
   )

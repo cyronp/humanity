@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { Attachment } from "./Attachment.ts"
 import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
 
@@ -67,7 +68,11 @@ export type UsageSummary = typeof UsageSummary.Type
 
 export const MessageContent = Schema.Union([
   /** A message the human sent. */
-  Schema.TaggedStruct("user", { text: Schema.String }),
+  Schema.TaggedStruct("user", {
+    text: Schema.String,
+    /** Files sent with the message. Absent on messages without any. */
+    attachments: Schema.optional(Schema.Array(Attachment)),
+  }),
   Schema.TaggedStruct("assistant", {
     blocks: Schema.Array(AssistantBlock),
     /** Set for messages produced inside a subagent's tool call. */

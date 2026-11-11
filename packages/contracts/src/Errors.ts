@@ -94,6 +94,24 @@ export class SessionEnded extends Schema.TaggedError<SessionEnded>()("SessionEnd
   }
 }
 
+export class AttachmentRejected extends Schema.TaggedError<AttachmentRejected>()(
+  "AttachmentRejected",
+  { name: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return this.name === "" ? this.reason : `${this.name}: ${this.reason}`
+  }
+}
+
+export class AttachmentNotFound extends Schema.TaggedError<AttachmentNotFound>()(
+  "AttachmentNotFound",
+  { attachmentId: Schema.String },
+) {
+  override get message() {
+    return "This attachment is no longer stored."
+  }
+}
+
 export class ApprovalNotFound extends Schema.TaggedError<ApprovalNotFound>()("ApprovalNotFound", {
   id: Schema.String,
 }) {

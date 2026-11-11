@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId } from "@humanity/contracts"
+import { type ProjectId, SessionId } from "@humanity/contracts"
 import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
@@ -44,6 +44,17 @@ export const createSessionAtom = HumanityClient.mutation("Sessions.create")
 export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const setAutonomyAtom = HumanityClient.mutation("Sessions.setAutonomy")
 export const setModelAtom = HumanityClient.mutation("Sessions.setModel")
+
+/** A stored attachment's bytes, keyed `<sessionId>/<attachmentId>`. Used for image thumbnails. */
+export const attachmentAtom = Atom.family((key: string) => {
+  const [sessionId = "", attachmentId = ""] = key.split("/")
+  return HumanityClient.query("Sessions.attachment", {
+    sessionId: SessionId.make(sessionId),
+    attachmentId,
+  })
+})
+/** The same bytes on demand, for opening a file in a new tab. */
+export const fetchAttachmentAtom = HumanityClient.mutation("Sessions.attachment")
 export const interruptAtom = HumanityClient.mutation("Sessions.interrupt")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 
