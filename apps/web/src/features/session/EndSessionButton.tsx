@@ -22,7 +22,7 @@ import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { endSessionAtom } from "./atoms.ts"
 
-/** A small icon button that ends `session` after asking, optionally deleting its worktree. */
+/** A small icon button that ends `session` after asking, optionally deleting its worktree if it has one. */
 export function EndSessionButton({
   session,
   className,
@@ -38,7 +38,7 @@ export function EndSessionButton({
   const confirm = async () => {
     setError(undefined)
     const exit = await end({
-      payload: { sessionId: session.id, removeWorktree },
+      payload: { sessionId: session.id, removeWorktree: session.inWorktree && removeWorktree },
       reactivityKeys: [keys.sessions(session.projectId)],
     })
     if (Exit.isSuccess(exit)) setOpen(false)
@@ -66,22 +66,30 @@ export function EndSessionButton({
         <DialogHeader>
           <DialogTitle>End “{session.title}”?</DialogTitle>
           <DialogDescription>
-            The agent stops and the session becomes read-only. The branch{" "}
-            <code>{session.branch}</code> is kept either way.
+            The agent stops and the session becomes read-only.{" "}
+            {session.inWorktree ? (
+              <>
+                The branch <code>{session.branch}</code> is kept either way.
+              </>
+            ) : (
+              "Your checkout is left as it is."
+            )}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2">
-          <input
-            id={`remove-worktree-${session.id}`}
-            type="checkbox"
-            checked={removeWorktree}
-            onChange={(event) => setRemoveWorktree(event.target.checked)}
-            className="size-4"
-          />
-          <Label htmlFor={`remove-worktree-${session.id}`}>
-            Also delete the worktree (uncommitted changes in it are lost)
-          </Label>
-        </div>
+        {session.inWorktree && (
+          <div className="flex items-center gap-2">
+            <input
+              id={`remove-worktree-${session.id}`}
+              type="checkbox"
+              checked={removeWorktree}
+              onChange={(event) => setRemoveWorktree(event.target.checked)}
+              className="size-4"
+            />
+            <Label htmlFor={`remove-worktree-${session.id}`}>
+              Also delete the worktree (uncommitted changes in it are lost)
+            </Label>
+          </div>
+        )}
         {error !== undefined && <ErrorNote title="Could not end the session" message={error} />}
         <DialogFooter>
           <DialogClose asChild>

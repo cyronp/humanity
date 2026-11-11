@@ -13,6 +13,7 @@ import { ReviewPanel } from "@/features/review/ReviewPanel"
 import { TimelinePanel } from "@/features/timeline/TimelinePanel"
 import { ChangesPanel } from "./ChangesPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
+import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
 import {
   approvalForToolUse,
   isBusy,
@@ -74,18 +75,21 @@ export function Workspace({
         project={project}
         session={session}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPanelOpen((open) => !open)}
-            aria-expanded={panelOpen}
-          >
-            {panelOpen ? <PanelRightClose /> : <PanelRightOpen />}
-            Review
-            {changes.length > 0 && (
-              <Badge className="bg-amber-500 text-black">{changes.length}</Badge>
-            )}
-          </Button>
+          <>
+            <SetupWorktreeButton session={session} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-expanded={panelOpen}
+            >
+              {panelOpen ? <PanelRightClose /> : <PanelRightOpen />}
+              Review
+              {changes.length > 0 && (
+                <Badge className="bg-amber-500 text-black">{changes.length}</Badge>
+              )}
+            </Button>
+          </>
         }
       />
       <div className="flex min-h-0 flex-1">

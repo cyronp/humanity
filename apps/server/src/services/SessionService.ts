@@ -94,6 +94,10 @@ export class SessionService extends Context.Service<
   {
     readonly list: (projectId: string) => Effect.Effect<ReadonlyArray<Session>, ProjectNotFound>
     readonly get: (sessionId: string) => Effect.Effect<Session, SessionNotFound>
+    /**
+     * Starts a session in the project's checkout, switching it to `baseBranch`
+     * first when one is given. No worktree until `setupWorktree`.
+     */
     readonly create: (options: {
       readonly projectId: string
       readonly title?: string | undefined
@@ -110,6 +114,23 @@ export class SessionService extends Context.Service<
       | GitInvalidBranchName
       | GitRefNotFound
       | AttachmentRejected
+    >
+    /**
+     * Moves the session from the project's checkout into its own branch and
+     * worktree, between turns. The conversation resumes there.
+     */
+    readonly setupWorktree: (
+      sessionId: string,
+    ) => Effect.Effect<
+      Session,
+      | SessionNotFound
+      | SessionEnded
+      | SessionBusy
+      | ProjectNotFound
+      | GitError
+      | GitBranchExists
+      | GitInvalidBranchName
+      | GitRefNotFound
     >
     /** Changes how much the agent may do without asking, from its next tool call on. */
     readonly setAutonomy: (
@@ -142,11 +163,12 @@ export class SessionService extends Context.Service<
     ) => Effect.Effect<Session, SessionNotFound | GitError>
     /** Stops every running agent of a project, before the project is removed. */
     readonly stopProject: (projectId: string) => Effect.Effect<void>
-    /** Uncommitted changes in the session's worktree. */
+    /** Uncommitted changes where the session works: its worktree or the project's checkout. */
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
     /**
-     * Commits everything in the worktree to the session's branch. Every change
-     * in it was approved by the human, hunk by hunk, or made by the human.
+     * Commits everything where the session works to the branch checked out
+     * there. Every change the agent made in it was approved by the human, hunk
+     * by hunk, unless the session's autonomy let it through.
      */
     readonly commit: (
       sessionId: string,
@@ -172,6 +194,11 @@ export class SessionService extends Context.Service<
       const serviceScope = yield* Effect.scope
 
       const active = new Map<string, ActiveRun>()
+      /**
+       * Sessions that moved into a worktree since the agent last heard from
+       * Humanity: the next message tells it where it works now.
+       */
+      const relocated = new Map<string, { readonly from: string; readonly to: string }>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -555,6 +582,13 @@ export class SessionService extends Context.Service<
       /** Records the human's message with its files, then hands both to the agent. */
       const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
+          const moved = relocated.get(session.id)
+          relocated.delete(session.id)
+          // Only the agent sees this; the transcript shows the move as a notice.
+          const forAgent =
+            moved === undefined
+              ? text
+              : `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.\n\n${text}`
           const stored = yield* storeAttachments(session.id, files)
           yield* addMessage(
             session.id,
@@ -565,7 +599,7 @@ export class SessionService extends Context.Service<
           const state = yield* ensureRun(session)
           state.interrupted = false
           yield* setStatus(session.id, "running")
-          yield* state.run.send({ text, attachments: files.map(toAgentAttachment) })
+          yield* state.run.send({ text: forAgent, attachments: files.map(toAgentAttachment) })
         })
 
       const sendMessage = Effect.fn("SessionService.sendMessage")(function* (
@@ -597,6 +631,21 @@ export class SessionService extends Context.Service<
         } satisfies AttachmentContent
       })
 
+      /**
+       * Switches the project's checkout to `name`, unless it is on it already.
+       * A remote-tracking branch (`origin/x`) switches to the local `x`, which
+       * git creates to track it when it does not exist yet.
+       */
+      const switchCheckout = (checkout: string, name: string) =>
+        Effect.gen(function* () {
+          const branches = yield* git.listBranches(checkout)
+          const picked = branches.find((branch) => branch.name === name)
+          const local = picked?.isRemote === true ? name.slice(name.indexOf("/") + 1) : name
+          const current = branches.find((branch) => branch.isCurrent && !branch.isRemote)
+          if (current?.name === local) return
+          yield* git.checkout(checkout, local)
+        })
+
       const create = Effect.fn("SessionService.create")(function* (options: {
         readonly projectId: string
         readonly title?: string | undefined
@@ -607,7 +656,7 @@ export class SessionService extends Context.Service<
         readonly autonomy?: Autonomy | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
-        // Checked before anything is created, so a bad file leaves no branch or worktree behind.
+        // Checked before anything changes, so a bad file leaves the checkout as it was.
         const files = yield* prepareAttachments(options.attachments ?? [])
         const prompt = options.prompt?.trim()
         if (files.length > 0 && !prompt) {
@@ -621,11 +670,9 @@ export class SessionService extends Context.Service<
           options.title?.trim() ||
           options.prompt?.trim().split("\n")[0]?.slice(0, 80) ||
           "New session"
-        const branch = sessionBranchName(id, title)
-        const worktreePath = join(config.worktreesDir, project.id, id)
-        const base = options.baseBranch?.trim() || project.defaultBranch
-
-        yield* git.worktreeAdd(project.localPath, { path: worktreePath, branch, base })
+        const requested = options.baseBranch?.trim()
+        if (requested) yield* switchCheckout(project.localPath, requested)
+        const branch = (yield* git.status(project.localPath)).branch ?? "HEAD"
 
         const timestamp = yield* now
         const session: Session = {
@@ -634,7 +681,8 @@ export class SessionService extends Context.Service<
           sdkSessionId: null,
           title,
           branch,
-          worktreePath,
+          worktreePath: project.localPath,
+          inWorktree: false,
           model: options.model?.trim() || null,
           autonomy: options.autonomy ?? DEFAULT_AUTONOMY,
           status: "idle",
@@ -645,6 +693,44 @@ export class SessionService extends Context.Service<
         yield* events.publishListChanged
         if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
+      })
+
+      const setupWorktree = Effect.fn("SessionService.setupWorktree")(function* (
+        sessionId: string,
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (session.inWorktree) return session
+        // The agent's cwd cannot change under a running turn.
+        if (session.status === "running" || session.status === "waiting_for_human") {
+          return yield* new SessionBusy({ sessionId })
+        }
+        const project = yield* projects.get(session.projectId)
+        const branch = sessionBranchName(session.id, session.title)
+        const path = join(config.worktreesDir, project.id, session.id)
+        const checkout = yield* git.status(project.localPath)
+        yield* git.worktreeAdd(project.localPath, { path, branch, base: "HEAD" })
+
+        // The agent process keeps its cwd; the next message starts one in the worktree.
+        yield* stopRun(sessionId)
+        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
+        yield* repo.update(sessionId, { worktree: { branch, path }, updatedAt: session.updatedAt })
+        if (session.sdkSessionId !== null) {
+          relocated.set(sessionId, { from: session.worktreePath, to: path })
+        }
+        const left =
+          checkout.entries.length === 0
+            ? ""
+            : ` Uncommitted changes in ${project.localPath} stayed there.`
+        yield* addMessage(sessionId, {
+          _tag: "notice",
+          level: "info",
+          text: `Set up a worktree: the agent now works on ${branch}, started from ${checkout.branch ?? "HEAD"}.${left}`,
+        })
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
       })
 
       const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
@@ -745,10 +831,12 @@ export class SessionService extends Context.Service<
         if (status.entries.length === 0) return yield* new NothingToCommit({ sessionId })
         const hash = yield* git.commit(session.worktreePath, message.trim())
         const subject = message.trim().split("\n")[0] ?? ""
+        // A checkout can have switched branches since the session started.
+        const branch = status.branch ?? session.branch
         yield* addMessage(sessionId, {
           _tag: "notice",
           level: "info",
-          text: `Committed ${hash} to ${session.branch}: ${subject}`,
+          text: `Committed ${hash} to ${branch}: ${subject}`,
         })
         return hash
       })
@@ -814,6 +902,7 @@ export class SessionService extends Context.Service<
         list,
         get,
         create,
+        setupWorktree,
         setAutonomy,
         setModel,
         sendMessage,

@@ -33,7 +33,7 @@ describe("session naming", () => {
 })
 
 describe("SessionService", () => {
-  it.live("creates a session on its own branch and worktree, leaving the repo alone", () =>
+  it.live("starts a session in the project's checkout, without a worktree", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
 
@@ -42,6 +42,61 @@ describe("SessionService", () => {
         const project = yield* addProject(repo)
         const session = yield* sessions.create({ projectId: project.id, title: "Fix login" })
 
+        assert.isFalse(session.inWorktree)
+        assert.strictEqual(session.worktreePath, project.localPath)
+        assert.strictEqual(session.branch, "main")
+        assert.isFalse(existsSync(join(home, "worktrees", project.id, session.id)))
+        assert.strictEqual(
+          git(repo, "worktree", "list", "--porcelain").match(/^worktree /gm)?.length,
+          1,
+        )
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("switches the checkout to the chosen branch, a remote one by its local name", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      git(repo, "branch", "feature")
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+
+        const onFeature = yield* sessions.create({ projectId: project.id, baseBranch: "feature" })
+        assert.strictEqual(onFeature.branch, "feature")
+        assert.strictEqual(git(repo, "branch", "--show-current").trim(), "feature")
+
+        const back = yield* sessions.create({ projectId: project.id, baseBranch: "main" })
+        assert.strictEqual(back.branch, "main")
+        assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
+
+        const missing = yield* Effect.flip(
+          sessions.create({ projectId: project.id, baseBranch: "nope" }),
+        )
+        assert.strictEqual(missing._tag, "GitCommandFailed")
+        assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("sets up a worktree on request: own branch, repo left alone, agent told", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({
+          projectId: project.id,
+          title: "Fix login",
+          prompt: "look around",
+        })
+        yield* waitForStatus(created.id, "idle")
+
+        const session = yield* sessions.setupWorktree(created.id)
+        assert.isTrue(session.inWorktree)
         assert.match(session.branch, /^humanity\/[0-9a-f]{8}-fix-login$/)
         assert.strictEqual(session.worktreePath, join(home, "worktrees", project.id, session.id))
         assert.strictEqual(session.status, "idle")
@@ -52,12 +107,50 @@ describe("SessionService", () => {
         )
         // The user's working copy stays on its branch.
         assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
+        // Already set up: nothing changes.
+        assert.deepStrictEqual(yield* sessions.setupWorktree(session.id), session)
 
-        assert.deepStrictEqual(
-          (yield* sessions.list(project.id)).map((s) => s.id),
-          [session.id],
+        // The next run resumes the conversation in the worktree, and the agent hears of the move.
+        yield* sessions.sendMessage(session.id, "now fix it")
+        yield* waitForStatus(session.id, "idle")
+        const runs = yield* Ref.get(log.runs)
+        assert.strictEqual(runs.length, 2)
+        assert.strictEqual(runs[1]?.cwd, session.worktreePath)
+        assert.strictEqual(runs[1]?.resume, "fake-sdk-session-1")
+        const sent = (yield* Ref.get(log.sent)).map((message) => message.text)
+        assert.match(sent[1] ?? "", /^\[Humanity\] This session now works in its own git worktree/)
+        assert.match(sent[1] ?? "", /now fix it$/)
+        const snapshot = yield* contents(session.id)
+        assert.isTrue(
+          snapshot.messages.some(
+            (message) =>
+              message.content._tag === "notice" && message.content.text.includes(session.branch),
+          ),
         )
-      }).pipe(Effect.provide(services(home, () => [])))
+        // The transcript keeps the human's own words.
+        assert.isTrue(
+          snapshot.messages.some(
+            (message) => message.content._tag === "user" && message.content.text === "now fix it",
+          ),
+        )
+      }).pipe(Effect.provide(services(home, () => [{ text: "ok" }])))
+    }),
+  )
+
+  it.live("refuses to set up a worktree while the agent works", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "go" })
+        yield* waitForStatus(session.id, "running")
+
+        const error = yield* Effect.flip(sessions.setupWorktree(session.id))
+        assert.strictEqual(error._tag, "SessionBusy")
+        assert.isFalse((yield* sessions.get(session.id)).inWorktree)
+      }).pipe(Effect.provide(services(home, () => [{ hang: true }])))
     }),
   )
 
@@ -401,7 +494,8 @@ describe("SessionService", () => {
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const project = yield* addProject(repo)
-        const session = yield* sessions.create({ projectId: project.id, title: "Temp" })
+        const created = yield* sessions.create({ projectId: project.id, title: "Temp" })
+        const session = yield* sessions.setupWorktree(created.id)
 
         const ended = yield* sessions.end(session.id, { removeWorktree: true })
         assert.strictEqual(ended.status, "ended")
@@ -423,7 +517,11 @@ describe("SessionService", () => {
         const projects = yield* ProjectService
         const sql = yield* SqlClient.SqlClient
         const project = yield* addProject(repo)
-        const session = yield* sessions.create({ projectId: project.id })
+        const session = yield* sessions.setupWorktree(
+          (yield* sessions.create({ projectId: project.id })).id,
+        )
+        const inCheckout = yield* sessions.create({ projectId: project.id })
+        assert.strictEqual(inCheckout.worktreePath, project.localPath)
 
         yield* sessions.stopProject(project.id)
         yield* projects.remove(project.id)

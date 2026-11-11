@@ -22,9 +22,18 @@ export const Session = Schema.Struct({
   /** The Agent SDK's own session id, known after the first turn; used to resume. */
   sdkSessionId: Schema.NullOr(Schema.String),
   title: Schema.String,
+  /**
+   * The session's own `humanity/…` branch once it has a worktree. Before that,
+   * the branch the project's checkout was on when the session started.
+   */
   branch: Schema.String,
-  /** Absolute path of this session's git worktree under the data directory. */
+  /**
+   * Absolute path the agent works in: the session's own git worktree under the
+   * data directory when `inWorktree`, otherwise the project's checkout.
+   */
   worktreePath: Schema.String,
+  /** False until the human sets up a worktree; the agent works in the project's checkout until then. */
+  inWorktree: Schema.Boolean,
   /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
   model: Schema.NullOr(Schema.String),
   /** How much the agent may do without asking, on top of the project's policy. */

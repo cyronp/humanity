@@ -23,7 +23,7 @@ export const ProposedChange = Schema.Struct({
   sessionId: SessionId,
   toolUseId: Schema.String,
   toolName: Schema.String,
-  /** Relative to the session's worktree, with forward slashes. */
+  /** Relative to the folder the session works in, with forward slashes. */
   filePath: Schema.String,
   kind: Schema.Literals(["create", "modify"]),
   originalContent: Schema.String,

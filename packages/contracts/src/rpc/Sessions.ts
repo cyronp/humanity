@@ -42,12 +42,18 @@ export const SessionsRpcs = RpcGroup.make(
     success: Session,
     error: SessionNotFound,
   }),
-  /** Creates the session's branch and worktree, then sends `prompt` if one is given. */
+  /**
+   * Starts a session in the project's checkout, then sends `prompt` if one is
+   * given. No worktree is made until `Sessions.setupWorktree`.
+   */
   Rpc.make("Sessions.create", {
     payload: {
       projectId: ProjectId,
       title: Schema.optional(Schema.String),
-      /** Branch to start from. Defaults to the project's default branch. */
+      /**
+       * Branch the checkout switches to first (a remote one such as
+       * `origin/x` switches to the local `x`). Stays on its branch when absent.
+       */
       baseBranch: Schema.optional(Schema.String),
       prompt: Schema.optional(Schema.String),
       /** Files sent with `prompt`. */
@@ -67,6 +73,29 @@ export const SessionsRpcs = RpcGroup.make(
       GitInvalidBranchName,
       GitRefNotFound,
       AttachmentRejected,
+    ]),
+  }),
+  /**
+   * Moves a session out of the project's checkout into its own branch
+   * `humanity/<short-id>-<slug>` and worktree, starting from the checkout's
+   * HEAD. Uncommitted changes stay in the checkout. Only between turns; the
+   * conversation resumes in the worktree. Returns the session as is when it
+   * already has one.
+   */
+  Rpc.make("Sessions.setupWorktree", {
+    payload: { sessionId: SessionId },
+    success: Session,
+    error: Schema.Union([
+      SessionNotFound,
+      SessionEnded,
+      SessionBusy,
+      ProjectNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+      GitBranchExists,
+      GitInvalidBranchName,
+      GitRefNotFound,
     ]),
   }),
   /** Changes how much the agent may do without asking. Applies from the next tool call. */
@@ -103,19 +132,22 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId },
     error: SessionNotFound,
   }),
-  /** Stops the agent. `removeWorktree` deletes the worktree; the branch is always kept. */
+  /**
+   * Stops the agent. `removeWorktree` deletes the session's worktree, if it has
+   * one; the branch is always kept. The project's checkout is never removed.
+   */
   Rpc.make("Sessions.end", {
     payload: { sessionId: SessionId, removeWorktree: Schema.Boolean },
     success: Session,
     error: Schema.Union([SessionNotFound, GitNotInstalled, GitCommandFailed, GitNotARepository]),
   }),
-  /** Uncommitted changes in the session's worktree: what a commit would contain. */
+  /** Uncommitted changes where the session works (worktree or checkout): what a commit would contain. */
   Rpc.make("Sessions.diff", {
     payload: { sessionId: SessionId },
     success: WorkingTreeDiff,
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
-  /** Commits everything in the session's worktree to the session's branch. Returns the short hash. */
+  /** Commits everything where the session works to the branch checked out there. Returns the short hash. */
   Rpc.make("Sessions.commit", {
     payload: { sessionId: SessionId, message: Schema.NonEmptyString },
     success: Schema.String,

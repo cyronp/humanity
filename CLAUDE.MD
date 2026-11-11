@@ -32,7 +32,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 - Never substitute a library from the spec's stack without asking.
 - Call the git CLI with argument arrays only, never shell-interpolated strings.
 - Never use the SDK's `bypassPermissions` mode. Unknown tools default to `confirm`.
-- Never write outside `~/.humanity/` or a session's worktree.
+- Never write outside `~/.humanity/` or the folder a session works in (its worktree, or the project's checkout until it has one).
 - Never store API keys or tokens in the database.
 
 ## Workflow

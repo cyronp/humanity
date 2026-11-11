@@ -10,6 +10,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.watchAll": () => sessions.watchAll,
       "Sessions.get": ({ sessionId }) => sessions.get(sessionId),
       "Sessions.create": (payload) => sessions.create(payload),
+      "Sessions.setupWorktree": ({ sessionId }) => sessions.setupWorktree(sessionId),
       "Sessions.setAutonomy": ({ sessionId, autonomy }) =>
         sessions.setAutonomy(sessionId, autonomy),
       "Sessions.setModel": ({ sessionId, model }) => sessions.setModel(sessionId, model),

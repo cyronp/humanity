@@ -192,6 +192,6 @@ export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("Noth
   sessionId: Schema.String,
 }) {
   override get message() {
-    return "There are no changes in this session's worktree to commit."
+    return "There are no uncommitted changes where this session works."
   }
 }

@@ -24,7 +24,7 @@ const byRecentCommit = (a: Branch, b: Branch) =>
   (Date.parse(b.committedAt) || 0) - (Date.parse(a.committedAt) || 0)
 
 /**
- * Picks the branch a new thread's branch and worktree start from: a
+ * Picks the branch the project's checkout switches to for a new thread: a
  * searchable popup listing local and remote branches with their last commit.
  */
 export function BranchPicker({
@@ -69,7 +69,7 @@ export function BranchPicker({
         <InputGroupButton
           size="sm"
           className="max-w-52 text-muted-foreground hover:text-foreground"
-          aria-label={`Start from branch ${value}`}
+          aria-label={`Work on branch ${value}`}
         >
           <GitBranch />
           <span className="truncate font-mono text-xs">{value}</span>
@@ -77,7 +77,7 @@ export function BranchPicker({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[30rem] max-w-[calc(100vw-2rem)] p-0">
         <Command>
-          <CommandInput placeholder="Select a branch to start from" />
+          <CommandInput placeholder="Select a branch to work on" />
           <CommandList className="max-h-96">
             {AsyncResult.isSuccess(branches) ? (
               <>

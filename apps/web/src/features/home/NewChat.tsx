@@ -16,6 +16,7 @@ import {
   useAttachmentDraft,
 } from "@/features/chat/attachments"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import { branchesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
@@ -54,8 +55,8 @@ export function NewChat({
       <div className="flex flex-col items-center gap-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">What should we work on?</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          The agent works on its own branch and worktree. Every change it proposes waits for your
-          review.
+          The agent works in your checkout; set up a worktree from the session to give it its own
+          branch. Every change it proposes waits for your review.
         </p>
       </div>
       {AsyncResult.match(projects, {
@@ -104,8 +105,13 @@ function NewChatForm({ project }: { readonly project: Project }) {
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
 
-  const baseBranch =
-    chosenBranch?.projectId === project.id ? chosenBranch.name : project.defaultBranch
+  const branches = useAtomValue(branchesAtom(project.id))
+  const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
+  // The checkout stays on its branch unless the human picks another one.
+  const current = AsyncResult.isSuccess(branches)
+    ? branches.value.find((branch) => branch.isCurrent && !branch.isRemote)?.name
+    : undefined
+  const shownBranch = chosen ?? current ?? project.defaultBranch
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -116,7 +122,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
     const exit = await create({
       payload: {
         projectId: project.id,
-        baseBranch,
+        ...(chosen === undefined ? {} : { baseBranch: chosen }),
         prompt,
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
         autonomy,
@@ -167,7 +173,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
           <AttachButton onFiles={(picked) => void files.add(picked)} disabled={pending} />
           <BranchPicker
             project={project}
-            value={baseBranch}
+            value={shownBranch}
             onChange={(name) => setChosenBranch({ projectId: project.id, name })}
             disabled={pending}
           />
@@ -184,7 +190,9 @@ function NewChatForm({ project }: { readonly project: Project }) {
       </ChatBox>
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
-          Creating a branch and worktree for this session…
+          {chosen === undefined || chosen === current
+            ? "Starting the session…"
+            : `Switching your checkout to ${chosen}…`}
         </p>
       )}
       {error !== undefined && <ErrorNote title="Could not start the session" message={error} />}

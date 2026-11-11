@@ -394,8 +394,8 @@ describe("review flow", () => {
             : "allowed",
         )
         assert.lengthOf(messages, 4)
-        assert.match(messages[0] ?? "", /outside this session's worktree/)
-        assert.match(messages[1] ?? "", /outside this session's worktree/)
+        assert.match(messages[0] ?? "", /outside the folder this session works in/)
+        assert.match(messages[1] ?? "", /outside the folder this session works in/)
         assert.match(messages[2] ?? "", /old_string was not found/)
         assert.match(messages[3] ?? "", /unchanged/)
         assert.isFalse(existsSync(outside))
@@ -761,7 +761,10 @@ describe("committing approved work", () => {
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const approvals = yield* ApprovalService
-        const { session } = yield* createSession(repo)
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({ projectId: project.id })
+        const session = yield* sessions.setupWorktree(created.id)
+        yield* sessions.sendMessage(session.id, "Make the changes")
 
         const nothingYet = yield* Effect.flip(sessions.commit(session.id, "too early"))
         assert.strictEqual(nothingYet._tag, "SessionBusy")

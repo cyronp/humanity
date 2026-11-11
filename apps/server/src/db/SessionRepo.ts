@@ -22,6 +22,7 @@ const SessionRow = Schema.Struct({
   title: Schema.String,
   branch: Schema.String,
   worktree_path: Schema.String,
+  in_worktree: Schema.Number,
   model: Schema.NullOr(Schema.String),
   autonomy: Autonomy,
   status: SessionStatus,
@@ -36,6 +37,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   title: row.title,
   branch: row.branch,
   worktreePath: row.worktree_path,
+  inWorktree: row.in_worktree !== 0,
   model: row.model,
   autonomy: row.autonomy,
   status: row.status,
@@ -131,6 +133,8 @@ export class SessionRepo extends Context.Service<
         readonly autonomy?: Autonomy
         /** `null` stores Claude Code's default. */
         readonly model?: string | null
+        /** Set together when the session moves into its own worktree. */
+        readonly worktree?: { readonly branch: string; readonly path: string }
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
@@ -219,6 +223,7 @@ export class SessionRepo extends Context.Service<
             title: session.title,
             branch: session.branch,
             worktree_path: session.worktreePath,
+            in_worktree: session.inWorktree ? 1 : 0,
             model: session.model,
             autonomy: session.autonomy,
             status: session.status,
@@ -256,6 +261,7 @@ export class SessionRepo extends Context.Service<
           readonly sdkSessionId?: string
           readonly autonomy?: Autonomy
           readonly model?: string | null
+          readonly worktree?: { readonly branch: string; readonly path: string }
           readonly updatedAt: string
         },
       ) =>
@@ -266,6 +272,13 @@ export class SessionRepo extends Context.Service<
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
             ...(changes.model === undefined ? {} : { model: changes.model }),
+            ...(changes.worktree === undefined
+              ? {}
+              : {
+                  branch: changes.worktree.branch,
+                  worktree_path: changes.worktree.path,
+                  in_worktree: 1,
+                }),
           })}
           WHERE id = ${sessionId}
         `.pipe(Effect.asVoid, Effect.orDie)

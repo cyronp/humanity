@@ -39,6 +39,9 @@ export type ReviewTarget =
   | { readonly _tag: "Deny"; readonly message: string }
 
 /** Where a `review` tool call would write, or why it cannot be reviewed as a file change. */
+const outsideMessage = (rawPath: string, workdir: string) =>
+  `DENIED: ${rawPath} is outside the folder this session works in (${workdir}). Only files inside it can be changed.`
+
 export const reviewTarget = (
   toolName: string,
   input: Record<string, unknown>,
@@ -53,7 +56,7 @@ export const reviewTarget = (
   if (!isInsideDir(worktree, absolutePath)) {
     return {
       _tag: "Deny",
-      message: `DENIED: ${rawPath} is outside this session's worktree (${worktree}). Only files inside the worktree can be changed.`,
+      message: outsideMessage(rawPath, worktree),
     }
   }
   return {
@@ -81,7 +84,7 @@ export const outsideWorktreeDenial = (
     if (!Predicate.isString(rawPath) || rawPath.trim() === "") continue
     const absolutePath = isAbsolute(rawPath) ? resolve(rawPath) : resolve(worktree, rawPath)
     if (!isInsideDir(worktree, absolutePath)) {
-      return `DENIED: ${rawPath} is outside this session's worktree (${worktree}). Only files inside the worktree can be changed.`
+      return outsideMessage(rawPath, worktree)
     }
   }
   return undefined
