@@ -33,9 +33,15 @@ export const ApprovalsHandlers = ApprovalsRpcs.toLayer(
         ),
       "Approvals.decideChange": ({ changeId, decisions }) =>
         approvals.decideChange(changeId, decisions),
-      "Approvals.decideConfirmation": ({ confirmationId, decision, comment, alwaysAllow }) =>
+      "Approvals.decideConfirmation": ({
+        confirmationId,
+        decision,
+        comment,
+        alwaysAllow,
+        answers,
+      }) =>
         approvals
-          .decideConfirmation(confirmationId, { decision, comment, alwaysAllow })
+          .decideConfirmation(confirmationId, { decision, comment, alwaysAllow, answers })
           // The confirmation belongs to an existing project; a missing one is a bug, not a user error.
           .pipe(Effect.catchTag("ProjectNotFound", Effect.die)),
     })

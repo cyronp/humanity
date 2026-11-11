@@ -19,6 +19,7 @@ import {
   type Project,
   type ProjectNotFound,
   type ProposedChange,
+  QUESTION_TOOL,
   type ReasoningEffort,
   type Session,
   SessionBusy,
@@ -351,7 +352,12 @@ export class SessionService extends Context.Service<
             const decision: PermissionDecision = yield* Effect.gen(function* () {
               const projectMode = policies.modeFor(session.projectId, request.toolName)
               const autonomy = yield* currentAutonomy(session.id)
-              switch (applyAutonomy(autonomy, projectMode)) {
+              // No amount of autonomy answers a question for the human.
+              const mode =
+                request.toolName === QUESTION_TOOL
+                  ? projectMode
+                  : applyAutonomy(autonomy, projectMode)
+              switch (mode) {
                 case "auto": {
                   // A file change let through without a review still stays inside the worktree.
                   const denial =
@@ -552,7 +558,12 @@ export class SessionService extends Context.Service<
                 // Only exact `auto` names. If the policy later tightens one of them, the
                 // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
                 allowedTools: policy.rules
-                  .filter((rule) => rule.mode === "auto" && !rule.pattern.endsWith("*"))
+                  .filter(
+                    (rule) =>
+                      rule.mode === "auto" &&
+                      !rule.pattern.endsWith("*") &&
+                      rule.pattern !== QUESTION_TOOL,
+                  )
                   .map((rule) => rule.pattern),
                 toolMode: (toolName, toolUseId) => {
                   const mode = policies.modeFor(session.projectId, toolName)

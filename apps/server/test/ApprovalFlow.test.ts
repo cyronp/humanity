@@ -7,6 +7,7 @@ import {
   type PendingConfirmation,
   type ProposedChange,
   setToolRule,
+  TALK_ABOUT_IT_MESSAGE,
 } from "@humanity/contracts"
 import {
   applyHunks,
@@ -526,6 +527,82 @@ describe("confirm flow", () => {
           ["succeeded", "succeeded"],
         )
       }).pipe(Effect.provide(services(home, bashScript)))
+    }),
+  )
+
+  const QUESTION = "Which library should we use?"
+  const questionInput = {
+    questions: [
+      {
+        question: QUESTION,
+        header: "Library",
+        options: [
+          { label: "date-fns", description: "Small" },
+          { label: "Luxon", description: "Time zones built in" },
+        ],
+        multiSelect: false,
+      },
+    ],
+  }
+  const questionScript: FakeScript = () => [
+    { tool: "AskUserQuestion", input: questionInput },
+    { text: "Thanks." },
+  ]
+
+  it.live("a question's answers go back to the agent as the tool's input", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const approvals = yield* ApprovalService
+        const policies = yield* PolicyService
+        const project = yield* addProject(repo)
+        // Even "Auto mode" cannot answer for the human.
+        const session = yield* sessions.create({
+          projectId: project.id,
+          prompt: "Pick a library",
+          autonomy: "auto",
+        })
+        const confirmation = yield* pendingConfirmation(session.id)
+        yield* waitForStatus(session.id, "waiting_for_human")
+
+        const resolved = yield* approvals.decideConfirmation(confirmation.id, {
+          decision: "allow",
+          alwaysAllow: true,
+          answers: { [QUESTION]: "Luxon" },
+        })
+        assert.deepStrictEqual(resolved.answers, { [QUESTION]: "Luxon" })
+        const { decision } = yield* decisionFor("AskUserQuestion")
+        assert.deepStrictEqual(decision, {
+          behavior: "allow",
+          updatedInput: { ...questionInput, answers: { [QUESTION]: "Luxon" } },
+        })
+        yield* waitForStatus(session.id, "idle")
+        // "Always allow" means nothing for a question: the next one is asked again.
+        assert.strictEqual(policies.modeFor(project.id, "AskUserQuestion"), "confirm")
+        const stored = (yield* contents(session.id)).approvals[0]
+        assert.deepStrictEqual(
+          stored?._tag === "confirmation" ? stored.confirmation.answers : undefined,
+          { [QUESTION]: "Luxon" },
+        )
+      }).pipe(Effect.provide(services(home, questionScript)))
+    }),
+  )
+
+  it.live("declining a question tells the agent the human wants to talk", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const approvals = yield* ApprovalService
+        const { session } = yield* createSession(repo)
+        const confirmation = yield* pendingConfirmation(session.id)
+
+        yield* approvals.decideConfirmation(confirmation.id, { decision: "deny" })
+        const { decision } = yield* decisionFor("AskUserQuestion")
+        assert.deepStrictEqual(decision, { behavior: "deny", message: TALK_ABOUT_IT_MESSAGE })
+      }).pipe(Effect.provide(services(home, questionScript)))
     }),
   )
 

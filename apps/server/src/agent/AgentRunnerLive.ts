@@ -156,7 +156,7 @@ export const AgentRunnerLive = Layer.effect(
           }).then(
             (decision): PermissionResult =>
               decision.behavior === "allow"
-                ? { behavior: "allow", updatedInput: input }
+                ? { behavior: "allow", updatedInput: decision.updatedInput ?? input }
                 : { behavior: "deny", message: decision.message },
             (): PermissionResult => ({
               behavior: "deny",

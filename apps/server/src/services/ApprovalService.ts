@@ -12,7 +12,10 @@ import {
   type ProjectNotFound,
   type ProposedChange,
   ProposedChangeStatus,
+  QUESTION_TOOL,
+  QuestionAnswers,
   SessionId,
+  TALK_ABOUT_IT_MESSAGE,
 } from "@humanity/contracts"
 import {
   applyHunks,
@@ -86,6 +89,7 @@ const ConfirmationRow = Schema.Struct({
   input_json: Schema.fromJsonString(Schema.Unknown),
   status: ConfirmationStatus,
   comment: Schema.NullOr(Schema.String),
+  answers_json: Schema.NullOr(Schema.fromJsonString(QuestionAnswers)),
   created_at: Schema.String,
   decided_at: Schema.NullOr(Schema.String),
 })
@@ -98,9 +102,15 @@ const toConfirmation = (row: typeof ConfirmationRow.Type): PendingConfirmation =
   input: row.input_json,
   status: row.status,
   ...(row.comment === null ? {} : { comment: row.comment }),
+  ...(row.answers_json === null ? {} : { answers: row.answers_json }),
   createdAt: row.created_at,
   ...(row.decided_at === null ? {} : { decidedAt: row.decided_at }),
 })
+
+const asRecord = (input: unknown): Record<string, unknown> =>
+  input !== null && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : {}
 
 const HunksJson = Schema.fromJsonString(Schema.Array(Hunk))
 
@@ -139,6 +149,8 @@ export class ApprovalService extends Context.Service<
         readonly decision: "allow" | "deny"
         readonly comment?: string | undefined
         readonly alwaysAllow?: boolean | undefined
+        /** The answers to an `AskUserQuestion` call; they become the tool's input. */
+        readonly answers?: QuestionAnswers | undefined
       },
     ) => Effect.Effect<
       PendingConfirmation,
@@ -216,6 +228,8 @@ export class ApprovalService extends Context.Service<
           UPDATE confirmations SET ${sql.update({
             status: confirmation.status,
             comment: confirmation.comment ?? null,
+            answers_json:
+              confirmation.answers === undefined ? null : JSON.stringify(confirmation.answers),
             decided_at: confirmation.decidedAt ?? null,
           })}
           WHERE id = ${confirmation.id}
@@ -425,6 +439,7 @@ export class ApprovalService extends Context.Service<
           readonly decision: "allow" | "deny"
           readonly comment?: string | undefined
           readonly alwaysAllow?: boolean | undefined
+          readonly answers?: QuestionAnswers | undefined
         },
       ) =>
         decisionLock.withPermits(1)(
@@ -436,8 +451,11 @@ export class ApprovalService extends Context.Service<
             )
             const confirmation = Option.getOrThrow(stored)
             const comment = options.comment?.trim()
+            const isQuestion = confirmation.toolName === QUESTION_TOOL
+            const answers = isQuestion && options.decision === "allow" ? options.answers : undefined
 
-            if (options.decision === "allow" && options.alwaysAllow === true) {
+            // A question is answered each time; it can never be allowed once and for all.
+            if (options.decision === "allow" && options.alwaysAllow === true && !isQuestion) {
               const session = yield* sessions.get(confirmation.sessionId)
               if (Option.isSome(session)) {
                 yield* policies.allowTool(session.value.projectId, confirmation.toolName)
@@ -448,18 +466,26 @@ export class ApprovalService extends Context.Service<
               ...confirmation,
               status: options.decision === "allow" ? "allowed" : "denied",
               ...(comment ? { comment } : {}),
+              ...(answers === undefined ? {} : { answers }),
               decidedAt: yield* now,
             }
             yield* saveConfirmationOutcome(resolved)
             yield* publish({ _tag: "confirmation", confirmation: resolved }, "ApprovalResolved")
             const decision: PermissionDecision =
               options.decision === "allow"
-                ? { behavior: "allow" }
+                ? {
+                    behavior: "allow",
+                    ...(answers === undefined
+                      ? {}
+                      : { updatedInput: { ...asRecord(confirmation.input), answers } }),
+                  }
                 : {
                     behavior: "deny",
                     message: comment
                       ? `DENIED by the human reviewer: ${comment}`
-                      : `DENIED by the human reviewer: do not run this ${confirmation.toolName} call. Ask how to proceed if it is necessary.`,
+                      : isQuestion
+                        ? TALK_ABOUT_IT_MESSAGE
+                        : `DENIED by the human reviewer: do not run this ${confirmation.toolName} call. Ask how to proceed if it is necessary.`,
                   }
             yield* Deferred.succeed(waiter.deferred, decision)
             return resolved

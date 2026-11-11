@@ -3,7 +3,12 @@ import { Context, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
 export type PermissionDecision =
-  { readonly behavior: "allow" } | { readonly behavior: "deny"; readonly message: string }
+  | {
+      readonly behavior: "allow"
+      /** The input the tool runs with instead of the agent's own: the answers to a question. */
+      readonly updatedInput?: Record<string, unknown>
+    }
+  | { readonly behavior: "deny"; readonly message: string }
 
 export interface ToolPermissionRequest {
   readonly toolName: string
