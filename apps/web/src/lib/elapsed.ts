@@ -26,3 +26,24 @@ export const useNow = (intervalMs: number): number => {
   }, [intervalMs])
   return now
 }
+
+const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
+
+const UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
+  ["year", 365 * 24 * 3600],
+  ["month", 30 * 24 * 3600],
+  ["week", 7 * 24 * 3600],
+  ["day", 24 * 3600],
+  ["hour", 3600],
+  ["minute", 60],
+]
+
+/** How long ago `iso` was, spelled out: `41 minutes ago`, `yesterday`, `3 weeks ago`. */
+export const formatTimeAgo = (iso: string, now: number = Date.now()): string => {
+  const seconds = Math.round((now - Date.parse(iso)) / 1000)
+  if (Number.isNaN(seconds)) return ""
+  for (const [unit, size] of UNITS) {
+    if (seconds >= size) return relative.format(-Math.floor(seconds / size), unit)
+  }
+  return "just now"
+}

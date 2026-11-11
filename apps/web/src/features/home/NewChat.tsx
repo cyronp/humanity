@@ -3,23 +3,14 @@ import type { Project, ProjectId, Session } from "@humanity/contracts"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { FolderPlus, GitBranch } from "lucide-react"
+import { FolderPlus } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { InputGroupTextarea } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
-import { branchesAtom } from "@/features/git/atoms"
+import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { projectsAtom } from "@/features/projects/atoms"
@@ -155,6 +146,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
             project={project}
             value={baseBranch}
             onChange={(name) => setChosenBranch({ projectId: project.id, name })}
+            disabled={pending}
           />
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker value={model} onChange={setModel} />
@@ -173,47 +165,5 @@ function NewChatForm({ project }: { readonly project: Project }) {
       )}
       {error !== undefined && <ErrorNote title="Could not start the session" message={error} />}
     </form>
-  )
-}
-
-/** Picks the branch the new thread's branch and worktree start from. */
-function BranchPicker({
-  project,
-  value,
-  onChange,
-}: {
-  readonly project: Project
-  readonly value: string
-  readonly onChange: (name: string) => void
-}) {
-  const branches = useAtomValue(branchesAtom(project.id))
-  const names = AsyncResult.isSuccess(branches) ? branches.value.map((branch) => branch.name) : []
-  const options = names.includes(value) ? names : [value, ...names]
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <InputGroupButton
-          size="sm"
-          className="max-w-52 text-muted-foreground hover:text-foreground"
-          aria-label={`Start from branch ${value}`}
-        >
-          <GitBranch />
-          <span className="truncate font-mono text-xs">{value}</span>
-        </InputGroupButton>
-      </DropdownMenuTrigger>
-      {/* Repositories can have many branches; the list scrolls instead of growing past the screen. */}
-      <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Start from</DropdownMenuLabel>
-            {options.map((name) => (
-              <DropdownMenuRadioItem key={name} value={name} className="font-mono text-xs">
-                {name}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
