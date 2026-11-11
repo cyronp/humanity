@@ -3,8 +3,8 @@ import type { Project, Session, SessionStatus } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { CircleHelp, FolderGit2, GitBranch, SquarePen } from "lucide-react"
-import { useMemo } from "react"
+import { CircleHelp, FolderGit2, GitBranch, Search, SquarePen } from "lucide-react"
+import { type ReactNode, useMemo, useState } from "react"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,8 +15,8 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
+  SidebarInput,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarRail,
@@ -31,48 +31,79 @@ import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon
 import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
 import { formatElapsed, useNow } from "@/lib/elapsed"
+import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
+import {
+  DEFAULT_THREAD_FILTER,
+  isDefaultFilter,
+  readStoredFilter,
+  selectThreads,
+  storeFilter,
+  type ThreadFilter,
+} from "./threadFilter.ts"
 
-/** Sessions that are not over: idle, running, waiting for the human, interrupted or failed. */
-const isOpen = (session: Session) => session.status !== "ended"
-
-/** The app's left column: new chat, the open conversations, and app-wide controls. */
+/** The app's left column: new chat, the conversations, and app-wide controls. */
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   // Choosing a destination on a phone closes the sheet the sidebar lives in.
   const close = () => setOpenMobile(false)
+  const projectsResult = useAtomValue(projectsAtom)
+  const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
+  const [query, setQuery] = useState("")
+  const [filter, setFilterState] = useState(readStoredFilter)
+  const setFilter = (next: ThreadFilter) => {
+    setFilterState(next)
+    storeFilter(next)
+  }
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="mb-2 flex items-center gap-2 pl-2">
+        <div className="mt-1 mb-4 flex items-center gap-2 pl-2">
           <Link to="/" onClick={close} className="flex min-w-0 flex-1 items-baseline gap-2">
             <span className="font-semibold tracking-tight">Humanity</span>
           </Link>
           <SidebarTrigger className="text-muted-foreground" />
         </div>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link to="/" onClick={close} activeOptions={{ exact: true }}>
-                <SquarePen />
-                <span>New chat</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link to="/projects" onClick={close}>
-                <FolderGit2 />
-                <span>Projects</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex items-center gap-0.5">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SidebarInput
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && query !== "") {
+                  event.preventDefault()
+                  setQuery("")
+                }
+              }}
+              placeholder="Search threads"
+              aria-label="Search threads"
+              className="border-0 bg-transparent pl-8 shadow-none focus-visible:ring-0 dark:bg-transparent"
+            />
+          </div>
+          <ThreadFilterMenu filter={filter} onChange={setFilter} projects={projects} />
+          <HeaderLink label="New chat" onClick={close} exact to="/">
+            <SquarePen />
+          </HeaderLink>
+          <HeaderLink label="Projects" onClick={close} to="/projects">
+            <FolderGit2 />
+          </HeaderLink>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Conversations</SidebarGroupLabel>
           <SidebarGroupContent>
-            <Conversations onNavigate={close} />
+            <Conversations
+              onNavigate={close}
+              projects={projects}
+              query={query}
+              filter={filter}
+              onReset={() => {
+                setQuery("")
+                setFilter(DEFAULT_THREAD_FILTER)
+              }}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
@@ -97,18 +128,57 @@ export function AppSidebar() {
   )
 }
 
-function Conversations({ onNavigate }: { readonly onNavigate: () => void }) {
+/** An icon-only link in the header row, named by its tooltip. */
+function HeaderLink({
+  to,
+  label,
+  exact = false,
+  onClick,
+  children,
+}: {
+  readonly to: "/" | "/projects"
+  readonly label: string
+  readonly exact?: boolean
+  readonly onClick: () => void
+  readonly children: ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 text-muted-foreground hover:text-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
+          asChild
+        >
+          <Link to={to} onClick={onClick} activeOptions={{ exact }} aria-label={label}>
+            {children}
+          </Link>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function Conversations({
+  onNavigate,
+  projects,
+  query,
+  filter,
+  onReset,
+}: {
+  readonly onNavigate: () => void
+  readonly projects: ReadonlyArray<Project>
+  readonly query: string
+  readonly filter: ThreadFilter
+  readonly onReset: () => void
+}) {
   const sessions = useAtomValue(allSessionsAtom)
-  const projects = useAtomValue(projectsAtom)
   const { sessionId: activeId } = useParams({ strict: false })
 
   const byId = useMemo(
-    () =>
-      new Map(
-        AsyncResult.isSuccess(projects)
-          ? projects.value.map((project) => [project.id, project] as const)
-          : [],
-      ),
+    () => new Map(projects.map((project) => [project.id, project] as const)),
     [projects],
   )
 
@@ -126,12 +196,21 @@ function Conversations({ onNavigate }: { readonly onNavigate: () => void }) {
     )
   }
 
-  const open = sessions.value.filter(isOpen).flatMap((session) => {
+  const all = sessions.value.flatMap((session) => {
     const project = byId.get(session.projectId)
     return project === undefined ? [] : [{ session, project }]
   })
-  if (open.length === 0) {
-    return (
+  const shown = selectThreads(all, query, filter)
+  if (shown.length === 0) {
+    const narrowed = query.trim() !== "" || !isDefaultFilter(filter)
+    return narrowed ? (
+      <div className="flex flex-col items-start gap-1 px-2 text-xs text-muted-foreground">
+        <p>No conversations match.</p>
+        <Button variant="link" size="xs" className="h-auto p-0" onClick={onReset}>
+          Clear search and filters
+        </Button>
+      </div>
+    ) : (
       <p className="px-2 text-xs text-muted-foreground">
         No conversations yet. Start one with New chat.
       </p>
@@ -139,7 +218,7 @@ function Conversations({ onNavigate }: { readonly onNavigate: () => void }) {
   }
   return (
     <SidebarMenu className="gap-0.5">
-      {open.map(({ session, project }) => (
+      {shown.map(({ session, project }) => (
         <SidebarMenuItem key={session.id}>
           <ConversationLink
             session={session}
@@ -148,10 +227,12 @@ function Conversations({ onNavigate }: { readonly onNavigate: () => void }) {
             onNavigate={onNavigate}
           />
           {/* Takes the place of the time on hover or keyboard focus; always shown on touch screens. */}
-          <EndSessionButton
-            session={session}
-            className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 pointer-coarse:opacity-100"
-          />
+          {session.status !== "ended" && (
+            <EndSessionButton
+              session={session}
+              className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 pointer-coarse:opacity-100"
+            />
+          )}
         </SidebarMenuItem>
       ))}
     </SidebarMenu>
