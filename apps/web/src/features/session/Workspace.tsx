@@ -58,6 +58,16 @@ export function Workspace({
     }
   }
 
+  // The message box floats over the transcript; the transcript leaves room for its height.
+  const [dock, setDock] = useState<HTMLDivElement | null>(null)
+  const [dockHeight, setDockHeight] = useState(0)
+  useEffect(() => {
+    if (dock === null) return
+    const observer = new ResizeObserver(() => setDockHeight(dock.offsetHeight))
+    observer.observe(dock)
+    return () => observer.disconnect()
+  }, [dock])
+
   // A blocked agent is visible from other tabs too.
   useEffect(() => {
     const previous = document.title
@@ -94,9 +104,10 @@ export function Workspace({
         }
       />
       <div className="flex min-h-0 flex-1">
-        <div className={cn("flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
+        <div className={cn("relative flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
           <div className="min-h-0 flex-1">
             <MessageList
+              bottomInset={dockHeight}
               messages={view.messages}
               toolCalls={view.toolCalls}
               draft={view.draft}
@@ -116,16 +127,27 @@ export function Workspace({
               }
             />
           </div>
-          <div className="border-t bg-background">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4">
+          {/*
+            Floats over the transcript, which scrolls behind the message box. It
+            reserves the same scrollbar gutter as the transcript, so both centre
+            on the same column.
+          */}
+          <div
+            ref={setDock}
+            className="pointer-events-none absolute inset-x-0 bottom-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto"
+          >
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
               {confirmations.map((confirmation) => (
-                <ConfirmationCard key={confirmation.id} confirmation={confirmation} />
+                // A solid base: the card's own amber tint is see-through.
+                <div key={confirmation.id} className="rounded-lg bg-background">
+                  <ConfirmationCard confirmation={confirmation} />
+                </div>
               ))}
               {changes.length > 0 && !panelOpen && (
                 <button
                   type="button"
                   onClick={() => setPanelOpen(true)}
-                  className="rounded-lg border-2 border-amber-500 bg-amber-500/5 p-3 text-left text-sm font-medium"
+                  className="rounded-lg border-2 border-amber-500 bg-background bg-linear-to-b from-amber-500/5 to-amber-500/5 p-3 text-left text-sm font-medium"
                 >
                   The agent is waiting for your review of {changes.length} change
                   {changes.length === 1 ? "" : "s"}. Open the review panel.

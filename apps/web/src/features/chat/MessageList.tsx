@@ -49,6 +49,7 @@ export function MessageList({
   worktreePath,
   empty,
   footer,
+  bottomInset = 0,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
@@ -61,6 +62,8 @@ export function MessageList({
   readonly empty?: ReactNode
   /** Shown after the last message, such as the reason the agent stopped. */
   readonly footer?: ReactNode
+  /** Pixels at the bottom covered by something floating over the transcript, such as the message box. */
+  readonly bottomInset?: number
 }) {
   const items = messages.flatMap((message) => {
     const rendered = renderContent(
@@ -79,7 +82,8 @@ export function MessageList({
           <MessageScrollerContent
             aria-label="Conversation"
             aria-busy={draft !== "" || working}
-            className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16 pb-4"
+            className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16"
+            style={{ paddingBottom: bottomInset + 16 }}
           >
             {items.length === 0 && draft === "" && empty !== undefined && (
               <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
@@ -116,7 +120,7 @@ export function MessageList({
             )}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        <MessageScrollerButton />
+        <MessageScrollerButton style={{ bottom: bottomInset + 16 }} />
       </MessageScroller>
     </MessageScrollerProvider>
   )
