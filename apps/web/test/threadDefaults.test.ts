@@ -10,6 +10,7 @@ const session = (id: string, overrides: Partial<Session> = {}): Session => ({
   branch: "main",
   worktreePath: "/repos/web-app",
   inWorktree: false,
+  origin: "humanity",
   model: null,
   effort: null,
   autonomy: "ask",

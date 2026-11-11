@@ -10,6 +10,7 @@ import sessionWorktree from "./migrations/0005_session_worktree.ts"
 import sessionEffort from "./migrations/0006_session_effort.ts"
 import sessionUsage from "./migrations/0007_session_usage.ts"
 import preferences from "./migrations/0008_preferences.ts"
+import sessionImport from "./migrations/0009_session_import.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
@@ -21,6 +22,7 @@ const migrations = {
   "0006_session_effort": sessionEffort,
   "0007_session_usage": sessionUsage,
   "0008_preferences": preferences,
+  "0009_session_import": sessionImport,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

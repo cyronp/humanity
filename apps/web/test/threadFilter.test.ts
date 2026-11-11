@@ -42,6 +42,7 @@ const thread = (
     branch: `humanity/${id}-${title.toLowerCase().replaceAll(" ", "-")}`,
     worktreePath: `/home/me/.humanity/worktrees/${owner.id}/${id}`,
     inWorktree: true,
+    origin: "humanity",
     model: null,
     effort: null,
     autonomy: "ask",

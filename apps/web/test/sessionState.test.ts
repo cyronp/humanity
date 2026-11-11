@@ -29,6 +29,7 @@ const session: Session = {
   branch: "humanity/s1-test",
   worktreePath: "/home/me/.humanity/worktrees/p1/s1",
   inWorktree: true,
+  origin: "humanity",
   model: null,
   effort: null,
   autonomy: "ask",

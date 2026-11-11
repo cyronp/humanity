@@ -3,6 +3,7 @@ import type { MessageContent, SessionStatus } from "@humanity/contracts"
 import { Effect, Layer, Stream } from "effect"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
+import { ClaudeHistory, type TestConversation } from "../src/claude/ClaudeHistory.ts"
 import { Services } from "../src/Daemon.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
@@ -14,10 +15,15 @@ const NoClaude = ClaudeCode.layerTest(
   Effect.fail(new ClaudeProbeFailed({ reason: "Claude Code is not used by session tests." })),
 )
 
-export const services = (home: string, script: FakeScript) =>
+export const services = (
+  home: string,
+  script: FakeScript,
+  claudeHistory: () => Readonly<Record<string, ReadonlyArray<TestConversation>>> = () => ({}),
+) =>
   Services.pipe(
     Layer.provideMerge(AgentRunnerFake(script)),
     Layer.provide(NoClaude),
+    Layer.provide(ClaudeHistory.layerTest(claudeHistory)),
     Layer.provideMerge(baseLayer(home)),
   )
 

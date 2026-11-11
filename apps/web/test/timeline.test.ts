@@ -73,6 +73,7 @@ const view = (
     branch: "b",
     worktreePath: "/w",
     inWorktree: true,
+    origin: "humanity",
     model: null,
     effort: null,
     autonomy: "ask",

@@ -1,4 +1,5 @@
 import {
+  acceptsMessages,
   applyAutonomy,
   type Attachment,
   type AttachmentContent,
@@ -650,8 +651,19 @@ export class SessionService extends Context.Service<
         uploads: ReadonlyArray<AttachmentUpload> = [],
       ) {
         const session = yield* get(sessionId)
-        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         const files = yield* prepareAttachments(uploads)
+        if (session.origin === "claude-code") {
+          // From now on the conversation goes on here; the CLI's transcript no longer replaces it.
+          yield* repo.update(sessionId, { detachImport: true, updatedAt: session.updatedAt })
+          if (session.status === "ended") {
+            yield* addMessage(sessionId, {
+              _tag: "notice",
+              level: "info",
+              text: "Continued in Humanity. The messages above come from Claude Code.",
+            })
+          }
+        }
         yield* deliver(session, text, files)
       })
 
@@ -730,6 +742,7 @@ export class SessionService extends Context.Service<
           effort: options.effort ?? null,
           autonomy: options.autonomy ?? DEFAULT_AUTONOMY,
           status: "idle",
+          origin: "humanity",
           createdAt: timestamp,
           updatedAt: timestamp,
         }
@@ -782,7 +795,7 @@ export class SessionService extends Context.Service<
         autonomy: Autonomy,
       ) {
         const session = yield* get(sessionId)
-        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         if (session.autonomy === autonomy) return session
         // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { autonomy, updatedAt: session.updatedAt })
@@ -797,7 +810,7 @@ export class SessionService extends Context.Service<
         requested: string | null,
       ) {
         const session = yield* get(sessionId)
-        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         const model = requested?.trim() || null
         if (session.model === model) return session
         // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
@@ -837,7 +850,7 @@ export class SessionService extends Context.Service<
         effort: ReasoningEffort | null,
       ) {
         const session = yield* get(sessionId)
-        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         if (session.effort === effort) return session
         // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { effort, updatedAt: session.updatedAt })

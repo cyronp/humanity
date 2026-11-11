@@ -3,7 +3,7 @@ import type { Project } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { ChevronDown, History } from "lucide-react"
+import { ChevronDown, History, SquareTerminal } from "lucide-react"
 import { useEffect, useId, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { SidebarGroup, SidebarGroupContent } from "@/components/ui/sidebar"
@@ -17,7 +17,8 @@ const FIRST_PAGE = 10
 const NEXT_PAGE = 25
 
 /**
- * The threads that are over, folded away at the bottom of the sidebar: a ghost
+ * The threads that are over, and the conversations imported from Claude Code,
+ * folded away at the bottom of the sidebar: a ghost
  * button with their count that expands into a compact list, newest first. The
  * sidebar's search and project filter narrow it like the list above.
  */
@@ -82,7 +83,7 @@ export function ThreadHistory({
             <p className="px-2 py-1 text-xs text-muted-foreground">
               {threads.some((thread) => thread.session.status === "ended")
                 ? "No ended threads match."
-                : "No ended threads yet. A thread moves here when you end it."}
+                : "No ended threads yet. A thread moves here when you end it, and your Claude Code conversations in a project's folder show up here too."}
             </p>
           ) : (
             <ul className="flex flex-col gap-0.5">
@@ -94,11 +95,20 @@ export function ThreadHistory({
                     onClick={onNavigate}
                     data-active={session.id === activeId}
                     aria-current={session.id === activeId ? "page" : undefined}
-                    title={`${project.name} · ${session.title}`}
+                    title={`${project.name} · ${session.title}${session.origin === "claude-code" ? " · from Claude Code" : ""}`}
                     className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ring-sidebar-ring outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
                   >
                     <ProjectIcon project={project} className="size-4" />
                     <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                    {session.origin === "claude-code" && (
+                      <>
+                        <SquareTerminal
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                          aria-hidden
+                        />
+                        <span className="sr-only">from Claude Code</span>
+                      </>
+                    )}
                     <time
                       dateTime={session.updatedAt}
                       className="shrink-0 text-xs text-muted-foreground tabular-nums"

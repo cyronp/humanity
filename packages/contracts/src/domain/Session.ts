@@ -16,6 +16,9 @@ export const SessionStatus = Schema.Literals([
 ])
 export type SessionStatus = typeof SessionStatus.Type
 
+export const SessionOrigin = Schema.Literals(["humanity", "claude-code"])
+export type SessionOrigin = typeof SessionOrigin.Type
+
 /** How hard the model thinks before answering, as Claude Code names its effort levels. */
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
 export type ReasoningEffort = typeof ReasoningEffort.Type
@@ -45,10 +48,23 @@ export const Session = Schema.Struct({
   /** How much the agent may do without asking, on top of the project's policy. */
   autonomy: Autonomy,
   status: SessionStatus,
+  /**
+   * Where the conversation started: in Humanity, or in the Claude Code CLI,
+   * whose history Humanity imports into each project's thread history.
+   */
+  origin: SessionOrigin,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 })
 export type Session = typeof Session.Type
+
+/**
+ * Whether the human can still send messages. An ended thread is over, except
+ * one imported from Claude Code: it was never ended in Humanity, and it still
+ * works in the project's checkout, where its conversation can resume.
+ */
+export const acceptsMessages = (session: Session): boolean =>
+  session.status !== "ended" || (session.origin === "claude-code" && !session.inWorktree)
 
 /** How full the model's context window is, as Claude Code counts it. */
 export const ContextUsage = Schema.Struct({

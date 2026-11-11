@@ -1,4 +1,4 @@
-import type { Project } from "@humanity/contracts"
+import { acceptsMessages, type Project } from "@humanity/contracts"
 import { cn } from "cn"
 import { PanelRightClose, PanelRightOpen } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -160,7 +160,7 @@ export function Workspace({
                 autonomy={session.autonomy}
                 model={session.model}
                 effort={session.effort}
-                disabled={session.status === "ended"}
+                disabled={!acceptsMessages(session)}
                 busy={isBusy(session.status)}
               />
             </div>

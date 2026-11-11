@@ -8,6 +8,7 @@ import { Socket } from "effect/socket"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { AuthToken } from "../src/AuthToken.ts"
 import { ClaudeCode } from "../src/claude/ClaudeCode.ts"
+import { ClaudeHistory } from "../src/claude/ClaudeHistory.ts"
 import { App } from "../src/Daemon.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
@@ -24,6 +25,7 @@ const ScriptedClaude = ClaudeCode.layerTest(
 const daemon = (home: string, script: FakeScript = () => []) =>
   HttpRouter.serve(App, { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provide(ScriptedClaude),
+    Layer.provide(ClaudeHistory.layerTest()),
     Layer.provideMerge(AuthToken.layer),
     Layer.provide(AgentRunnerFake(script)),
     Layer.provideMerge(NodeHttpServer.layerTest),

@@ -1,5 +1,6 @@
 import { ProjectsRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
+import { HistoryImport } from "../services/HistoryImport.ts"
 import { PolicyService } from "../services/PolicyService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 import { SessionEvents } from "../services/SessionEvents.ts"
@@ -11,9 +12,12 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
     const sessions = yield* SessionService
     const policies = yield* PolicyService
     const events = yield* SessionEvents
+    const imports = yield* HistoryImport
     return ProjectsRpcs.of({
       "Projects.list": () => projects.list,
-      "Projects.addLocal": ({ path }) => projects.addLocal(path),
+      // Its conversations from the Claude Code CLI follow into the thread history.
+      "Projects.addLocal": ({ path }) =>
+        Effect.tap(projects.addLocal(path), (project) => imports.syncInBackground(project.id)),
       "Projects.cloneFromGitHub": ({ fullName }) => projects.cloneFromGitHub(fullName),
       // Stop the project's agents before their worktrees disappear.
       "Projects.remove": ({ projectId }) =>

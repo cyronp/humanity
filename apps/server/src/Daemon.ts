@@ -6,6 +6,7 @@ import { createServer } from "node:http"
 import { AgentRunnerLive } from "./agent/AgentRunnerLive.ts"
 import { AuthToken } from "./AuthToken.ts"
 import { ClaudeCode } from "./claude/ClaudeCode.ts"
+import { ClaudeHistory } from "./claude/ClaudeHistory.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
@@ -22,6 +23,7 @@ import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
+import { HistoryImport } from "./services/HistoryImport.ts"
 import { PolicyService } from "./services/PolicyService.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
@@ -29,11 +31,11 @@ import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 
 /**
- * Domain services, built on whatever config, database, platform, agent runner
- * and Claude Code runtime they are given. Tests swap in the fake runner here.
+ * Domain services, built on whatever config, database, platform, agent runner,
+ * Claude Code runtime and Claude Code history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
-  SessionService.layer.pipe(
+  Layer.merge(HistoryImport.layer, SessionService.layer).pipe(
     Layer.provideMerge(ApprovalService.layer),
     Layer.provideMerge(PolicyService.layer),
     Layer.provideMerge(ProjectService.layer),
@@ -118,13 +120,14 @@ const HttpServerLive = Layer.unwrap(
 /** The whole daemon as one layer. Needs only a `ServerConfig`. */
 // No per-request log: the RPC socket URL carries the auth token in its query string.
 export const Daemon = HttpRouter.serve(
-  Layer.merge(Banner, ClaudeBanner).pipe(Layer.provideMerge(App)),
+  Layer.mergeAll(Banner, ClaudeBanner, HistoryImport.background).pipe(Layer.provideMerge(App)),
   { disableLogger: true },
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
   // After the runner: both it and the account check run on this Claude Code.
   Layer.provide(ClaudeCode.layer),
+  Layer.provide(ClaudeHistory.layer),
   Layer.provide(GitHubLive),
   Layer.provide(HttpServerLive),
   Layer.provide(DatabaseLive),

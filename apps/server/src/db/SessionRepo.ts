@@ -9,6 +9,7 @@ import {
   ReasoningEffort,
   type Session,
   SessionId,
+  SessionOrigin,
   SessionStatus,
   SessionUsage,
   type ToolCall,
@@ -30,6 +31,7 @@ const SessionRow = Schema.Struct({
   effort: Schema.NullOr(ReasoningEffort),
   autonomy: Autonomy,
   status: SessionStatus,
+  origin: SessionOrigin,
   created_at: Schema.String,
   updated_at: Schema.String,
 })
@@ -46,6 +48,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   effort: row.effort,
   autonomy: row.autonomy,
   status: row.status,
+  origin: row.origin,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
@@ -121,6 +124,37 @@ const safeJson = (value: unknown): string => {
   }
 }
 
+export interface ImportIndex {
+  /** Imported threads by the Claude Code session they came from. */
+  readonly bySource: ReadonlyMap<
+    string,
+    {
+      readonly sessionId: SessionId
+      /** The transcript's mtime at the last import; `null` once continued in Humanity. */
+      readonly mtime: number | null
+    }
+  >
+  /** Every Agent SDK session id a thread has, imported or not. */
+  readonly sdkSessionIds: ReadonlySet<string>
+}
+
+export interface ImportedThreadRows {
+  readonly session: Session
+  /** The Claude Code session the thread came from. */
+  readonly sourceId: string
+  /** The transcript's mtime, in milliseconds. */
+  readonly mtime: number
+  readonly messages: ReadonlyArray<{ readonly message: ChatMessage; readonly raw: unknown }>
+  readonly toolCalls: ReadonlyArray<ToolCall>
+}
+
+const ImportIndexRow = Schema.Struct({
+  id: SessionId,
+  sdk_session_id: Schema.NullOr(Schema.String),
+  import_source_id: Schema.NullOr(Schema.String),
+  import_mtime: Schema.NullOr(Schema.Number),
+})
+
 /** Persistence for sessions, their messages and tool calls. Rows are decoded with Schema. */
 export class SessionRepo extends Context.Service<
   SessionRepo,
@@ -145,9 +179,23 @@ export class SessionRepo extends Context.Service<
         readonly effort?: ReasoningEffort | null
         /** Set together when the session moves into its own worktree. */
         readonly worktree?: { readonly branch: string; readonly path: string }
+        /** Stops refreshing an imported thread from its Claude Code transcript. */
+        readonly detachImport?: true
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
+    /**
+     * Which Claude Code conversations Humanity already knows: the imported
+     * ones by the session they came from, and every `sdk_session_id`.
+     */
+    readonly importIndex: Effect.Effect<ImportIndex>
+    /**
+     * Writes an imported thread with its whole transcript, replacing what an
+     * earlier import of the same thread stored. One transaction, so a thread
+     * is never seen half imported. `false` when the thread was continued in
+     * Humanity meanwhile, and nothing was written.
+     */
+    readonly writeImported: (imported: ImportedThreadRows) => Effect.Effect<boolean>
     /** The limits the session last heard about; all `null` until the agent reports them. */
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
@@ -241,6 +289,7 @@ export class SessionRepo extends Context.Service<
             effort: session.effort,
             autonomy: session.autonomy,
             status: session.status,
+            origin: session.origin,
             created_at: session.createdAt,
             updated_at: session.updatedAt,
           })}
@@ -277,12 +326,14 @@ export class SessionRepo extends Context.Service<
           readonly model?: string | null
           readonly effort?: ReasoningEffort | null
           readonly worktree?: { readonly branch: string; readonly path: string }
+          readonly detachImport?: true
           readonly updatedAt: string
         },
       ) =>
         sql`
           UPDATE sessions SET ${sql.update({
             updated_at: changes.updatedAt,
+            ...(changes.detachImport === undefined ? {} : { import_mtime: null }),
             ...(changes.status === undefined ? {} : { status: changes.status }),
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
@@ -438,6 +489,94 @@ export class SessionRepo extends Context.Service<
           Effect.orDie,
         )
 
+      const findImportIndex = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: ImportIndexRow,
+        execute: () => sql`SELECT id, sdk_session_id, import_source_id, import_mtime FROM sessions`,
+      })
+
+      const importIndex = findImportIndex().pipe(
+        Effect.map((rows): ImportIndex => {
+          const bySource = new Map<string, { sessionId: SessionId; mtime: number | null }>()
+          const sdkSessionIds = new Set<string>()
+          for (const row of rows) {
+            if (row.sdk_session_id !== null) sdkSessionIds.add(row.sdk_session_id)
+            if (row.import_source_id !== null) {
+              bySource.set(row.import_source_id, { sessionId: row.id, mtime: row.import_mtime })
+            }
+          }
+          return { bySource, sdkSessionIds }
+        }),
+        Effect.orDie,
+      )
+
+      const findImportMtime = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ import_mtime: Schema.NullOr(Schema.Number) }),
+        execute: (id) => sql`SELECT import_mtime FROM sessions WHERE id = ${id}`,
+      })
+
+      const writeImported = ({
+        session,
+        sourceId,
+        mtime,
+        messages,
+        toolCalls,
+      }: ImportedThreadRows) =>
+        Effect.gen(function* () {
+          // Continued in Humanity since the import was planned: its messages are the human's now.
+          const existing = yield* findImportMtime(session.id)
+          if (Option.isSome(existing) && existing.value.import_mtime === null) return false
+          yield* sql`
+            INSERT INTO sessions ${sql.insert({
+              id: session.id,
+              project_id: session.projectId,
+              sdk_session_id: session.sdkSessionId,
+              title: session.title,
+              branch: session.branch,
+              worktree_path: session.worktreePath,
+              in_worktree: session.inWorktree ? 1 : 0,
+              model: session.model,
+              effort: session.effort,
+              autonomy: session.autonomy,
+              status: session.status,
+              origin: session.origin,
+              import_source_id: sourceId,
+              import_mtime: mtime,
+              created_at: session.createdAt,
+              updated_at: session.updatedAt,
+            })}
+            ON CONFLICT (id) DO UPDATE SET
+              title = excluded.title,
+              branch = excluded.branch,
+              import_mtime = excluded.import_mtime,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at
+          `
+          yield* sql`DELETE FROM messages WHERE session_id = ${session.id}`
+          yield* sql`DELETE FROM tool_calls WHERE session_id = ${session.id}`
+          for (const { message, raw } of messages) yield* insertMessage(message, raw)
+          for (const toolCall of toolCalls) {
+            const output =
+              toolCall.output === null ? null : yield* encodeOutput({ result: toolCall.output })
+            yield* sql`
+              INSERT INTO tool_calls ${sql.insert({
+                id: toolCall.id,
+                session_id: toolCall.sessionId,
+                tool_use_id: toolCall.toolUseId,
+                tool_name: toolCall.toolName,
+                input_json: safeJson(toolCall.input),
+                output_json: output,
+                status: toolCall.status,
+                started_at: toolCall.startedAt,
+                finished_at: toolCall.finishedAt,
+              })}
+              ON CONFLICT (session_id, tool_use_id) DO NOTHING
+            `
+          }
+          return true
+        }).pipe(sql.withTransaction, Effect.orDie)
+
       return SessionRepo.of({
         insert,
         get,
@@ -445,6 +584,8 @@ export class SessionRepo extends Context.Service<
         listAll,
         listByStatus,
         update,
+        importIndex,
+        writeImported,
         getUsage,
         setUsage,
         insertMessage,
