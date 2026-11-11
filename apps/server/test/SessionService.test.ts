@@ -100,6 +100,52 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live("switches an open thread's model, live and across a restart", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      const sessionId = yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(session.id, "idle")
+        const before = yield* sessions.get(session.id)
+
+        // The run is still open between turns, so it switches in place.
+        const updated = yield* sessions.setModel(session.id, " sonnet ")
+        assert.strictEqual(updated.model, "sonnet")
+        // The sidebar counts from `updatedAt`; a change of model is not a change of status.
+        assert.strictEqual(updated.updatedAt, before.updatedAt)
+        // Back to Claude Code's default, and a repeat of the same value is a no-op.
+        assert.isNull((yield* sessions.setModel(session.id, null)).model)
+        yield* sessions.setModel(session.id, null)
+        yield* sessions.setModel(session.id, "opus")
+        assert.deepStrictEqual(yield* Ref.get(log.modelChanges), ["sonnet", undefined, "opus"])
+        assert.lengthOf(yield* Ref.get(log.runs), 1)
+        return session.id
+      }).pipe(Effect.provide(services(home, () => [])))
+
+      // After a restart there is no run to switch: the next one starts on the stored model.
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        yield* sessions.setModel(sessionId, "haiku")
+        assert.deepStrictEqual(yield* Ref.get(log.modelChanges), [])
+        yield* sessions.sendMessage(sessionId, "again")
+        yield* waitForStatus(sessionId, "idle")
+        assert.deepStrictEqual(
+          (yield* Ref.get(log.runs)).map((run) => run.model),
+          ["haiku"],
+        )
+
+        yield* sessions.end(sessionId, { removeWorktree: false })
+        const result = yield* sessions.setModel(sessionId, "opus").pipe(Effect.flip)
+        assert.strictEqual(result._tag, "SessionEnded")
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
   it.live("streams every project's sessions again after each change", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

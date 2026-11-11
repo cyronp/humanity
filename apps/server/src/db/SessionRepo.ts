@@ -111,6 +111,8 @@ export class SessionRepo extends Context.Service<
         readonly status?: SessionStatus
         readonly sdkSessionId?: string
         readonly autonomy?: Autonomy
+        /** `null` stores Claude Code's default. */
+        readonly model?: string | null
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
@@ -226,6 +228,7 @@ export class SessionRepo extends Context.Service<
           readonly status?: SessionStatus
           readonly sdkSessionId?: string
           readonly autonomy?: Autonomy
+          readonly model?: string | null
           readonly updatedAt: string
         },
       ) =>
@@ -235,6 +238,7 @@ export class SessionRepo extends Context.Service<
             ...(changes.status === undefined ? {} : { status: changes.status }),
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
+            ...(changes.model === undefined ? {} : { model: changes.model }),
           })}
           WHERE id = ${sessionId}
         `.pipe(Effect.asVoid, Effect.orDie)

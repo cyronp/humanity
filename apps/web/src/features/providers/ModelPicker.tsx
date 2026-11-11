@@ -75,16 +75,19 @@ const useFavoriteModels = () => {
 type Section = "favorites" | ProviderId
 
 /**
- * The model a new thread runs on. A popover with a rail of providers (and
+ * The model a thread runs on, chosen before it starts or changed while it is
+ * open. A popover with a rail of providers (and
  * the starred models), a search over every model, and older models behind
  * "Legacy models". `null` means Claude Code's default.
  */
 export function ModelPicker({
   value,
   onChange,
+  disabled = false,
 }: {
   readonly value: string | null
   readonly onChange: (model: string | null) => void
+  readonly disabled?: boolean
 }) {
   const status = useAtomValue(claudeStatusAtom)
   const reported = AsyncResult.isSuccess(status) ? status.value.models : []
@@ -140,7 +143,7 @@ export function ModelPicker({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger asChild disabled={disabled}>
         <InputGroupButton
           size="sm"
           className="max-w-48 text-muted-foreground hover:text-foreground"

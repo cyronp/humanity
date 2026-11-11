@@ -43,6 +43,7 @@ export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
 export const createSessionAtom = HumanityClient.mutation("Sessions.create")
 export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const setAutonomyAtom = HumanityClient.mutation("Sessions.setAutonomy")
+export const setModelAtom = HumanityClient.mutation("Sessions.setModel")
 export const interruptAtom = HumanityClient.mutation("Sessions.interrupt")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 

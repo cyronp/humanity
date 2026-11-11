@@ -35,6 +35,8 @@ export class FakeAgentLog extends Context.Service<
     readonly runs: Ref.Ref<ReadonlyArray<AgentRunOptions>>
     readonly prompts: Ref.Ref<ReadonlyArray<string>>
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
+    /** Every `setModel` on a running agent, in order. */
+    readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
   }
 >()("humanity/test/FakeAgentLog") {}
 
@@ -246,6 +248,8 @@ export const AgentRunnerFake = (script: FakeScript) =>
                 }),
               ),
             ),
+            setModel: (model: string | undefined) =>
+              Ref.update(log.modelChanges, (all) => [...all, model]),
           }
         })
 
@@ -260,6 +264,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
             runs: yield* Ref.make<ReadonlyArray<AgentRunOptions>>([]),
             prompts: yield* Ref.make<ReadonlyArray<string>>([]),
             permissions: yield* Ref.make<ReadonlyArray<PermissionLogEntry>>([]),
+            modelChanges: yield* Ref.make<ReadonlyArray<string | undefined>>([]),
           })
         }),
       ),

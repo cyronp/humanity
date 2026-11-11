@@ -69,6 +69,16 @@ export const SessionsRpcs = RpcGroup.make(
     success: Session,
     error: Schema.Union([SessionNotFound, SessionEnded]),
   }),
+  /**
+   * Changes the model the agent runs on: a value from `Claude.status`, or
+   * `null` for Claude Code's default. A running agent switches right away;
+   * otherwise the next run starts on it.
+   */
+  Rpc.make("Sessions.setModel", {
+    payload: { sessionId: SessionId, model: Schema.NullOr(Schema.String) },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded]),
+  }),
   Rpc.make("Sessions.sendMessage", {
     payload: { sessionId: SessionId, text: Schema.NonEmptyString },
     error: Schema.Union([SessionNotFound, SessionEnded]),

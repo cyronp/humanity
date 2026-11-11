@@ -149,6 +149,11 @@ export const AgentRunnerLive = Layer.effect(
               }),
             ),
           interrupt: Effect.tryPromise(() => handle.interrupt()).pipe(Effect.ignore),
+          setModel: (model: string | undefined) =>
+            Effect.tryPromise({
+              try: () => handle.setModel(model),
+              catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
+            }),
         }
       })
 

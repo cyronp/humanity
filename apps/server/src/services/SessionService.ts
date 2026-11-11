@@ -104,6 +104,14 @@ export class SessionService extends Context.Service<
       sessionId: string,
       autonomy: Autonomy,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
+    /**
+     * Changes the model; `null` is Claude Code's default. A running agent
+     * switches right away, otherwise the next run starts on it.
+     */
+    readonly setModel: (
+      sessionId: string,
+      model: string | null,
+    ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
     readonly sendMessage: (
       sessionId: string,
       text: string,
@@ -571,6 +579,46 @@ export class SessionService extends Context.Service<
         return updated
       })
 
+      const setModel = Effect.fn("SessionService.setModel")(function* (
+        sessionId: string,
+        requested: string | null,
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        const model = requested?.trim() || null
+        if (session.model === model) return session
+        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
+        yield* repo.update(sessionId, { model, updatedAt: session.updatedAt })
+        // A session without an active run reads the stored model when its next run starts.
+        const state = active.get(sessionId)
+        if (state !== undefined) {
+          yield* state.run.setModel(model ?? undefined).pipe(
+            Effect.catch((error) =>
+              Effect.gen(function* () {
+                yield* Effect.logWarning("could not switch the model", {
+                  sessionId,
+                  reason: error.message,
+                })
+                // Between turns, closing the run makes the next message resume on the new model.
+                if (session.status !== "running" && session.status !== "waiting_for_human") {
+                  yield* stopRun(sessionId)
+                  return
+                }
+                yield* addMessage(sessionId, {
+                  _tag: "notice",
+                  level: "warning",
+                  text: `The agent could not switch models while working (${error.message}). It keeps the previous model until this session restarts.`,
+                })
+              }),
+            ),
+          )
+        }
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
+      })
+
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
         yield* get(sessionId)
         const state = active.get(sessionId)
@@ -684,6 +732,7 @@ export class SessionService extends Context.Service<
         get,
         create,
         setAutonomy,
+        setModel,
         sendMessage,
         interrupt,
         end,

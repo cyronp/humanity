@@ -5,7 +5,8 @@ import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
-import { sendMessageAtom, setAutonomyAtom } from "@/features/session/atoms"
+import { ModelPicker } from "@/features/providers/ModelPicker"
+import { sendMessageAtom, setAutonomyAtom, setModelAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
 
@@ -13,21 +14,26 @@ import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
 export function Composer({
   sessionId,
   autonomy,
+  model,
   disabled,
   busy,
 }: {
   readonly sessionId: SessionId
   /** The session's current autonomy; it changes from the next tool call on. */
   readonly autonomy: Autonomy
+  /** The session's model; `null` is Claude Code's default. */
+  readonly model: string | null
   readonly disabled: boolean
   readonly busy: boolean
 }) {
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
+  const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const [autonomyError, setAutonomyError] = useState<string>()
+  const [modelError, setModelError] = useState<string>()
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -48,6 +54,13 @@ export function Composer({
     if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
   }
 
+  // Like the autonomy, the new model comes back through `SessionUpdated`.
+  const changeModel = async (next: string | null) => {
+    setModelError(undefined)
+    const exit = await updateModel({ payload: { sessionId, model: next } })
+    if (Exit.isFailure(exit)) setModelError(describeCause(exit.cause))
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
@@ -60,6 +73,9 @@ export function Composer({
       {error !== undefined && <ErrorNote title="The message was not sent" message={error} />}
       {autonomyError !== undefined && (
         <ErrorNote title="The autonomy was not changed" message={autonomyError} />
+      )}
+      {modelError !== undefined && (
+        <ErrorNote title="The model was not changed" message={modelError} />
       )}
       <ChatBox>
         <InputGroupTextarea
@@ -85,7 +101,8 @@ export function Composer({
               Queued until the agent finishes
             </InputGroupText>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <ModelPicker value={model} onChange={changeModel} disabled={disabled} />
             <SendButton
               ready={!disabled && !pending && text.trim() !== ""}
               disabled={disabled || pending || text.trim() === ""}

@@ -12,6 +12,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.create": (payload) => sessions.create(payload),
       "Sessions.setAutonomy": ({ sessionId, autonomy }) =>
         sessions.setAutonomy(sessionId, autonomy),
+      "Sessions.setModel": ({ sessionId, model }) => sessions.setModel(sessionId, model),
       "Sessions.sendMessage": ({ sessionId, text }) => sessions.sendMessage(sessionId, text),
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
       "Sessions.end": ({ sessionId, removeWorktree }) =>

@@ -129,6 +129,7 @@ export function Workspace({
               <Composer
                 sessionId={session.id}
                 autonomy={session.autonomy}
+                model={session.model}
                 disabled={session.status === "ended"}
                 busy={isBusy(session.status)}
               />

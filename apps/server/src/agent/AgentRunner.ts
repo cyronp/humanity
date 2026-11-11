@@ -41,6 +41,8 @@ export interface AgentRun {
   readonly send: (text: string) => Effect.Effect<void>
   /** Stops the current turn. The run stays open for the next message. */
   readonly interrupt: Effect.Effect<void>
+  /** Switches the model for the rest of the run; `undefined` is Claude Code's default. */
+  readonly setModel: (model: string | undefined) => Effect.Effect<void, AgentRunError>
 }
 
 export class AgentRunError extends Schema.TaggedError<AgentRunError>()("AgentRunError", {
