@@ -72,7 +72,7 @@ Core principles:
 
 ### Verify before coding
 
-Before Milestone 1, check current docs and record findings in `docs/notes/api-verification.md`:
+Before Milestone 1, check the current docs for:
 
 - Claude Agent SDK: `query()` options, `canUseTool` signature and return shape, permission modes, `allowedTools`, `settingSources`, session resume, streaming input mode, interrupts, the message types it emits, and the current names and input shapes of built-in tools (`Edit`, `Write`, `Bash`, etc.). Docs: https://code.claude.com/docs/en/agent-sdk/overview and https://code.claude.com/docs/en/agent-sdk/permissions
 - Effect 4: RPC (WebSocket protocol, streaming RPCs), `ChildProcess`, SQL + SQLite driver + `Migrator`, `HttpClient`, `AtomRpc`. Docs: https://effect.website/docs
@@ -109,7 +109,6 @@ humanity/
 ├─ packages/
 │  ├─ contracts/     RpcGroups, Schemas, event/union types shared by server and web
 │  └─ diff/          Pure hunk logic on top of jsdiff (no I/O, fully unit-tested)
-├─ docs/notes/       Decisions and API verification notes
 ├─ turbo.json
 ├─ package.json      npm workspaces root
 ├─ eslint.config.js
@@ -327,9 +326,9 @@ Tailwind + shadcn/ui with light and dark mode. Use Shiki's dual-theme output wir
 
 ## 12. Milestones
 
-Complete each milestone fully (lint, typecheck and tests passing) and commit before starting the next. At the end of each, write a short summary in `docs/notes/progress.md`.
+Complete each milestone fully (lint, typecheck and tests passing) and commit before starting the next.
 
-**M0 — Scaffold.** npm workspaces + Turborepo, TypeScript strict, ESLint + Prettier, Vitest, empty `apps/server`, `apps/web`, `packages/contracts`, `packages/diff`. API verification notes written (section 3).
+**M0 — Scaffold.** npm workspaces + Turborepo, TypeScript strict, ESLint + Prettier, Vitest, empty `apps/server`, `apps/web`, `packages/contracts`, `packages/diff`. Current APIs checked (section 3).
 *Done when:* `npm run lint`, `npm run typecheck`, `npm run test` and `npm run dev` work from the root.
 
 **M1 — Daemon foundation.** Effect HTTP server on `127.0.0.1`, RPC over WebSocket with token auth, SQLite + migrations, `Projects.list/addLocal/remove`. Web app connects via `AtomRpc` and shows the project list.
@@ -360,4 +359,4 @@ Complete each milestone fully (lint, typecheck and tests passing) and commit bef
 - Errors are tagged, typed and shown in the UI with actionable messages; no silent failures.
 - Keep `packages/diff` free of I/O and framework dependencies.
 - Keep components small; the review panel and renderers are the heart of the product, so prioritize their clarity and keyboard ergonomics.
-- When the spec and reality disagree, or a decision isn't covered here, **ask the human** rather than guessing silently. Record decisions in `docs/notes/decisions.md`.
+- When the spec and reality disagree, or a decision isn't covered here, **ask the human** rather than guessing silently.

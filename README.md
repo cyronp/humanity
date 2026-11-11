@@ -109,4 +109,3 @@ npm run format      # Prettier
 | `packages/contracts` | Schemas and RPC groups shared by both                                                             |
 | `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, partial application, tool simulation, agent messages |
 | `docs/spec.md`       | The MVP specification                                                                             |
-| `docs/notes/`        | Progress per milestone, decisions taken along the way, and API verification notes                 |

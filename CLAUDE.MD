@@ -24,7 +24,6 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 - `apps/web` — Vite + React 19 + TanStack Router + shadcn/ui
 - `packages/contracts` — shared RpcGroups and Schemas
 - `packages/diff` — pure hunk logic on top of jsdiff (no I/O)
-- `docs/notes/` — `progress.md`, `decisions.md`, `api-verification.md`
 
 ## Hard rules
 
@@ -39,6 +38,5 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 ## Workflow
 
 - Work one milestone at a time, in the order of the spec. Commit at the end of each one.
-- After each milestone, append a short summary to `docs/notes/progress.md`.
-- When the spec and the real API disagree, follow the real API and record the deviation in `docs/notes/api-verification.md`.
-- When a decision isn't covered by the spec, **stop and ask** instead of guessing. Record the answer in `docs/notes/decisions.md`.
+- When the spec and the real API disagree, follow the real API and say so in the end-of-task summary.
+- When a decision isn't covered by the spec, **stop and ask** instead of guessing.
