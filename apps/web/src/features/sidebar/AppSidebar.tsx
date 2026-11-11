@@ -14,7 +14,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInput,
   SidebarMenu,
@@ -33,6 +32,7 @@ import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
 import { formatElapsed, useNow } from "@/lib/elapsed"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
+import { ThreadHistory } from "./ThreadHistory.tsx"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
@@ -42,7 +42,7 @@ import {
   type ThreadFilter,
 } from "./threadFilter.ts"
 
-/** The app's left column: new chat, the conversations, and app-wide controls. */
+/** The app's left column: new chat, the conversations, the history of ended ones, and app-wide controls. */
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   // Choosing a destination on a phone closes the sheet the sidebar lives in.
@@ -94,7 +94,6 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Conversations</SidebarGroupLabel>
           <SidebarGroupContent>
             <Conversations
               onNavigate={close}
@@ -108,6 +107,7 @@ export function AppSidebar() {
             />
           </SidebarGroupContent>
         </SidebarGroup>
+        <ThreadHistory projects={projects} query={query} filter={filter} onNavigate={close} />
       </SidebarContent>
       <SidebarFooter className="flex-row items-center gap-1">
         <div className="min-w-0 flex-1">

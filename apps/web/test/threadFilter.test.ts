@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
+  selectHistory,
   selectThreads,
   type Thread,
 } from "@/features/sidebar/threadFilter"
@@ -92,6 +93,26 @@ describe("selectThreads", () => {
   it("ignores a chosen project that no longer exists", () => {
     const filter = { ...DEFAULT_THREAD_FILTER, projectIds: ["gone"] }
     expect(ids(selectThreads(threads, "", filter))).toEqual(["b", "a", "d"])
+  })
+})
+
+describe("selectHistory", () => {
+  const history = [
+    ...threads,
+    thread("e", api, "Old migration", "ended", "2026-11-09T09:00:00.000Z"),
+    thread("f", web, "Login page copy", "ended", "2026-11-10T16:00:00.000Z"),
+  ]
+
+  it("lists only the threads that are over, newest first whatever the sidebar's order", () => {
+    const filter = { ...DEFAULT_THREAD_FILTER, order: "oldest" as const }
+    expect(ids(selectHistory(history, "", filter))).toEqual(["f", "c", "e"])
+  })
+
+  it("follows the sidebar's search and project filter", () => {
+    expect(ids(selectHistory(history, "login", DEFAULT_THREAD_FILTER))).toEqual(["f"])
+    expect(
+      ids(selectHistory(history, "", { ...DEFAULT_THREAD_FILTER, projectIds: [api.id] })),
+    ).toEqual(["e"])
   })
 })
 

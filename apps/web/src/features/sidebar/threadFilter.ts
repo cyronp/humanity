@@ -76,6 +76,21 @@ export const selectThreads = (
     .toSorted((a, b) => sign * (Date.parse(a.session.updatedAt) - Date.parse(b.session.updatedAt)))
 }
 
+/**
+ * The threads that are over, for the sidebar's history: always newest first,
+ * searched and narrowed to the chosen projects like the list above it.
+ */
+export const selectHistory = (
+  threads: ReadonlyArray<Thread>,
+  query: string,
+  filter: ThreadFilter,
+): ReadonlyArray<Thread> =>
+  selectThreads(threads, query, {
+    projectIds: filter.projectIds,
+    statuses: ["ended"],
+    order: "newest",
+  })
+
 const STORAGE_KEY = "humanity.threadFilter"
 
 const isStatus = (value: unknown): value is SessionStatus =>
