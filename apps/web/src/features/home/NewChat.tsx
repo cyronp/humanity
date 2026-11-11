@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Autonomy, Project, ProjectId, Session } from "@humanity/contracts"
+import type { Autonomy, Project, ProjectId, ReasoningEffort, Session } from "@humanity/contracts"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -16,6 +16,7 @@ import {
   useAttachmentDraft,
 } from "@/features/chat/attachments"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import { claudeStatusAtom } from "@/features/claude/atoms"
 import { branchesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
@@ -23,13 +24,18 @@ import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
+import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import { allSessionsAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { usePinnedDefaults } from "./pinnedDefaults.ts"
+import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
 /**
  * The home page: one message box, like any AI chat. It starts a new session
- * in the repository the human prompted last, unless they pick another one.
+ * in the repository the human prompted last, with that thread's model,
+ * reasoning effort and autonomy (or the pinned effort and autonomy), unless
+ * they pick otherwise.
  */
 export function NewChat({
   projectId,
@@ -39,8 +45,16 @@ export function NewChat({
 }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
+  const status = useAtomValue(claudeStatusAtom)
   const list = AsyncResult.isSuccess(projects) ? projects.value : []
-  const lastProjectId = AsyncResult.isSuccess(sessions) ? lastPrompted(sessions.value) : undefined
+  const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
+  const lastProjectId = lastPrompted(recent)
+  const { pinned } = usePinnedDefaults()
+  const defaults = threadDefaults(
+    recent,
+    AsyncResult.isSuccess(status) ? status.value.models : undefined,
+    pinned,
+  )
   // Until the human picks one, follow the last prompted project as it loads.
   const project =
     list.find((candidate) => candidate.id === projectId) ??
@@ -67,7 +81,11 @@ export function NewChat({
           </div>
         ),
         onSuccess: () =>
-          project === undefined ? <NoProjects /> : <NewChatForm project={project} />,
+          project === undefined ? (
+            <NoProjects />
+          ) : (
+            <NewChatForm project={project} defaults={defaults} />
+          ),
       })}
     </div>
   )
@@ -94,11 +112,23 @@ function NoProjects() {
   )
 }
 
-function NewChatForm({ project }: { readonly project: Project }) {
+function NewChatForm({
+  project,
+  defaults,
+}: {
+  readonly project: Project
+  /** The pinned defaults, else how the last thread was left; each setting follows them until the human picks another. */
+  readonly defaults: ThreadDefaults
+}) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
-  const [model, setModel] = useState<string | null>(null)
-  const [autonomy, setAutonomy] = useState<Autonomy>("ask")
+  // `undefined` is "not picked yet"; `null` is a picked "Default".
+  const [chosenModel, setModel] = useState<string | null>()
+  const [chosenEffort, setEffort] = useState<ReasoningEffort | null>()
+  const [chosenAutonomy, setAutonomy] = useState<Autonomy>()
+  const model = chosenModel === undefined ? defaults.model : chosenModel
+  const effort = chosenEffort === undefined ? defaults.effort : chosenEffort
+  const autonomy = chosenAutonomy ?? defaults.autonomy
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
@@ -127,6 +157,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
         autonomy,
         ...(model === null ? {} : { model }),
+        ...(effort === null ? {} : { effort }),
       },
       reactivityKeys: [keys.sessions(project.id), keys.git(project.id)],
     })
@@ -179,6 +210,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
           />
           <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
+            <ReasoningPicker value={effort} onChange={setEffort} disabled={pending} />
             <ModelPicker value={model} onChange={setModel} />
             <SendButton
               ready={text.trim() !== "" && !pending && !files.reading}

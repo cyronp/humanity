@@ -26,6 +26,8 @@ export const keys = {
   projects: "projects",
   /** The Claude account sessions run as. */
   claude: "claude",
+  /** The human's own choices, like the pinned defaults of new threads. */
+  preferences: "preferences",
   /** Branches, status and diff of one project's repository. */
   git: (projectId: string) => `git:${projectId}`,
   /** The session list of one project. */

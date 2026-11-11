@@ -13,6 +13,7 @@ import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
+import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
@@ -22,6 +23,7 @@ import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
 import { PolicyService } from "./services/PolicyService.ts"
+import { PreferencesService } from "./services/PreferencesService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
@@ -40,6 +42,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(SessionEvents.layer),
   ),
   ClaudeAccountService.layer,
+  PreferencesService.layer,
 )
 
 export const RpcHandlers = Layer.mergeAll(
@@ -49,6 +52,7 @@ export const RpcHandlers = Layer.mergeAll(
   SessionsHandlers,
   ApprovalsHandlers,
   ClaudeHandlers,
+  PreferencesHandlers,
 )
 
 /**

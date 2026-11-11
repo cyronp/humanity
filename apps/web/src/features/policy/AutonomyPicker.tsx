@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroupButton } from "@/components/ui/input-group"
+import { PinDefaultButton } from "@/components/PinDefaultButton"
+import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 
 interface AutonomyOption {
   readonly value: Autonomy
@@ -48,8 +50,9 @@ const findOption = (value: string): AutonomyOption | undefined =>
 
 /**
  * How much the agent may do without the human, for one session. Anything
- * beyond "Ask me" is shown in amber, so a loosened session is never mistaken
- * for a reviewed one.
+ * beyond "Ask me" is coloured (amber for accepted edits, purple for auto mode),
+ * so a loosened session is never mistaken for a reviewed one. A new thread
+ * starts in the pinned mode, or the one the last thread was left in.
  */
 export function AutonomyPicker({
   value,
@@ -60,9 +63,9 @@ export function AutonomyPicker({
   readonly onChange: (autonomy: Autonomy) => void
   readonly disabled?: boolean
 }) {
+  const pins = usePinnedDefaults()
   const current = findOption(value) ?? ASK
   const Icon = current.icon
-  const loosened = value !== "ask"
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
@@ -70,7 +73,8 @@ export function AutonomyPicker({
           size="sm"
           className={cn(
             "text-muted-foreground hover:text-foreground",
-            loosened && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
+            value === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
+            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
           )}
           aria-label={`Autonomy: ${current.label}`}
         >
@@ -95,14 +99,25 @@ export function AutonomyPicker({
                 className="items-start"
               >
                 <option.icon className="mt-0.5" />
-                <span className="flex flex-col gap-0.5">
+                <span className="flex flex-1 flex-col gap-0.5">
                   <span>{option.label}</span>
                   <span className="text-xs text-muted-foreground">{option.description}</span>
                 </span>
+                <PinDefaultButton
+                  label={option.label}
+                  pinned={pins.pinned.autonomy === option.value}
+                  disabled={!pins.ready}
+                  onToggle={() => void pins.toggle("autonomy", option.value)}
+                />
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuGroup>
         </DropdownMenuRadioGroup>
+        {pins.error !== undefined && (
+          <p role="alert" className="px-1.5 py-1 text-xs text-destructive">
+            The default was not changed: {pins.error}
+          </p>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

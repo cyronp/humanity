@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroupButton } from "@/components/ui/input-group"
+import { PinDefaultButton } from "@/components/PinDefaultButton"
+import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 
 /** The model's own choice. Picking it sends no effort, so the session follows the model. */
 const DEFAULT = "default"
@@ -37,7 +39,8 @@ export const EFFORT_OPTIONS: ReadonlyArray<EffortOption> = [
 
 /**
  * How hard the model reasons in a thread, chosen before it starts or changed
- * while it is open. `null` means the model's default.
+ * while it is open. `null` means the model's default. The pin on an option
+ * makes it the effort every new thread starts with.
  */
 export function ReasoningPicker({
   value,
@@ -48,6 +51,7 @@ export function ReasoningPicker({
   readonly onChange: (effort: ReasoningEffort | null) => void
   readonly disabled?: boolean
 }) {
+  const pins = usePinnedDefaults()
   const selected = value ?? DEFAULT
   const current = EFFORT_OPTIONS.find((option) => option.value === selected)
   const label = current?.label ?? selected
@@ -84,10 +88,21 @@ export function ReasoningPicker({
                   <span>{option.label}</span>
                   <span className="text-xs text-muted-foreground">{option.description}</span>
                 </span>
+                <PinDefaultButton
+                  label={option.label}
+                  pinned={pins.pinned.effort === option.value}
+                  disabled={!pins.ready}
+                  onToggle={() => void pins.toggle("effort", option.value)}
+                />
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuGroup>
         </DropdownMenuRadioGroup>
+        {pins.error !== undefined && (
+          <p role="alert" className="px-1.5 py-1 text-xs text-destructive">
+            The default was not changed: {pins.error}
+          </p>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
