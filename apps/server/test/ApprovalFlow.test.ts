@@ -1,10 +1,12 @@
 import { assert, describe, it } from "@effect/vitest"
 import {
   type Approval,
+  type Autonomy,
   ChangeId,
   ConfirmationId,
   type PendingConfirmation,
   type ProposedChange,
+  setToolRule,
 } from "@humanity/contracts"
 import {
   applyHunks,
@@ -566,6 +568,147 @@ describe("confirm flow", () => {
         const confirmation = yield* pendingConfirmation(session.id)
         assert.strictEqual(confirmation.toolName, "Read")
       }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+})
+
+describe("autonomy", () => {
+  const bashScript: FakeScript = () => [
+    { tool: "Bash", input: { command: "echo 1", description: "Print a number" }, output: "1" },
+    { text: "Ran it." },
+  ]
+
+  const createWith = (repo: string, autonomy: Autonomy, prompt = "Make the changes") =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionService
+      const project = yield* addProject(repo)
+      const session = yield* sessions.create({ projectId: project.id, prompt, autonomy })
+      return { project, session }
+    })
+
+  it.live("accept_edits applies an edit inside the worktree without a review", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup({ "data.txt": ORIGINAL })
+
+      yield* Effect.gen(function* () {
+        const { session } = yield* createWith(repo, "accept_edits")
+        assert.strictEqual(session.autonomy, "accept_edits")
+        yield* waitForStatus(session.id, "idle")
+        assert.deepStrictEqual((yield* decisionFor("Write")).decision, { behavior: "allow" })
+        const file = join(session.worktreePath, "data.txt")
+        assert.strictEqual(readFileSync(file, "utf8"), PROPOSED)
+        assert.lengthOf((yield* contents(session.id)).approvals, 0)
+      }).pipe(Effect.provide(services(home, writeScript)))
+    }),
+  )
+
+  it.live("accept_edits still denies a file outside the worktree", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const outside = join(home, "outside.txt")
+      const script: FakeScript = () => [
+        { tool: "Write", input: { file_path: outside, content: "nope\n" } },
+        { tool: "NotebookEdit", input: { notebook_path: join(home, "a.ipynb"), new_source: "1" } },
+      ]
+
+      yield* Effect.gen(function* () {
+        const log = yield* FakeAgentLog
+        const { session } = yield* createWith(repo, "accept_edits")
+        yield* waitForStatus(session.id, "idle")
+        const asked = yield* Ref.get(log.permissions)
+        for (const entry of asked) {
+          assert.strictEqual(
+            entry.decision === "interrupted" ? undefined : entry.decision.behavior,
+            "deny",
+          )
+        }
+        assert.lengthOf(asked, 2)
+        assert.isFalse(existsSync(outside))
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("accept_edits still asks before a command; auto runs it", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const { session } = yield* createWith(repo, "accept_edits")
+        const confirmation = yield* pendingConfirmation(session.id)
+        assert.strictEqual(confirmation.toolName, "Bash")
+      }).pipe(Effect.provide(services(home, bashScript)))
+
+      const second = yield* setup()
+      yield* Effect.gen(function* () {
+        const { session } = yield* createWith(second.repo, "auto")
+        yield* waitForStatus(session.id, "idle")
+        assert.deepStrictEqual((yield* decisionFor("Bash")).decision, { behavior: "allow" })
+        assert.lengthOf((yield* contents(session.id)).approvals, 0)
+      }).pipe(Effect.provide(services(second.home, bashScript)))
+    }),
+  )
+
+  it.live("auto never overrides a deny rule", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const policies = yield* PolicyService
+        const project = yield* addProject(repo)
+        const policy = yield* policies.get(project.id)
+        yield* policies.set(project.id, setToolRule(policy, "Bash", "deny"))
+        const sessions = yield* SessionService
+        const session = yield* sessions.create({
+          projectId: project.id,
+          prompt: "run it",
+          autonomy: "auto",
+        })
+        yield* waitForStatus(session.id, "idle")
+        const snapshot = yield* contents(session.id)
+        assert.strictEqual(snapshot.toolCalls[0]?.status, "denied")
+        assert.lengthOf(snapshot.approvals, 0)
+      }).pipe(Effect.provide(services(home, bashScript)))
+    }),
+  )
+
+  it.live("a change of autonomy mid-session applies to the very next call", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const approvals = yield* ApprovalService
+        const { session } = yield* createWith(repo, "ask")
+        const confirmation = yield* pendingConfirmation(session.id)
+        yield* approvals.decideConfirmation(confirmation.id, { decision: "allow" })
+        yield* waitForStatus(session.id, "idle")
+
+        const before = yield* sessions.get(session.id)
+        const updated = yield* sessions.setAutonomy(session.id, "auto")
+        assert.strictEqual(updated.autonomy, "auto")
+        // The sidebar counts from `updatedAt`; a change of autonomy is not a change of status.
+        assert.strictEqual(updated.updatedAt, before.updatedAt)
+
+        yield* sessions.sendMessage(session.id, "again")
+        yield* waitForStatus(session.id, "idle")
+        assert.lengthOf((yield* contents(session.id)).approvals, 1)
+      }).pipe(Effect.provide(services(home, bashScript)))
+    }),
+  )
+
+  it.live("an ended session's autonomy cannot change", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id })
+        assert.strictEqual(session.autonomy, "ask")
+        yield* sessions.end(session.id, { removeWorktree: false })
+        const result = yield* sessions.setAutonomy(session.id, "auto").pipe(Effect.flip)
+        assert.strictEqual(result._tag, "SessionEnded")
+      }).pipe(Effect.provide(services(home, bashScript)))
     }),
   )
 })

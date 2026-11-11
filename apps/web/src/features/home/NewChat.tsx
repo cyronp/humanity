@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Project, ProjectId, Session } from "@humanity/contracts"
+import type { Autonomy, Project, ProjectId, Session } from "@humanity/contracts"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -13,6 +13,7 @@ import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import { allSessionsAtom, createSessionAtom } from "@/features/session/atoms"
@@ -90,6 +91,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
   const [model, setModel] = useState<string | null>(null)
+  const [autonomy, setAutonomy] = useState<Autonomy>("ask")
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
@@ -105,7 +107,13 @@ function NewChatForm({ project }: { readonly project: Project }) {
     setPending(true)
     setError(undefined)
     const exit = await create({
-      payload: { projectId: project.id, baseBranch, prompt, ...(model === null ? {} : { model }) },
+      payload: {
+        projectId: project.id,
+        baseBranch,
+        prompt,
+        autonomy,
+        ...(model === null ? {} : { model }),
+      },
       reactivityKeys: [keys.sessions(project.id), keys.git(project.id)],
     })
     setPending(false)
@@ -148,6 +156,7 @@ function NewChatForm({ project }: { readonly project: Project }) {
             onChange={(name) => setChosenBranch({ projectId: project.id, name })}
             disabled={pending}
           />
+          <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker value={model} onChange={setModel} />
             <SendButton

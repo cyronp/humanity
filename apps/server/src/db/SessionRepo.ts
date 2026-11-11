@@ -1,4 +1,5 @@
 import {
+  Autonomy,
   type ChatMessage,
   MessageContent,
   ProjectId,
@@ -20,6 +21,7 @@ const SessionRow = Schema.Struct({
   branch: Schema.String,
   worktree_path: Schema.String,
   model: Schema.NullOr(Schema.String),
+  autonomy: Autonomy,
   status: SessionStatus,
   created_at: Schema.String,
   updated_at: Schema.String,
@@ -33,6 +35,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   branch: row.branch,
   worktreePath: row.worktree_path,
   model: row.model,
+  autonomy: row.autonomy,
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -107,6 +110,7 @@ export class SessionRepo extends Context.Service<
       changes: {
         readonly status?: SessionStatus
         readonly sdkSessionId?: string
+        readonly autonomy?: Autonomy
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
@@ -187,6 +191,7 @@ export class SessionRepo extends Context.Service<
             branch: session.branch,
             worktree_path: session.worktreePath,
             model: session.model,
+            autonomy: session.autonomy,
             status: session.status,
             created_at: session.createdAt,
             updated_at: session.updatedAt,
@@ -220,6 +225,7 @@ export class SessionRepo extends Context.Service<
         changes: {
           readonly status?: SessionStatus
           readonly sdkSessionId?: string
+          readonly autonomy?: Autonomy
           readonly updatedAt: string
         },
       ) =>
@@ -228,6 +234,7 @@ export class SessionRepo extends Context.Service<
             updated_at: changes.updatedAt,
             ...(changes.status === undefined ? {} : { status: changes.status }),
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
+            ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
           })}
           WHERE id = ${sessionId}
         `.pipe(Effect.asVoid, Effect.orDie)

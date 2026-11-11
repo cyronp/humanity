@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyAutonomy,
   DEFAULT_TOOL_POLICY,
   parseMcpToolName,
   resolveToolMode,
@@ -79,5 +80,31 @@ describe("parseMcpToolName", () => {
   it("returns undefined for built-in tools", () => {
     expect(parseMcpToolName("Bash")).toBeUndefined()
     expect(parseMcpToolName("mcp__broken")).toBeUndefined()
+  })
+})
+
+describe("applyAutonomy", () => {
+  const modes = ["auto", "review", "confirm", "deny"] as const
+
+  it("ask leaves the project's mode as it is", () => {
+    for (const mode of modes) expect(applyAutonomy("ask", mode)).toBe(mode)
+  })
+
+  it("accept_edits lets reviewed tools through and nothing else", () => {
+    expect(modes.map((mode) => applyAutonomy("accept_edits", mode))).toEqual([
+      "auto",
+      "auto",
+      "confirm",
+      "deny",
+    ])
+  })
+
+  it("auto lets everything through except denied tools", () => {
+    expect(modes.map((mode) => applyAutonomy("auto", mode))).toEqual([
+      "auto",
+      "auto",
+      "auto",
+      "deny",
+    ])
   })
 })

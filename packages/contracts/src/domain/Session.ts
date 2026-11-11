@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
 
 export const SessionId = Schema.String.pipe(Schema.brand("SessionId"))
@@ -25,6 +26,8 @@ export const Session = Schema.Struct({
   worktreePath: Schema.String,
   /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
   model: Schema.NullOr(Schema.String),
+  /** How much the agent may do without asking, on top of the project's policy. */
+  autonomy: Autonomy,
   status: SessionStatus,
   createdAt: Schema.String,
   updatedAt: Schema.String,

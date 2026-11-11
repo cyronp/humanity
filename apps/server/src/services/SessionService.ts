@@ -1,5 +1,8 @@
 import {
+  applyAutonomy,
+  type Autonomy,
   ChangeId,
+  DEFAULT_AUTONOMY,
   type ChatMessage,
   ConfirmationId,
   type GitBranchExists,
@@ -43,7 +46,7 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
-import { planChange, reviewTarget } from "../agent/review.ts"
+import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -91,10 +94,16 @@ export class SessionService extends Context.Service<
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
       readonly model?: string | undefined
+      readonly autonomy?: Autonomy | undefined
     }) => Effect.Effect<
       Session,
       ProjectNotFound | GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound
     >
+    /** Changes how much the agent may do without asking, from its next tool call on. */
+    readonly setAutonomy: (
+      sessionId: string,
+      autonomy: Autonomy,
+    ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
     readonly sendMessage: (
       sessionId: string,
       text: string,
@@ -254,18 +263,38 @@ export class SessionService extends Context.Service<
           return yield* whileWaiting(session.id, approvals.requestChange(change))
         })
 
+      /** The session's autonomy right now; the human can change it while the agent runs. */
+      const currentAutonomy = (sessionId: string) =>
+        Effect.map(repo.get(sessionId), (found) =>
+          Option.match(found, {
+            onNone: () => DEFAULT_AUTONOMY,
+            onSome: (session) => session.autonomy,
+          }),
+        )
+
       /**
-       * Every tool call that is not pre-approved lands here. The policy is read
-       * fresh on each call, so a change in settings applies to running agents.
+       * Every tool call that is not pre-approved lands here. The policy and the
+       * session's autonomy are read fresh on each call, so a change in either
+       * applies to running agents.
        */
       const decide =
         (session: Session, state: { readonly denied: Set<string> }) =>
         (request: ToolPermissionRequest): Effect.Effect<PermissionDecision> =>
           Effect.gen(function* () {
             const decision: PermissionDecision = yield* Effect.gen(function* () {
-              switch (policies.modeFor(session.projectId, request.toolName)) {
-                case "auto":
-                  return { behavior: "allow" } as const
+              const projectMode = policies.modeFor(session.projectId, request.toolName)
+              const autonomy = yield* currentAutonomy(session.id)
+              switch (applyAutonomy(autonomy, projectMode)) {
+                case "auto": {
+                  // A file change let through without a review still stays inside the worktree.
+                  const denial =
+                    projectMode === "review"
+                      ? outsideWorktreeDenial(request.toolName, request.input, session.worktreePath)
+                      : undefined
+                  return denial === undefined
+                    ? ({ behavior: "allow" } as const)
+                    : ({ behavior: "deny", message: denial } as const)
+                }
                 case "deny":
                   return {
                     behavior: "deny",
@@ -492,6 +521,7 @@ export class SessionService extends Context.Service<
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
         readonly model?: string | undefined
+        readonly autonomy?: Autonomy | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
         const id = SessionId.make(randomUUID())
@@ -514,6 +544,7 @@ export class SessionService extends Context.Service<
           branch,
           worktreePath,
           model: options.model?.trim() || null,
+          autonomy: options.autonomy ?? DEFAULT_AUTONOMY,
           status: "idle",
           createdAt: timestamp,
           updatedAt: timestamp,
@@ -523,6 +554,21 @@ export class SessionService extends Context.Service<
         const prompt = options.prompt?.trim()
         if (prompt) yield* sendMessage(id, prompt).pipe(Effect.orDie)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
+      })
+
+      const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
+        sessionId: string,
+        autonomy: Autonomy,
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (session.autonomy === autonomy) return session
+        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
+        yield* repo.update(sessionId, { autonomy, updatedAt: session.updatedAt })
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
       })
 
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
@@ -637,6 +683,7 @@ export class SessionService extends Context.Service<
         list,
         get,
         create,
+        setAutonomy,
         sendMessage,
         interrupt,
         end,

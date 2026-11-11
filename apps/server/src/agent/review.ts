@@ -63,6 +63,30 @@ export const reviewTarget = (
   }
 }
 
+/**
+ * Why a `review` tool the session lets through without a review must still be
+ * denied, if it must: a file outside the worktree. `undefined` when it may run.
+ * Covers tools without a simulator too, through their `notebook_path`.
+ */
+export const outsideWorktreeDenial = (
+  toolName: string,
+  input: Record<string, unknown>,
+  worktree: string,
+): string | undefined => {
+  const target = reviewTarget(toolName, input, worktree)
+  if (target._tag === "Deny") return target.message
+  if (target._tag === "Target") return undefined
+  for (const key of ["file_path", "notebook_path"]) {
+    const rawPath = input[key]
+    if (!Predicate.isString(rawPath) || rawPath.trim() === "") continue
+    const absolutePath = isAbsolute(rawPath) ? resolve(rawPath) : resolve(worktree, rawPath)
+    if (!isInsideDir(worktree, absolutePath)) {
+      return `DENIED: ${rawPath} is outside this session's worktree (${worktree}). Only files inside the worktree can be changed.`
+    }
+  }
+  return undefined
+}
+
 export type PlannedChange =
   | { readonly _tag: "Change"; readonly proposedContent: string; readonly hunks: Array<Hunk> }
   | { readonly _tag: "Deny"; readonly message: string }

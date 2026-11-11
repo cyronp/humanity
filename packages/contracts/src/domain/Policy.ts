@@ -65,6 +65,33 @@ export const resolveToolMode = (policy: ToolPolicy, toolName: string): ToolMode 
   return best?.mode ?? FALLBACK_TOOL_MODE
 }
 
+/**
+ * How much a session's agent may do without the human, chosen per session on
+ * top of the project's policy. Humanity's own presets, not the SDK's
+ * permission modes: every call still reaches Humanity's permission check, and
+ * `deny` rules always hold.
+ *
+ * - `ask`: the project's policy as it is.
+ * - `accept_edits`: `review` tools change files inside the worktree without a review.
+ * - `auto` ("Auto mode"): `review` and `confirm` tools both run without asking.
+ */
+export const Autonomy = Schema.Literals(["ask", "accept_edits", "auto"])
+export type Autonomy = typeof Autonomy.Type
+
+export const DEFAULT_AUTONOMY: Autonomy = "ask"
+
+/** The mode a call gets once the session's autonomy is applied to the project's mode. */
+export const applyAutonomy = (autonomy: Autonomy, mode: ToolMode): ToolMode => {
+  switch (autonomy) {
+    case "ask":
+      return mode
+    case "accept_edits":
+      return mode === "review" ? "auto" : mode
+    case "auto":
+      return mode === "review" || mode === "confirm" ? "auto" : mode
+  }
+}
+
 /** Returns a policy where `pattern` maps to `mode`, replacing an existing rule for it. */
 export const setToolRule = (policy: ToolPolicy, pattern: string, mode: ToolMode): ToolPolicy => {
   const exists = policy.rules.some((rule) => rule.pattern === pattern)

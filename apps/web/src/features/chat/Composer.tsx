@@ -1,27 +1,33 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { SessionId } from "@humanity/contracts"
+import type { Autonomy, SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
-import { sendMessageAtom } from "@/features/session/atoms"
+import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
+import { sendMessageAtom, setAutonomyAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
 
 /** The message box of an open thread. Enter sends, Shift+Enter adds a line. Follow-ups are queued while the agent works. */
 export function Composer({
   sessionId,
+  autonomy,
   disabled,
   busy,
 }: {
   readonly sessionId: SessionId
+  /** The session's current autonomy; it changes from the next tool call on. */
+  readonly autonomy: Autonomy
   readonly disabled: boolean
   readonly busy: boolean
 }) {
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
+  const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
+  const [autonomyError, setAutonomyError] = useState<string>()
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -35,6 +41,13 @@ export function Composer({
     else setError(describeCause(exit.cause))
   }
 
+  // The session's `SessionUpdated` event brings the new value back into `autonomy`.
+  const changeAutonomy = async (next: Autonomy) => {
+    setAutonomyError(undefined)
+    const exit = await updateAutonomy({ payload: { sessionId, autonomy: next } })
+    if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
@@ -45,6 +58,9 @@ export function Composer({
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       {error !== undefined && <ErrorNote title="The message was not sent" message={error} />}
+      {autonomyError !== undefined && (
+        <ErrorNote title="The autonomy was not changed" message={autonomyError} />
+      )}
       <ChatBox>
         <InputGroupTextarea
           value={text}
@@ -63,6 +79,7 @@ export function Composer({
           aria-label="Message to the agent"
         />
         <ChatBoxFooter>
+          <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
           {busy && (
             <InputGroupText className="px-1.5 text-xs font-normal">
               Queued until the agent finishes

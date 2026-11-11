@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
+import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { Session, SessionId } from "../domain/Session.ts"
 import { WorkingTreeDiff } from "../domain/Git.ts"
@@ -48,6 +49,8 @@ export const SessionsRpcs = RpcGroup.make(
       prompt: Schema.optional(Schema.String),
       /** A model value from `Claude.status`. Claude Code's default when absent. */
       model: Schema.optional(Schema.String),
+      /** `ask` (the project's policy as it is) when absent. */
+      autonomy: Schema.optional(Autonomy),
     },
     success: Session,
     error: Schema.Union([
@@ -59,6 +62,12 @@ export const SessionsRpcs = RpcGroup.make(
       GitInvalidBranchName,
       GitRefNotFound,
     ]),
+  }),
+  /** Changes how much the agent may do without asking. Applies from the next tool call. */
+  Rpc.make("Sessions.setAutonomy", {
+    payload: { sessionId: SessionId, autonomy: Autonomy },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded]),
   }),
   Rpc.make("Sessions.sendMessage", {
     payload: { sessionId: SessionId, text: Schema.NonEmptyString },

@@ -10,6 +10,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.watchAll": () => sessions.watchAll,
       "Sessions.get": ({ sessionId }) => sessions.get(sessionId),
       "Sessions.create": (payload) => sessions.create(payload),
+      "Sessions.setAutonomy": ({ sessionId, autonomy }) =>
+        sessions.setAutonomy(sessionId, autonomy),
       "Sessions.sendMessage": ({ sessionId, text }) => sessions.sendMessage(sessionId, text),
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
       "Sessions.end": ({ sessionId, removeWorktree }) =>
