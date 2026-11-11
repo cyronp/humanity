@@ -10,7 +10,14 @@ export const BRANCH_FORMAT = [
   "%(upstream:short)",
   "%(objectname:short)",
   "%(contents:subject)",
+  "%(authorname)",
+  "%(committerdate:iso-strict)",
+  "%(upstream:track,nobracket)",
 ].join(FIELD)
+
+/** `ahead 2, behind 1`, `ahead 3`, `gone` or empty, as `%(upstream:track,nobracket)` prints it. */
+const trackCount = (track: string, word: "ahead" | "behind") =>
+  Number(new RegExp(`${word} (\\d+)`).exec(track)?.[1] ?? 0)
 
 /** Parses `git branch --all --format=<BRANCH_FORMAT>`. */
 export const parseBranches = (output: string): Array<Branch> =>
@@ -18,8 +25,17 @@ export const parseBranches = (output: string): Array<Branch> =>
     .split("\n")
     .filter((line) => line.trim() !== "")
     .flatMap((line): Array<Branch> => {
-      const [refname = "", name = "", head = "", upstream = "", commit = "", subject = ""] =
-        line.split(FIELD)
+      const [
+        refname = "",
+        name = "",
+        head = "",
+        upstream = "",
+        commit = "",
+        subject = "",
+        author = "",
+        committedAt = "",
+        track = "",
+      ] = line.split(FIELD)
       // `origin/HEAD` is a pointer to the remote's default branch, not a branch.
       if (refname.endsWith("/HEAD") || name === "" || name.startsWith("(")) return []
       return [
@@ -30,6 +46,10 @@ export const parseBranches = (output: string): Array<Branch> =>
           upstream: upstream === "" ? null : upstream,
           commit,
           subject,
+          author,
+          committedAt,
+          ahead: trackCount(track, "ahead"),
+          behind: trackCount(track, "behind"),
         },
       ]
     })

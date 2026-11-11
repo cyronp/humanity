@@ -34,6 +34,8 @@ describe("GitService", () => {
         ],
       )
       assert.strictEqual(branches[1]?.subject, "initial")
+      assert.isAbove(branches[1]?.author.length ?? 0, 0)
+      assert.isFalse(Number.isNaN(Date.parse(branches[1]?.committedAt ?? "")))
       assert.match(branches[1]?.commit ?? "", /^[0-9a-f]{7,}$/)
     }),
   )

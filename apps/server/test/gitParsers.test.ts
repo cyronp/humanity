@@ -56,11 +56,42 @@ describe("parseBranches", () => {
   const row = (...fields: Array<string>) => fields.join(FIELD)
 
   it("separates local from remote branches and skips the remote HEAD pointer", () => {
+    const date = "2026-11-10T21:58:00-03:00"
     const output = [
-      row("refs/heads/main", "main", "*", "origin/main", "abc1234", "initial commit"),
-      row("refs/heads/topic", "topic", " ", "", "def5678", "wip: a | b"),
-      row("refs/remotes/origin/HEAD", "origin", " ", "", "abc1234", "initial commit"),
-      row("refs/remotes/origin/main", "origin/main", " ", "", "abc1234", "initial commit"),
+      row(
+        "refs/heads/main",
+        "main",
+        "*",
+        "origin/main",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "ahead 2, behind 1",
+      ),
+      row("refs/heads/topic", "topic", " ", "", "def5678", "wip: a | b", "Bo", date, ""),
+      row(
+        "refs/remotes/origin/HEAD",
+        "origin",
+        " ",
+        "",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "",
+      ),
+      row(
+        "refs/remotes/origin/main",
+        "origin/main",
+        " ",
+        "",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "",
+      ),
       "",
     ].join("\n")
 
@@ -72,6 +103,10 @@ describe("parseBranches", () => {
         upstream: "origin/main",
         commit: "abc1234",
         subject: "initial commit",
+        author: "Ana",
+        committedAt: date,
+        ahead: 2,
+        behind: 1,
       },
       {
         name: "topic",
@@ -80,6 +115,10 @@ describe("parseBranches", () => {
         upstream: null,
         commit: "def5678",
         subject: "wip: a | b",
+        author: "Bo",
+        committedAt: date,
+        ahead: 0,
+        behind: 0,
       },
       {
         name: "origin/main",
@@ -88,6 +127,10 @@ describe("parseBranches", () => {
         upstream: null,
         commit: "abc1234",
         subject: "initial commit",
+        author: "Ana",
+        committedAt: date,
+        ahead: 0,
+        behind: 0,
       },
     ])
   })
