@@ -10,6 +10,7 @@ import {
   ProposedChange,
 } from "../domain/Approval.ts"
 import { ProjectId } from "../domain/Project.ts"
+import { QuestionAnswers } from "../domain/Question.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
   ApprovalAlreadyDecided,
@@ -45,6 +46,8 @@ export const ApprovalsRpcs = RpcGroup.make(
       comment: Schema.optional(Schema.String),
       /** Also set this tool to `auto` in the project's policy. Only with `allow`. */
       alwaysAllow: Schema.optional(Schema.Boolean),
+      /** The human's answers to an `AskUserQuestion` call. Only with `allow`. */
+      answers: Schema.optional(QuestionAnswers),
     },
     success: PendingConfirmation,
     error: Schema.Union([ApprovalNotFound, ApprovalAlreadyDecided]),

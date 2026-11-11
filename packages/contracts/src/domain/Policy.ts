@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { QUESTION_TOOL } from "./Question.ts"
 
 /**
  * How much autonomy a tool gets. Unknown tools always resolve to `confirm`,
@@ -53,9 +54,15 @@ const matches = (pattern: string, toolName: string): boolean =>
 
 /**
  * Resolve a tool name to its mode. An exact rule beats a wildcard, a longer
- * wildcard beats a shorter one, and no match means `confirm`.
+ * wildcard beats a shorter one, and no match means `confirm`. A question for
+ * the human always reaches the human, unless the policy denies it.
  */
 export const resolveToolMode = (policy: ToolPolicy, toolName: string): ToolMode => {
+  const mode = resolveRule(policy, toolName)
+  return toolName === QUESTION_TOOL && mode !== "deny" ? "confirm" : mode
+}
+
+const resolveRule = (policy: ToolPolicy, toolName: string): ToolMode => {
   let best: ToolRule | undefined
   for (const rule of policy.rules) {
     if (!matches(rule.pattern, toolName)) continue

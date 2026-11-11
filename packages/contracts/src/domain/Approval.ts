@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Hunk } from "./Diff.ts"
+import { QuestionAnswers } from "./Question.ts"
 import { SessionId } from "./Session.ts"
 
 export const ChangeId = Schema.String.pipe(Schema.brand("ChangeId"))
@@ -47,6 +48,8 @@ export const PendingConfirmation = Schema.Struct({
   input: Schema.Unknown,
   status: ConfirmationStatus,
   comment: Schema.optional(Schema.String),
+  /** What the human answered, when the call was the agent asking a question. */
+  answers: Schema.optional(QuestionAnswers),
   createdAt: Schema.String,
   decidedAt: Schema.optional(Schema.String),
 })
