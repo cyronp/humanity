@@ -129,6 +129,26 @@ describe("buildTimeline", () => {
 })
 
 describe("describeDecision", () => {
+  it("describes a question by what the human did with it", () => {
+    const question = (status: "allowed" | "denied" | "expired"): Approval => ({
+      _tag: "confirmation",
+      confirmation: {
+        id: ConfirmationId.make("q"),
+        sessionId,
+        toolUseId: "ask",
+        toolName: "AskUserQuestion",
+        input: {},
+        status,
+        createdAt: "2026-11-09T10:00:00.000Z",
+      },
+    })
+    expect(describeDecision(question("allowed"))).toBe("You answered the agent's question")
+    expect(describeDecision(question("denied"))).toBe(
+      "You chose to talk about the agent's question",
+    )
+    expect(describeDecision(question("expired"))).toBe("The agent's question expired")
+  })
+
   it("summarizes each outcome in one sentence", () => {
     expect(describeDecision(change("applied"))).toBe("You approved all 1 hunk of src/a.ts")
     expect(
