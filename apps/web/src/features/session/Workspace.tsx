@@ -1,4 +1,4 @@
-import { acceptsMessages, type Project } from "@humanity/contracts"
+import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
 import { PanelRightClose, PanelRightOpen } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
+import { QuestionPanel } from "@/features/questions/QuestionPanel"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
 import { ReviewPanel } from "@/features/review/ReviewPanel"
 import { TimelinePanel } from "@/features/timeline/TimelinePanel"
@@ -45,6 +46,11 @@ export function Workspace({
   const changes = pendingChanges(view)
   const confirmations = pendingConfirmations(view)
   const waiting = changes.length + confirmations.length
+  // The oldest question takes the message box's place; every other call keeps its card.
+  const asked = confirmations.find((confirmation) => confirmation.toolName === QUESTION_TOOL)
+  const questions = asked === undefined ? undefined : parseQuestions(asked.input)
+  const cards =
+    questions === undefined ? confirmations : confirmations.filter((each) => each !== asked)
   const [panelOpen, setPanelOpen] = useState(changes.length > 0 || search.file !== undefined)
   const [tab, setTab] = useState("review")
 
@@ -138,7 +144,7 @@ export function Workspace({
             className="pointer-events-none absolute inset-x-0 bottom-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto"
           >
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
-              {confirmations.map((confirmation) => (
+              {cards.map((confirmation) => (
                 // A solid base: the card's own amber tint is see-through.
                 <div key={confirmation.id} className="rounded-lg bg-background">
                   <ConfirmationCard confirmation={confirmation} />
@@ -155,14 +161,18 @@ export function Workspace({
                 </button>
               )}
               <UsageMeters usage={view.usage} />
-              <Composer
-                sessionId={session.id}
-                autonomy={session.autonomy}
-                model={session.model}
-                effort={session.effort}
-                disabled={!acceptsMessages(session)}
-                busy={isBusy(session.status)}
-              />
+              {asked !== undefined && questions !== undefined ? (
+                <QuestionPanel key={asked.id} confirmation={asked} questions={questions} />
+              ) : (
+                <Composer
+                  sessionId={session.id}
+                  autonomy={session.autonomy}
+                  model={session.model}
+                  effort={session.effort}
+                  disabled={!acceptsMessages(session)}
+                  busy={isBusy(session.status)}
+                />
+              )}
             </div>
           </div>
         </div>
