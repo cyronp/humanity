@@ -4,11 +4,13 @@ import {
   Autonomy,
   type ChatMessage,
   MessageContent,
+  NO_USAGE,
   ProjectId,
   ReasoningEffort,
   type Session,
   SessionId,
   SessionStatus,
+  SessionUsage,
   type ToolCall,
   ToolCallStatus,
   ToolResult,
@@ -47,6 +49,9 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
+
+const UsageJson = Schema.fromJsonString(SessionUsage)
+const UsageRow = Schema.Struct({ usage_json: Schema.NullOr(Schema.String) })
 
 const AttachmentRow = Schema.Struct({
   id: Schema.String,
@@ -143,6 +148,9 @@ export class SessionRepo extends Context.Service<
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
+    /** The limits the session last heard about; all `null` until the agent reports them. */
+    readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
+    readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly insertToolCall: (toolCall: ToolCall) => Effect.Effect<void>
@@ -291,6 +299,32 @@ export class SessionRepo extends Context.Service<
           WHERE id = ${sessionId}
         `.pipe(Effect.asVoid, Effect.orDie)
 
+      const findUsage = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: UsageRow,
+        execute: (id) => sql`SELECT usage_json FROM sessions WHERE id = ${id}`,
+      })
+      const decodeUsage = Schema.decodeUnknownOption(UsageJson)
+      const encodeUsage = Schema.encodeEffect(UsageJson)
+
+      const getUsage = (sessionId: string) =>
+        findUsage(sessionId).pipe(
+          Effect.map((row) =>
+            row.pipe(
+              // A value written by another version of Humanity reads as "nothing reported yet".
+              Option.flatMap(({ usage_json }) => decodeUsage(usage_json)),
+              Option.getOrElse(() => NO_USAGE),
+            ),
+          ),
+          Effect.orDie,
+        )
+
+      const setUsage = (sessionId: string, usage: SessionUsage) =>
+        Effect.gen(function* () {
+          const json = yield* encodeUsage(usage)
+          yield* sql`UPDATE sessions SET usage_json = ${json} WHERE id = ${sessionId}`
+        }).pipe(Effect.orDie)
+
       const findAttachment = SqlSchema.findOneOption({
         Request: Schema.Struct({ sessionId: Schema.String, attachmentId: Schema.String }),
         Result: AttachmentRow,
@@ -411,6 +445,8 @@ export class SessionRepo extends Context.Service<
         listAll,
         listByStatus,
         update,
+        getUsage,
+        setUsage,
         insertMessage,
         listMessages,
         insertToolCall,

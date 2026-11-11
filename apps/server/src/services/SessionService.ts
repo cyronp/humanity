@@ -72,6 +72,8 @@ interface ActiveRun {
   initSeen: boolean
   /** Tool calls Humanity denied, so their error results are shown as denials. */
   readonly denied: Set<string>
+  /** One usage refresh at a time, so an older answer never overwrites a newer one. */
+  readonly usageLock: Semaphore.Semaphore
 }
 
 /** `Fix the login bug!` → `fix-the-login-bug` */
@@ -433,6 +435,27 @@ export class SessionService extends Context.Service<
           }
         })
 
+      /**
+       * Asks the agent how full its context window is and, with `withPlan`,
+       * how much of the plan's rate-limit windows is used. What it cannot say
+       * keeps the last known value.
+       */
+      const refreshUsage = (sessionId: string, state: ActiveRun, withPlan: boolean) =>
+        state.usageLock.withPermits(1)(
+          Effect.gen(function* () {
+            const context = yield* state.run.contextUsage
+            const plan = withPlan ? yield* state.run.planUsage : undefined
+            if (context === undefined && plan === undefined) return
+            const known = yield* repo.getUsage(sessionId)
+            const usage = {
+              context: context ?? known.context,
+              plan: plan ?? known.plan,
+            }
+            yield* repo.setUsage(sessionId, usage)
+            yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
+          }),
+        )
+
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
           const normalized = normalizeSdkMessage(raw)
@@ -467,6 +490,13 @@ export class SessionService extends Context.Service<
           yield* addMessage(session.id, content, raw)
           yield* startToolCalls(session, content)
           yield* finishToolCalls(session, state, content, normalized.structuredResult)
+
+          // The context grows with each of the agent's own replies; the plan's
+          // window is asked once per turn. Neither holds up the transcript.
+          const turnEnded = content._tag === "result"
+          if (turnEnded || (content._tag === "assistant" && content.parentToolUseId === null)) {
+            yield* refreshUsage(session.id, state, turnEnded).pipe(Effect.forkIn(state.scope))
+          }
 
           if (content._tag === "result") {
             if (state.interrupted) {
@@ -510,6 +540,7 @@ export class SessionService extends Context.Service<
               interrupted: false,
               initSeen: false,
               denied: new Set(),
+              usageLock: yield* Semaphore.make(1),
             }
             const run = yield* runner
               .start({
@@ -911,6 +942,7 @@ export class SessionService extends Context.Service<
               messages: yield* repo.listMessages(sessionId),
               toolCalls: yield* repo.listToolCalls(sessionId),
               approvals: yield* approvals.listForSession(sessionId),
+              usage: yield* repo.getUsage(sessionId),
             }
             return Stream.concat(Stream.make(snapshot), Stream.fromSubscription(subscription))
           }),

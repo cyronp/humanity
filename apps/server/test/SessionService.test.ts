@@ -293,6 +293,46 @@ describe("SessionService", () => {
       }),
   )
 
+  it.live("reports the context window and the plan's windows, and keeps them", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const reported = {
+        context: { usedTokens: 20_000, maxTokens: 200_000 },
+        plan: {
+          fiveHour: { utilization: 62, resetsAt: "2099-01-01T00:00:00.000Z" },
+          sevenDay: { utilization: 30, resetsAt: "2099-01-05T00:00:00.000Z" },
+          models: [{ name: "Fable", utilization: 80, resetsAt: null }],
+        },
+      }
+
+      const sessionId = yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const untouched = yield* sessions.create({ projectId: project.id })
+        assert.deepStrictEqual((yield* contents(untouched.id)).usage, {
+          context: null,
+          plan: null,
+        })
+
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(session.id, "idle")
+        yield* eventually(
+          "the usage of the first turn",
+          Effect.map(contents(session.id), ({ usage }) =>
+            usage.plan === null ? undefined : usage,
+          ),
+        )
+        assert.deepStrictEqual((yield* contents(session.id)).usage, reported)
+        return session.id
+      }).pipe(Effect.provide(services(home, () => [{ text: "hello" }])))
+
+      // After a restart no agent is running: the last report is still shown.
+      yield* Effect.gen(function* () {
+        assert.deepStrictEqual((yield* contents(sessionId)).usage, reported)
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
   it.live("streams every project's sessions again after each change", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

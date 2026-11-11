@@ -258,6 +258,13 @@ export const AgentRunnerFake = (script: FakeScript) =>
               Ref.update(log.modelChanges, (all) => [...all, model]),
             setEffort: (effort: ReasoningEffort | undefined) =>
               Ref.update(log.effortChanges, (all) => [...all, effort]),
+            // Each turn fills another tenth of a 200k window.
+            contextUsage: Effect.sync(() => ({ usedTokens: turn * 20_000, maxTokens: 200_000 })),
+            planUsage: Effect.succeed({
+              fiveHour: { utilization: 62, resetsAt: "2099-01-01T00:00:00.000Z" },
+              sevenDay: { utilization: 30, resetsAt: "2099-01-05T00:00:00.000Z" },
+              models: [{ name: "Fable", utilization: 80, resetsAt: null }],
+            }),
           }
         })
 

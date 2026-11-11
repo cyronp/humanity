@@ -22,6 +22,7 @@ import {
   pendingConfirmations,
   type SessionView,
 } from "./state.ts"
+import { UsageMeters } from "./UsageMeters.tsx"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
@@ -153,6 +154,7 @@ export function Workspace({
                   {changes.length === 1 ? "" : "s"}. Open the review panel.
                 </button>
               )}
+              <UsageMeters usage={view.usage} />
               <Composer
                 sessionId={session.id}
                 autonomy={session.autonomy}

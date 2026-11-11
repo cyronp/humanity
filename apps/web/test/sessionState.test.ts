@@ -63,6 +63,7 @@ const snapshot = (overrides: Partial<Extract<SessionEvent, { _tag: "Snapshot" }>
     messages: [],
     toolCalls: [],
     approvals: [],
+    usage: { context: null, plan: null },
     ...overrides,
   }) satisfies SessionEvent
 

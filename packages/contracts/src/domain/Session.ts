@@ -50,6 +50,50 @@ export const Session = Schema.Struct({
 })
 export type Session = typeof Session.Type
 
+/** How full the model's context window is, as Claude Code counts it. */
+export const ContextUsage = Schema.Struct({
+  usedTokens: Schema.Number,
+  maxTokens: Schema.Number,
+})
+export type ContextUsage = typeof ContextUsage.Type
+
+/** One rate-limit window of a claude.ai plan. */
+export const PlanWindow = Schema.Struct({
+  /** Percentage of the window used, 0 to 100. */
+  utilization: Schema.Number,
+  /** When the window resets (ISO 8601), if Claude Code said so. */
+  resetsAt: Schema.NullOr(Schema.String),
+})
+export type PlanWindow = typeof PlanWindow.Type
+
+/** The rate-limit windows of a claude.ai plan. A window Claude Code did not report is `null`. */
+export const PlanUsage = Schema.Struct({
+  fiveHour: Schema.NullOr(PlanWindow),
+  sevenDay: Schema.NullOr(PlanWindow),
+  /** Weekly windows that count one model only, under the name Claude Code gives it ("Fable"). */
+  models: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      utilization: Schema.Number,
+      resetsAt: Schema.NullOr(Schema.String),
+    }),
+  ),
+})
+export type PlanUsage = typeof PlanUsage.Type
+
+/**
+ * What a session last heard from Claude Code about its limits. Each part is
+ * `null` until the agent reports it; `plan` stays `null` for logins without
+ * plan limits (an API key).
+ */
+export const SessionUsage = Schema.Struct({
+  context: Schema.NullOr(ContextUsage),
+  plan: Schema.NullOr(PlanUsage),
+})
+export type SessionUsage = typeof SessionUsage.Type
+
+export const NO_USAGE: SessionUsage = { context: null, plan: null }
+
 // ---------------------------------------------------------------------------
 // Normalized messages. The raw SDK message is stored next to these in the
 // database, so renderers can be improved later without losing data.

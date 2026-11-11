@@ -5,8 +5,8 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import type { ReasoningEffort } from "@humanity/contracts"
-import { Effect, Layer, Stream } from "effect"
+import type { ContextUsage, PlanUsage, PlanWindow, ReasoningEffort } from "@humanity/contracts"
+import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import {
   type AgentRunOptions,
@@ -58,6 +58,27 @@ When a tool call is denied or only partly applied, the message you receive is th
 
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause)
+
+/**
+ * Asks the agent process something that is only nice to know: a failure, a
+ * shape Humanity does not expect or no answer in time all read as `undefined`.
+ */
+const quietly = <A, B>(ask: () => Promise<A>, read: (answer: A) => B | undefined) =>
+  Effect.tryPromise(ask).pipe(
+    Effect.flatMap((answer) => Effect.try(() => read(answer))),
+    Effect.timeoutOption("10 seconds"),
+    Effect.map(Option.getOrUndefined),
+    Effect.orElseSucceed(() => undefined),
+  )
+
+/** A plan window as Claude Code reports it; one without a percentage says nothing. */
+const planWindow = (
+  window:
+    { readonly utilization: number | null; readonly resets_at: string | null } | null | undefined,
+): PlanWindow | null =>
+  typeof window?.utilization === "number"
+    ? { utilization: window.utilization, resetsAt: window.resets_at ?? null }
+    : null
 
 /**
  * The project's policy runs before the SDK applies permission rules from
@@ -203,6 +224,33 @@ export const AgentRunnerLive = Layer.effect(
               try: () => handle.applyFlagSettings({ effortLevel: effort ?? null }),
               catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
             }),
+          // "summary" answers from the last response's usage, without token-count calls.
+          contextUsage: quietly(
+            () => handle.getContextUsage({ detail: "summary" }),
+            (usage): ContextUsage | undefined =>
+              usage.maxTokens > 0
+                ? { usedTokens: usage.totalTokens, maxTokens: usage.maxTokens }
+                : undefined,
+          ),
+          // The SDK marks this call experimental: any surprise reads as "cannot say".
+          planUsage: quietly(
+            () =>
+              handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+                skipBehaviors: true,
+              }),
+            (usage): PlanUsage | undefined => {
+              const limits = usage.rate_limits
+              if (!limits) return undefined
+              return {
+                fiveHour: planWindow(limits.five_hour),
+                sevenDay: planWindow(limits.seven_day),
+                models: (limits.model_scoped ?? []).flatMap((model) => {
+                  const window = planWindow(model)
+                  return window === null ? [] : [{ name: model.display_name, ...window }]
+                }),
+              }
+            },
+          ),
         }
       })
 

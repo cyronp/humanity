@@ -86,6 +86,7 @@ const view = (
   approvals,
   draft: "",
   error: null,
+  usage: { context: null, plan: null },
 })
 
 describe("buildTimeline", () => {

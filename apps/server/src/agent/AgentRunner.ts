@@ -1,4 +1,4 @@
-import type { ReasoningEffort, ToolMode } from "@humanity/contracts"
+import type { ContextUsage, PlanUsage, ReasoningEffort, ToolMode } from "@humanity/contracts"
 import { Context, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
@@ -65,6 +65,13 @@ export interface AgentRun {
   readonly setModel: (model: string | undefined) => Effect.Effect<void, AgentRunError>
   /** Switches the reasoning effort for the rest of the run; `undefined` is the model's default. */
   readonly setEffort: (effort: ReasoningEffort | undefined) => Effect.Effect<void, AgentRunError>
+  /** How full the context window is right now; `undefined` when the agent cannot say. */
+  readonly contextUsage: Effect.Effect<ContextUsage | undefined>
+  /**
+   * The claude.ai plan's rate-limit windows; `undefined` when the agent cannot
+   * say or the login has no plan limits (an API key).
+   */
+  readonly planUsage: Effect.Effect<PlanUsage | undefined>
 }
 
 export class AgentRunError extends Schema.TaggedError<AgentRunError>()("AgentRunError", {
