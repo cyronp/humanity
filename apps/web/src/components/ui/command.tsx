@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
@@ -81,14 +82,10 @@ function CommandInput({
 
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
-    <CommandPrimitive.List
-      data-slot="command-list"
-      className={cn(
-        "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
-        className,
-      )}
-      {...props}
-    />
+    // `className` styles the scrolling viewport, where the list's height limit lives.
+    <ScrollArea viewportClassName={cn("max-h-72 scroll-py-1", className)}>
+      <CommandPrimitive.List data-slot="command-list" className="outline-none" {...props} />
+    </ScrollArea>
   )
 }
 

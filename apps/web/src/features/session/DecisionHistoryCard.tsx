@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { describeDecision } from "@/features/timeline/timeline"
 import { ApprovalBadge } from "@/features/tools/ToolCallCard"
 import { historyAtom } from "./atoms.ts"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const when = (record: ApprovalRecord) => {
   const approval = record.approval
@@ -31,19 +32,21 @@ export function DecisionHistoryCard({ project }: { readonly project: Project }) 
             records.length === 0 ? (
               <p className="text-sm text-muted-foreground">No decisions yet.</p>
             ) : (
-              <ul className="flex max-h-96 flex-col divide-y overflow-y-auto rounded-md border text-sm">
-                {records.map((record) => (
-                  <HistoryRow
-                    key={
-                      record.approval._tag === "change"
-                        ? record.approval.change.id
-                        : record.approval.confirmation.id
-                    }
-                    project={project}
-                    record={record}
-                  />
-                ))}
-              </ul>
+              <ScrollArea className="rounded-md border" viewportClassName="max-h-96">
+                <ul className="flex flex-col divide-y text-sm">
+                  {records.map((record) => (
+                    <HistoryRow
+                      key={
+                        record.approval._tag === "change"
+                          ? record.approval.change.id
+                          : record.approval.confirmation.id
+                      }
+                      project={project}
+                      record={record}
+                    />
+                  ))}
+                </ul>
+              </ScrollArea>
             )
           }
         </AsyncView>

@@ -6,6 +6,7 @@ import { Slot } from "radix-ui"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -345,15 +346,13 @@ function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof S
   )
 }
 
-function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarContent({ className, ...props }: React.ComponentProps<typeof ScrollArea>) {
   return (
-    <div
+    <ScrollArea
       data-slot="sidebar-content"
       data-sidebar="content"
-      className={cn(
-        "no-scrollbar flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
-        className,
-      )}
+      className={cn("min-h-0 flex-1", className)}
+      viewportClassName="group-data-[collapsible=icon]:overflow-hidden! [&>div]:flex! [&>div]:min-h-full [&>div]:flex-col [&>div]:gap-0"
       {...props}
     />
   )

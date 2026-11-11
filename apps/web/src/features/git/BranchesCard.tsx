@@ -19,6 +19,7 @@ import {
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { branchesAtom, createBranchAtom } from "./atoms.ts"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function BranchesCard({ project }: { readonly project: Project }) {
   const result = useAtomValue(branchesAtom(project.id))
@@ -49,19 +50,21 @@ function BranchList({ branches }: { readonly branches: ReadonlyArray<Branch> }) 
     return <p className="text-sm text-muted-foreground">This repository has no commits yet.</p>
   }
   return (
-    <ul className="flex max-h-72 flex-col divide-y overflow-y-auto rounded-md border">
-      {branches.map((branch) => (
-        <li key={branch.name} className="flex items-center gap-2 px-3 py-2 text-sm">
-          <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-          <code className="font-mono text-xs">{branch.name}</code>
-          {branch.isCurrent && <Badge>checked out</Badge>}
-          {branch.isRemote && <Badge variant="outline">remote</Badge>}
-          <span className="ml-auto truncate text-xs text-muted-foreground">
-            <code>{branch.commit}</code> {branch.subject}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <ScrollArea className="rounded-md border" viewportClassName="max-h-72">
+      <ul className="flex flex-col divide-y">
+        {branches.map((branch) => (
+          <li key={branch.name} className="flex items-center gap-2 px-3 py-2 text-sm">
+            <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
+            <code className="font-mono text-xs">{branch.name}</code>
+            {branch.isCurrent && <Badge>checked out</Badge>}
+            {branch.isRemote && <Badge variant="outline">remote</Badge>}
+            <span className="ml-auto truncate text-xs text-muted-foreground">
+              <code>{branch.commit}</code> {branch.subject}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </ScrollArea>
   )
 }
 

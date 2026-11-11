@@ -1,6 +1,7 @@
 import { cn } from "cn"
 import { type ReactNode, useMemo } from "react"
 import { CodeBlock } from "../CodeBlock.tsx"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function Path({ path }: { readonly path: string }) {
   return (
@@ -34,14 +35,17 @@ export function OutputText({
   readonly error?: boolean
 }) {
   return (
-    <pre
+    <ScrollArea
       className={cn(
-        "max-h-80 overflow-auto rounded-md border p-2 font-mono whitespace-pre-wrap break-all",
+        "rounded-md border",
         error ? "border-red-500/40 bg-red-500/5 text-red-700 dark:text-red-300" : "bg-muted/40",
       )}
+      viewportClassName="max-h-80"
     >
-      {text === "" ? "(empty)" : text}
-    </pre>
+      <pre className="p-2 font-mono whitespace-pre-wrap break-all">
+        {text === "" ? "(empty)" : text}
+      </pre>
+    </ScrollArea>
   )
 }
 

@@ -30,7 +30,7 @@ export const shellRenderer: ToolRenderer = {
       <div className="flex flex-col gap-2">
         {description !== undefined && <p>{description}</p>}
         <Field label="Command">
-          <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono whitespace-pre-wrap break-all">
+          <pre className="rounded-md bg-muted p-2 font-mono whitespace-pre-wrap break-all">
             {stringField(input, "command") ?? ""}
           </pre>
         </Field>

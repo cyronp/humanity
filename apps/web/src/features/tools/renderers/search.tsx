@@ -1,6 +1,7 @@
 import { resultLines, shortPath, stringField } from "../inputs.ts"
 import type { ToolCallProps, ToolRenderer } from "../registry.ts"
 import { OutputText } from "./common.tsx"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const MAX_RESULTS = 200
 
@@ -11,16 +12,18 @@ function Results({ call, worktreePath }: ToolCallProps) {
   const results = resultLines(output.content)
   if (results.length === 0) return <p className="text-muted-foreground">No matches.</p>
   return (
-    <ul className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-2 font-mono">
-      {results.slice(0, MAX_RESULTS).map((line, position) => (
-        <li key={position} className="truncate" title={line}>
-          {shortPath(line, worktreePath)}
-        </li>
-      ))}
-      {results.length > MAX_RESULTS && (
-        <li className="text-muted-foreground">{results.length - MAX_RESULTS} more…</li>
-      )}
-    </ul>
+    <ScrollArea className="rounded-md border bg-muted/40 font-mono" viewportClassName="max-h-80">
+      <ul className="p-2">
+        {results.slice(0, MAX_RESULTS).map((line, position) => (
+          <li key={position} className="truncate" title={line}>
+            {shortPath(line, worktreePath)}
+          </li>
+        ))}
+        {results.length > MAX_RESULTS && (
+          <li className="text-muted-foreground">{results.length - MAX_RESULTS} more…</li>
+        )}
+      </ul>
+    </ScrollArea>
   )
 }
 

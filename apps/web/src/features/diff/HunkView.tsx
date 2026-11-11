@@ -3,6 +3,7 @@ import { type DiffLine, hunkHeader, toDiffLines } from "@humanity/diff"
 import { cn } from "cn"
 import { type ReactNode, useMemo } from "react"
 import { type CodeToken, languageForPath, useHighlightedLines } from "./highlighter.ts"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const ROW_STYLES: Record<DiffLine["kind"], string> = {
   add: "bg-emerald-500/12",
@@ -43,7 +44,7 @@ export function HunkView({
         </code>
         {actions}
       </div>
-      <div className="overflow-x-auto">
+      <ScrollArea orientation="horizontal">
         <table className="w-full border-collapse font-mono text-xs leading-5">
           <tbody>
             {rows.map((row, position) => (
@@ -70,7 +71,7 @@ export function HunkView({
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
       {footer}
     </div>
   )

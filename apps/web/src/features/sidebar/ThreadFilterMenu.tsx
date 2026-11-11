@@ -72,7 +72,7 @@ export function ThreadFilterMenu({
               Projects
               <span className="ml-auto text-xs text-muted-foreground">{projectSummary}</span>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-80 w-56 overflow-y-auto">
+            <DropdownMenuSubContent className="w-56 **:data-[slot=scroll-area-viewport]:max-h-80">
               <DropdownMenuCheckboxItem
                 checked={filter.projectIds.length === 0}
                 onSelect={keepOpen}

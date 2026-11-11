@@ -130,6 +130,12 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /*
+     * The few places that scroll natively (the transcript, code blocks, text
+     * fields) get a thin bar in the colours of the ScrollArea's.
+     */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
   body {
     @apply bg-background text-foreground;

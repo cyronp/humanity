@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { projectsAtom } from "@/features/projects/atoms"
 import { describeCause } from "@/lib/errors"
 import { cloneAtom, reposAtom, whoamiAtom } from "./atoms.ts"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const FULL_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
 
@@ -186,35 +187,37 @@ function FilteredRepos({
     return <p className="text-xs text-muted-foreground">No repositories match.</p>
   }
   return (
-    <ul className="flex max-h-80 flex-col divide-y overflow-y-auto rounded-md border">
-      {visible.map((repo) => (
-        <li key={repo.fullName} className="flex items-center gap-3 px-3 py-2 text-sm">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="flex items-center gap-2">
-              <code className="truncate font-mono">{repo.fullName}</code>
-              {repo.private && (
-                <Badge variant="outline">
-                  <Lock />
-                  private
-                </Badge>
+    <ScrollArea className="rounded-md border" viewportClassName="max-h-80">
+      <ul className="flex flex-col divide-y">
+        {visible.map((repo) => (
+          <li key={repo.fullName} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="flex items-center gap-2">
+                <code className="truncate font-mono">{repo.fullName}</code>
+                {repo.private && (
+                  <Badge variant="outline">
+                    <Lock />
+                    private
+                  </Badge>
+                )}
+              </span>
+              {repo.description !== null && (
+                <span className="truncate text-xs text-muted-foreground">{repo.description}</span>
               )}
-            </span>
-            {repo.description !== null && (
-              <span className="truncate text-xs text-muted-foreground">{repo.description}</span>
-            )}
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => onClone(repo.fullName)}
-          >
-            <Download />
-            Clone
-          </Button>
-        </li>
-      ))}
-    </ul>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={() => onClone(repo.fullName)}
+            >
+              <Download />
+              Clone
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </ScrollArea>
   )
 }
 
@@ -228,9 +231,15 @@ function CloneLog({
   return (
     <div className="flex flex-col gap-1" aria-live="polite">
       <span className="text-xs font-medium">Cloning {fullName}…</span>
-      <pre className="max-h-40 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-xs">
-        {lines.slice(-12).join("\n") || "Starting git…"}
-      </pre>
+      <ScrollArea
+        orientation="both"
+        className="rounded-md border bg-muted/40"
+        viewportClassName="max-h-40"
+      >
+        <pre className="p-2 font-mono text-xs">
+          {lines.slice(-12).join("\n") || "Starting git…"}
+        </pre>
+      </ScrollArea>
     </div>
   )
 }

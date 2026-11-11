@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
@@ -153,22 +154,28 @@ export function Workspace({
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
                 <TabsTrigger value="changes">Changes</TabsTrigger>
               </TabsList>
-              <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto">
-                <ReviewPanel
-                  changes={changes}
-                  file={search.file}
-                  hunk={search.hunk}
-                  onFocusChange={(file, hunk) => onSearchChange({ file, hunk })}
-                />
+              <TabsContent value="review" asChild>
+                <ScrollArea className="min-h-0 flex-1">
+                  <ReviewPanel
+                    changes={changes}
+                    file={search.file}
+                    hunk={search.hunk}
+                    onFocusChange={(file, hunk) => onSearchChange({ file, hunk })}
+                  />
+                </ScrollArea>
               </TabsContent>
-              <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto">
-                <TimelinePanel view={view} />
+              <TabsContent value="timeline" asChild>
+                <ScrollArea className="min-h-0 flex-1">
+                  <TimelinePanel view={view} />
+                </ScrollArea>
               </TabsContent>
-              <TabsContent value="changes" className="min-h-0 flex-1 overflow-y-auto">
-                <ChangesPanel
-                  session={session}
-                  activity={Object.keys(view.toolCalls).length + view.approvals.length}
-                />
+              <TabsContent value="changes" asChild>
+                <ScrollArea className="min-h-0 flex-1">
+                  <ChangesPanel
+                    session={session}
+                    activity={Object.keys(view.toolCalls).length + view.approvals.length}
+                  />
+                </ScrollArea>
               </TabsContent>
             </Tabs>
           </aside>

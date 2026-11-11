@@ -2,6 +2,7 @@ import { cn } from "cn"
 import { Check, Copy } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 /** A shell command the human is asked to run, with a copy button. */
 export function CopyCommand({
@@ -36,7 +37,9 @@ export function CopyCommand({
       <span className="text-muted-foreground select-none" aria-hidden="true">
         $
       </span>
-      <code className="min-w-0 flex-1 overflow-x-auto py-1 whitespace-pre">{command}</code>
+      <ScrollArea orientation="horizontal" className="min-w-0 flex-1">
+        <code className="block py-1 whitespace-pre">{command}</code>
+      </ScrollArea>
       <Button
         type="button"
         variant="ghost"
