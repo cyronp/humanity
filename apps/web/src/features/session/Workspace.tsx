@@ -157,6 +157,7 @@ export function Workspace({
                 sessionId={session.id}
                 autonomy={session.autonomy}
                 model={session.model}
+                effort={session.effort}
                 disabled={session.status === "ended"}
                 busy={isBusy(session.status)}
               />

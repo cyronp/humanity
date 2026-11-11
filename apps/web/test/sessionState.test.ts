@@ -30,6 +30,7 @@ const session: Session = {
   worktreePath: "/home/me/.humanity/worktrees/p1/s1",
   inWorktree: true,
   model: null,
+  effort: null,
   autonomy: "ask",
   status: "idle",
   createdAt: "2026-11-09T00:00:00.000Z",

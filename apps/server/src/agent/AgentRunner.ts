@@ -1,4 +1,4 @@
-import type { ToolMode } from "@humanity/contracts"
+import type { ReasoningEffort, ToolMode } from "@humanity/contracts"
 import { Context, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
@@ -18,6 +18,8 @@ export interface AgentRunOptions {
   readonly resume: string | undefined
   /** The model to run on, or `undefined` for Claude Code's default. */
   readonly model: string | undefined
+  /** How hard the model reasons, or `undefined` for the model's default. */
+  readonly effort: ReasoningEffort | undefined
   /** Tools that run without asking: exactly the project's `auto` tools. */
   readonly allowedTools: ReadonlyArray<string>
   /**
@@ -61,6 +63,8 @@ export interface AgentRun {
   readonly interrupt: Effect.Effect<void>
   /** Switches the model for the rest of the run; `undefined` is Claude Code's default. */
   readonly setModel: (model: string | undefined) => Effect.Effect<void, AgentRunError>
+  /** Switches the reasoning effort for the rest of the run; `undefined` is the model's default. */
+  readonly setEffort: (effort: ReasoningEffort | undefined) => Effect.Effect<void, AgentRunError>
 }
 
 export class AgentRunError extends Schema.TaggedError<AgentRunError>()("AgentRunError", {

@@ -239,6 +239,60 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live(
+    "runs on the chosen reasoning effort, switches it live and keeps it after a restart",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup()
+
+        const sessionId = yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const log = yield* FakeAgentLog
+          const project = yield* addProject(repo)
+          const session = yield* sessions.create({
+            projectId: project.id,
+            effort: "high",
+            prompt: "hi",
+          })
+          yield* waitForStatus(session.id, "idle")
+          const before = yield* sessions.get(session.id)
+          assert.strictEqual(before.effort, "high")
+          assert.deepStrictEqual(
+            (yield* Ref.get(log.runs)).map((run) => run.effort),
+            ["high"],
+          )
+
+          // The run is still open between turns, so it switches in place.
+          const updated = yield* sessions.setEffort(session.id, "low")
+          assert.strictEqual(updated.effort, "low")
+          assert.strictEqual(updated.updatedAt, before.updatedAt)
+          // Back to the model's default, and a repeat of the same value is a no-op.
+          assert.isNull((yield* sessions.setEffort(session.id, null)).effort)
+          yield* sessions.setEffort(session.id, null)
+          yield* sessions.setEffort(session.id, "max")
+          assert.deepStrictEqual(yield* Ref.get(log.effortChanges), ["low", undefined, "max"])
+          return session.id
+        }).pipe(Effect.provide(services(home, () => [])))
+
+        // After a restart there is no run to switch: the next one starts on the stored effort.
+        yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const log = yield* FakeAgentLog
+          assert.strictEqual((yield* sessions.get(sessionId)).effort, "max")
+          yield* sessions.sendMessage(sessionId, "again")
+          yield* waitForStatus(sessionId, "idle")
+          assert.deepStrictEqual(
+            (yield* Ref.get(log.runs)).map((run) => run.effort),
+            ["max"],
+          )
+
+          yield* sessions.end(sessionId, { removeWorktree: false })
+          const result = yield* sessions.setEffort(sessionId, "low").pipe(Effect.flip)
+          assert.strictEqual(result._tag, "SessionEnded")
+        }).pipe(Effect.provide(services(home, () => [])))
+      }),
+  )
+
   it.live("streams every project's sessions again after each change", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

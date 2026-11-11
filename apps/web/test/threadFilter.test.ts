@@ -43,6 +43,7 @@ const thread = (
     worktreePath: `/home/me/.humanity/worktrees/${owner.id}/${id}`,
     inWorktree: true,
     model: null,
+    effort: null,
     autonomy: "ask",
     status,
     createdAt: updatedAt,

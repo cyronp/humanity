@@ -5,6 +5,7 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
+import type { ReasoningEffort } from "@humanity/contracts"
 import { Effect, Layer, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import {
@@ -148,6 +149,7 @@ export const AgentRunnerLive = Layer.effect(
             cwd: options.cwd,
             ...(options.resume === undefined ? {} : { resume: options.resume }),
             ...(options.model === undefined ? {} : { model: options.model }),
+            ...(options.effort === undefined ? {} : { effort: options.effort }),
             // Every non-auto call must reach canUseTool. Never bypassPermissions.
             permissionMode: "default",
             allowedTools: [...options.allowedTools],
@@ -193,6 +195,12 @@ export const AgentRunnerLive = Layer.effect(
           setModel: (model: string | undefined) =>
             Effect.tryPromise({
               try: () => handle.setModel(model),
+              catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
+            }),
+          setEffort: (effort: ReasoningEffort | undefined) =>
+            Effect.tryPromise({
+              // `null` resets the session to the model's default effort.
+              try: () => handle.applyFlagSettings({ effortLevel: effort ?? null }),
               catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
             }),
         }

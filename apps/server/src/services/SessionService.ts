@@ -18,6 +18,7 @@ import {
   type Project,
   type ProjectNotFound,
   type ProposedChange,
+  type ReasoningEffort,
   type Session,
   SessionBusy,
   SessionEnded,
@@ -105,6 +106,7 @@ export class SessionService extends Context.Service<
       readonly prompt?: string | undefined
       readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
       readonly model?: string | undefined
+      readonly effort?: ReasoningEffort | undefined
       readonly autonomy?: Autonomy | undefined
     }) => Effect.Effect<
       Session,
@@ -144,6 +146,14 @@ export class SessionService extends Context.Service<
     readonly setModel: (
       sessionId: string,
       model: string | null,
+    ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
+    /**
+     * Changes how hard the model reasons; `null` is the model's default. A
+     * running agent switches right away, otherwise the next run starts on it.
+     */
+    readonly setEffort: (
+      sessionId: string,
+      effort: ReasoningEffort | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
     /** Sends a message, with files the agent receives inline (images, PDFs, text). */
     readonly sendMessage: (
@@ -506,6 +516,7 @@ export class SessionService extends Context.Service<
                 cwd: session.worktreePath,
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
+                effort: session.effort ?? undefined,
                 // Only exact `auto` names. If the policy later tightens one of them, the
                 // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
                 allowedTools: policy.rules
@@ -653,6 +664,7 @@ export class SessionService extends Context.Service<
         readonly prompt?: string | undefined
         readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
         readonly model?: string | undefined
+        readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
@@ -684,6 +696,7 @@ export class SessionService extends Context.Service<
           worktreePath: project.localPath,
           inWorktree: false,
           model: options.model?.trim() || null,
+          effort: options.effort ?? null,
           autonomy: options.autonomy ?? DEFAULT_AUTONOMY,
           status: "idle",
           createdAt: timestamp,
@@ -777,6 +790,45 @@ export class SessionService extends Context.Service<
                   _tag: "notice",
                   level: "warning",
                   text: `The agent could not switch models while working (${error.message}). It keeps the previous model until this session restarts.`,
+                })
+              }),
+            ),
+          )
+        }
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
+      })
+
+      const setEffort = Effect.fn("SessionService.setEffort")(function* (
+        sessionId: string,
+        effort: ReasoningEffort | null,
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        if (session.effort === effort) return session
+        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
+        yield* repo.update(sessionId, { effort, updatedAt: session.updatedAt })
+        // A session without an active run reads the stored effort when its next run starts.
+        const state = active.get(sessionId)
+        if (state !== undefined) {
+          yield* state.run.setEffort(effort ?? undefined).pipe(
+            Effect.catch((error) =>
+              Effect.gen(function* () {
+                yield* Effect.logWarning("could not switch the reasoning effort", {
+                  sessionId,
+                  reason: error.message,
+                })
+                // Between turns, closing the run makes the next message resume on the new effort.
+                if (session.status !== "running" && session.status !== "waiting_for_human") {
+                  yield* stopRun(sessionId)
+                  return
+                }
+                yield* addMessage(sessionId, {
+                  _tag: "notice",
+                  level: "warning",
+                  text: `The agent could not change its reasoning effort while working (${error.message}). It keeps the previous one until this session restarts.`,
                 })
               }),
             ),
@@ -905,6 +957,7 @@ export class SessionService extends Context.Service<
         setupWorktree,
         setAutonomy,
         setModel,
+        setEffort,
         sendMessage,
         attachment,
         interrupt,

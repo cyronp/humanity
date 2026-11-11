@@ -1,3 +1,4 @@
+import type { ReasoningEffort } from "@humanity/contracts"
 import { simulateEdit, simulateWrite } from "@humanity/diff"
 import { Context, Effect, Fiber, Layer, Option, Queue, Ref, Stream } from "effect"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -40,6 +41,7 @@ export class FakeAgentLog extends Context.Service<
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
     /** Every `setModel` on a running agent, in order. */
     readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
+    readonly effortChanges: Ref.Ref<ReadonlyArray<ReasoningEffort | undefined>>
   }
 >()("humanity/test/FakeAgentLog") {}
 
@@ -254,6 +256,8 @@ export const AgentRunnerFake = (script: FakeScript) =>
             ),
             setModel: (model: string | undefined) =>
               Ref.update(log.modelChanges, (all) => [...all, model]),
+            setEffort: (effort: ReasoningEffort | undefined) =>
+              Ref.update(log.effortChanges, (all) => [...all, effort]),
           }
         })
 
@@ -270,6 +274,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
             sent: yield* Ref.make<ReadonlyArray<AgentUserMessage>>([]),
             permissions: yield* Ref.make<ReadonlyArray<PermissionLogEntry>>([]),
             modelChanges: yield* Ref.make<ReadonlyArray<string | undefined>>([]),
+            effortChanges: yield* Ref.make<ReadonlyArray<ReasoningEffort | undefined>>([]),
           })
         }),
       ),

@@ -3,7 +3,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
-import { Session, SessionId } from "../domain/Session.ts"
+import { ReasoningEffort, Session, SessionId } from "../domain/Session.ts"
 import { WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
@@ -60,6 +60,8 @@ export const SessionsRpcs = RpcGroup.make(
       attachments: Schema.optional(Schema.Array(AttachmentUpload)),
       /** A model value from `Claude.status`. Claude Code's default when absent. */
       model: Schema.optional(Schema.String),
+      /** The model's own default effort when absent. */
+      effort: Schema.optional(ReasoningEffort),
       /** `ask` (the project's policy as it is) when absent. */
       autonomy: Schema.optional(Autonomy),
     },
@@ -111,6 +113,15 @@ export const SessionsRpcs = RpcGroup.make(
    */
   Rpc.make("Sessions.setModel", {
     payload: { sessionId: SessionId, model: Schema.NullOr(Schema.String) },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded]),
+  }),
+  /**
+   * Changes how hard the model reasons; `null` is the model's own default. A
+   * running agent switches right away; otherwise the next run starts on it.
+   */
+  Rpc.make("Sessions.setEffort", {
+    payload: { sessionId: SessionId, effort: Schema.NullOr(ReasoningEffort) },
     success: Session,
     error: Schema.Union([SessionNotFound, SessionEnded]),
   }),

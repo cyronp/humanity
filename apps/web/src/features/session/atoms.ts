@@ -45,6 +45,7 @@ export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const setupWorktreeAtom = HumanityClient.mutation("Sessions.setupWorktree")
 export const setAutonomyAtom = HumanityClient.mutation("Sessions.setAutonomy")
 export const setModelAtom = HumanityClient.mutation("Sessions.setModel")
+export const setEffortAtom = HumanityClient.mutation("Sessions.setEffort")
 
 /** A stored attachment's bytes, keyed `<sessionId>/<attachmentId>`. Used for image thumbnails. */
 export const attachmentAtom = Atom.family((key: string) => {

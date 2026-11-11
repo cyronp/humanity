@@ -5,6 +5,7 @@ import {
   type ChatMessage,
   MessageContent,
   ProjectId,
+  ReasoningEffort,
   type Session,
   SessionId,
   SessionStatus,
@@ -24,6 +25,7 @@ const SessionRow = Schema.Struct({
   worktree_path: Schema.String,
   in_worktree: Schema.Number,
   model: Schema.NullOr(Schema.String),
+  effort: Schema.NullOr(ReasoningEffort),
   autonomy: Autonomy,
   status: SessionStatus,
   created_at: Schema.String,
@@ -39,6 +41,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   worktreePath: row.worktree_path,
   inWorktree: row.in_worktree !== 0,
   model: row.model,
+  effort: row.effort,
   autonomy: row.autonomy,
   status: row.status,
   createdAt: row.created_at,
@@ -133,6 +136,8 @@ export class SessionRepo extends Context.Service<
         readonly autonomy?: Autonomy
         /** `null` stores Claude Code's default. */
         readonly model?: string | null
+        /** `null` stores the model's default effort. */
+        readonly effort?: ReasoningEffort | null
         /** Set together when the session moves into its own worktree. */
         readonly worktree?: { readonly branch: string; readonly path: string }
         readonly updatedAt: string
@@ -225,6 +230,7 @@ export class SessionRepo extends Context.Service<
             worktree_path: session.worktreePath,
             in_worktree: session.inWorktree ? 1 : 0,
             model: session.model,
+            effort: session.effort,
             autonomy: session.autonomy,
             status: session.status,
             created_at: session.createdAt,
@@ -261,6 +267,7 @@ export class SessionRepo extends Context.Service<
           readonly sdkSessionId?: string
           readonly autonomy?: Autonomy
           readonly model?: string | null
+          readonly effort?: ReasoningEffort | null
           readonly worktree?: { readonly branch: string; readonly path: string }
           readonly updatedAt: string
         },
@@ -272,6 +279,7 @@ export class SessionRepo extends Context.Service<
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
             ...(changes.model === undefined ? {} : { model: changes.model }),
+            ...(changes.effort === undefined ? {} : { effort: changes.effort }),
             ...(changes.worktree === undefined
               ? {}
               : {

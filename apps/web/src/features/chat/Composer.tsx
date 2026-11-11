@@ -1,12 +1,18 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { Autonomy, SessionId } from "@humanity/contracts"
+import type { Autonomy, ReasoningEffort, SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
-import { sendMessageAtom, setAutonomyAtom, setModelAtom } from "@/features/session/atoms"
+import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
+import {
+  sendMessageAtom,
+  setAutonomyAtom,
+  setEffortAtom,
+  setModelAtom,
+} from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import {
   AttachButton,
@@ -21,6 +27,7 @@ export function Composer({
   sessionId,
   autonomy,
   model,
+  effort,
   disabled,
   busy,
 }: {
@@ -29,17 +36,21 @@ export function Composer({
   readonly autonomy: Autonomy
   /** The session's model; `null` is Claude Code's default. */
   readonly model: string | null
+  /** The session's reasoning effort; `null` is the model's default. */
+  readonly effort: ReasoningEffort | null
   readonly disabled: boolean
   readonly busy: boolean
 }) {
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
   const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
+  const updateEffort = useAtomSet(setEffortAtom, { mode: "promiseExit" })
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const [autonomyError, setAutonomyError] = useState<string>()
   const [modelError, setModelError] = useState<string>()
+  const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
 
   const submit = async (event?: FormEvent) => {
@@ -76,6 +87,12 @@ export function Composer({
     if (Exit.isFailure(exit)) setModelError(describeCause(exit.cause))
   }
 
+  const changeEffort = async (next: ReasoningEffort | null) => {
+    setEffortError(undefined)
+    const exit = await updateEffort({ payload: { sessionId, effort: next } })
+    if (Exit.isFailure(exit)) setEffortError(describeCause(exit.cause))
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
@@ -91,6 +108,9 @@ export function Composer({
       )}
       {modelError !== undefined && (
         <ErrorNote title="The model was not changed" message={modelError} />
+      )}
+      {effortError !== undefined && (
+        <ErrorNote title="The reasoning effort was not changed" message={effortError} />
       )}
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
@@ -123,6 +143,7 @@ export function Composer({
             </InputGroupText>
           )}
           <div className="ml-auto flex items-center gap-1">
+            <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
             <ModelPicker value={model} onChange={changeModel} disabled={disabled} />
             <SendButton
               ready={!disabled && !pending && !files.reading && text.trim() !== ""}

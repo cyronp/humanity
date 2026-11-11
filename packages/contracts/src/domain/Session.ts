@@ -16,6 +16,10 @@ export const SessionStatus = Schema.Literals([
 ])
 export type SessionStatus = typeof SessionStatus.Type
 
+/** How hard the model thinks before answering, as Claude Code names its effort levels. */
+export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
+export type ReasoningEffort = typeof ReasoningEffort.Type
+
 export const Session = Schema.Struct({
   id: SessionId,
   projectId: ProjectId,
@@ -36,6 +40,8 @@ export const Session = Schema.Struct({
   inWorktree: Schema.Boolean,
   /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
   model: Schema.NullOr(Schema.String),
+  /** How hard the model reasons, or `null` for the model's own default. */
+  effort: Schema.NullOr(ReasoningEffort),
   /** How much the agent may do without asking, on top of the project's policy. */
   autonomy: Autonomy,
   status: SessionStatus,

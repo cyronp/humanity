@@ -74,6 +74,7 @@ const view = (
     worktreePath: "/w",
     inWorktree: true,
     model: null,
+    effort: null,
     autonomy: "ask",
     status: "idle",
     createdAt: "",
