@@ -234,3 +234,22 @@ export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailabl
     return `Could not read the plan's usage: ${this.reason}`
   }
 }
+
+/** An MCP server or skill could not be saved as given. */
+export class ExtensionInvalid extends Schema.TaggedError<ExtensionInvalid>()("ExtensionInvalid", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class ExtensionNotFound extends Schema.TaggedError<ExtensionNotFound>()(
+  "ExtensionNotFound",
+  { kind: Schema.Literals(["mcp", "skill"]), name: Schema.String },
+) {
+  override get message() {
+    const what = this.kind === "mcp" ? "MCP server" : "skill"
+    return `The ${what} "${this.name}" does not exist any more. Reload the settings.`
+  }
+}
