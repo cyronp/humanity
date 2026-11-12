@@ -143,8 +143,8 @@ export class GitHubNotAuthenticated extends Schema.TaggedError<GitHubNotAuthenti
 ) {
   override get message() {
     return this.reason === "no_token"
-      ? "No GitHub token found. Run `gh auth login`, or export GITHUB_TOKEN (a fine-grained token with read access to your repositories), then restart the daemon."
-      : "GitHub rejected the token. Run `gh auth login` again or replace GITHUB_TOKEN."
+      ? "GitHub is not connected. In Settings, under Repositories, sign in with the GitHub CLI (`gh auth login`) or add a token."
+      : "GitHub rejected the token. In Settings, under Repositories, replace it, or run `gh auth login` again."
   }
 }
 

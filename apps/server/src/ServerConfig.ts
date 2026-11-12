@@ -17,6 +17,8 @@ export interface ServerConfigShape {
   /** Claude Code config folders of added accounts: `<accountsDir>/<accountId>`. */
   readonly accountsDir: string
   readonly authTokenPath: string
+  /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
+  readonly githubTokenPath: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
   /** Origin the human should open. Differs from the daemon's own in development (Vite). */
@@ -40,6 +42,7 @@ const make = (options: {
     attachmentsDir: join(home, "attachments"),
     accountsDir: join(home, "accounts"),
     authTokenPath: join(home, "auth-token"),
+    githubTokenPath: join(home, "github-token"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }

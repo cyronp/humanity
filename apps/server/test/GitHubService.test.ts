@@ -187,6 +187,79 @@ describe("GitHubService", () => {
     }),
   )
 
+  it.effect("reports where the token comes from and who it signs in as", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeGitHub({
+        "/user": { body: { login: "octo", name: "Octo Cat", avatar_url: "https://x/a.png" } },
+      })
+      const connection = GitHubService.use((service) => service.connection({ refresh: false }))
+
+      assert.deepStrictEqual(yield* connection.pipe(Effect.provide(github(client, "t"))), {
+        source: "environment",
+        cliInstalled: false,
+        user: { login: "octo", name: "Octo Cat", avatarUrl: "https://x/a.png" },
+        problem: null,
+      })
+
+      // Without a token there is nobody to ask GitHub about.
+      const before = (yield* Ref.get(requests)).length
+      assert.deepStrictEqual(yield* connection.pipe(Effect.provide(github(client, undefined))), {
+        source: null,
+        cliInstalled: false,
+        user: null,
+        problem: null,
+      })
+      assert.strictEqual((yield* Ref.get(requests)).length, before)
+    }),
+  )
+
+  it.effect("reports a token GitHub refuses as a problem, not a failure", () =>
+    Effect.gen(function* () {
+      const { client } = yield* fakeGitHub({
+        "/user": { status: 401, body: { message: "Bad credentials" } },
+      })
+      const connection = yield* GitHubService.use((service) =>
+        service.connection({ refresh: true }),
+      ).pipe(Effect.provide(github(client, "bad")))
+      assert.strictEqual(connection.source, "environment")
+      assert.isNull(connection.user)
+      assert.include(connection.problem, "rejected the token")
+    }),
+  )
+
+  it.effect("saves a token GitHub accepts, uses it first, and forgets it on request", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeGitHub({
+        "/user": { body: { login: "octo", name: null, avatar_url: "https://x/a.png" } },
+      })
+      yield* Effect.gen(function* () {
+        const service = yield* GitHubService
+        const saved = yield* service.saveToken("pasted-token")
+        assert.deepInclude(saved, { source: "token", problem: null })
+        assert.strictEqual(saved.user?.login, "octo")
+        assert.strictEqual((yield* Ref.get(requests)).at(-1)?.auth, "Bearer pasted-token")
+
+        const removed = yield* service.removeToken
+        assert.strictEqual(removed.source, "environment")
+        assert.strictEqual((yield* Ref.get(requests)).at(-1)?.auth, "Bearer from-env")
+      }).pipe(Effect.provide(github(client, "from-env")))
+    }),
+  )
+
+  it.effect("does not save a token GitHub rejects", () =>
+    Effect.gen(function* () {
+      const { client } = yield* fakeGitHub({
+        "/user": { status: 401, body: { message: "Bad credentials" } },
+      })
+      yield* Effect.gen(function* () {
+        const service = yield* GitHubService
+        const error = yield* Effect.flip(service.saveToken("wrong"))
+        assert.deepInclude(error, { _tag: "GitHubNotAuthenticated", reason: "rejected" })
+        assert.isNull((yield* service.connection({ refresh: false })).source)
+      }).pipe(Effect.provide(github(client, undefined)))
+    }),
+  )
+
   it.effect("reads public repositories and their branches without a token", () =>
     Effect.gen(function* () {
       const { client, requests } = yield* fakeGitHub({
@@ -333,6 +406,39 @@ describe("GitHubToken", () => {
         Effect.provide(GitHubToken.layerTest("abc")),
       )
       assert.strictEqual(Option.map(token, Redacted.value).pipe(Option.getOrUndefined), "abc")
+    }),
+  )
+
+  it.live("keeps a saved token in its own file, ahead of every other source", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const file = join(home, "github-token")
+      yield* Effect.gen(function* () {
+        const tokens = yield* GitHubToken
+        yield* tokens.save(Redacted.make("saved-token"))
+        assert.strictEqual(readFileSync(file, "utf8"), "saved-token")
+
+        const resolved = yield* tokens.resolve
+        assert.strictEqual(resolved.source, "token")
+        assert.strictEqual(
+          Option.map(resolved.token, Redacted.value).pipe(Option.getOrUndefined),
+          "saved-token",
+        )
+
+        yield* tokens.clear
+        assert.isFalse(existsSync(file))
+        // Whatever this machine has (a gh login, GITHUB_TOKEN or nothing), it is not the saved one.
+        assert.notStrictEqual((yield* tokens.resolve).source, "token")
+        // Forgetting twice is not an error.
+        yield* tokens.clear
+      }).pipe(
+        Effect.provide(
+          GitHubToken.layer.pipe(
+            Layer.provide(ServerConfig.layer({ home, port: 0 })),
+            Layer.provide(NodeServices.layer),
+          ),
+        ),
+      )
     }),
   )
 })

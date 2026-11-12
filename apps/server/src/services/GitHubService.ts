@@ -1,5 +1,6 @@
 import {
   type GitHubBranch,
+  type GitHubConnection,
   GitHubNotAuthenticated,
   GitHubRateLimited,
   type GitHubRepo,
@@ -75,6 +76,12 @@ export class GitHubService extends Context.Service<
   GitHubService,
   {
     readonly whoami: Effect.Effect<GitHubUser, GitHubError>
+    /** Where the token comes from and who it signs in as. A token GitHub refuses is a `problem`, not a failure. */
+    readonly connection: (options: { readonly refresh: boolean }) => Effect.Effect<GitHubConnection>
+    /** Saves a token once GitHub accepted it; one it rejects is not saved. */
+    readonly saveToken: (token: string) => Effect.Effect<GitHubConnection, GitHubError>
+    /** Forgets the saved token and reports what is used instead. */
+    readonly removeToken: Effect.Effect<GitHubConnection>
     /** Every page of the user's repositories, as a stream that follows `Link: rel="next"`. */
     readonly repos: Stream.Stream<GitHubRepo, GitHubError>
     readonly listRepos: Effect.Effect<ReadonlyArray<GitHubRepo>, GitHubError>
@@ -161,15 +168,48 @@ export class GitHubService extends Context.Service<
             ),
           )
 
-      const whoami = Effect.gen(function* () {
-        const token = yield* requireToken
-        const user = yield* get("/user", Option.some(token)).pipe(Effect.flatMap(decode(UserJson)))
-        return {
-          login: user.login,
-          name: user.name,
-          avatarUrl: user.avatar_url,
-        } satisfies GitHubUser
-      })
+      const whoamiWith = (token: Redacted.Redacted<string>) =>
+        get("/user", Option.some(token)).pipe(
+          Effect.flatMap(decode(UserJson)),
+          Effect.map((user): GitHubUser => ({
+            login: user.login,
+            name: user.name,
+            avatarUrl: user.avatar_url,
+          })),
+        )
+
+      const whoami = Effect.flatMap(requireToken, whoamiWith)
+
+      const connection = (options: { readonly refresh: boolean }) =>
+        Effect.gen(function* () {
+          if (options.refresh) yield* tokens.invalidate
+          const { token, source, cliInstalled } = yield* tokens.resolve
+          if (Option.isNone(token)) {
+            return { source, cliInstalled, user: null, problem: null } satisfies GitHubConnection
+          }
+          return yield* whoamiWith(token.value).pipe(
+            Effect.map((user): GitHubConnection => ({ source, cliInstalled, user, problem: null })),
+            Effect.catch((error) =>
+              Effect.succeed<GitHubConnection>({
+                source,
+                cliInstalled,
+                user: null,
+                problem: error.message,
+              }),
+            ),
+          )
+        })
+
+      const saveToken = (token: string) =>
+        Effect.gen(function* () {
+          const candidate = Redacted.make(token)
+          // Asking who it is proves GitHub accepts it, before anything is written.
+          yield* whoamiWith(candidate)
+          yield* tokens.save(candidate)
+          return yield* connection({ refresh: false })
+        })
+
+      const removeToken = Effect.andThen(tokens.clear, connection({ refresh: false }))
 
       const repos = Stream.unwrap(
         Effect.map(requireToken, (token) =>
@@ -220,6 +260,9 @@ export class GitHubService extends Context.Service<
 
       return GitHubService.of({
         whoami,
+        connection,
+        saveToken,
+        removeToken,
         repos,
         listRepos,
         getRepo,
