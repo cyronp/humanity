@@ -16,6 +16,30 @@ export interface ToolPermissionRequest {
   readonly toolUseId: string
 }
 
+/** An MCP server as the agent is given it, in the SDK's configuration format. */
+export type AgentMcpServer =
+  | {
+      readonly type: "stdio"
+      readonly command: string
+      readonly args: ReadonlyArray<string>
+      readonly env: Readonly<Record<string, string>>
+    }
+  | {
+      readonly type: "http" | "sse"
+      readonly url: string
+      readonly headers: Readonly<Record<string, string>>
+    }
+
+/**
+ * What Humanity adds to the agent on top of the repository's own settings:
+ * its enabled MCP servers and the plugin folders its skills live in.
+ */
+export interface AgentExtensions {
+  readonly mcpServers: Readonly<Record<string, AgentMcpServer>>
+  /** Absolute paths of local Claude Code plugins. */
+  readonly plugins: ReadonlyArray<string>
+}
+
 export interface AgentRunOptions {
   /** The session's worktree. The agent never runs anywhere else. */
   readonly cwd: string
@@ -30,6 +54,8 @@ export interface AgentRunOptions {
   readonly model: string | undefined
   /** How hard the model reasons, or `undefined` for the model's default. */
   readonly effort: ReasoningEffort | undefined
+  /** Humanity's MCP servers and skills, as they are when the run starts. */
+  readonly extensions: AgentExtensions
   /** Tools that run without asking: exactly the project's `auto` tools. */
   readonly allowedTools: ReadonlyArray<string>
   /**
@@ -75,6 +101,11 @@ export interface AgentRun {
   readonly setModel: (model: string | undefined) => Effect.Effect<void, AgentRunError>
   /** Switches the reasoning effort for the rest of the run; `undefined` is the model's default. */
   readonly setEffort: (effort: ReasoningEffort | undefined) => Effect.Effect<void, AgentRunError>
+  /**
+   * Replaces Humanity's MCP servers and reloads its skills, for the next turn
+   * on. The repository's own servers and skills are not touched.
+   */
+  readonly applyExtensions: (extensions: AgentExtensions) => Effect.Effect<void, AgentRunError>
   /** How full the context window is right now; `undefined` when the agent cannot say. */
   readonly contextUsage: Effect.Effect<ContextUsage | undefined>
   /**

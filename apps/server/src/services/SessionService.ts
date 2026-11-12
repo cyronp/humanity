@@ -68,6 +68,7 @@ import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
+import { ExtensionsService } from "./ExtensionsService.ts"
 import { PolicyService } from "./PolicyService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
@@ -83,6 +84,8 @@ interface ActiveRun {
   readonly denied: Set<string>
   /** One usage refresh at a time, so an older answer never overwrites a newer one. */
   readonly usageLock: Semaphore.Semaphore
+  /** The change of Humanity's MCP servers and skills the agent last got. */
+  extensionsVersion: number
 }
 
 /** `Fix the login bug!` → `fix-the-login-bug` */
@@ -219,6 +222,7 @@ export class SessionService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const policies = yield* PolicyService
       const accounts = yield* ClaudeAccountService
+      const extensions = yield* ExtensionsService
       const claude = yield* ClaudeCode
       const approvals = yield* ApprovalService
       const serviceScope = yield* Effect.scope
@@ -595,6 +599,7 @@ export class SessionService extends Context.Service<
 
             // Loads the policy into the cache that every tool call reads synchronously.
             const policy = yield* policies.get(session.projectId).pipe(Effect.orDie)
+            const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
@@ -603,6 +608,7 @@ export class SessionService extends Context.Service<
               initSeen: false,
               denied: new Set(),
               usageLock: yield* Semaphore.make(1),
+              extensionsVersion: added.version,
             }
             const run = yield* runner
               .start({
@@ -611,6 +617,7 @@ export class SessionService extends Context.Service<
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
+                extensions: { mcpServers: added.mcpServers, plugins: added.plugins },
                 // Only exact `auto` names. If the policy later tightens one of them, the
                 // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
                 allowedTools: policy.rules
@@ -689,6 +696,29 @@ export class SessionService extends Context.Service<
           )
         })
 
+      /**
+       * Gives a running agent the MCP servers and skills changed in the
+       * settings since it started, before its next turn. A failure leaves the
+       * agent as it was; the message still goes through.
+       */
+      const syncExtensions = (sessionId: string, state: ActiveRun) =>
+        Effect.gen(function* () {
+          const latest = yield* extensions.forAgent
+          if (latest.version === state.extensionsVersion) return
+          state.extensionsVersion = latest.version
+          yield* state.run
+            .applyExtensions(latest)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  "Could not update the agent's MCP servers and skills",
+                  sessionId,
+                  error.message,
+                ),
+              ),
+            )
+        })
+
       /** Records the human's message with its files, then hands both to the agent. */
       const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
@@ -708,6 +738,7 @@ export class SessionService extends Context.Service<
           )
           const state = yield* ensureRun(session)
           state.interrupted = false
+          yield* syncExtensions(session.id, state)
           yield* setStatus(session.id, "running")
           yield* state.run.send({ text: forAgent, attachments: files.map(toAgentAttachment) })
         })

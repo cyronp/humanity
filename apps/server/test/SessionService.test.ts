@@ -12,6 +12,7 @@ import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
+import { ExtensionsService } from "../src/services/ExtensionsService.ts"
 import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService, sessionBranchName, slugify } from "../src/services/SessionService.ts"
@@ -288,6 +289,51 @@ describe("SessionService", () => {
         assert.strictEqual(result._tag, "SessionEnded")
       }).pipe(Effect.provide(services(home, () => [])))
     }),
+  )
+
+  it.live(
+    "gives the agent Humanity's MCP servers and skills, and their changes before a turn",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup()
+        yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const extensions = yield* ExtensionsService
+          const log = yield* FakeAgentLog
+          const project = yield* addProject(repo)
+          yield* extensions.saveMcpServer(null, "docs", {
+            _tag: "http",
+            url: "https://docs.dev/mcp",
+            headers: [],
+          })
+
+          const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+          yield* waitForStatus(session.id, "idle")
+          const [run] = yield* Ref.get(log.runs)
+          assert.deepStrictEqual(run?.extensions, {
+            mcpServers: { docs: { type: "http", url: "https://docs.dev/mcp", headers: {} } },
+            plugins: [join(home, "plugin")],
+          })
+
+          // Nothing changed: the next turn leaves the agent's servers alone.
+          yield* sessions.sendMessage(session.id, "again")
+          yield* waitForStatus(session.id, "idle")
+          assert.lengthOf(yield* Ref.get(log.extensionChanges), 0)
+
+          yield* extensions.setMcpServerEnabled("docs", false)
+          yield* extensions.saveSkill(null, {
+            name: "tidy",
+            description: "Tidies",
+            instructions: "",
+          })
+          yield* sessions.sendMessage(session.id, "/humanity:tidy the README")
+          yield* waitForStatus(session.id, "idle")
+          const changes = yield* Ref.get(log.extensionChanges)
+          assert.lengthOf(changes, 1)
+          assert.deepStrictEqual(changes[0]?.mcpServers, {})
+          assert.lengthOf(yield* Ref.get(log.runs), 1)
+        }).pipe(Effect.provide(services(home, () => [])))
+      }),
   )
 
   it.live(

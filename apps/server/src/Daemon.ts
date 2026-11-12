@@ -12,6 +12,7 @@ import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
+import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
@@ -20,6 +21,7 @@ import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
+import { ExtensionsService } from "./services/ExtensionsService.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
@@ -44,6 +46,8 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(SessionEvents.layer),
     // Sessions run as one of these accounts.
     Layer.provideMerge(ClaudeAccountService.layer),
+    // Humanity's own MCP servers and skills, given to every run.
+    Layer.provideMerge(ExtensionsService.layer),
   ),
   PreferencesService.layer,
 )
@@ -56,6 +60,7 @@ export const RpcHandlers = Layer.mergeAll(
   ApprovalsHandlers,
   ClaudeHandlers,
   PreferencesHandlers,
+  ExtensionsHandlers,
 )
 
 /**

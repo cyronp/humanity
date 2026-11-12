@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import {
   type AgentRunOptions,
   AgentRunner,
+  type AgentExtensions,
   type AgentUserMessage,
   type PermissionDecision,
   type ToolPermissionRequest,
@@ -42,6 +43,8 @@ export class FakeAgentLog extends Context.Service<
     /** Every `setModel` on a running agent, in order. */
     readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
     readonly effortChanges: Ref.Ref<ReadonlyArray<ReasoningEffort | undefined>>
+    /** Every `applyExtensions` on a running agent, in order. */
+    readonly extensionChanges: Ref.Ref<ReadonlyArray<AgentExtensions>>
   }
 >()("humanity/test/FakeAgentLog") {}
 
@@ -258,6 +261,8 @@ export const AgentRunnerFake = (script: FakeScript) =>
               Ref.update(log.modelChanges, (all) => [...all, model]),
             setEffort: (effort: ReasoningEffort | undefined) =>
               Ref.update(log.effortChanges, (all) => [...all, effort]),
+            applyExtensions: (extensions: AgentExtensions) =>
+              Ref.update(log.extensionChanges, (all) => [...all, extensions]),
             // Each turn fills another tenth of a 200k window.
             contextUsage: Effect.sync(() => ({ usedTokens: turn * 20_000, maxTokens: 200_000 })),
             planUsage: Effect.succeed({
@@ -282,6 +287,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
             permissions: yield* Ref.make<ReadonlyArray<PermissionLogEntry>>([]),
             modelChanges: yield* Ref.make<ReadonlyArray<string | undefined>>([]),
             effortChanges: yield* Ref.make<ReadonlyArray<ReasoningEffort | undefined>>([]),
+            extensionChanges: yield* Ref.make<ReadonlyArray<AgentExtensions>>([]),
           })
         }),
       ),

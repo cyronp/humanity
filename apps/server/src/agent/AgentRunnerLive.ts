@@ -1,6 +1,7 @@
 import {
   type CanUseTool,
   type HookCallback,
+  type McpServerConfig,
   type PermissionResult,
   query,
   type SDKUserMessage,
@@ -10,6 +11,7 @@ import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
+  type AgentExtensions,
   type AgentRunOptions,
   AgentRunError,
   AgentRunner,
@@ -131,6 +133,17 @@ const userContent = (message: AgentUserMessage): SDKUserMessage["message"]["cont
   ]
 }
 
+/** Humanity's MCP servers in the SDK's (mutable) configuration types. */
+const sdkMcpServers = (extensions: AgentExtensions): Record<string, McpServerConfig> =>
+  Object.fromEntries(
+    Object.entries(extensions.mcpServers).map(([name, server]): [string, McpServerConfig] => [
+      name,
+      server.type === "stdio"
+        ? { type: "stdio", command: server.command, args: [...server.args], env: { ...server.env } }
+        : { type: server.type, url: server.url, headers: { ...server.headers } },
+    ]),
+  )
+
 export const AgentRunnerLive = Layer.effect(
   AgentRunner,
   Effect.gen(function* () {
@@ -172,6 +185,13 @@ export const AgentRunnerLive = Layer.effect(
             settingSources: ["project"],
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
+            // Humanity's own servers and skills. Their MCP tools still go through the policy.
+            mcpServers: sdkMcpServers(options.extensions),
+            plugins: options.extensions.plugins.map((path) => ({
+              type: "local" as const,
+              path,
+              skipMcpDiscovery: true,
+            })),
             // Claude Code's own environment and config directory, so it signs in
             // with the human's login (`claude auth login`), like the account check.
             env: {
@@ -215,6 +235,15 @@ export const AgentRunnerLive = Layer.effect(
             Effect.tryPromise({
               // `null` resets the session to the model's default effort.
               try: () => handle.applyFlagSettings({ effortLevel: effort ?? null }),
+              catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
+            }),
+          applyExtensions: (extensions: AgentExtensions) =>
+            Effect.tryPromise({
+              try: async () => {
+                await handle.setMcpServers(sdkMcpServers(extensions))
+                // Re-reads the plugin folders, so added, edited and removed skills show.
+                await handle.reloadPlugins()
+              },
               catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
             }),
           // "summary" answers from the last response's usage, without token-count calls.

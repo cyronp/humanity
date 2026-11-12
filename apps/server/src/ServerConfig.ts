@@ -19,6 +19,10 @@ export interface ServerConfigShape {
   readonly authTokenPath: string
   /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
   readonly githubTokenPath: string
+  /** Humanity's own MCP servers, in Claude Code's `.mcp.json` format. Exists once one is added. */
+  readonly mcpConfigPath: string
+  /** The local Claude Code plugin Humanity's own skills live in: `<pluginDir>/skills/<name>/SKILL.md`. */
+  readonly pluginDir: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
   /** Origin the human should open. Differs from the daemon's own in development (Vite). */
@@ -43,6 +47,8 @@ const make = (options: {
     accountsDir: join(home, "accounts"),
     authTokenPath: join(home, "auth-token"),
     githubTokenPath: join(home, "github-token"),
+    mcpConfigPath: join(home, "mcp.json"),
+    pluginDir: join(home, "plugin"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }
