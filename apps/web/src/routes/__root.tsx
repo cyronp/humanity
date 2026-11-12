@@ -22,7 +22,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <SidebarProvider className="h-svh" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
+    <SidebarProvider className="h-svh" style={{ "--sidebar-width": "20rem" } as CSSProperties}>
       <AppSidebar />
       <SidebarInset className="relative min-h-0 overflow-hidden [--background:var(--chat)]">
         <AppHeaderHost>
