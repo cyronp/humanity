@@ -19,6 +19,11 @@ export interface ToolPermissionRequest {
 export interface AgentRunOptions {
   /** The session's worktree. The agent never runs anywhere else. */
   readonly cwd: string
+  /**
+   * The Claude Code config folder of the account the session runs as, or
+   * `undefined` for Claude Code's default login.
+   */
+  readonly configDir: string | undefined
   /** SDK session id to resume, if the conversation already exists. */
   readonly resume: string | undefined
   /** The model to run on, or `undefined` for Claude Code's default. */

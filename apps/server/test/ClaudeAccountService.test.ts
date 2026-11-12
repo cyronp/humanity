@@ -1,9 +1,12 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer, Ref } from "effect"
 import { TestClock } from "effect/testing"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import type { ReportedAccount } from "../src/claude/account.ts"
 import { ClaudeCode, ClaudeProbeFailed, type ProbeResult } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
+import { baseLayer, tempDir } from "./helpers.ts"
 
 const SUBSCRIPTION: ReportedAccount = { email: "dev@example.com", subscriptionType: "pro" }
 const SIGNED_OUT: ReportedAccount = { tokenSource: "none" }
@@ -30,8 +33,14 @@ const setup = (initial: ReportedAccount | "fail") =>
   Effect.gen(function* () {
     const account = yield* Ref.make<ReportedAccount | "fail">(initial)
     const probes = yield* Ref.make(0)
+    const home = yield* tempDir()
     const service = yield* ClaudeAccountService.pipe(
-      Effect.provide(ClaudeAccountService.layer.pipe(Layer.provide(scripted(account, probes)))),
+      Effect.provide(
+        ClaudeAccountService.layer.pipe(
+          Layer.provide(scripted(account, probes)),
+          Layer.provide(baseLayer(home)),
+        ),
+      ),
     )
     return { account, probes, service }
   })
@@ -105,6 +114,87 @@ describe("ClaudeAccountService", () => {
       })
       assert.isNull(status.cliVersion)
       assert.deepStrictEqual(status.models, [])
+    }),
+  )
+
+  it.effect(
+    "adds an account with its own config folder and runs new threads as the active one",
+    () =>
+      Effect.gen(function* () {
+        const home = yield* tempDir()
+        const probed = yield* Ref.make<ReadonlyArray<string | undefined>>([])
+        // The default login is signed in; a folder of an added account is not.
+        const claude = ClaudeCode.layerTest((configDir) =>
+          Effect.as(
+            Ref.update(probed, (dirs) => [...dirs, configDir]),
+            {
+              cliVersion: "2.1.321",
+              account: configDir === undefined ? SUBSCRIPTION : SIGNED_OUT,
+              models: MODELS,
+            } satisfies ProbeResult,
+          ),
+        )
+        const layer = ClaudeAccountService.layer.pipe(
+          Layer.provide(claude),
+          Layer.provide(baseLayer(home)),
+        )
+
+        const work = yield* Effect.gen(function* () {
+          const service = yield* ClaudeAccountService
+          const work = yield* service.add("  Work  ")
+          assert.strictEqual(work.name, "Work")
+          assert.isFalse(work.active)
+          assert.strictEqual(work.status.connection._tag, "SignedOut")
+          assert.strictEqual(work.status.configDir, join(home, "accounts", work.id))
+          assert.deepStrictEqual(yield* Ref.get(probed), [work.status.configDir])
+
+          assert.strictEqual(
+            (yield* service.status({ refresh: false })).connection._tag,
+            "Connected",
+          )
+          assert.isUndefined(yield* service.configDirFor(yield* service.activeId))
+
+          yield* service.setActive(work.id)
+          assert.strictEqual(
+            (yield* service.status({ refresh: false })).connection._tag,
+            "SignedOut",
+          )
+          assert.strictEqual(yield* service.configDirFor(work.id), work.status.configDir)
+          return work
+        }).pipe(Effect.provide(layer))
+
+        // A restarted daemon still knows the account and that it is the active one.
+        yield* Effect.gen(function* () {
+          const service = yield* ClaudeAccountService
+          const accounts = yield* service.accounts({ refresh: false })
+          assert.deepStrictEqual(
+            accounts.map(({ id, name, isDefault, active }) => ({ id, name, isDefault, active })),
+            [
+              { id: "default", name: "Default login", isDefault: true, active: false },
+              { id: work.id, name: "Work", isDefault: false, active: true },
+            ],
+          )
+
+          yield* service.remove(work.id)
+          assert.isFalse(existsSync(work.status.configDir))
+          assert.strictEqual(yield* service.activeId, "default")
+          assert.isUndefined(yield* service.configDirFor(work.id))
+        }).pipe(Effect.provide(layer))
+      }),
+  )
+
+  it.effect("refuses a nameless account and never removes the default login", () =>
+    Effect.gen(function* () {
+      const { service } = yield* setup(SUBSCRIPTION)
+      assert.strictEqual((yield* Effect.flip(service.add("   ")))._tag, "ClaudeAccountNameInvalid")
+      assert.strictEqual(
+        (yield* Effect.flip(service.remove("default")))._tag,
+        "ClaudeAccountNotFound",
+      )
+      assert.strictEqual(
+        (yield* Effect.flip(service.setActive("nope")))._tag,
+        "ClaudeAccountNotFound",
+      )
     }),
   )
 })

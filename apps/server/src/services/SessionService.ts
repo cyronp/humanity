@@ -9,6 +9,7 @@ import {
   type Autonomy,
   ChangeId,
   DEFAULT_AUTONOMY,
+  DEFAULT_CLAUDE_ACCOUNT,
   type ChatMessage,
   ConfirmationId,
   type GitBranchExists,
@@ -61,6 +62,7 @@ import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
+import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { PolicyService } from "./PolicyService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
@@ -204,6 +206,7 @@ export class SessionService extends Context.Service<
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
       const policies = yield* PolicyService
+      const accounts = yield* ClaudeAccountService
       const approvals = yield* ApprovalService
       const serviceScope = yield* Effect.scope
 
@@ -552,6 +555,7 @@ export class SessionService extends Context.Service<
             const run = yield* runner
               .start({
                 cwd: session.worktreePath,
+                configDir: yield* accounts.configDirFor(yield* repo.getAccountId(session.id)),
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
@@ -758,6 +762,9 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
+        // The thread keeps this account for good: its transcript lives in that account's folder.
+        const accountId = yield* accounts.activeId
+        if (accountId !== DEFAULT_CLAUDE_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
         if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))

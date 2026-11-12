@@ -197,6 +197,9 @@ export class SessionRepo extends Context.Service<
      */
     readonly writeImported: (imported: ImportedThreadRows) => Effect.Effect<boolean>
     /** The limits the session last heard about; all `null` until the agent reports them. */
+    /** The added Claude account a session runs as; `null` is Claude Code's default login. */
+    readonly getAccountId: (sessionId: string) => Effect.Effect<string | null>
+    readonly setAccountId: (sessionId: string, accountId: string | null) => Effect.Effect<void>
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
@@ -375,6 +378,24 @@ export class SessionRepo extends Context.Service<
           const json = yield* encodeUsage(usage)
           yield* sql`UPDATE sessions SET usage_json = ${json} WHERE id = ${sessionId}`
         }).pipe(Effect.orDie)
+
+      const findAccountId = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ claude_account_id: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT claude_account_id FROM sessions WHERE id = ${id}`,
+      })
+
+      const getAccountId = (sessionId: string) =>
+        findAccountId(sessionId).pipe(
+          Effect.map((row) => (Option.isSome(row) ? row.value.claude_account_id : null)),
+          Effect.orDie,
+        )
+
+      const setAccountId = (sessionId: string, accountId: string | null) =>
+        sql`UPDATE sessions SET claude_account_id = ${accountId} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
 
       const findAttachment = SqlSchema.findOneOption({
         Request: Schema.Struct({ sessionId: Schema.String, attachmentId: Schema.String }),
@@ -586,6 +607,8 @@ export class SessionRepo extends Context.Service<
         update,
         importIndex,
         writeImported,
+        getAccountId,
+        setAccountId,
         getUsage,
         setUsage,
         insertMessage,

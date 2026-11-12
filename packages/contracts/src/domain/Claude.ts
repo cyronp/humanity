@@ -62,3 +62,23 @@ export const ClaudeStatus = Schema.Struct({
   checkedAt: Schema.String,
 })
 export type ClaudeStatus = typeof ClaudeStatus.Type
+
+/** The id of the login Claude Code uses by itself: `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export const DEFAULT_CLAUDE_ACCOUNT = "default"
+
+/**
+ * One Claude Code login Humanity can run sessions as. The default account is
+ * the human's own Claude Code login; every other one is a separate Claude Code
+ * config folder under Humanity's data directory, signed in on its own.
+ * Humanity stores only the name: the credential stays in that folder.
+ */
+export const ClaudeAccount = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  /** The human's own Claude Code login. It cannot be removed. */
+  isDefault: Schema.Boolean,
+  /** New threads run as this account. Exactly one account is active. */
+  active: Schema.Boolean,
+  status: ClaudeStatus,
+})
+export type ClaudeAccount = typeof ClaudeAccount.Type

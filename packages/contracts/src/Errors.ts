@@ -195,3 +195,32 @@ export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("Noth
     return "There are no uncommitted changes where this session works."
   }
 }
+
+export class ClaudeAccountNotFound extends Schema.TaggedError<ClaudeAccountNotFound>()(
+  "ClaudeAccountNotFound",
+  { accountId: Schema.String },
+) {
+  override get message() {
+    return "This account does not exist any more. Reload the list of accounts."
+  }
+}
+
+export class ClaudeAccountInUse extends Schema.TaggedError<ClaudeAccountInUse>()(
+  "ClaudeAccountInUse",
+  { accountId: Schema.String, sessions: Schema.Number },
+) {
+  override get message() {
+    return this.sessions === 1
+      ? "One open thread still runs as this account. End it before removing the account."
+      : `${this.sessions} open threads still run as this account. End them before removing the account.`
+  }
+}
+
+export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNameInvalid>()(
+  "ClaudeAccountNameInvalid",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}

@@ -14,6 +14,8 @@ export interface ServerConfigShape {
   readonly reposDir: string
   /** Files attached to messages: `<attachmentsDir>/<sessionId>/<attachmentId>`. */
   readonly attachmentsDir: string
+  /** Claude Code config folders of added accounts: `<accountsDir>/<accountId>`. */
+  readonly accountsDir: string
   readonly authTokenPath: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
@@ -36,6 +38,7 @@ const make = (options: {
     worktreesDir: join(home, "worktrees"),
     reposDir: join(home, "repos"),
     attachmentsDir: join(home, "attachments"),
+    accountsDir: join(home, "accounts"),
     authTokenPath: join(home, "auth-token"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
@@ -55,6 +58,7 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         yield* fs.makeDirectory(config.worktreesDir, { recursive: true })
         yield* fs.makeDirectory(config.reposDir, { recursive: true })
         yield* fs.makeDirectory(config.attachmentsDir, { recursive: true })
+        yield* fs.makeDirectory(config.accountsDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

@@ -5,6 +5,7 @@ import { SqlClient } from "effect/sql"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
+import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService, sessionBranchName, slugify } from "../src/services/SessionService.ts"
@@ -188,6 +189,50 @@ describe("SessionService", () => {
         assert.deepStrictEqual(
           (yield* Ref.get(log.runs)).map((run) => run.model),
           ["opus"],
+        )
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("runs a thread as the account that was active when it started", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const first = yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const accounts = yield* ClaudeAccountService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+
+        const onDefault = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(onDefault.id, "idle")
+        const work = yield* accounts.add("Work")
+        yield* accounts.setActive(work.id)
+        const onWork = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(onWork.id, "idle")
+
+        const workDir = join(home, "accounts", work.id)
+        assert.deepStrictEqual(
+          (yield* Ref.get(log.runs)).map((run) => run.configDir),
+          [undefined, workDir],
+        )
+        // An open thread still needs the account's login.
+        assert.strictEqual(
+          (yield* Effect.flip(accounts.remove(work.id)))._tag,
+          "ClaudeAccountInUse",
+        )
+        // Switching back changes new threads only.
+        yield* accounts.setActive("default")
+        return { onWork: onWork.id, workDir }
+      }).pipe(Effect.provide(services(home, () => [])))
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        yield* sessions.sendMessage(first.onWork, "again")
+        yield* waitForStatus(first.onWork, "idle")
+        assert.deepStrictEqual(
+          (yield* Ref.get(log.runs)).map((run) => run.configDir),
+          [first.workDir],
         )
       }).pipe(Effect.provide(services(home, () => [])))
     }),

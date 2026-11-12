@@ -42,8 +42,9 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
+    // Sessions run as one of these accounts.
+    Layer.provideMerge(ClaudeAccountService.layer),
   ),
-  ClaudeAccountService.layer,
   PreferencesService.layer,
 )
 
@@ -104,7 +105,7 @@ const ClaudeBanner = Layer.effectDiscard(
   }).pipe(Effect.forkScoped),
 )
 
-/** GitHub over the real network, with the token from `gh` or `GITHUB_TOKEN`. */
+/** GitHub over the real network, with a saved token or the one from `gh` or `GITHUB_TOKEN`. */
 const GitHubLive = GitHubService.layer.pipe(
   Layer.provide(GitHubToken.layer),
   Layer.provide(FetchHttpClient.layer),

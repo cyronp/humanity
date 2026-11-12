@@ -103,14 +103,18 @@ const probe = (cwd: string, env: Record<string, string>) =>
 export class ClaudeCode extends Context.Service<
   ClaudeCode,
   {
-    /** Where the login lives. */
+    /** Where the default login lives. */
     readonly configDir: string
     /** The bundled CLI, or `null` when its platform package is missing. */
     readonly bundledExecutable: string | null
     /** Environment every Claude Code process is started with. */
     readonly environment: Record<string, string>
-    /** Starts Claude Code just long enough to read the account it would use. */
-    readonly probe: Effect.Effect<ProbeResult, ClaudeProbeFailed>
+    /**
+     * Starts Claude Code just long enough to read the account it would use.
+     * `configDir` is the config folder of an added account; without it Claude
+     * Code uses its default login.
+     */
+    readonly probe: (configDir?: string) => Effect.Effect<ProbeResult, ClaudeProbeFailed>
   }
 >()("humanity/ClaudeCode") {
   static readonly layer = Layer.effect(
@@ -123,20 +127,28 @@ export class ClaudeCode extends Context.Service<
         bundledExecutable: bundledClaudeExecutable(),
         environment,
         // Humanity's own data directory: never the user's repository.
-        probe: probe(config.home, environment),
+        probe: (configDir) =>
+          probe(
+            config.home,
+            configDir === undefined
+              ? environment
+              : { ...environment, CLAUDE_CONFIG_DIR: configDir },
+          ),
       }
     }),
   )
 
   /** A scripted Claude Code for tests: nothing is spawned. */
   static readonly layerTest = (
-    probe: Effect.Effect<ProbeResult, ClaudeProbeFailed>,
+    probe:
+      | Effect.Effect<ProbeResult, ClaudeProbeFailed>
+      | ((configDir?: string) => Effect.Effect<ProbeResult, ClaudeProbeFailed>),
     options: { readonly configDir?: string; readonly bundledExecutable?: string | null } = {},
   ) =>
     Layer.succeed(ClaudeCode, {
       configDir: options.configDir ?? "/home/test/.claude",
       bundledExecutable: options.bundledExecutable ?? null,
       environment: {},
-      probe,
+      probe: typeof probe === "function" ? probe : () => probe,
     })
 }

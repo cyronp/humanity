@@ -184,6 +184,7 @@ export const AgentRunnerLive = Layer.effect(
             // with the human's login (`claude auth login`), like the account check.
             env: {
               ...claude.environment,
+              ...(options.configDir === undefined ? {} : { CLAUDE_CONFIG_DIR: options.configDir }),
               CLAUDE_AGENT_SDK_CLIENT_APP: "humanity/0.1.0",
             },
             stderr: (data) => {
