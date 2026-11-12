@@ -11,7 +11,7 @@ import {
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { FileText, ImageOff, Paperclip, X } from "lucide-react"
+import { FileText, ImageOff, X } from "lucide-react"
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -22,7 +22,6 @@ import {
 } from "react"
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { attachmentAtom, fetchAttachmentAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 
@@ -173,49 +172,6 @@ export type AttachmentDraft = ReturnType<typeof useAttachmentDraft>
 /** Highlights the message box while files are dragged over it. */
 export const dropTargetClass =
   "data-[dragging]:border-primary data-[dragging]:ring-2 data-[dragging]:ring-primary/30"
-
-/** The paperclip: picks files from disk. */
-export function AttachButton({
-  onFiles,
-  disabled = false,
-}: {
-  readonly onFiles: (files: ReadonlyArray<File>) => void
-  readonly disabled?: boolean
-}) {
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        multiple
-        hidden
-        tabIndex={-1}
-        onChange={(event) => {
-          onFiles(Array.from(event.target.files ?? []))
-          // Picking the same file again must fire again.
-          event.target.value = ""
-        }}
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <InputGroupButton
-            size="icon-sm"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Attach files"
-            disabled={disabled}
-            onClick={() => input.current?.click()}
-          >
-            <Paperclip />
-          </InputGroupButton>
-        </TooltipTrigger>
-        <TooltipContent>
-          Attach images, PDFs or text files. You can also paste or drop them.
-        </TooltipContent>
-      </Tooltip>
-    </>
-  )
-}
 
 /** The files waiting in the message box, above the text. */
 export function AttachmentTray({ draft }: { readonly draft: AttachmentDraft }) {

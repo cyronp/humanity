@@ -1,9 +1,18 @@
 import { cn } from "cn"
-import { CircleHelp, FolderCog, FolderGit2, type LucideIcon, Plug, Search } from "lucide-react"
+import {
+  Blocks,
+  CircleHelp,
+  FolderCog,
+  FolderGit2,
+  type LucideIcon,
+  Plug,
+  Search,
+} from "lucide-react"
 import { type ComponentType, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { openOnboarding } from "@/features/onboarding/onboarding"
+import { ExtensionsSettings } from "./ExtensionsSettings.tsx"
 import { ProjectsSettings } from "./ProjectsSettings.tsx"
 import { ProvidersSettings } from "./ProvidersSettings.tsx"
 import { RepositoriesSettings } from "./RepositoriesSettings.tsx"
@@ -23,6 +32,7 @@ const SECTION_VIEWS: Record<
   providers: { icon: Plug, View: ProvidersSettings },
   repositories: { icon: FolderGit2, View: RepositoriesSettings },
   projects: { icon: FolderCog, View: ProjectsSettings },
+  extensions: { icon: Blocks, View: ExtensionsSettings },
 }
 
 /** The settings, floating over the app: the sections on the left, the chosen one on the right. */
@@ -55,7 +65,8 @@ export function SettingsDialog() {
         <div className="shrink-0 border-b px-4 py-3">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Providers and their accounts, where repositories come from, and each project's rules.
+            Providers and their accounts, where repositories come from, each project's rules, and
+            the MCP servers and skills the agent can use.
           </DialogDescription>
         </div>
 

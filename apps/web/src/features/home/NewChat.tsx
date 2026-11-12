@@ -9,18 +9,15 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { InputGroupTextarea } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  AttachButton,
-  AttachmentTray,
-  dropTargetClass,
-  useAttachmentDraft,
-} from "@/features/chat/attachments"
+import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
+import { AddMenu } from "@/features/chat/AddMenu"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { branchesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
@@ -133,6 +130,7 @@ function NewChatForm({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
+  const { textarea, insert } = usePromptInsert(text, setText)
 
   const branches = useAtomValue(branchesAtom(project.id))
   const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
@@ -188,6 +186,7 @@ function NewChatForm({
       <ChatBox className={dropTargetClass} {...(pending ? {} : files.dropProps)}>
         <AttachmentTray draft={files} />
         <InputGroupTextarea
+          ref={textarea}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
@@ -200,7 +199,12 @@ function NewChatForm({
           aria-label="First message to the agent"
         />
         <ChatBoxFooter>
-          <AttachButton onFiles={(picked) => void files.add(picked)} disabled={pending} />
+          <AddMenu
+            projectId={project.id}
+            onFiles={(picked) => void files.add(picked)}
+            onInsert={insert}
+            disabled={pending}
+          />
           <BranchPicker
             project={project}
             value={shownBranch}

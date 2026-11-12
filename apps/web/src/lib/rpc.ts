@@ -28,6 +28,8 @@ export const keys = {
   claude: "claude",
   /** How GitHub is reached, and so which repositories it lists. */
   github: "github",
+  /** MCP servers and skills: Humanity's own and each repository's. */
+  extensions: "extensions",
   /** The human's own choices, like the pinned defaults of new threads. */
   preferences: "preferences",
   /** Branches, status and diff of one project's repository. */

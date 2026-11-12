@@ -166,6 +166,7 @@ export function Workspace({
               ) : (
                 <Composer
                   sessionId={session.id}
+                  projectId={session.projectId}
                   autonomy={session.autonomy}
                   model={session.model}
                   effort={session.effort}

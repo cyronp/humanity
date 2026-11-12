@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react"
  * and from anywhere that points at a setting.
  */
 
-export const SETTINGS_SECTIONS = ["providers", "repositories", "projects"] as const
+export const SETTINGS_SECTIONS = ["providers", "repositories", "projects", "extensions"] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
 export const SECTION_INFO: Record<
@@ -28,6 +28,18 @@ export const SECTION_INFO: Record<
   projects: {
     label: "Projects",
     keywords: ["tool policy", "tools", "autonomy", "permissions", "rules", "remove", "folder"],
+  },
+  extensions: {
+    label: "MCP & Skills",
+    keywords: [
+      "mcp",
+      "servers",
+      "skills",
+      "slash commands",
+      "plugins",
+      "integrations",
+      "extensions",
+    ],
   },
 }
 
