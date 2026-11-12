@@ -1,8 +1,8 @@
 import { useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
 import { AsyncResult } from "effect/reactivity"
-import { Check, ChevronsUpDown, FolderCog, FolderGit2 } from "lucide-react"
+import { Check, ChevronsUpDown, FolderGit2, Plus } from "lucide-react"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 
@@ -51,20 +52,7 @@ export function ProjectBreadcrumb({
   )
 }
 
-/** A page outside any project, such as the project list. */
-export function PageBreadcrumb({ page }: { readonly page: string }) {
-  return (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbPage>{page}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  )
-}
-
-/** Picking a project opens a new thread in it. */
+/** Picking a project opens a new thread in it; "Add repository" brings in another one. */
 function ProjectSwitcher({ current }: { readonly current: Project | undefined }) {
   const projects = useAtomValue(projectsAtom)
   const navigate = useNavigate()
@@ -79,7 +67,7 @@ function ProjectSwitcher({ current }: { readonly current: Project | undefined })
           ) : (
             <ProjectIcon project={current} className="size-4" />
           )}
-          <span className="truncate">{current?.name ?? "Choose a project"}</span>
+          <span className="truncate">{current?.name ?? "Add a repository"}</span>
           <ChevronsUpDown className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -102,19 +90,9 @@ function ProjectSwitcher({ current }: { readonly current: Project | undefined })
             <DropdownMenuSeparator />
           </>
         )}
-        {current !== undefined && (
-          <DropdownMenuItem asChild>
-            <Link to="/projects/$projectId" params={{ projectId: current.id }}>
-              <FolderCog />
-              {current.name} settings
-            </Link>
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem asChild>
-          <Link to="/projects">
-            <FolderGit2 />
-            {list.length === 0 ? "Add a project" : "Manage projects"}
-          </Link>
+        <DropdownMenuItem onSelect={openAddRepository}>
+          <Plus />
+          Add repository
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

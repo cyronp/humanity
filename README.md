@@ -9,7 +9,7 @@ The agent (Claude, through the Claude Agent SDK) proposes; you decide, change by
 - **Node.js 22.13 or newer** (24 LTS recommended). The database uses Node's built-in `node:sqlite`; Node prints an "experimental" warning for it, which is harmless.
 - **git** on your `PATH`.
 - **A Claude login.** Run `claude auth login` once with your Claude Pro, Max, Team or Enterprise account (or the bundled CLI's own `auth login` command, shown in the first-run guide). An `ANTHROPIC_API_KEY` in the environment also works, but Claude Code then bills that key instead of your plan.
-- Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
+- Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), a token saved in Humanity (Settings, under Repositories, or the first-run guide), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
 
 ## Getting started
 
@@ -31,8 +31,8 @@ The daemon also prints which Claude account the agent will run as. The first vis
 
 Then:
 
-1. **Add a project.** Point Humanity at a local git repository, or clone one from GitHub (your repositories are listed when `gh` or `GITHUB_TOKEN` is available; any public `owner/repo` works by name).
-2. **Start a session** from the project page. Pick the branch to start from (local or `origin/…`) and write a first message. Humanity creates a branch `humanity/<id>-<title>` and a worktree for it.
+1. **Add a repository** from the project menu in the header. Your GitHub repositories are listed once GitHub is connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub URL or the path of a local git repository adds that instead.
+2. **Start a session** from the home page. Pick the branch to start from (local or `origin/…`) and write a first message. Humanity creates a branch `humanity/<id>-<title>` and a worktree for it.
 3. **Work with the agent.** It reads freely. When it wants to change a file, the review panel opens; when it wants to run a command, a card appears above the message box. The session status turns to **waiting for you** until you decide.
 4. **Commit** what you approved from the **Changes** tab. Commits go to the session branch only.
 
@@ -50,7 +50,7 @@ Keyboard shortcuts in the review panel: `j` / `k` next / previous hunk, `a` appr
 
 ### Tool policies
 
-Each project has a policy (on the project page) that gives every tool one of four modes:
+Each project has a policy (in Settings, under Projects) that gives every tool one of four modes:
 
 | Mode      | Meaning                | Default for                                                                          |
 | --------- | ---------------------- | ------------------------------------------------------------------------------------ |
@@ -70,12 +70,12 @@ npm run build
 npm start          # serves the web app and the API on http://127.0.0.1:7420
 ```
 
-| Variable            | Default       | Purpose                                     |
-| ------------------- | ------------- | ------------------------------------------- |
-| `ANTHROPIC_API_KEY` | (none)        | Optional. Overrides your Claude login       |
-| `HUMANITY_HOME`     | `~/.humanity` | Data directory                              |
-| `HUMANITY_PORT`     | `7420`        | Daemon port. It always binds to `127.0.0.1` |
-| `GITHUB_TOKEN`      | (none)        | Used when `gh` is not logged in             |
+| Variable            | Default       | Purpose                                               |
+| ------------------- | ------------- | ----------------------------------------------------- |
+| `ANTHROPIC_API_KEY` | (none)        | Optional. Overrides your Claude login                 |
+| `HUMANITY_HOME`     | `~/.humanity` | Data directory                                        |
+| `HUMANITY_PORT`     | `7420`        | Daemon port. It always binds to `127.0.0.1`           |
+| `GITHUB_TOKEN`      | (none)        | Used when no token is saved and `gh` is not logged in |
 
 Everything Humanity writes lives in the data directory:
 
@@ -83,6 +83,7 @@ Everything Humanity writes lives in the data directory:
 ~/.humanity/
 ├─ humanity.db                       projects, sessions, messages, tool calls, decisions
 ├─ auth-token                        the daemon's access token
+├─ github-token                      a GitHub token saved from the UI, only while one is saved
 ├─ worktrees/<project>/<session>/    one git worktree per session
 └─ repos/<owner>/<repo>/             clones made from GitHub
 ```

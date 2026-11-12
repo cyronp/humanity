@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { Autonomy, Project, ProjectId, ReasoningEffort, Session } from "@humanity/contracts"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { FolderPlus } from "lucide-react"
@@ -22,6 +22,7 @@ import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
+import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
@@ -99,14 +100,12 @@ function NoProjects() {
   return (
     <div className="flex w-full max-w-2xl flex-col items-center gap-3 rounded-2xl border border-dashed p-8 text-center">
       <p className="text-sm text-muted-foreground">
-        Add a repository first. Humanity works on a git repository on this machine or one cloned
-        from GitHub.
+        Add a repository first. Humanity works on one cloned from GitHub or a git repository already
+        on this machine.
       </p>
-      <Button asChild>
-        <Link to="/projects">
-          <FolderPlus />
-          Add a project
-        </Link>
+      <Button onClick={openAddRepository}>
+        <FolderPlus />
+        Add repository
       </Button>
     </div>
   )

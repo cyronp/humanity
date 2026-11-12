@@ -12,7 +12,6 @@ import { type FormEvent, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -40,24 +39,25 @@ const MODES: ReadonlyArray<{ readonly value: ToolMode; readonly label: string }>
   { value: "deny", label: "deny: never runs" },
 ]
 
-export function PolicyCard({ project }: { readonly project: Project }) {
+/** A project's tool policy: which tools run by themselves, get reviewed, ask first or never run. */
+export function ProjectPolicy({ project }: { readonly project: Project }) {
   const policy = useAtomValue(policyAtom(project.id))
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Tool policy</CardTitle>
-        <CardDescription>
+    <section aria-labelledby="project-policy" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h3 id="project-policy" className="font-medium">
+          Tool policy
+        </h3>
+        <p className="max-w-prose text-sm text-muted-foreground">
           How much autonomy each tool gets. Exact names win over wildcards like <code>mcp__*</code>;
           any tool not listed needs a <code>{FALLBACK_TOOL_MODE}</code>. Changes apply to running
           agents right away.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AsyncView result={policy} errorTitle="Could not load the policy">
-          {(value) => <PolicyEditor key={JSON.stringify(value)} project={project} policy={value} />}
-        </AsyncView>
-      </CardContent>
-    </Card>
+        </p>
+      </div>
+      <AsyncView result={policy} errorTitle="Could not load the policy">
+        {(value) => <PolicyEditor key={JSON.stringify(value)} project={project} policy={value} />}
+      </AsyncView>
+    </section>
   )
 }
 

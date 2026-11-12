@@ -15,6 +15,7 @@ const hueOf = (name: string) => {
 
 /**
  * The project's avatar: its favicon from the repository, on shadcn's Avatar.
+ * The favicon keeps its own shape (not clipped to a circle), since it's a logo.
  * Without one (or while it loads, or if it fails to decode) the fallback
  * shows the project's initial on a tile coloured by its name.
  */
@@ -39,7 +40,7 @@ export function ProjectIcon({
           src={`data:${icon.mimeType};base64,${icon.base64}`}
           alt=""
           draggable={false}
-          className="object-contain"
+          className="rounded-none object-contain"
         />
       )}
       <AvatarFallback className="bg-[oklch(0.9_0.06_var(--project-hue))] text-[0.625rem] font-semibold text-[oklch(0.35_0.08_var(--project-hue))] uppercase dark:bg-[oklch(0.35_0.06_var(--project-hue))] dark:text-[oklch(0.92_0.05_var(--project-hue))]">

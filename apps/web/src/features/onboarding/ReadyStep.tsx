@@ -9,8 +9,8 @@ import { isReady } from "@/features/claude/summary"
 
 const NEXT: ReadonlyArray<{ readonly title: string; readonly body: ReactNode }> = [
   {
-    title: "Add a project",
-    body: "Point Humanity at a git repository on this computer. Nothing in it is modified.",
+    title: "Add a repository",
+    body: "Pick one of your GitHub repositories and Humanity clones it, or paste the path of one already on this computer.",
   },
   {
     title: "Start a session",
@@ -65,8 +65,8 @@ export function ReadyStep() {
           <Info />
           <AlertTitle>Claude is not connected yet</AlertTitle>
           <AlertDescription>
-            You can add projects now. Agent sessions need a Claude account; the badge in the header
-            takes you back to the connection step.
+            You can add projects now. Agent sessions need a connected account; connect one in
+            Settings, at the bottom of the sidebar.
           </AlertDescription>
         </Alert>
       )}

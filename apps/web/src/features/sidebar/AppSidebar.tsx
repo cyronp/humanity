@@ -3,7 +3,7 @@ import type { Project, Session, SessionStatus } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { CircleHelp, FolderGit2, GitBranch, Search, SquarePen } from "lucide-react"
+import { GitBranch, Search, Settings, SquarePen } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
 import { ThemeToggle } from "@/components/ThemeToggle"
@@ -24,12 +24,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ClaudeStatusBadge } from "@/features/claude/ClaudeStatusBadge"
+import { AccountSwitcher } from "@/features/claude/AccountSwitcher"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon"
 import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
+import { openSettings } from "@/features/settings/settings"
 import { formatElapsed, useNow } from "@/lib/elapsed"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
@@ -87,9 +88,6 @@ export function AppSidebar() {
           <HeaderLink label="New chat" onClick={close} exact to="/">
             <SquarePen />
           </HeaderLink>
-          <HeaderLink label="Projects" onClick={close} to="/projects">
-            <FolderGit2 />
-          </HeaderLink>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -110,18 +108,23 @@ export function AppSidebar() {
         <ThreadHistory projects={projects} query={query} filter={filter} onNavigate={close} />
       </SidebarContent>
       <SidebarFooter className="flex-row items-center gap-1">
-        <div className="min-w-0 flex-1">
-          <ClaudeStatusBadge />
-        </div>
+        <AccountSwitcher onNavigate={close} />
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/welcome" onClick={close} aria-label="How Humanity works">
-                <CircleHelp />
-              </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto"
+              aria-label="Settings"
+              onClick={() => {
+                close()
+                openSettings()
+              }}
+            >
+              <Settings />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>How Humanity works</TooltipContent>
+          <TooltipContent>Settings</TooltipContent>
         </Tooltip>
         <ThemeToggle />
       </SidebarFooter>
@@ -138,7 +141,7 @@ function HeaderLink({
   onClick,
   children,
 }: {
-  readonly to: "/" | "/projects"
+  readonly to: "/"
   readonly label: string
   readonly exact?: boolean
   readonly onClick: () => void

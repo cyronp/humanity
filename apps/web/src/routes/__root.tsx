@@ -1,8 +1,10 @@
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router"
+import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
 import type { CSSProperties } from "react"
-import { ThemeToggle } from "@/components/ThemeToggle"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppHeaderHost } from "@/features/layout/AppHeader"
+import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
+import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
+import { SettingsDialog } from "@/features/settings/SettingsDialog"
 import { AppSidebar } from "@/features/sidebar/AppSidebar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -19,30 +21,6 @@ export const Route = createRootRoute({
 })
 
 function RootLayout() {
-  const onboarding = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/welcome"),
-  })
-
-  // The setup guide stands on its own, without the app around it.
-  if (onboarding) {
-    return (
-      <div className="flex min-h-svh flex-col">
-        <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-          <Link to="/" className="flex items-baseline gap-2">
-            <span className="font-semibold tracking-tight">Humanity</span>
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              human in the loop, not AI in the loop
-            </span>
-          </Link>
-          <ThemeToggle />
-        </header>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <Outlet />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <SidebarProvider className="h-svh" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
       <AppSidebar />
@@ -56,6 +34,9 @@ function RootLayout() {
           </ScrollArea>
         </AppHeaderHost>
       </SidebarInset>
+      <OnboardingDialog />
+      <SettingsDialog />
+      <AddRepositoryDialog />
     </SidebarProvider>
   )
 }
