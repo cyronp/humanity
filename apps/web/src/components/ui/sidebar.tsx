@@ -346,13 +346,20 @@ function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof S
   )
 }
 
-function SidebarContent({ className, ...props }: React.ComponentProps<typeof ScrollArea>) {
+function SidebarContent({
+  className,
+  viewportClassName,
+  ...props
+}: React.ComponentProps<typeof ScrollArea>) {
   return (
     <ScrollArea
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn("min-h-0 flex-1", className)}
-      viewportClassName="group-data-[collapsible=icon]:overflow-hidden! [&>div]:flex! [&>div]:min-h-full [&>div]:flex-col [&>div]:gap-0"
+      viewportClassName={cn(
+        "group-data-[collapsible=icon]:overflow-hidden! [&>div]:flex! [&>div]:min-h-full [&>div]:flex-col [&>div]:gap-0",
+        viewportClassName,
+      )}
       {...props}
     />
   )

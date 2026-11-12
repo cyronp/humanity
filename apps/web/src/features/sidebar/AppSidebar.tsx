@@ -90,7 +90,8 @@ export function AppSidebar() {
           </HeaderLink>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      {/* shadcn's scroll fade: the list fades out at whichever edge has more threads past it. */}
+      <SidebarContent viewportClassName="scroll-fade-y">
         <SidebarGroup>
           <SidebarGroupContent>
             <Conversations
