@@ -1,30 +1,33 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { Autonomy, ReasoningEffort, SessionId } from "@humanity/contracts"
+import type { Autonomy, ProjectId, ReasoningEffort, SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
 import { type FormEvent, type KeyboardEvent, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
+import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import {
+  interruptAtom,
   sendMessageAtom,
   setAutonomyAtom,
   setEffortAtom,
   setModelAtom,
 } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
-import {
-  AttachButton,
-  AttachmentTray,
-  dropTargetClass,
-  useAttachmentDraft,
-} from "./attachments.tsx"
-import { ChatBox, ChatBoxFooter, SendButton } from "./ChatBox.tsx"
+import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
+import { AddMenu } from "./AddMenu.tsx"
+import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
 
-/** The message box of an open thread. Enter sends, Shift+Enter adds a line. Follow-ups are queued while the agent works. */
+/**
+ * The message box of an open thread. Enter sends, Shift+Enter adds a line.
+ * Follow-ups are queued while the agent works; with nothing typed, the send
+ * button is a red stop for the agent's current turn instead.
+ */
 export function Composer({
   sessionId,
+  projectId,
   autonomy,
   model,
   effort,
@@ -32,6 +35,8 @@ export function Composer({
   busy,
 }: {
   readonly sessionId: SessionId
+  /** The session's project, whose repository may bring skills and MCP servers of its own. */
+  readonly projectId: ProjectId
   /** The session's current autonomy; it changes from the next tool call on. */
   readonly autonomy: Autonomy
   /** The session's model; `null` is Claude Code's default. */
@@ -45,6 +50,9 @@ export function Composer({
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
   const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
   const updateEffort = useAtomSet(setEffortAtom, { mode: "promiseExit" })
+  const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
+  const [stopping, setStopping] = useState(false)
+  const [stopError, setStopError] = useState<string>()
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
@@ -52,6 +60,7 @@ export function Composer({
   const [modelError, setModelError] = useState<string>()
   const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
+  const { textarea, insert } = usePromptInsert(text, setText)
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -72,6 +81,17 @@ export function Composer({
       files.clear()
     } else setError(describeCause(exit.cause))
   }
+
+  // The session's status event then turns `busy` off, and the stop back into send.
+  const stop = async () => {
+    setStopping(true)
+    setStopError(undefined)
+    const exit = await interrupt({ payload: { sessionId } })
+    setStopping(false)
+    if (Exit.isFailure(exit)) setStopError(describeCause(exit.cause))
+  }
+  // A typed message is queued rather than stopping anything, so it keeps its send button.
+  const canStop = busy && !disabled && text.trim() === ""
 
   // The session's `SessionUpdated` event brings the new value back into `autonomy`.
   const changeAutonomy = async (next: Autonomy) => {
@@ -103,6 +123,9 @@ export function Composer({
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       {error !== undefined && <ErrorNote title="The message was not sent" message={error} />}
+      {stopError !== undefined && (
+        <ErrorNote title="The agent was not stopped" message={stopError} />
+      )}
       {autonomyError !== undefined && (
         <ErrorNote title="The autonomy was not changed" message={autonomyError} />
       )}
@@ -118,6 +141,7 @@ export function Composer({
       <ChatBox className={dropTargetClass} {...(disabled ? {} : files.dropProps)}>
         <AttachmentTray draft={files} />
         <InputGroupTextarea
+          ref={textarea}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
@@ -135,7 +159,12 @@ export function Composer({
           aria-label="Message to the agent"
         />
         <ChatBoxFooter>
-          <AttachButton onFiles={(picked) => void files.add(picked)} disabled={disabled} />
+          <AddMenu
+            projectId={projectId}
+            onFiles={(picked) => void files.add(picked)}
+            onInsert={insert}
+            disabled={disabled}
+          />
           <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
           {busy && (
             <InputGroupText className="px-1.5 text-xs font-normal">
@@ -145,11 +174,15 @@ export function Composer({
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
             <ModelPicker value={model} onChange={changeModel} disabled={disabled} />
-            <SendButton
-              ready={!disabled && !pending && !files.reading && text.trim() !== ""}
-              disabled={disabled || pending || files.reading || text.trim() === ""}
-              label="Send"
-            />
+            {canStop ? (
+              <StopButton onStop={() => void stop()} stopping={stopping} />
+            ) : (
+              <SendButton
+                ready={!disabled && !pending && !files.reading && text.trim() !== ""}
+                disabled={disabled || pending || files.reading || text.trim() === ""}
+                label="Send"
+              />
+            )}
           </div>
         </ChatBoxFooter>
       </ChatBox>

@@ -1,5 +1,5 @@
 import { cn } from "cn"
-import { ArrowUp } from "lucide-react"
+import { ArrowUp, Square } from "lucide-react"
 import type { ComponentProps } from "react"
 import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 
@@ -66,6 +66,33 @@ export function SendButton({
       aria-label={label}
     >
       <ArrowUp />
+    </InputGroupButton>
+  )
+}
+
+/**
+ * The send button's place while the agent works and nothing is typed: a red
+ * stop that ends the agent's current turn. The thread stays open.
+ */
+export function StopButton({
+  onStop,
+  stopping,
+}: {
+  readonly onStop: () => void
+  /** The stop was asked for and the agent has not stopped yet. */
+  readonly stopping: boolean
+}) {
+  return (
+    <InputGroupButton
+      type="button"
+      size="icon-sm"
+      className="rounded-full bg-destructive text-white hover:bg-destructive/90 hover:text-white focus-visible:ring-destructive/40 dark:bg-destructive/80 dark:hover:bg-destructive"
+      disabled={stopping}
+      onClick={onStop}
+      aria-label={stopping ? "Stopping the agent" : "Stop the agent"}
+      title="Stop the agent"
+    >
+      <Square className="size-3 fill-current" />
     </InputGroupButton>
   )
 }
