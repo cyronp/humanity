@@ -1,9 +1,10 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { Autonomy, ProjectId, ReasoningEffort, SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
-import { type FormEvent, type KeyboardEvent, useState } from "react"
+import { type FormEvent, type KeyboardEvent, type Ref, useImperativeHandle, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
+import type { PromptInsertion } from "@/features/extensions/prompt"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
@@ -20,6 +21,12 @@ import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachmen
 import { AddMenu } from "./AddMenu.tsx"
 import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
 
+/** What the rest of the workspace can do to the message box. */
+export interface ComposerHandle {
+  /** Writes at the caret and gives the box the focus. */
+  readonly insert: (insertion: PromptInsertion) => void
+}
+
 /**
  * The message box of an open thread. Enter sends, Shift+Enter adds a line.
  * Follow-ups are queued while the agent works; with nothing typed, the send
@@ -33,7 +40,9 @@ export function Composer({
   effort,
   disabled,
   busy,
+  ref,
 }: {
+  readonly ref?: Ref<ComposerHandle>
   readonly sessionId: SessionId
   /** The session's project, whose repository may bring skills and MCP servers of its own. */
   readonly projectId: ProjectId
@@ -61,6 +70,8 @@ export function Composer({
   const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
+  // No dependencies: `insert` reads the text of the render it was made in.
+  useImperativeHandle(ref, () => ({ insert }))
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()

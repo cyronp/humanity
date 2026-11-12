@@ -61,6 +61,13 @@ describe("inserting into the message box", () => {
     const selection = { start: 0, end: 0 }
     expect(applyInsertion("hi", { kind: "skill", invocation: "/x" }, selection).text).toBe("/x hi")
     expect(applyInsertion("hi", { kind: "mcp", server: "gh" }, selection).text).toBe("mcp__gh hi")
+    expect(
+      applyInsertion(
+        "fix",
+        { kind: "reference", reference: "src/app.ts:12" },
+        { start: 3, end: 3 },
+      ),
+    ).toEqual({ text: "fix src/app.ts:12 ", caret: 18 })
   })
 })
 

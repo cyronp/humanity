@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { countChanges, parseUnifiedDiff, toDiffLines } from "../src/index.ts"
+import {
+  countChanges,
+  hunkReference,
+  lineReference,
+  parseUnifiedDiff,
+  toDiffLines,
+} from "../src/index.ts"
 
 const GIT_DIFF = `diff --git a/src/app.ts b/src/app.ts
 index 1111111..2222222 100644
@@ -131,5 +137,41 @@ describe("countChanges", () => {
     const files = parseUnifiedDiff(GIT_DIFF)
     expect(countChanges(files[0]?.hunks ?? [])).toEqual({ added: 2, removed: 1 })
     expect(countChanges(files.flatMap((file) => file.hunks))).toEqual({ added: 4, removed: 2 })
+  })
+})
+
+describe("references for a message", () => {
+  const files = parseUnifiedDiff(GIT_DIFF)
+
+  it("names a row by its line in the file as it is now", () => {
+    const hunk = files[0]?.hunks[0]
+    const rows = hunk === undefined ? [] : toDiffLines(hunk)
+    expect(rows.map((row) => lineReference("src/app.ts", row))).toEqual([
+      "src/app.ts:1",
+      "src/app.ts:2 (removed line)",
+      "src/app.ts:2",
+      "src/app.ts:3",
+      "src/app.ts:4",
+    ])
+    expect(lineReference("src/app.ts", { kind: "meta", text: "No newline at end of file" })).toBe(
+      undefined,
+    )
+  })
+
+  it("names a hunk by the lines it covers", () => {
+    const [modified, created, deleted] = files.map((file) => file.hunks[0])
+    expect(modified && hunkReference("src/app.ts", modified)).toBe("src/app.ts:1-4")
+    expect(created && hunkReference("src/new.ts", created)).toBe("src/new.ts:1-2")
+    expect(deleted && hunkReference("src/old.ts", deleted)).toBe("src/old.ts:1 (removed lines)")
+    expect(
+      hunkReference("a.ts", {
+        index: 1,
+        oldStart: 7,
+        oldLines: 0,
+        newStart: 8,
+        newLines: 1,
+        lines: ["+x"],
+      }),
+    ).toBe("a.ts:8")
   })
 })

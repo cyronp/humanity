@@ -1,13 +1,13 @@
 import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
 import { PanelRightClose, PanelRightOpen } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Composer } from "@/features/chat/Composer"
+import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { QuestionPanel } from "@/features/questions/QuestionPanel"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
@@ -53,6 +53,9 @@ export function Workspace({
     questions === undefined ? confirmations : confirmations.filter((each) => each !== asked)
   const [panelOpen, setPanelOpen] = useState(changes.length > 0 || search.file !== undefined)
   const [tab, setTab] = useState("review")
+  // The Changes tab's reference buttons write into the message box.
+  const composer = useRef<ComposerHandle>(null)
+  const canReference = acceptsMessages(session) && questions === undefined
 
   // A new change to review opens the panel on the review tab.
   const pendingCount = changes.length
@@ -165,6 +168,7 @@ export function Workspace({
                 <QuestionPanel key={asked.id} confirmation={asked} questions={questions} />
               ) : (
                 <Composer
+                  ref={composer}
                   sessionId={session.id}
                   projectId={session.projectId}
                   autonomy={session.autonomy}
@@ -210,6 +214,11 @@ export function Workspace({
                   <ChangesPanel
                     session={session}
                     activity={Object.keys(view.toolCalls).length + view.approvals.length}
+                    onReference={
+                      canReference
+                        ? (reference) => composer.current?.insert({ kind: "reference", reference })
+                        : undefined
+                    }
                   />
                 </ScrollArea>
               </TabsContent>

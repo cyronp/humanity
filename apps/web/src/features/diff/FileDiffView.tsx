@@ -28,7 +28,14 @@ export function ChangeCount({
 }
 
 /** A read-only view of one file's changes. */
-export function FileDiffView({ file }: { readonly file: FileDiff }) {
+export function FileDiffView({
+  file,
+  onReference,
+}: {
+  readonly file: FileDiff
+  /** Puts a `path:line` reference in the next message; its buttons show only when given. */
+  readonly onReference?: ((reference: string) => void) | undefined
+}) {
   const { label, Icon } = KIND[file.kind]
   const counts = countChanges(file.hunks)
   return (
@@ -53,7 +60,14 @@ export function FileDiffView({ file }: { readonly file: FileDiff }) {
           No line changes (mode change or empty file).
         </p>
       ) : (
-        file.hunks.map((hunk) => <HunkView key={hunk.index} hunk={hunk} filePath={file.filePath} />)
+        file.hunks.map((hunk) => (
+          <HunkView
+            key={hunk.index}
+            hunk={hunk}
+            filePath={file.filePath}
+            onReference={onReference}
+          />
+        ))
       )}
     </section>
   )

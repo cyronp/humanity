@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction, useRef } from "react"
 import { applyInsertion, type PromptInsertion } from "./prompt.ts"
 
 /**
- * Puts a skill or MCP server picked from the menu into a message box, then
+ * Puts a skill, an MCP server or a diff reference into a message box, then
  * gives the box back its focus with the caret after what was inserted.
  */
 export function usePromptInsert(text: string, setText: Dispatch<SetStateAction<string>>) {

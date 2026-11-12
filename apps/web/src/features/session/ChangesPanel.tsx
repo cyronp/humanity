@@ -22,8 +22,11 @@ import { isBusy } from "./state.ts"
 export function ChangesPanel({
   session,
   activity,
+  onReference,
 }: {
   readonly session: Session
+  /** Puts a `path:line` reference in the message box; absent when no box can take it. */
+  readonly onReference?: ((reference: string) => void) | undefined
   /** Changes whenever the agent may have written files, to refresh the diff. */
   readonly activity: number
 }) {
@@ -59,7 +62,7 @@ export function ChangesPanel({
                 counts={countChanges(value.files.flatMap((file) => file.hunks))}
               />
               {value.files.map((file) => (
-                <FileDiffView key={file.filePath} file={file} />
+                <FileDiffView key={file.filePath} file={file} onReference={onReference} />
               ))}
             </>
           )

@@ -42,3 +42,26 @@ export const countChanges = (
   }
   return { added, removed }
 }
+
+/**
+ * How a message points the agent at one row of a diff: `path:line` in the
+ * file as it is now. A removed line no longer has a place there, so it is
+ * named by the number it had before the change, and says so.
+ */
+export const lineReference = (filePath: string, line: DiffLine): string | undefined => {
+  if (line.newNumber !== undefined) return `${filePath}:${line.newNumber}`
+  if (line.oldNumber !== undefined) return `${filePath}:${line.oldNumber} (removed line)`
+  return undefined
+}
+
+const span = (start: number, lines: number) =>
+  lines === 1 ? `${start}` : `${start}-${start + lines - 1}`
+
+/**
+ * How a message points the agent at a whole hunk: the lines it covers in the
+ * file as it is now, or the old ones when the hunk only removed lines.
+ */
+export const hunkReference = (filePath: string, hunk: DiffHunk): string =>
+  hunk.newLines > 0
+    ? `${filePath}:${span(hunk.newStart, hunk.newLines)}`
+    : `${filePath}:${span(hunk.oldStart, hunk.oldLines)} (removed lines)`

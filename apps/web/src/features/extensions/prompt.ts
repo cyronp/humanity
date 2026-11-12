@@ -6,10 +6,12 @@ export interface PromptEdit {
   readonly caret: number
 }
 
-/** What the MCP & Skills menu puts in the message box. */
+/** What the MCP & Skills menu, or a diff's reference button, puts in the message box. */
 export type PromptInsertion =
   | { readonly kind: "skill"; readonly invocation: string }
   | { readonly kind: "mcp"; readonly server: string }
+  /** A place in a file, `path:line`, as a diff names it. */
+  | { readonly kind: "reference"; readonly reference: string }
 
 /**
  * How a message names an MCP server: the prefix of its tools'
@@ -70,7 +72,12 @@ export const applyInsertion = (
 ): PromptEdit =>
   insertion.kind === "skill"
     ? insertSkill(text, insertion.invocation)
-    : insertAtSelection(text, mcpMention(insertion.server), selection.start, selection.end)
+    : insertAtSelection(
+        text,
+        insertion.kind === "mcp" ? mcpMention(insertion.server) : insertion.reference,
+        selection.start,
+        selection.end,
+      )
 
 /** One line about how a server is reached: its command or its address. */
 export const describeTransport = (transport: McpTransport): string => {
