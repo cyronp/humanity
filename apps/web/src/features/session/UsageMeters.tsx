@@ -1,6 +1,10 @@
-import type { ContextUsage, SessionUsage } from "@humanity/contracts"
+import { useAtomSet } from "@effect/atom-react"
+import type { ContextUsage, SessionId, SessionUsage } from "@humanity/contracts"
 import { cn } from "cn"
-import { Gauge } from "lucide-react"
+import { Exit } from "effect"
+import { Gauge, RefreshCw } from "lucide-react"
+import { useCallback, useRef, useState } from "react"
+import { Button } from "@/components/ui/button"
 import {
   Popover,
   PopoverContent,
@@ -9,6 +13,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { describeCause } from "@/lib/errors"
+import { refreshUsageAtom } from "./atoms.ts"
 import {
   contextPercentUsed,
   formatTokens,
@@ -33,12 +39,18 @@ const FLOATING = "rounded-full bg-background/60 px-2 py-0.5 text-xs tabular-nums
  * The line above the message box: the plan's usage on the far left, a button
  * that opens every window, and the context window on the right.
  */
-export function UsageMeters({ usage }: { readonly usage: SessionUsage }) {
+export function UsageMeters({
+  sessionId,
+  usage,
+}: {
+  readonly sessionId: SessionId
+  readonly usage: SessionUsage
+}) {
   const rows = planRows(usage.plan, new Date())
-  if (usage.context === null && rows.length === 0) return null
+  if (usage.context === null && usage.plan === null) return null
   return (
     <div className="-mb-1 flex items-center justify-between gap-3 px-1">
-      {rows.length === 0 ? <span /> : <PlanUsageButton rows={rows} />}
+      {usage.plan === null ? <span /> : <PlanUsageButton sessionId={sessionId} rows={rows} />}
       {usage.context !== null && <ContextMeter context={usage.context} />}
     </div>
   )
@@ -78,14 +90,69 @@ const formatReset = (resetsAt: string): string => {
     : `${date.toLocaleDateString([], { weekday: "short" })} ${time}`
 }
 
+type Refresh =
+  | { readonly _tag: "Idle" }
+  | { readonly _tag: "Refreshing" }
+  | { readonly _tag: "Refreshed"; readonly at: Date }
+  | { readonly _tag: "Failed"; readonly error: string }
+
+/**
+ * Asks the daemon for the plan's usage right now. The new numbers arrive on
+ * the session's stream; this only tracks how the last ask went.
+ */
+function useRefreshUsage(sessionId: SessionId) {
+  const refreshUsage = useAtomSet(refreshUsageAtom, { mode: "promiseExit" })
+  const [state, setState] = useState<Refresh>({ _tag: "Idle" })
+  const inFlight = useRef(false)
+  const refresh = useCallback(async () => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setState({ _tag: "Refreshing" })
+    const exit = await refreshUsage({ payload: { sessionId } })
+    inFlight.current = false
+    setState(
+      Exit.isSuccess(exit)
+        ? { _tag: "Refreshed", at: new Date() }
+        : { _tag: "Failed", error: describeCause(exit.cause) },
+    )
+  }, [refreshUsage, sessionId])
+  return [state, refresh] as const
+}
+
+const refreshNote = (state: Refresh): string => {
+  switch (state._tag) {
+    case "Idle":
+      return "As of the agent's last turn in this thread."
+    case "Refreshing":
+      return "Checking your plan…"
+    case "Refreshed":
+      return `Updated at ${state.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+    case "Failed":
+      return "Could not refresh. These are the last known numbers."
+  }
+}
+
 /**
  * Reads "Usage" while every window is at most half used, then names the
- * fullest one in its colour. Clicking it lists every window of the plan.
+ * fullest one in its colour. Clicking it refreshes and lists every window of
+ * the plan.
  */
-function PlanUsageButton({ rows }: { readonly rows: ReadonlyArray<PlanRow> }) {
+function PlanUsageButton({
+  sessionId,
+  rows,
+}: {
+  readonly sessionId: SessionId
+  readonly rows: ReadonlyArray<PlanRow>
+}) {
   const headline = planHeadline(rows)
+  const [refresh, runRefresh] = useRefreshUsage(sessionId)
+  const refreshing = refresh._tag === "Refreshing"
   return (
-    <Popover>
+    <Popover
+      onOpenChange={(open) => {
+        if (open) void runRefresh()
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -103,15 +170,35 @@ function PlanUsageButton({ rows }: { readonly rows: ReadonlyArray<PlanRow> }) {
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-72 gap-3 p-3">
-        <PopoverHeader>
-          <PopoverTitle>Plan usage</PopoverTitle>
-          <PopoverDescription className="text-xs">
-            As of the agent's last turn in this thread.
-          </PopoverDescription>
-        </PopoverHeader>
-        {rows.map((row) => (
-          <PlanRowMeter key={row.label} row={row} />
-        ))}
+        <div className="flex items-start justify-between gap-2">
+          <PopoverHeader>
+            <PopoverTitle>Plan usage</PopoverTitle>
+            <PopoverDescription
+              className={cn("text-xs", refresh._tag === "Failed" && LEVEL_CLASS.critical)}
+              title={refresh._tag === "Failed" ? refresh.error : undefined}
+              aria-live="polite"
+            >
+              {refreshNote(refresh)}
+            </PopoverDescription>
+          </PopoverHeader>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => void runRefresh()}
+            disabled={refreshing}
+            aria-label="Refresh plan usage"
+            title="Refresh"
+          >
+            <RefreshCw className={cn(refreshing && "animate-spin")} aria-hidden />
+          </Button>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Every window has reset since the last check.
+          </p>
+        ) : (
+          rows.map((row) => <PlanRowMeter key={row.label} row={row} />)
+        )}
       </PopoverContent>
     </Popover>
   )

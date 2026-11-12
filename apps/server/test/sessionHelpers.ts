@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest"
-import type { MessageContent, SessionStatus } from "@humanity/contracts"
+import type { MessageContent, PlanUsage, SessionStatus } from "@humanity/contracts"
 import { Effect, Layer, Stream } from "effect"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
@@ -9,20 +9,31 @@ import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
-/** A full set of services over `home`, with a scripted agent instead of the SDK. */
-/** Session tests never reach Claude Code: the account check is never asked and fails if it is. */
-const NoClaude = ClaudeCode.layerTest(
-  Effect.fail(new ClaudeProbeFailed({ reason: "Claude Code is not used by session tests." })),
-)
+/**
+ * Session tests never reach Claude Code: the account check is never asked and
+ * fails if it is, and the plan's usage is whatever `planUsage` scripts.
+ */
+const noClaude = (planUsage?: PlanUsageProbe) =>
+  ClaudeCode.layerTest(
+    Effect.fail(new ClaudeProbeFailed({ reason: "Claude Code is not used by session tests." })),
+    planUsage === undefined ? {} : { planUsage },
+  )
 
+/** What an idle Claude Code reports about the plan when no agent is running. */
+export type PlanUsageProbe = (
+  configDir?: string,
+) => Effect.Effect<PlanUsage | undefined, ClaudeProbeFailed>
+
+/** A full set of services over `home`, with a scripted agent instead of the SDK. */
 export const services = (
   home: string,
   script: FakeScript,
   claudeHistory: () => Readonly<Record<string, ReadonlyArray<TestConversation>>> = () => ({}),
+  planUsage?: PlanUsageProbe,
 ) =>
   Services.pipe(
     Layer.provideMerge(AgentRunnerFake(script)),
-    Layer.provide(NoClaude),
+    Layer.provide(noClaude(planUsage)),
     Layer.provide(ClaudeHistory.layerTest(claudeHistory)),
     Layer.provideMerge(baseLayer(home)),
   )

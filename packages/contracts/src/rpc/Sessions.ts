@@ -3,7 +3,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
-import { ReasoningEffort, Session, SessionId } from "../domain/Session.ts"
+import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
 import { WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
@@ -16,6 +16,7 @@ import {
   GitNotInstalled,
   GitRefNotFound,
   NothingToCommit,
+  PlanUsageUnavailable,
   ProjectNotFound,
   SessionBusy,
   SessionEnded,
@@ -170,6 +171,15 @@ export const SessionsRpcs = RpcGroup.make(
       GitNotInstalled,
       GitCommandFailed,
     ]),
+  }),
+  /**
+   * Asks Claude Code how much of the plan is used right now, and how full the
+   * running agent's context is. Publishes `UsageUpdated` and returns the result.
+   */
+  Rpc.make("Sessions.refreshUsage", {
+    payload: { sessionId: SessionId },
+    success: SessionUsage,
+    error: Schema.Union([SessionNotFound, PlanUsageUnavailable]),
   }),
   /** A snapshot of the session, then every event as it happens. */
   Rpc.make("Sessions.subscribe", {

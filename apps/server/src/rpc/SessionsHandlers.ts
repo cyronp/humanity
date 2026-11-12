@@ -20,6 +20,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.attachment": ({ sessionId, attachmentId }) =>
         sessions.attachment(sessionId, attachmentId),
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
+      "Sessions.refreshUsage": ({ sessionId }) => sessions.refreshUsage(sessionId),
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),
       "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),

@@ -12,11 +12,14 @@ import {
   DEFAULT_CLAUDE_ACCOUNT,
   type ChatMessage,
   ConfirmationId,
+  type ContextUsage,
   type GitBranchExists,
   type GitInvalidBranchName,
   type GitRefNotFound,
   type MessageContent,
   type PendingConfirmation,
+  type PlanUsage,
+  PlanUsageUnavailable,
   type Project,
   type ProjectNotFound,
   type ProposedChange,
@@ -29,6 +32,7 @@ import {
   SessionId,
   SessionNotFound,
   type SessionStatus,
+  type SessionUsage,
   NothingToCommit,
   type WorkingTreeDiff,
   type ToolCall,
@@ -55,6 +59,7 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
+import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
@@ -173,6 +178,13 @@ export class SessionService extends Context.Service<
       attachmentId: string,
     ) => Effect.Effect<AttachmentContent, SessionNotFound | AttachmentNotFound>
     readonly interrupt: (sessionId: string) => Effect.Effect<void, SessionNotFound>
+    /**
+     * Reads the plan's usage right now (and the context, when an agent is
+     * running), stores it and publishes `UsageUpdated`.
+     */
+    readonly refreshUsage: (
+      sessionId: string,
+    ) => Effect.Effect<SessionUsage, SessionNotFound | PlanUsageUnavailable>
     readonly end: (
       sessionId: string,
       options: { readonly removeWorktree: boolean },
@@ -207,6 +219,7 @@ export class SessionService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const policies = yield* PolicyService
       const accounts = yield* ClaudeAccountService
+      const claude = yield* ClaudeCode
       const approvals = yield* ApprovalService
       const serviceScope = yield* Effect.scope
 
@@ -455,16 +468,55 @@ export class SessionService extends Context.Service<
           Effect.gen(function* () {
             const context = yield* state.run.contextUsage
             const plan = withPlan ? yield* state.run.planUsage : undefined
-            if (context === undefined && plan === undefined) return
-            const known = yield* repo.getUsage(sessionId)
-            const usage = {
-              context: context ?? known.context,
-              plan: plan ?? known.plan,
-            }
-            yield* repo.setUsage(sessionId, usage)
-            yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
+            return { plan, usage: yield* storeUsage(sessionId, context, plan) }
           }),
         )
+
+      /** Stores and publishes what is known now; what is not keeps its last value. */
+      const storeUsage = (
+        sessionId: string,
+        context: ContextUsage | undefined,
+        plan: PlanUsage | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const known = yield* repo.getUsage(sessionId)
+          if (context === undefined && plan === undefined) return known
+          const usage: SessionUsage = {
+            context: context ?? known.context,
+            plan: plan ?? known.plan,
+          }
+          yield* repo.setUsage(sessionId, usage)
+          yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
+          return usage
+        })
+
+      /**
+       * The plan's windows right now: from the running agent when the session
+       * has one, otherwise from a Claude Code started idle on the session's
+       * account just to ask, which sends nothing to the model.
+       */
+      const refreshUsageNow = Effect.fn("SessionService.refreshUsage")(function* (
+        sessionId: string,
+      ) {
+        yield* get(sessionId)
+        const unavailable = (reason: string) => new PlanUsageUnavailable({ reason })
+        const state = active.get(sessionId)
+        if (state !== undefined) {
+          const { plan, usage } = yield* refreshUsage(sessionId, state, true)
+          if (plan === undefined) {
+            return yield* unavailable("the agent did not report the plan's limits.")
+          }
+          return usage
+        }
+        const configDir = yield* accounts.configDirFor(yield* repo.getAccountId(sessionId))
+        const plan = yield* claude
+          .planUsage(configDir)
+          .pipe(Effect.mapError((error) => unavailable(error.reason)))
+        if (plan === undefined) {
+          return yield* unavailable("this login has no plan limits to report.")
+        }
+        return yield* storeUsage(sessionId, undefined, plan)
+      })
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
@@ -1024,6 +1076,7 @@ export class SessionService extends Context.Service<
         sendMessage,
         attachment,
         interrupt,
+        refreshUsage: refreshUsageNow,
         end,
         stopProject,
         diff,

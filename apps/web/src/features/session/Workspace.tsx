@@ -160,7 +160,7 @@ export function Workspace({
                   {changes.length === 1 ? "" : "s"}. Open the review panel.
                 </button>
               )}
-              <UsageMeters usage={view.usage} />
+              <UsageMeters sessionId={session.id} usage={view.usage} />
               {asked !== undefined && questions !== undefined ? (
                 <QuestionPanel key={asked.id} confirmation={asked} questions={questions} />
               ) : (

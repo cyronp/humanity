@@ -1,10 +1,16 @@
 import { assert, describe, it } from "@effect/vitest"
-import { type MessageContent, type SessionEvent, setToolRule } from "@humanity/contracts"
+import {
+  type MessageContent,
+  type PlanUsage,
+  type SessionEvent,
+  setToolRule,
+} from "@humanity/contracts"
 import { Effect, Fiber, Ref, Stream } from "effect"
 import { SqlClient } from "effect/sql"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
+import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
@@ -375,6 +381,78 @@ describe("SessionService", () => {
       yield* Effect.gen(function* () {
         assert.deepStrictEqual((yield* contents(sessionId)).usage, reported)
       }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("refreshes the plan's usage on demand, with or without a running agent", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const fromAgent = {
+        fiveHour: { utilization: 62, resetsAt: "2099-01-01T00:00:00.000Z" },
+        sevenDay: { utilization: 30, resetsAt: "2099-01-05T00:00:00.000Z" },
+        models: [{ name: "Fable", utilization: 80, resetsAt: null }],
+      }
+      const fromIdleClaude: PlanUsage = {
+        fiveHour: { utilization: 91, resetsAt: "2099-01-01T05:00:00.000Z" },
+        sevenDay: null,
+        models: [],
+      }
+      const probed: Array<string | undefined> = []
+      let idleAnswer: Effect.Effect<PlanUsage | undefined, ClaudeProbeFailed> =
+        Effect.succeed(fromIdleClaude)
+      const planUsage = (configDir?: string) =>
+        Effect.suspend(() => {
+          probed.push(configDir)
+          return idleAnswer
+        })
+
+      const sessionId = yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(session.id, "idle")
+
+        // The running agent answers; no extra Claude Code is started.
+        const refreshed = yield* sessions.refreshUsage(session.id)
+        assert.deepStrictEqual(refreshed.plan, fromAgent)
+        assert.isNotNull(refreshed.context)
+        assert.deepStrictEqual(probed, [])
+
+        const missing = yield* sessions.refreshUsage("no-such-session").pipe(Effect.flip)
+        assert.strictEqual(missing._tag, "SessionNotFound")
+        return session.id
+      }).pipe(Effect.provide(services(home, () => [{ text: "hello" }], undefined, planUsage)))
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const before = (yield* contents(sessionId)).usage
+
+        // No agent after a restart: an idle Claude Code on the session's account answers.
+        const events = yield* sessions.subscribe(sessionId).pipe(
+          Stream.filter((event) => event._tag === "UsageUpdated"),
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.forkChild,
+        )
+        yield* Effect.sleep("20 millis")
+        const refreshed = yield* sessions.refreshUsage(sessionId)
+        assert.deepStrictEqual(refreshed, { context: before.context, plan: fromIdleClaude })
+        assert.deepStrictEqual(probed, [undefined])
+        assert.deepStrictEqual(
+          (yield* Fiber.join(events)).map((event) => event._tag),
+          ["UsageUpdated"],
+        )
+        assert.deepStrictEqual((yield* contents(sessionId)).usage, refreshed)
+
+        // A failed check is reported and leaves the last numbers alone.
+        idleAnswer = Effect.fail(new ClaudeProbeFailed({ reason: "not signed in" }))
+        const failed = yield* sessions.refreshUsage(sessionId).pipe(Effect.flip)
+        assert.strictEqual(failed._tag, "PlanUsageUnavailable")
+        idleAnswer = Effect.succeed(undefined)
+        const noPlan = yield* sessions.refreshUsage(sessionId).pipe(Effect.flip)
+        assert.strictEqual(noPlan._tag, "PlanUsageUnavailable")
+        assert.deepStrictEqual((yield* contents(sessionId)).usage, refreshed)
+      }).pipe(Effect.provide(services(home, () => [], undefined, planUsage)))
     }),
   )
 

@@ -224,3 +224,13 @@ export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNa
     return this.reason
   }
 }
+
+/** Claude Code could not say how much of the plan is used right now. */
+export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailable>()(
+  "PlanUsageUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return `Could not read the plan's usage: ${this.reason}`
+  }
+}
