@@ -56,9 +56,11 @@ export const matchSections = (query: string): ReadonlyArray<SettingsSection> => 
 interface SettingsState {
   readonly open: boolean
   readonly section: SettingsSection
+  /** The item last picked in each section's list: a provider, a repository service, a project. */
+  readonly items: Partial<Record<SettingsSection, string>>
 }
 
-let state: SettingsState = { open: false, section: "providers" }
+let state: SettingsState = { open: false, section: "providers", items: {} }
 const listeners = new Set<() => void>()
 
 const setState = (next: SettingsState): void => {
@@ -71,10 +73,18 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => listeners.delete(listener)
 }
 
-/** Opens the settings at a section, or at the one shown last. */
-export const openSettings = (section: SettingsSection = state.section): void =>
-  setState({ open: true, section })
+/** Opens the settings at a section, or at the one shown last, and optionally at one of its items. */
+export const openSettings = (section: SettingsSection = state.section, item?: string): void =>
+  setState({
+    open: true,
+    section,
+    items: item === undefined ? state.items : { ...state.items, [section]: item },
+  })
 
 export const closeSettings = (): void => setState({ ...state, open: false })
+
+/** Shows one item of a section's list on the right. */
+export const selectSettingsItem = (section: SettingsSection, item: string): void =>
+  setState({ ...state, items: { ...state.items, [section]: item } })
 
 export const useSettings = (): SettingsState => useSyncExternalStore(subscribe, () => state)

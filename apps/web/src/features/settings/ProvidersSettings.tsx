@@ -1,18 +1,35 @@
 import { ProvidersOverview } from "@/features/providers/ProvidersOverview"
+import { PROVIDERS, type ProviderId } from "@/features/providers/ProviderIcon"
+import { selectSettingsItem, useSettings } from "./settings.ts"
+import { SettingsFrame, type SettingsListItem, SettingsSplit } from "./SettingsLayout.tsx"
 
+const PROVIDER_IDS = Object.keys(PROVIDERS) as ReadonlyArray<ProviderId>
+
+const ITEMS: ReadonlyArray<SettingsListItem> = PROVIDER_IDS.map((id) => {
+  const { name, Icon } = PROVIDERS[id]
+  return { id, label: name, icon: <Icon aria-hidden="true" className="size-7" /> }
+})
+
+/** Each provider in the list on the left; its accounts on the right. */
 export function ProvidersSettings() {
+  const { items } = useSettings()
+  const selected = PROVIDER_IDS.find((id) => id === items.providers) ?? "claude-code"
+
   return (
-    <section aria-labelledby="settings-providers" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1">
-        <h2 id="settings-providers" className="text-base font-medium">
-          Providers
-        </h2>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          The agents Humanity runs sessions on and the accounts they sign in with. Humanity never
-          reads or stores a login: each provider keeps its own.
-        </p>
-      </div>
-      <ProvidersOverview />
-    </section>
+    <SettingsFrame
+      id="settings-providers"
+      title="Providers"
+      description="The agents Humanity runs sessions on and the accounts they sign in with. Humanity never reads or stores a login: each provider keeps its own."
+    >
+      <SettingsSplit
+        label="Providers"
+        items={ITEMS}
+        selected={selected}
+        onSelect={(id) => selectSettingsItem("providers", id)}
+      >
+        {/* Claude Code is the only provider so far; another adds its view here. */}
+        <ProvidersOverview />
+      </SettingsSplit>
+    </SettingsFrame>
   )
 }

@@ -54,7 +54,7 @@ export function SettingsDialog() {
       }}
     >
       <DialogContent
-        className="flex h-[min(50rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(64rem,calc(100%-2rem))]"
+        className="flex h-[min(50rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(80rem,calc(100%-2rem))]"
         onEscapeKeyDown={(event) => {
           // The first Escape clears a search; the next one closes the settings.
           if (query === "") return
@@ -100,7 +100,7 @@ export function SettingsDialog() {
             </button>
           </nav>
 
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:px-5">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <View />
           </div>
         </div>

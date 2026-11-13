@@ -2,6 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { Exit } from "effect"
+import { AsyncResult } from "effect/reactivity"
 import { Plus } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
@@ -17,22 +18,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { ProjectPermissions } from "@/features/policy/ProjectPermissions"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom, removeProjectAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
-import { closeSettings } from "./settings.ts"
+import { closeSettings, selectSettingsItem, useSettings } from "./settings.ts"
+import { SettingsFrame, SettingsPane, SettingsSplit } from "./SettingsLayout.tsx"
 
-/** The projects Humanity works on: one at a time, with its permissions and the way to remove it. */
+/**
+ * The projects Humanity works on, listed on the left; the chosen one's facts,
+ * permissions and removal on the right.
+ */
 export function ProjectsSettings() {
   const projects = useAtomValue(projectsAtom)
 
@@ -42,65 +40,69 @@ export function ProjectsSettings() {
   }
 
   return (
-    <section aria-labelledby="settings-projects" className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 id="settings-projects" className="text-base font-medium">
-            Projects
-          </h2>
-          <p className="max-w-prose text-sm text-muted-foreground">
-            The repositories Humanity works on, each with its own rules for what the agent may do
-            without asking.
-          </p>
-        </div>
+    <SettingsFrame
+      id="settings-projects"
+      title="Projects"
+      description="The repositories Humanity works on, each with its own rules for what the agent may do without asking."
+      action={
         <Button variant="outline" size="sm" onClick={addRepository}>
           <Plus />
           Add repository
         </Button>
-      </div>
-      <AsyncView result={projects} errorTitle="Could not load projects">
-        {(list) =>
-          list.length === 0 ? (
-            <p className="border-y py-4 text-sm text-muted-foreground">
-              No projects yet. Add a repository to start working on it.
-            </p>
-          ) : (
-            <ProjectSettings projects={list} />
-          )
-        }
-      </AsyncView>
-    </section>
+      }
+    >
+      {AsyncResult.isSuccess(projects) && projects.value.length > 0 ? (
+        <ProjectList projects={projects.value} />
+      ) : (
+        <SettingsPane>
+          <AsyncView result={projects} errorTitle="Could not load projects">
+            {() => (
+              <p className="border-y py-4 text-sm text-muted-foreground">
+                No projects yet. Add a repository to start working on it.
+              </p>
+            )}
+          </AsyncView>
+        </SettingsPane>
+      )}
+    </SettingsFrame>
   )
 }
 
-function ProjectSettings({ projects }: { readonly projects: ReadonlyArray<Project> }) {
+function ProjectList({ projects }: { readonly projects: ReadonlyArray<Project> }) {
   const { projectId: openProjectId } = useParams({ strict: false })
-  const [chosenId, setChosenId] = useState<string>()
-  // Until one is picked, the project of the page behind the settings; else the first.
+  const { items } = useSettings()
+  // Until one is picked (or once the picked one is removed), the project of
+  // the page behind the settings; else the first.
   const project =
-    projects.find((candidate) => candidate.id === chosenId) ??
+    projects.find((candidate) => candidate.id === items.projects) ??
     projects.find((candidate) => candidate.id === openProjectId) ??
     projects[0]
   if (project === undefined) return null
 
   return (
+    <SettingsSplit
+      label="Projects"
+      items={projects.map((candidate) => ({
+        id: candidate.id,
+        label: candidate.name,
+        icon: <ProjectIcon project={candidate} className="size-7" />,
+      }))}
+      selected={project.id}
+      onSelect={(id) => selectSettingsItem("projects", id)}
+    >
+      <ProjectDetail key={project.id} project={project} />
+    </SettingsSplit>
+  )
+}
+
+function ProjectDetail({ project }: { readonly project: Project }) {
+  return (
     <div className="flex flex-col">
-      <dl className="divide-y border-y text-sm">
-        <Row label="Project">
-          <Select value={project.id} onValueChange={setChosenId}>
-            <SelectTrigger className="max-w-64" aria-label="Project">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              {projects.map((candidate) => (
-                <SelectItem key={candidate.id} value={candidate.id}>
-                  <ProjectIcon project={candidate} className="size-4" />
-                  <span className="truncate">{candidate.name}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Row>
+      <div className="flex items-center gap-2 border-b pb-3">
+        <ProjectIcon project={project} className="size-4" />
+        <h3 className="truncate text-sm font-medium">{project.name}</h3>
+      </div>
+      <dl className="divide-y border-b text-sm">
         <Row label="Folder">
           <code className="font-mono text-xs break-all">{project.localPath}</code>
         </Row>
@@ -134,7 +136,7 @@ function ProjectSettings({ projects }: { readonly projects: ReadonlyArray<Projec
       </dl>
 
       <div className="border-b py-5">
-        <ProjectPermissions key={project.id} project={project} />
+        <ProjectPermissions project={project} />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 py-4">
@@ -144,11 +146,7 @@ function ProjectSettings({ projects }: { readonly projects: ReadonlyArray<Projec
             Its threads go with it. The repository in its folder is not touched.
           </span>
         </div>
-        <RemoveProject
-          key={project.id}
-          project={project}
-          onRemoved={() => setChosenId(undefined)}
-        />
+        <RemoveProject project={project} />
       </div>
     </div>
   )
@@ -164,14 +162,11 @@ function Row({ label, children }: { readonly label: string; readonly children: R
   )
 }
 
-/** Asks before removing: the project's threads and their history go with it. */
-function RemoveProject({
-  project,
-  onRemoved,
-}: {
-  readonly project: Project
-  readonly onRemoved: () => void
-}) {
+/**
+ * Asks before removing: the project's threads and their history go with it.
+ * Once it is gone the list shows another project, since the picked one no longer matches.
+ */
+function RemoveProject({ project }: { readonly project: Project }) {
   const remove = useAtomSet(removeProjectAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
   const { projectId: openProjectId } = useParams({ strict: false })
@@ -191,7 +186,6 @@ function RemoveProject({
       return
     }
     setOpen(false)
-    onRemoved()
     // The page behind the settings showed a thread of this project: it is gone too.
     if (openProjectId === project.id) void navigate({ to: "/" })
   }
