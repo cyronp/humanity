@@ -181,8 +181,9 @@ export const AgentRunnerLive = Layer.effect(
             allowedTools: [...options.allowedTools],
             canUseTool,
             hooks: { PreToolUse: [{ hooks: [policyGuard(options)], onFailure: "block" }] },
-            // Loads the repository's CLAUDE.md, skills and project settings only.
-            settingSources: ["project"],
+            // Loads the human's user settings (e.g. `attribution` for commit trailers)
+            // and the repository's CLAUDE.md, skills and project settings.
+            settingSources: ["user", "project"],
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
             // Humanity's own servers and skills. Their MCP tools still go through the policy.
