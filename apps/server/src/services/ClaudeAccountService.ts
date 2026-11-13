@@ -57,9 +57,7 @@ export class ClaudeAccountService extends Context.Service<
     readonly remove: (
       accountId: string,
     ) => Effect.Effect<void, ClaudeAccountNotFound | ClaudeAccountInUse>
-    /** Makes new threads run as this account. */
     readonly setActive: (accountId: string) => Effect.Effect<void, ClaudeAccountNotFound>
-    /** The account new threads run as. */
     readonly activeId: Effect.Effect<string>
     /**
      * The config folder Claude Code runs with for an account; `undefined` means

@@ -83,7 +83,6 @@ export const openSettings = (section: SettingsSection = state.section, item?: st
 
 export const closeSettings = (): void => setState({ ...state, open: false })
 
-/** Shows one item of a section's list on the right. */
 export const selectSettingsItem = (section: SettingsSection, item: string): void =>
   setState({ ...state, items: { ...state.items, [section]: item } })
 

@@ -40,7 +40,6 @@ import {
   type ThreadFilter,
 } from "./threadFilter.ts"
 
-/** The app's left column: new chat, the conversations, the history of ended ones, and app-wide controls. */
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   // Choosing a destination on a phone closes the sheet the sidebar lives in.

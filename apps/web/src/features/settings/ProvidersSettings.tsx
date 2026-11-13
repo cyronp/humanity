@@ -10,7 +10,6 @@ const ITEMS: ReadonlyArray<SettingsListItem> = PROVIDER_IDS.map((id) => {
   return { id, label: name, icon: <Icon aria-hidden="true" className="size-7" /> }
 })
 
-/** Each provider in the list on the left; its accounts on the right. */
 export function ProvidersSettings() {
   const { items } = useSettings()
   const selected = PROVIDER_IDS.find((id) => id === items.providers) ?? "claude-code"

@@ -79,7 +79,6 @@ export const applyInsertion = (
         selection.end,
       )
 
-/** One line about how a server is reached: its command or its address. */
 export const describeTransport = (transport: McpTransport): string => {
   switch (transport._tag) {
     case "stdio":

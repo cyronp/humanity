@@ -4,7 +4,6 @@ import { ForgeBackground } from "./ForgeGate.ts"
 import { GitHubService } from "./GitHubService.ts"
 import { GitLabService } from "./GitLabService.ts"
 
-/** A branch on a forge Humanity can ask about. */
 export type ForgeTarget =
   | { readonly forge: "github"; readonly fullName: string; readonly branch: string }
   | {

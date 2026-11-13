@@ -60,7 +60,6 @@ export const GitHubFullName = Schema.String.check(
 
 /** Streamed by `Projects.cloneFromGitHub`. */
 export const CloneEvent = Schema.Union([
-  /** A line of git's progress output. */
   Schema.TaggedStruct("Progress", { line: Schema.String }),
   /** The clone finished and was added as a project. */
   Schema.TaggedStruct("Cloned", { project: Project }),

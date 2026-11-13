@@ -411,7 +411,6 @@ const IMPORT_EXAMPLE = `{
   }
 }`
 
-/** Adds the servers of a configuration copied from a server's docs or another app. */
 function ImportServers({ onDone }: { readonly onDone: () => void }) {
   const importServers = useAtomSet(importMcpServersAtom, { mode: "promiseExit" })
   const [json, setJson] = useState("")

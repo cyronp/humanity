@@ -28,7 +28,6 @@ import {
 const toggle = <A,>(items: ReadonlyArray<A>, item: A, on: boolean): ReadonlyArray<A> =>
   on ? [...items.filter((candidate) => candidate !== item), item] : items.filter((x) => x !== item)
 
-/** Narrows the sidebar's threads by project and state, and orders them by date. */
 export function ThreadFilterMenu({
   filter,
   onChange,

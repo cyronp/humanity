@@ -1,6 +1,5 @@
 import type { ReactNode } from "react"
 
-/** One step of a short how-to, inside an `<ol>`: its number, a title and what to do. */
 export function NumberedStep({
   n,
   title,

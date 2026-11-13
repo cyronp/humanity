@@ -29,7 +29,6 @@ export function ClaudeIcon({ className, children, ...props }: IconProps) {
 export const PROVIDERS: Record<
   ProviderId,
   {
-    /** The agent that runs the session. */
     readonly name: string
     /** Who makes its models, shown under each model's name. */
     readonly vendor: string

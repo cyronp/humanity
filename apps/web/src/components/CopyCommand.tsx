@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-/** A shell command the human is asked to run, with a copy button. */
 export function CopyCommand({
   command,
   className,

@@ -9,7 +9,6 @@ export const Branch = Schema.Struct({
   upstream: Schema.NullOr(Schema.String),
   commit: Schema.String,
   subject: Schema.String,
-  /** Author of the branch's last commit. */
   author: Schema.String,
   /** When the last commit was made (committer date, ISO 8601). */
   committedAt: Schema.String,

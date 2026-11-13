@@ -5,7 +5,6 @@ import type { McpServer, McpTransportInput } from "@humanity/contracts"
  * daemon saves. Kept free of React so the rules are tested on their own.
  */
 
-/** One environment variable or header row. */
 export interface EntryDraft {
   readonly id: number
   readonly name: string

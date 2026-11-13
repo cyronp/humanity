@@ -27,7 +27,6 @@ export class GitHubToken extends Context.Service<
     readonly invalidate: Effect.Effect<void>
     /** Saves a token; it is used from the next lookup on. */
     readonly save: (token: Redacted.Redacted<string>) => Effect.Effect<void>
-    /** Forgets the saved token, if there is one. */
     readonly clear: Effect.Effect<void>
   }
 >()("humanity/GitHubToken") {

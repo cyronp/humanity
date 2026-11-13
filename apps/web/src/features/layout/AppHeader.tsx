@@ -77,7 +77,6 @@ export function useAppHeaderInsetEnd(pixels: number) {
   }, [pixels, setInsetEnd])
 }
 
-/** Puts a page's breadcrumb (`children`) and its `actions` into the app header. */
 export function AppHeader({
   children,
   actions,

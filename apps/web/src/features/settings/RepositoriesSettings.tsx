@@ -15,7 +15,6 @@ import { SettingsFrame, SettingsSplit } from "./SettingsLayout.tsx"
 const SERVICES = ["github", "gitlab"] as const
 type Service = (typeof SERVICES)[number]
 
-/** Each place repositories come from in the list on the left; how it is connected on the right. */
 export function RepositoriesSettings() {
   const { items } = useSettings()
   const selected: Service = SERVICES.find((id) => id === items.repositories) ?? "github"

@@ -134,7 +134,6 @@ export const SessionsRpcs = RpcGroup.make(
     },
     error: Schema.Union([SessionNotFound, SessionEnded, AttachmentRejected]),
   }),
-  /** The bytes of a file attached to one of the session's messages. */
   Rpc.make("Sessions.attachment", {
     payload: { sessionId: SessionId, attachmentId: Schema.String },
     success: AttachmentContent,

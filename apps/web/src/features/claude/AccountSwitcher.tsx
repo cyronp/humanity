@@ -147,7 +147,6 @@ function Accounts({
   )
 }
 
-/** The account new threads run as: its name, its state and who it is signed in as. */
 function CurrentAccount({ account }: { readonly account: ClaudeAccount }) {
   const facts = connectionFacts(account.status)
   return (

@@ -129,11 +129,9 @@ const planUsage = (cwd: string, env: Record<string, string>) =>
 export class ClaudeCode extends Context.Service<
   ClaudeCode,
   {
-    /** Where the default login lives. */
     readonly configDir: string
     /** The bundled CLI, or `null` when its platform package is missing. */
     readonly bundledExecutable: string | null
-    /** Environment every Claude Code process is started with. */
     readonly environment: Record<string, string>
     /**
      * Starts Claude Code just long enough to read the account it would use.

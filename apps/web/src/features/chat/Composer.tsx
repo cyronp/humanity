@@ -21,7 +21,6 @@ import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachmen
 import { AddMenu } from "./AddMenu.tsx"
 import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
 
-/** What the rest of the workspace can do to the message box. */
 export interface ComposerHandle {
   /** Writes at the caret and gives the box the focus. */
   readonly insert: (insertion: PromptInsertion) => void

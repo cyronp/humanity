@@ -43,20 +43,15 @@ import { SessionService } from "./services/SessionService.ts"
  */
 export const Services = Layer.mergeAll(
   Layer.merge(HistoryImport.layer, PullRequestService.layer).pipe(
-    // One poller per branch follows its pull request, for every tab and session on it.
     Layer.provideMerge(ForgeSync.layer),
-    // Pull requests are opened from what a session committed.
     Layer.provideMerge(SessionService.layer),
     Layer.provideMerge(ApprovalService.layer),
-    // What new threads start with, when the human or the project set a default.
     Layer.provideMerge(PreferencesService.layer),
     Layer.provideMerge(ProjectService.layer),
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
-    // Sessions run as one of these accounts.
     Layer.provideMerge(ClaudeAccountService.layer),
-    // Humanity's own MCP servers and skills, given to every run.
     Layer.provideMerge(ExtensionsService.layer),
   ),
 )
@@ -94,7 +89,6 @@ const Banner = Layer.effectDiscard(
   }),
 )
 
-/** One line for the terminal: which Claude account the agent will run as. */
 export const describeClaudeForBanner = (status: ClaudeStatus): string => {
   const connection = status.connection
   switch (connection._tag) {

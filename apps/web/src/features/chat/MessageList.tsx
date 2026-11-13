@@ -58,7 +58,6 @@ export function MessageList({
   readonly working: boolean
   readonly approvalFor: (toolUseId: string) => Approval | undefined
   readonly worktreePath: string
-  /** Shown while the transcript is empty. */
   readonly empty?: ReactNode
   /** Shown after the last message, such as the reason the agent stopped. */
   readonly footer?: ReactNode

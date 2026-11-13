@@ -2,7 +2,6 @@ import { Schema } from "effect"
 import { ProjectId } from "./Project.ts"
 import { ReasoningEffort, SessionId } from "./Session.ts"
 
-/** The thread an `open_thread` call opened. */
 export const OpenedThread = Schema.Struct({
   sessionId: SessionId,
   projectId: ProjectId,

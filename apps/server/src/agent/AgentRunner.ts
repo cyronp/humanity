@@ -18,7 +18,6 @@ export interface ToolPermissionRequest {
 
 /** What the agent passes to Humanity's `open_thread` tool. */
 export interface OpenThreadRequest {
-  /** The new thread's first message. */
   readonly prompt: string
   readonly title?: string | undefined
   /** A model as Claude Code names it; left out, the thread runs on Claude Code's default. */
@@ -63,7 +62,6 @@ export interface AgentRunOptions {
    * `undefined` for Claude Code's default login.
    */
   readonly configDir: string | undefined
-  /** SDK session id to resume, if the conversation already exists. */
   readonly resume: string | undefined
   /** The model to run on, or `undefined` for Claude Code's default. */
   readonly model: string | undefined

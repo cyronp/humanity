@@ -56,7 +56,6 @@ export const readMcpConfig = (raw: unknown): McpConfig | undefined => {
   return undefined
 }
 
-/** The configuration as written to disk, in Claude Code's format. */
 export const writeMcpConfig = (config: McpConfig): Record<string, unknown> =>
   config._tag === "stdio"
     ? { type: "stdio", command: config.command, args: config.args, env: config.env }

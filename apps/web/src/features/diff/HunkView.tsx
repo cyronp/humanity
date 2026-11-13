@@ -123,7 +123,6 @@ export function HunkButtons({ hunk, filePath, onReference, editorRoot }: HunkLin
   )
 }
 
-/** A hunk's rows: gutter buttons, line numbers, signs and highlighted code. */
 export function HunkLines({ hunk, filePath, onReference, editorRoot }: HunkLinkProps) {
   const rows = useMemo(() => toDiffLines(hunk), [hunk])
   const current = useMemo(() => currentLineNumbers(rows), [rows])
@@ -193,7 +192,6 @@ function ReferenceCell({
   )
 }
 
-/** The gutter link that opens one row's line in VS Code, shown like the reference button. */
 function OpenLineCell({
   root,
   filePath,

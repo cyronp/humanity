@@ -17,11 +17,9 @@ export const FILE_STATUS: Record<
   rename: { letter: "R", label: "Renamed", color: "text-git-renamed" },
 }
 
-/** The classes of a file name in a list of changes. */
 export const fileNameClass = (kind: FileKind) =>
   cn(FILE_STATUS[kind].color, kind === "delete" && "line-through")
 
-/** The status letter that ends a changed file's row. */
 export function FileStatusLetter({
   kind,
   className,

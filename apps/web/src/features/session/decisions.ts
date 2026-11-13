@@ -1,6 +1,5 @@
 import { type Approval, QUESTION_TOOL } from "@humanity/contracts"
 
-/** One sentence for a human decision. */
 export const describeDecision = (approval: Approval): string => {
   if (approval._tag === "confirmation") {
     const { status, toolName } = approval.confirmation

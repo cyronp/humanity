@@ -33,7 +33,6 @@ export class GitLabToken extends Context.Service<
     readonly invalidate: Effect.Effect<void>
     /** Saves a token and its instance; they are used from the next lookup on. */
     readonly save: (token: Redacted.Redacted<string>, host: string) => Effect.Effect<void>
-    /** Forgets the saved token and its instance, if there are any. */
     readonly clear: Effect.Effect<void>
   }
 >()("humanity/GitLabToken") {

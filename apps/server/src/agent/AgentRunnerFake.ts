@@ -18,7 +18,6 @@ import {
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
 
-/** One scripted beat of an agent turn. */
 export type FakeStep =
   | { readonly text: string }
   | {
@@ -30,14 +29,12 @@ export type FakeStep =
   /** Keeps the turn busy until it is interrupted, like a long tool call. */
   | { readonly hang: true }
 
-/** Decides what the fake agent does with each user message. */
 export type FakeScript = (prompt: string, turn: number) => ReadonlyArray<FakeStep>
 
 export interface PermissionLogEntry extends ToolPermissionRequest {
   readonly decision: PermissionDecision | "interrupted"
 }
 
-/** Lets tests inspect what the fake agent was asked to do and what it was told. */
 export class FakeAgentLog extends Context.Service<
   FakeAgentLog,
   {
@@ -46,10 +43,8 @@ export class FakeAgentLog extends Context.Service<
     /** Every user message as the agent received it, files included. */
     readonly sent: Ref.Ref<ReadonlyArray<AgentUserMessage>>
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
-    /** Every `setModel` on a running agent, in order. */
     readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
     readonly effortChanges: Ref.Ref<ReadonlyArray<ReasoningEffort | undefined>>
-    /** Every `applyExtensions` on a running agent, in order. */
     readonly extensionChanges: Ref.Ref<ReadonlyArray<AgentExtensions>>
   }
 >()("humanity/test/FakeAgentLog") {}

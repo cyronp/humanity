@@ -12,7 +12,6 @@ const SOURCE_PHRASE: Record<GitHubTokenSource, string> = {
   environment: "GITHUB_TOKEN",
 }
 
-/** What a connection means for the human, in the words the UI uses everywhere. */
 export const summarizeGitHub = (connection: GitHubConnection): GitHubSummary => {
   if (connection.source === null) return { tone: "warning", title: "Not connected" }
   const through = SOURCE_PHRASE[connection.source]

@@ -53,7 +53,6 @@ export class HistoryImport extends Context.Service<
       // Two syncs of one project at once would import the same conversation twice.
       const lock = yield* Semaphore.make(1)
 
-      /** Sends subscribers of a refreshed thread its new transcript. */
       const republish = (sessionId: SessionId) =>
         Effect.gen(function* () {
           const session = yield* repo.get(sessionId)

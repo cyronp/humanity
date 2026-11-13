@@ -14,7 +14,6 @@ function ForgeMark({ forge }: { readonly forge: Forge | null }) {
   return <GitBranch />
 }
 
-/** Opens and closes the source control panel, marked with the project's host. */
 export function SourceControlButton({
   session,
   open,

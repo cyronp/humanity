@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
  * settings on the right.
  */
 
-/** A section: its header on top, the rest filling the dialog below it. */
 export function SettingsFrame({
   id,
   title,
@@ -39,7 +38,6 @@ export function SettingsFrame({
   )
 }
 
-/** The body of a section without a list: it scrolls on its own. */
 export function SettingsPane({ children }: { readonly children: ReactNode }) {
   return <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:px-5">{children}</div>
 }

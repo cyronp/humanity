@@ -27,7 +27,6 @@ export function ChangeCards({
       ? null
       : document.querySelector<HTMLElement>(`[data-change-id="${currentId}"] ${selector}`)
 
-  // Keep the change the shortcuts act on in view.
   useEffect(() => {
     if (currentId === undefined) return
     document

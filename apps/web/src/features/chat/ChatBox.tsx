@@ -46,7 +46,6 @@ export function ChatBoxFooter({ className, ...props }: ComponentProps<typeof Inp
   )
 }
 
-/** The round send button: filled once there is something to send. */
 export function SendButton({
   ready,
   disabled,

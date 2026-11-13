@@ -19,7 +19,6 @@ export const BRANCH_FORMAT = [
 const trackCount = (track: string, word: "ahead" | "behind") =>
   Number(new RegExp(`${word} (\\d+)`).exec(track)?.[1] ?? 0)
 
-/** Parses `git branch --all --format=<BRANCH_FORMAT>`. */
 export const parseBranches = (output: string): Array<Branch> =>
   output
     .split("\n")

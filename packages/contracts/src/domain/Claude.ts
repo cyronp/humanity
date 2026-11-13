@@ -36,7 +36,6 @@ export const ClaudeConnection = Schema.TaggedUnion({
 })
 export type ClaudeConnection = typeof ClaudeConnection.Type
 
-/** A model Claude Code offers, as it reports it. */
 export const ClaudeModel = Schema.Struct({
   /** What to pass as the session's model, e.g. `opus` or `default`. */
   value: Schema.String,

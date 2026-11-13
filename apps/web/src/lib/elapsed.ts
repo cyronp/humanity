@@ -17,7 +17,6 @@ export const formatElapsed = (ms: number): string => {
   return `${Math.floor(days / 7)}w`
 }
 
-/** The current time, refreshed every `intervalMs`. */
 export const useNow = (intervalMs: number): number => {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {

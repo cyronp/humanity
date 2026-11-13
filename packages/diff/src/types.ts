@@ -16,7 +16,6 @@ export interface DiffHunk {
   readonly lines: ReadonlyArray<string>
 }
 
-/** A hunk of a file change the agent proposed. */
 export interface Hunk extends DiffHunk {
   readonly id: string
   readonly status: HunkStatus

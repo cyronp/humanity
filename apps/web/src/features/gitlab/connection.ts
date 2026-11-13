@@ -19,7 +19,6 @@ const SOURCE_PHRASE: Record<GitLabTokenSource, string> = {
 /** How a way to connect is named in a sentence. */
 export const gitlabSourcePhrase = (source: GitLabTokenSource): string => SOURCE_PHRASE[source]
 
-/** What a connection means for the human, in the words the UI uses everywhere. */
 export const summarizeGitLab = (connection: GitLabConnection): GitLabSummary => {
   if (connection.source === null) return { tone: "warning", title: "Not connected" }
   const through = SOURCE_PHRASE[connection.source]

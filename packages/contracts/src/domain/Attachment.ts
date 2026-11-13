@@ -23,7 +23,6 @@ export const AttachmentUpload = Schema.Struct({
 })
 export type AttachmentUpload = typeof AttachmentUpload.Type
 
-/** A stored attachment's bytes, for showing it again. */
 export const AttachmentContent = Schema.Struct({
   name: Schema.String,
   mediaType: Schema.String,

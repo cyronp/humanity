@@ -15,7 +15,6 @@ export function PinDefaultButton({
   /** The option's name, for the button's accessible label. */
   readonly label: string
   readonly pinned: boolean
-  /** While the pins are still loading. */
   readonly disabled?: boolean
   readonly onToggle: () => void
   readonly className?: string

@@ -30,7 +30,6 @@ export interface AgentExtensionsSnapshot extends AgentExtensions {
   readonly version: number
 }
 
-/** Humanity's own MCP servers, as kept in `mcp.json`. */
 interface McpFile {
   readonly servers: ReadonlyArray<readonly [string, McpConfig]>
   /** Names of servers kept in the settings but not given to the agent. */

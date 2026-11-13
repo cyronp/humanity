@@ -69,7 +69,6 @@ export class PullRequestService extends Context.Service<
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     /** The branch's pull request, checks and comments, kept fresh while the stream runs. */
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
-    /** Asks the forge again now. */
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
   }
 >()("humanity/PullRequestService") {

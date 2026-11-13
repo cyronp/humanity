@@ -152,7 +152,6 @@ function ProjectDetail({ project }: { readonly project: Project }) {
   )
 }
 
-/** One line of a project's facts: what it is on the left, its value on the right. */
 function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="flex min-h-12 items-center justify-between gap-6 py-2">

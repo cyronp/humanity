@@ -60,9 +60,7 @@ export class GitService extends Context.Service<
     readonly currentBranch: (cwd: string) => Effect.Effect<string | undefined, GitError>
     /** The remote's default branch when known, else the current branch, else `main`. */
     readonly defaultBranch: (cwd: string) => Effect.Effect<string, GitError>
-    /** URL of `origin`, if the repository has one. */
     readonly originUrl: (cwd: string) => Effect.Effect<string | undefined, GitError>
-    /** Local and remote-tracking branches. */
     readonly listBranches: (cwd: string) => Effect.Effect<ReadonlyArray<Branch>, GitError>
     /** Creates a branch ref without checking it out. */
     readonly createBranch: (

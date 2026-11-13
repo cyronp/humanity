@@ -466,7 +466,6 @@ function ListSkeleton() {
   )
 }
 
-/** Says why no repositories are listed, and where to fix it. */
 function ConnectionFooter({ reason }: { readonly reason: string }) {
   return (
     <div className="-mx-1 mt-1 -mb-1 flex items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">

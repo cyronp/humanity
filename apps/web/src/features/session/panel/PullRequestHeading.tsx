@@ -32,7 +32,6 @@ const STATE: Record<
   },
 }
 
-/** A pull request's state as a pill: its icon and its name, in its colour. */
 export function PullRequestStateBadge({ state }: { readonly state: PullRequestState }) {
   const { label, Icon, className } = STATE[state]
   return (

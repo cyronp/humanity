@@ -26,7 +26,6 @@ export function Field({
   )
 }
 
-/** A tool's text output, or its error. */
 export function OutputText({
   text,
   error = false,
@@ -49,7 +48,6 @@ export function OutputText({
   )
 }
 
-/** Any value as highlighted JSON: the fallback view of inputs and outputs. */
 export function JsonBlock({
   value,
   className = "max-h-80",

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 
-/** One of the ways to connect an account: what it is, whether it is the one in use, and what to do. */
 export function ConnectOption({
   title,
   description,

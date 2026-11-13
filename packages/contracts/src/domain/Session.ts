@@ -142,7 +142,6 @@ export const UsageSummary = Schema.Struct({
 export type UsageSummary = typeof UsageSummary.Type
 
 export const MessageContent = Schema.Union([
-  /** A message the human sent. */
   Schema.TaggedStruct("user", {
     text: Schema.String,
     /** Files sent with the message. Absent on messages without any. */

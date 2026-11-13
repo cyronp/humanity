@@ -27,7 +27,6 @@ export function CommitTab({
   onOpenPullRequest,
 }: {
   readonly session: Session
-  /** Shows the pull request tab. */
   readonly onOpenPullRequest: () => void
 }) {
   const diff = useAtomValue(sessionDiffAtom(session.id))

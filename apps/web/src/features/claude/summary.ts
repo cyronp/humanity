@@ -10,7 +10,6 @@ export interface ClaudeSummary {
   readonly title: string
 }
 
-/** What a status means for the human, in the words the UI uses everywhere. */
 export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
   const connection = status.connection
   switch (connection._tag) {
@@ -93,7 +92,6 @@ export const connectionFacts = (status: ClaudeStatus): ReadonlyArray<ClaudeFact>
   ]
 }
 
-/** One line saying what an account is: its plan and login, or why it cannot run sessions. */
 export const accountLine = (status: ClaudeStatus): string => {
   const summary = summarizeClaude(status)
   const connection = status.connection

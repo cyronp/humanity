@@ -211,7 +211,6 @@ export class SessionService extends Context.Service<
       text: string,
       attachments?: ReadonlyArray<AttachmentUpload>,
     ) => Effect.Effect<void, SessionNotFound | SessionEnded | AttachmentRejected>
-    /** A stored attachment's bytes. */
     readonly attachment: (
       sessionId: string,
       attachmentId: string,
@@ -613,7 +612,6 @@ export class SessionService extends Context.Service<
           }
         })
 
-      /** Ends the agent process attached to a session, if there is one. */
       const stopRun = (sessionId: string) =>
         Effect.gen(function* () {
           const state = active.get(sessionId)
@@ -736,7 +734,6 @@ export class SessionService extends Context.Service<
             )
         })
 
-      /** Records the human's message with its files, then hands both to the agent. */
       const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
           const moved = relocated.get(session.id)

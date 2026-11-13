@@ -35,7 +35,6 @@ const SECTION_VIEWS: Record<
   extensions: { icon: Blocks, View: ExtensionsSettings },
 }
 
-/** The settings, floating over the app: the sections on the left, the chosen one on the right. */
 export function SettingsDialog() {
   const { open, section } = useSettings()
   const [query, setQuery] = useState("")

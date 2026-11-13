@@ -1,4 +1,3 @@
-/** A run of terminal output with one style. */
 export interface AnsiSegment {
   readonly text: string
   /** A Tailwind text colour class, if the run is coloured. */
@@ -91,5 +90,4 @@ export const parseAnsi = (input: string): Array<AnsiSegment> => {
   return segments
 }
 
-/** Output with every escape sequence removed. */
 export const stripAnsi = (input: string): string => input.replace(ESCAPE, "")

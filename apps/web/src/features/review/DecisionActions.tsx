@@ -23,7 +23,6 @@ export function DecisionActions({
   onDecide,
 }: {
   readonly toolName: string
-  /** While a decision is on its way to the daemon. */
   readonly pending: boolean
   readonly onDecide: (verdict: Verdict) => void
 }) {

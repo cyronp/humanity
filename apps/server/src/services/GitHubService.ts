@@ -211,7 +211,6 @@ const toRepo = (repo: typeof RepoJson.Type): GitHubRepo => ({
   updatedAt: repo.updated_at,
 })
 
-/** The `next` URL from a `Link` header, if there is one. */
 export const nextPageUrl = (link: string | undefined): string | undefined => {
   if (link === undefined) return undefined
   for (const part of link.split(",")) {

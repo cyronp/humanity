@@ -59,7 +59,6 @@ export function CodeBlock({
   )
 }
 
-/** Terminal output with its ANSI colours turned into styles. */
 export function TerminalOutput({
   text,
   className,

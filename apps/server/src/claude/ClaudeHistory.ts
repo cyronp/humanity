@@ -1,7 +1,6 @@
 import { getSessionMessages, listSessions } from "@anthropic-ai/claude-agent-sdk"
 import { Context, Data, Effect, Layer } from "effect"
 
-/** One conversation in Claude Code's history, as the Agent SDK lists it. */
 export interface ClaudeConversation {
   readonly sessionId: string
   /** The `/rename` title, Claude Code's own summary, or the first prompt. */
@@ -41,7 +40,6 @@ export class ClaudeHistory extends Context.Service<
     readonly list: (
       dir: string,
     ) => Effect.Effect<ReadonlyArray<ClaudeConversation>, ClaudeHistoryUnavailable>
-    /** A conversation's transcript entries, in order. */
     readonly messages: (
       sessionId: string,
       dir: string,

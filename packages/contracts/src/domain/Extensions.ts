@@ -53,10 +53,8 @@ export const McpServer = Schema.Struct({
 })
 export type McpServer = typeof McpServer.Type
 
-/** An environment variable's name. */
 export const EnvVarName = Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/))
 
-/** An HTTP header's name. */
 export const HeaderName = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,128}$/),
 )
@@ -79,7 +77,6 @@ export const McpHeaderInput = Schema.Struct({
 })
 export type McpHeaderInput = typeof McpHeaderInput.Type
 
-/** An MCP server's connection, as the human enters it in the settings. */
 export const McpTransportInput = Schema.Union([
   Schema.TaggedStruct("stdio", {
     command: Schema.NonEmptyString,
@@ -102,7 +99,6 @@ export const Skill = Schema.Struct({
 })
 export type Skill = typeof Skill.Type
 
-/** A skill as the human writes it in the settings. */
 export const SkillInput = Schema.Struct({
   name: SkillName,
   description: Schema.String.check(Schema.isPattern(/^[^\r\n]{1,1024}$/)),

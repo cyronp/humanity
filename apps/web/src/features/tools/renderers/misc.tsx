@@ -83,7 +83,6 @@ export const subagentRenderer: ToolRenderer = {
   },
 }
 
-/** The agent asking the human to choose: each question with what was answered. */
 export const questionRenderer: ToolRenderer = {
   name: "Question",
   match: (toolName, input) => toolName === QUESTION_TOOL && parseQuestions(input) !== undefined,

@@ -89,9 +89,7 @@ export type TypedChoice =
   | { readonly kind: "clone"; readonly fullName: string }
   /** A repository of the connected GitLab instance, named by its URL, that the list does not offer. */
   | { readonly kind: "cloneGitLab"; readonly fullPath: string }
-  /** A folder on this computer. */
   | { readonly kind: "local"; readonly path: string }
-  /** A repository that already is a project. */
   | { readonly kind: "added"; readonly project: Project }
 
 /**

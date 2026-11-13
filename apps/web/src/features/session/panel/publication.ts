@@ -59,7 +59,6 @@ const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
 export const needsPush = (publication: BranchPublication): boolean =>
   publication.branch !== null && (publication.upstream === null || publication.ahead > 0)
 
-/** One line on where the branch stands against its remote. */
 export const remoteStatus = (publication: BranchPublication): string => {
   if (publication.branch === null) return "No branch is checked out (detached HEAD)."
   if (publication.upstream === null) return `${publication.branch} is not on the remote yet.`

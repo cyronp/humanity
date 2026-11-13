@@ -51,7 +51,6 @@ export const prepareAttachments = (uploads: ReadonlyArray<AttachmentUpload>) =>
     return prepared
   })
 
-/** What the agent receives for one attachment. */
 export const toAgentAttachment = (file: PreparedAttachment): AgentAttachment => {
   const base64 = () => Buffer.from(file.bytes).toString("base64")
   switch (file.kind) {

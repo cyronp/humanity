@@ -1,6 +1,5 @@
 import { Stream } from "effect"
 
-/** Whether this page is on screen, now and whenever that changes. */
 export const pageVisible: Stream.Stream<boolean> = Stream.suspend(() =>
   Stream.concat(
     Stream.sync(() => document.visibilityState === "visible"),

@@ -12,7 +12,6 @@ export interface ThreadFilter {
   readonly order: ThreadOrder
 }
 
-/** The states in the filter menu, in the order they are listed. */
 export const STATUS_OPTIONS: ReadonlyArray<{
   readonly value: SessionStatus
   readonly label: string
@@ -55,7 +54,6 @@ const matchesQuery = (thread: Thread, query: string) => {
   return words.every((word) => haystack.includes(word))
 }
 
-/** The threads to list, searched, filtered and sorted. */
 export const selectThreads = (
   threads: ReadonlyArray<Thread>,
   query: string,

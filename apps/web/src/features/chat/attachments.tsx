@@ -25,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { attachmentAtom, fetchAttachmentAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 
-/** A file in the message box, read and checked, waiting to be sent. */
 interface DraftAttachment {
   readonly id: string
   readonly name: string
@@ -169,11 +168,9 @@ export function useAttachmentDraft() {
 
 export type AttachmentDraft = ReturnType<typeof useAttachmentDraft>
 
-/** Highlights the message box while files are dragged over it. */
 export const dropTargetClass =
   "data-[dragging]:border-primary data-[dragging]:ring-2 data-[dragging]:ring-primary/30"
 
-/** The files waiting in the message box, above the text. */
 export function AttachmentTray({ draft }: { readonly draft: AttachmentDraft }) {
   if (draft.items.length === 0 && !draft.reading) return null
   return (

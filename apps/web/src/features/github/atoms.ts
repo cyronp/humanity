@@ -52,7 +52,6 @@ const asOne = <S extends Stream.Stream<unknown, unknown, unknown>>(
   stream: S,
 ): Stream.Stream<Stream.Success<S>, Stream.Error<S>, Stream.Services<S>> => stream as never
 
-/** Starts a clone and follows its progress until the project is added. */
 export const cloneAtom = HumanityClient.runtime.fn((target: CloneTarget) =>
   Stream.unwrap(
     HumanityClient.use((client) =>
