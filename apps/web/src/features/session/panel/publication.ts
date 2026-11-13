@@ -4,6 +4,7 @@ import type {
   FileDiff,
   Forge,
   PullRequestCheck,
+  PullRequestFeed,
 } from "@humanity/contracts"
 
 /** How each host names what this panel opens. */
@@ -94,4 +95,43 @@ export const summarizeChecks = (checks: ReadonlyArray<PullRequestCheck>): CheckS
   const overall =
     checks.length === 0 ? "none" : failed > 0 ? "failure" : pending > 0 ? "pending" : "success"
   return { passed, failed, pending, other, overall }
+}
+
+export interface FeedNotice {
+  /** An `error` is something to fix; a `note` only explains what is on screen. */
+  readonly tone: "error" | "note"
+  readonly title: string
+  readonly message: string
+}
+
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+
+/**
+ * What to say above a pull request when the forge isn't being asked as usual:
+ * a rate limit on hold, a forge that failed, or no token to ask with.
+ */
+export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | null => {
+  const { site } = forgeTerms(forge)
+  if (feed.pausedUntil !== null) {
+    return {
+      tone: "note",
+      title: `Paused until ${clock(feed.pausedUntil)}`,
+      message:
+        feed.fetchedAt === null
+          ? `${site}'s rate limit was reached. Humanity asks again once it resets.`
+          : `${site}'s rate limit was reached. This is what it said at ${clock(feed.fetchedAt)}; Humanity asks again once the limit resets.`,
+    }
+  }
+  if (feed.problem !== null) {
+    return { tone: "error", title: `Could not reach ${site}`, message: feed.problem }
+  }
+  if (feed.needsToken) {
+    return {
+      tone: "note",
+      title: `No ${site} token connected`,
+      message: `Without one ${site} allows very few requests, so Humanity asks it only when you press Refresh. Connect a token in Settings → Repositories to keep this up to date.`,
+    }
+  }
+  return null
 }

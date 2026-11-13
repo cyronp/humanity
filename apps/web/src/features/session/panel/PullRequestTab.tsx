@@ -1,9 +1,11 @@
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react"
+import { useAtomValue } from "@effect/atom-react"
 import type {
   CheckStatus,
+  Forge,
+  PullRequest,
   PullRequestCheck,
   PullRequestComment,
-  PullRequestDetails,
+  PullRequestFeed,
   Session,
 } from "@humanity/contracts"
 import { cn } from "cn"
@@ -17,19 +19,15 @@ import {
   GitCommitHorizontal,
   LoaderCircle,
 } from "lucide-react"
-import { useEffect } from "react"
 import { AsyncView } from "@/components/AsyncView"
-import { ErrorNote } from "@/components/ErrorNote"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Markdown } from "@/features/chat/Markdown"
-import { publicationAtom, pullRequestDetailsAtom } from "../atoms.ts"
+import { feedKey, publicationAtom, pullRequestFeedAtom } from "../atoms.ts"
+import { FeedNote } from "./FeedNote.tsx"
 import { forgeTerms, summarizeChecks } from "./publication.ts"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
-
-/** How often the open tab asks the forge again. */
-const POLL_MS = 30_000
 
 const CHECK_ICON: Record<
   CheckStatus,
@@ -44,7 +42,10 @@ const CHECK_ICON: Record<
   neutral: { Icon: CircleMinus, className: "text-muted-foreground" },
 }
 
-/** The branch's pull request: its CI checks and every comment on it, kept fresh while open. */
+/**
+ * The branch's pull request: its CI checks and every comment on it. The
+ * daemon follows it and sends what changes, so this tab never asks the forge.
+ */
 export function PullRequestTab({
   session,
   onOpenCommit,
@@ -53,35 +54,7 @@ export function PullRequestTab({
   /** Shows the commit tab, where a pull request is opened. */
   readonly onOpenCommit: () => void
 }) {
-  const details = useAtomValue(pullRequestDetailsAtom(session.id))
-  const refresh = useAtomRefresh(pullRequestDetailsAtom(session.id))
-
-  useEffect(() => {
-    const timer = setInterval(refresh, POLL_MS)
-    return () => clearInterval(timer)
-  }, [refresh])
-
-  return (
-    <AsyncView result={details} errorTitle="Could not load the pull request">
-      {(value) =>
-        value === null ? (
-          <NoPullRequest session={session} onOpenCommit={onOpenCommit} />
-        ) : (
-          <PullRequestView details={value} />
-        )
-      }
-    </AsyncView>
-  )
-}
-
-/** Why there is nothing to show: no host Humanity can ask, a host it can't reach, or none opened yet. */
-function NoPullRequest({
-  session,
-  onOpenCommit,
-}: {
-  readonly session: Session
-  readonly onOpenCommit: () => void
-}) {
+  // Git alone says which host this is and which branch to follow.
   const publication = useAtomValue(publicationAtom(session.id))
   return (
     <AsyncView result={publication} errorTitle="Could not read the branch">
@@ -91,31 +64,71 @@ function NoPullRequest({
             This project&apos;s origin is not on GitHub or on a connected GitLab instance, so
             Humanity can&apos;t follow its pull requests.
           </p>
-        ) : value.problem !== null ? (
-          <ErrorNote
-            title={`Could not reach ${forgeTerms(value.forge).site}`}
-            message={value.problem}
-          />
         ) : (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {value.branch === null
-                ? "No branch is checked out."
-                : `${value.branch} has no ${forgeTerms(value.forge).noun} yet.`}
-            </p>
-            <Button variant="outline" size="sm" onClick={onOpenCommit}>
-              <GitCommitHorizontal />
-              Commit and open one
-            </Button>
-          </div>
+          <Followed
+            session={session}
+            forge={value.forge}
+            branch={value.branch}
+            onOpenCommit={onOpenCommit}
+          />
         )
       }
     </AsyncView>
   )
 }
 
-function PullRequestView({ details }: { readonly details: PullRequestDetails }) {
-  const { pullRequest, checks, comments } = details
+/** What the forge last said of the branch, under a note when it isn't being asked as usual. */
+function Followed({
+  session,
+  forge,
+  branch,
+  onOpenCommit,
+}: {
+  readonly session: Session
+  readonly forge: Forge
+  readonly branch: string | null
+  readonly onOpenCommit: () => void
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, branch)))
+  return (
+    <AsyncView result={feed} errorTitle="Could not load the pull request">
+      {(value) => (
+        <div className="flex flex-col gap-4">
+          <FeedNote feed={value} forge={forge} />
+          {value.pullRequest !== null ? (
+            <PullRequestView pullRequest={value.pullRequest} feed={value} />
+          ) : branch === null ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No branch is checked out.
+            </p>
+          ) : (
+            // Until the forge answered once, nobody knows whether there is one.
+            value.fetchedAt !== null && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {branch} has no {forgeTerms(forge).noun} yet.
+                </p>
+                <Button variant="outline" size="sm" onClick={onOpenCommit}>
+                  <GitCommitHorizontal />
+                  Commit and open one
+                </Button>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </AsyncView>
+  )
+}
+
+function PullRequestView({
+  pullRequest,
+  feed,
+}: {
+  readonly pullRequest: PullRequest
+  readonly feed: PullRequestFeed
+}) {
+  const { checks, comments } = feed
   return (
     <div className="flex flex-col gap-6">
       <PullRequestHeading pullRequest={pullRequest} />

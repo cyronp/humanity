@@ -75,7 +75,7 @@ export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
 
 export const commitAtom = HumanityClient.mutation("Sessions.commit")
 
-/** The session's branch against its remote, and its pull request. */
+/** The session's branch against its remote. Read from git, so refreshing it asks no forge. */
 export const publicationAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.query(
     "PullRequests.publication",
@@ -84,14 +84,44 @@ export const publicationAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** The branch's pull request with its checks and comments, or `null`. */
-export const pullRequestDetailsAtom = Atom.family((sessionId: SessionId) =>
-  HumanityClient.query(
-    "PullRequests.details",
-    { sessionId },
-    { reactivityKeys: [keys.publication(sessionId)] },
+/** Whether this page is on screen, now and whenever that changes. */
+const pageVisible = Stream.suspend(() =>
+  Stream.concat(
+    Stream.sync(() => document.visibilityState === "visible"),
+    Stream.fromEventListener(document, "visibilitychange").pipe(
+      Stream.map(() => document.visibilityState === "visible"),
+    ),
   ),
-)
+).pipe(Stream.changes)
+
+/** Names the feed of one session on one branch; a new branch is a new feed. */
+export const feedKey = (sessionId: SessionId, branch: string | null): string =>
+  `${sessionId}\n${branch ?? ""}`
+
+/**
+ * The pull request of a session's branch with its checks and comments, pushed
+ * by the daemon. It asks the forge only while someone watches, so a page that
+ * is hidden stops watching and keeps showing what it last heard.
+ */
+export const pullRequestFeedAtom = Atom.family((key: string) => {
+  const sessionId = SessionId.make(key.split("\n")[0] ?? "")
+  return HumanityClient.runtime.atom(
+    pageVisible.pipe(
+      Stream.switchMap((visible) =>
+        visible
+          ? Stream.unwrap(
+              HumanityClient.use((client) =>
+                Effect.succeed(client("PullRequests.watch", { sessionId })),
+              ),
+            ).pipe(Stream.retry(Schedule.spaced("5 seconds")))
+          : Stream.never,
+      ),
+    ),
+  )
+})
+
+/** Asks the forge again now; the answer arrives on the feed. */
+export const refreshPullRequestAtom = HumanityClient.mutation("PullRequests.refresh")
 
 export const pushAtom = HumanityClient.mutation("PullRequests.push")
 export const createPullRequestAtom = HumanityClient.mutation("PullRequests.create")

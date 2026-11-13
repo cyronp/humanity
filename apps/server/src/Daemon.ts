@@ -24,6 +24,7 @@ import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { ExtensionsService } from "./services/ExtensionsService.ts"
+import { ForgeSync } from "./services/ForgeSync.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitLabService } from "./services/GitLabService.ts"
@@ -42,6 +43,8 @@ import { SessionService } from "./services/SessionService.ts"
  */
 export const Services = Layer.mergeAll(
   Layer.merge(HistoryImport.layer, PullRequestService.layer).pipe(
+    // One poller per branch follows its pull request, for every tab and session on it.
+    Layer.provideMerge(ForgeSync.layer),
     // Pull requests are opened from what a session committed.
     Layer.provideMerge(SessionService.layer),
     Layer.provideMerge(ApprovalService.layer),

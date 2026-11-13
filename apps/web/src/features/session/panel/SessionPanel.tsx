@@ -1,4 +1,4 @@
-import { useAtomRefresh } from "@effect/atom-react"
+import { useAtomRefresh, useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
 import { FileDiff, GitCommitHorizontal, GitPullRequest, RefreshCw } from "lucide-react"
 import { type ReactNode, useEffect, useState } from "react"
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { publicationAtom, pullRequestDetailsAtom, sessionDiffAtom } from "../atoms.ts"
+import { publicationAtom, refreshPullRequestAtom, sessionDiffAtom } from "../atoms.ts"
 import { CommitTab } from "./CommitTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
 import { PullRequestTab } from "./PullRequestTab.tsx"
@@ -50,8 +50,9 @@ export function SessionPanel({
     })
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
-  const refreshDetails = useAtomRefresh(pullRequestDetailsAtom(session.id))
+  const refreshPullRequest = useAtomSet(refreshPullRequestAtom)
 
+  // Both come from git on this machine: no forge is asked as the agent works.
   useEffect(() => {
     refreshDiff()
     refreshPublication()
@@ -60,7 +61,8 @@ export function SessionPanel({
   const refresh = () => {
     refreshDiff()
     refreshPublication()
-    if (tab === "pull-request") refreshDetails()
+    // Only this asks the forge, and only once for everyone watching the branch.
+    refreshPullRequest({ payload: { sessionId: session.id } })
   }
 
   return (

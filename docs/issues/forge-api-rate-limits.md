@@ -1,6 +1,6 @@
 # Too many GitHub / GitLab API calls (rate limit)
 
-**Status:** open. To pick up later.
+**Status:** fixed on 2026-11-13 (ideas 1, 2, 3, 4, 6 and 7). Idea 5 (GraphQL) was left out; see the end.
 **Found:** 2026-11-13, on `feat/ui-improvements`, right after the source control panel landed (commits `3d84948`, `5bc43e5`).
 
 ## What happened
@@ -12,7 +12,7 @@ The source control panel showed:
 
 The limits involved: GitHub allows 5,000 requests an hour with a token (60 without one). GitLab.com and self-hosted instances have their own per-user limits.
 
-## Where the calls come from today
+## Where the calls came from
 
 | Caller (web) | RPC | API calls each time | How often |
 |---|---|---|---|
@@ -37,3 +37,20 @@ Each browser tab polls on its own, and the daemon caches nothing, so two tabs on
 7. **Don't call the API without a token.** With no token, GitHub allows only 60 calls an hour, so ask the human to connect a token instead of polling.
 
 Start with 1 and 2. They remove most of the calls without changing what the panel shows.
+
+## What was done
+
+- **`PullRequests.publication` reads git only.** The header button and the refresh after each tool call no longer reach the forge.
+- **`ForgeSync` (daemon) follows pull requests.** One poller per `(host, repo, branch)`, shared by every tab and session on that branch. It runs only while someone watches and keeps the last answer, so a returning watcher is served without a request. The web app subscribes to `PullRequests.watch` and stops watching while the page is hidden.
+- **Pace.** Every 60 s for an open pull request or a branch without one, every 15 min for a closed one, never for a merged one whose checks finished. It asks again 5 s after a push or a new pull request, then once more after 15 s for the checks that start.
+- **`ForgeGate` in front of every request.** Pull request reads send `If-None-Match`; GitHub does not count a `304`. The gate keeps the quota from the response headers, holds the last tenth for requests the human starts, stays away after a rate limit until it resets, and allows 8 requests at once.
+- **No token, no polling.** The forge is asked only on Refresh, and the panel says to connect a token.
+- **A rate limit is a pause, not an error.** The panel keeps showing the last answer with "Paused until HH:MM".
+
+An unchanged open pull request now costs GitHub nothing per poll, against about 720 calls an hour per tab before.
+
+## Left out
+
+- **GraphQL.** With ETags the REST cost is already near zero when nothing changes. T3 Code uses GraphQL and still needs REST ETag probes in front of it.
+- **GitLab counts a `304`.** GitLab answers conditional requests, which saves the transfer, but its rate limit still counts them. Its limits are far looser than GitHub's, and the 60 s pace costs about 4 requests a minute per watched branch.
+- **Idle detection.** A visible page with nobody at the keyboard keeps its watch. T3 Code stops after 6 minutes without input; add that if GitLab limits ever bite.

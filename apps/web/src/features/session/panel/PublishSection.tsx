@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Branch, BranchPublication, Forge, Session } from "@humanity/contracts"
+import type { Branch, BranchPublication, Forge, PullRequest, Session } from "@humanity/contracts"
 import { Exit } from "effect"
 import { ArrowUpFromLine, GitBranch, GitPullRequest } from "lucide-react"
 import { type FormEvent, useState } from "react"
@@ -20,8 +20,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { branchesAtom } from "@/features/git/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
-import { createPullRequestAtom, publicationAtom, pushAtom } from "../atoms.ts"
+import {
+  createPullRequestAtom,
+  feedKey,
+  publicationAtom,
+  pullRequestFeedAtom,
+  pushAtom,
+} from "../atoms.ts"
 import { isBusy } from "../state.ts"
+import { FeedNote } from "./FeedNote.tsx"
 import { baseBranches, forgeTerms, needsPush, remoteStatus } from "./publication.ts"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 
@@ -40,13 +47,19 @@ export function PublishSection({
         <div className="flex flex-col gap-4">
           <p className="text-center text-sm text-muted-foreground">Nothing left to commit.</p>
           <BranchCard session={session} publication={value} />
-          {value.problem !== null && value.forge !== null && (
-            <ErrorNote
-              title={`Could not reach ${forgeTerms(value.forge).site}`}
-              message={value.problem}
+          {value.forge === null ? (
+            <p className="text-xs text-muted-foreground">
+              This project&apos;s origin is not on GitHub or on a connected GitLab instance, so pull
+              requests can&apos;t be opened from here.
+            </p>
+          ) : (
+            <NextStep
+              session={session}
+              publication={value}
+              forge={value.forge}
+              onOpenPullRequest={onOpenPullRequest}
             />
           )}
-          <NextStep session={session} publication={value} onOpenPullRequest={onOpenPullRequest} />
         </div>
       )}
     </AsyncView>
@@ -102,27 +115,54 @@ function BranchCard({
   )
 }
 
-/** The pull request the branch has, the form to open one, or why neither is possible here. */
+/** What the forge says of the branch, then the pull request it has or the form to open one. */
 function NextStep({
   session,
   publication,
+  forge,
   onOpenPullRequest,
 }: {
   readonly session: Session
   readonly publication: BranchPublication
+  readonly forge: Forge
+  readonly onOpenPullRequest: () => void
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  return (
+    <AsyncView result={feed} errorTitle="Could not load the pull request">
+      {(value) => (
+        <>
+          <FeedNote feed={value} forge={forge} />
+          <PullRequestStep
+            session={session}
+            publication={publication}
+            forge={forge}
+            pullRequest={value.pullRequest}
+            onOpenPullRequest={onOpenPullRequest}
+          />
+        </>
+      )}
+    </AsyncView>
+  )
+}
+
+/** The pull request the branch has, the form to open one, or why it can't be opened from here. */
+function PullRequestStep({
+  session,
+  publication,
+  forge,
+  pullRequest,
+  onOpenPullRequest,
+}: {
+  readonly session: Session
+  readonly publication: BranchPublication
+  readonly forge: Forge
+  readonly pullRequest: PullRequest | null
   readonly onOpenPullRequest: () => void
 }) {
   const branches = useAtomValue(branchesAtom(session.projectId))
-  const { forge, branch, pullRequest } = publication
+  const { branch } = publication
 
-  if (forge === null) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        This project&apos;s origin is not on GitHub or on a connected GitLab instance, so pull
-        requests can&apos;t be opened from here.
-      </p>
-    )
-  }
   if (pullRequest !== null && pullRequest.state !== "closed") {
     return (
       <div className="flex flex-col gap-3 rounded-md border bg-card p-3">

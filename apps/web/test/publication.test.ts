@@ -1,8 +1,15 @@
-import type { Branch, BranchPublication, FileDiff, PullRequestCheck } from "@humanity/contracts"
+import type {
+  Branch,
+  BranchPublication,
+  FileDiff,
+  PullRequestCheck,
+  PullRequestFeed,
+} from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import {
   baseBranches,
   commitPaths,
+  feedNotice,
   forgeTerms,
   needsPush,
   remoteStatus,
@@ -38,8 +45,17 @@ const publication = (extra: Partial<BranchPublication> = {}): BranchPublication 
   ahead: 0,
   behind: 0,
   uncommitted: 0,
+  ...extra,
+})
+
+const feed = (extra: Partial<PullRequestFeed> = {}): PullRequestFeed => ({
   pullRequest: null,
+  checks: [],
+  comments: [],
+  fetchedAt: "2026-11-13T10:00:00Z",
   problem: null,
+  pausedUntil: null,
+  needsToken: false,
   ...extra,
 })
 
@@ -122,5 +138,33 @@ describe("forgeTerms", () => {
   it("names a GitLab merge request as GitLab does", () => {
     expect(forgeTerms("gitlab")).toEqual({ noun: "merge request", site: "GitLab", symbol: "!" })
     expect(forgeTerms("github").symbol).toBe("#")
+  })
+})
+
+describe("feedNotice", () => {
+  it("says nothing while the forge answers as usual", () => {
+    expect(feedNotice(feed(), "github")).toBeNull()
+  })
+
+  it("explains a rate limit as a pause, not as a failure", () => {
+    const notice = feedNotice(
+      feed({ pausedUntil: "2026-11-13T11:50:03Z", problem: "rate limit" }),
+      "github",
+    )
+    expect(notice?.tone).toBe("note")
+    expect(notice?.title).toMatch(/^Paused until /)
+    expect(notice?.message).toContain("GitHub's rate limit was reached. This is what it said at")
+  })
+
+  it("reports a forge that failed, and asks for a token when there is none", () => {
+    expect(feedNotice(feed({ problem: "boom" }), "gitlab")).toEqual({
+      tone: "error",
+      title: "Could not reach GitLab",
+      message: "boom",
+    })
+    const notice = feedNotice(feed({ needsToken: true, fetchedAt: null }), "github")
+    expect(notice?.tone).toBe("note")
+    expect(notice?.title).toBe("No GitHub token connected")
+    expect(notice?.message).toContain("only when you press Refresh")
   })
 })

@@ -5,6 +5,7 @@ import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.t
 import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeHistory, type TestConversation } from "../src/claude/ClaudeHistory.ts"
 import { Services } from "../src/Daemon.ts"
+import type { GitHubService } from "../src/services/GitHubService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
@@ -30,12 +31,14 @@ export const services = (
   script: FakeScript,
   claudeHistory: () => Readonly<Record<string, ReadonlyArray<TestConversation>>> = () => ({}),
   planUsage?: PlanUsageProbe,
+  /** A GitHub to use instead of the offline one, for tests that follow pull requests. */
+  github?: Layer.Layer<GitHubService>,
 ) =>
   Services.pipe(
     Layer.provideMerge(AgentRunnerFake(script)),
     Layer.provide(noClaude(planUsage)),
     Layer.provide(ClaudeHistory.layerTest(claudeHistory)),
-    Layer.provideMerge(baseLayer(home)),
+    Layer.provideMerge(baseLayer(home, github)),
   )
 
 /** Polls until `check` returns a value, failing the test after about four seconds. */

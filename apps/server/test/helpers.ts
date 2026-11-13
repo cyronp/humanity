@@ -74,9 +74,12 @@ export const offlineGitLab = GitLabService.layer.pipe(
   Layer.provide(offlineHttp),
 )
 
-/** Config, platform, an on-disk database rooted at `home`, and an offline GitHub and GitLab. */
-export const baseLayer = (home: string) =>
-  Layer.mergeAll(DatabaseLive, offlineGitHub, offlineGitLab).pipe(
+/**
+ * Config, platform, an on-disk database rooted at `home`, and an offline
+ * GitHub and GitLab. A test that follows pull requests passes its own GitHub.
+ */
+export const baseLayer = (home: string, github: Layer.Layer<GitHubService> = offlineGitHub) =>
+  Layer.mergeAll(DatabaseLive, github, offlineGitLab).pipe(
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
     Layer.provideMerge(NodeServices.layer),
   )

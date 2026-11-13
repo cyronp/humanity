@@ -10,7 +10,8 @@ export const PullRequestsHandlers = PullRequestsRpcs.toLayer(
       "PullRequests.push": ({ sessionId }) => pullRequests.push(sessionId),
       "PullRequests.create": ({ sessionId, pullRequest }) =>
         pullRequests.create(sessionId, pullRequest),
-      "PullRequests.details": ({ sessionId }) => pullRequests.details(sessionId),
+      "PullRequests.watch": ({ sessionId }) => pullRequests.watch(sessionId),
+      "PullRequests.refresh": ({ sessionId }) => pullRequests.refresh(sessionId),
     })
   }),
 )

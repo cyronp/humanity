@@ -28,8 +28,8 @@ export const PullRequest = Schema.Struct({
 export type PullRequest = typeof PullRequest.Type
 
 /**
- * Where the session's branch stands against its remote and its pull request:
- * what the commit tab needs to offer a push or a new pull request.
+ * Where the session's branch stands against its remote: what the commit tab
+ * needs to offer a push. Read from git alone, so asking costs the forge nothing.
  */
 export const BranchPublication = Schema.Struct({
   /** `null` when the project's `origin` is on neither GitHub nor a known GitLab instance. */
@@ -46,10 +46,6 @@ export const BranchPublication = Schema.Struct({
   behind: Schema.Int,
   /** Files with uncommitted changes. */
   uncommitted: Schema.Int,
-  /** The branch's open pull request, else its most recent one; `null` when it has none. */
-  pullRequest: Schema.NullOr(PullRequest),
-  /** Why the forge could not be asked (no token, rate limit, ...); the rest still holds. */
-  problem: Schema.NullOr(Schema.String),
 })
 export type BranchPublication = typeof BranchPublication.Type
 
@@ -103,13 +99,27 @@ export const PullRequestComment = Schema.Struct({
 })
 export type PullRequestComment = typeof PullRequestComment.Type
 
-export const PullRequestDetails = Schema.Struct({
-  pullRequest: PullRequest,
+/**
+ * What the forge last said about a branch's pull request. The daemon asks the
+ * forge once for everyone watching the branch and sends this again whenever
+ * something in it changes.
+ */
+export const PullRequestFeed = Schema.Struct({
+  /** The branch's open pull request, else its most recent one; `null` when it has none. */
+  pullRequest: Schema.NullOr(PullRequest),
   checks: Schema.Array(PullRequestCheck),
   /** Oldest first. */
   comments: Schema.Array(PullRequestComment),
+  /** When the forge last answered; `null` while it never has. */
+  fetchedAt: Schema.NullOr(Schema.String),
+  /** Why the forge could not be asked the last time; what is above is the last it said. */
+  problem: Schema.NullOr(Schema.String),
+  /** When asking resumes after a rate limit; `null` when nothing is on hold. */
+  pausedUntil: Schema.NullOr(Schema.String),
+  /** No token is connected: the forge is asked only when the human refreshes. */
+  needsToken: Schema.Boolean,
 })
-export type PullRequestDetails = typeof PullRequestDetails.Type
+export type PullRequestFeed = typeof PullRequestFeed.Type
 
 export const NewPullRequest = Schema.Struct({
   title: Schema.NonEmptyString,

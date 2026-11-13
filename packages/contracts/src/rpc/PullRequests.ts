@@ -4,7 +4,7 @@ import {
   BranchPublication,
   NewPullRequest,
   PullRequest,
-  PullRequestDetails,
+  PullRequestFeed,
 } from "../domain/PullRequest.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
@@ -45,10 +45,7 @@ const Forge = [
  * out there.
  */
 export const PullRequestsRpcs = RpcGroup.make(
-  /**
-   * The branch against its remote and its pull request. A forge that can't be
-   * asked is reported as `problem`, so the push side still works.
-   */
+  /** The branch against its remote, from git alone: the forge is not asked. */
   Rpc.make("PullRequests.publication", {
     payload: { sessionId: SessionId },
     success: BranchPublication,
@@ -66,10 +63,21 @@ export const PullRequestsRpcs = RpcGroup.make(
     success: PullRequest,
     error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
   }),
-  /** The branch's pull request with its checks and comments; `null` when it has none. */
-  Rpc.make("PullRequests.details", {
+  /**
+   * The branch's pull request with its checks and comments: what the daemon
+   * knows right away, then again whenever the forge says something new. The
+   * forge is asked while someone watches, once for everyone on the same branch.
+   * A forge that can't be asked is reported in the feed, never as a failure.
+   */
+  Rpc.make("PullRequests.watch", {
     payload: { sessionId: SessionId },
-    success: Schema.NullOr(PullRequestDetails),
-    error: Schema.Union([...Base, ...Forge]),
+    success: PullRequestFeed,
+    error: Schema.Union(Base),
+    stream: true,
+  }),
+  /** Asks the forge again now, for everyone watching the session's branch. */
+  Rpc.make("PullRequests.refresh", {
+    payload: { sessionId: SessionId },
+    error: Schema.Union(Base),
   }),
 )
