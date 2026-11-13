@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   countChanges,
+  currentLineNumbers,
   hunkReference,
   lineReference,
   parseUnifiedDiff,
@@ -173,5 +174,32 @@ describe("references for a message", () => {
         lines: ["+x"],
       }),
     ).toBe("a.ts:8")
+  })
+})
+
+describe("currentLineNumbers", () => {
+  const row = (kind: "context" | "add" | "remove", number: number) =>
+    kind === "remove"
+      ? { kind, text: "", oldNumber: number }
+      : kind === "add"
+        ? { kind, text: "", newNumber: number }
+        : { kind, text: "", oldNumber: number, newNumber: number }
+
+  it("keeps the current number and sends a removed line to the one that took its place", () => {
+    const [file] = parseUnifiedDiff(GIT_DIFF)
+    const hunk = file?.hunks[0]
+    expect(hunk && currentLineNumbers(toDiffLines(hunk))).toEqual([1, 2, 2, 3, 4])
+  })
+
+  it("sends removed lines at the end of a hunk past the last kept line", () => {
+    expect(currentLineNumbers([row("context", 5), row("remove", 6), row("remove", 7)])).toEqual([
+      5, 6, 6,
+    ])
+  })
+
+  it("has no place for meta rows or a hunk that keeps nothing", () => {
+    expect(
+      currentLineNumbers([row("remove", 1), { kind: "meta", text: "No newline at end of file" }]),
+    ).toEqual([undefined, undefined])
   })
 })

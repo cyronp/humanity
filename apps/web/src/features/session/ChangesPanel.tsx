@@ -62,7 +62,12 @@ export function ChangesPanel({
                 counts={countChanges(value.files.flatMap((file) => file.hunks))}
               />
               {value.files.map((file) => (
-                <FileDiffView key={file.filePath} file={file} onReference={onReference} />
+                <FileDiffView
+                  key={file.filePath}
+                  file={file}
+                  onReference={onReference}
+                  editorRoot={session.worktreePath}
+                />
               ))}
             </>
           )

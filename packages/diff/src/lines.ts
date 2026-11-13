@@ -65,3 +65,21 @@ export const hunkReference = (filePath: string, hunk: DiffHunk): string =>
   hunk.newLines > 0
     ? `${filePath}:${span(hunk.newStart, hunk.newLines)}`
     : `${filePath}:${span(hunk.oldStart, hunk.oldLines)} (removed lines)`
+
+/**
+ * Where each row sits in the file as it is now, for opening it in an editor.
+ * A removed line is no longer there, so it points at the line that took its
+ * place: the next one still in the file, else the one after the last. Meta
+ * rows, and a hunk that keeps no line at all, have no place.
+ */
+export const currentLineNumbers = (rows: ReadonlyArray<DiffLine>): Array<number | undefined> => {
+  const kept = rows.map((row) => row.newNumber)
+  return rows.map((row, position) => {
+    if (row.newNumber !== undefined) return row.newNumber
+    if (row.kind !== "remove") return undefined
+    const next = kept.slice(position + 1).find((number) => number !== undefined)
+    if (next !== undefined) return next
+    const previous = kept.slice(0, position).findLast((number) => number !== undefined)
+    return previous === undefined ? undefined : previous + 1
+  })
+}

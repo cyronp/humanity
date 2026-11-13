@@ -1,8 +1,8 @@
 import type { FileDiff } from "@humanity/contracts"
-import { countChanges } from "@humanity/diff"
+import { countChanges, hunkHeader } from "@humanity/diff"
 import { FileDiff as FileDiffIcon, FileMinus, FilePlus, FileSymlink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { HunkView } from "./HunkView.tsx"
+import { HunkButtons, HunkLines } from "./HunkView.tsx"
 
 const KIND = {
   create: { label: "new file", Icon: FilePlus },
@@ -27,47 +27,75 @@ export function ChangeCount({
   )
 }
 
-/** A read-only view of one file's changes. */
+/**
+ * A read-only view of one file's changes, in one box: a bar naming the file,
+ * then its hunks, each after the first opened by its `@@` range. The bar and
+ * each range carry their hunk's VS Code and Reference buttons.
+ */
 export function FileDiffView({
   file,
   onReference,
+  editorRoot,
 }: {
   readonly file: FileDiff
   /** Puts a `path:line` reference in the next message; its buttons show only when given. */
   readonly onReference?: ((reference: string) => void) | undefined
+  /** The absolute folder the file is in; when given, its hunks and lines open in VS Code. */
+  readonly editorRoot?: string | undefined
 }) {
   const { label, Icon } = KIND[file.kind]
   const counts = countChanges(file.hunks)
+  // A deleted file is no longer on disk to open.
+  const root = file.kind === "delete" ? undefined : editorRoot
+  const [first, ...rest] = file.hunks
+  const links = { filePath: file.filePath, onReference, editorRoot: root }
+
   return (
-    <section className="flex flex-col gap-2" aria-label={`Changes to ${file.filePath}`}>
-      <header className="flex flex-wrap items-center gap-2">
-        <Icon className="size-4 text-muted-foreground" />
-        <code className="font-mono text-sm break-all">{file.filePath}</code>
-        {file.previousPath !== undefined && (
-          <span className="text-xs text-muted-foreground">
-            from <code>{file.previousPath}</code>
-          </span>
+    <section
+      className="overflow-hidden rounded-md border bg-card"
+      aria-label={`Changes to ${file.filePath}`}
+    >
+      <header className="flex items-center gap-2 border-b bg-muted/50 px-3 py-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <code className="font-mono text-xs font-medium break-all">{file.filePath}</code>
+          {file.previousPath !== undefined && (
+            <span className="text-xs text-muted-foreground">
+              from <code>{file.previousPath}</code>
+            </span>
+          )}
+          <Badge variant="outline">{label}</Badge>
+          <ChangeCount {...counts} />
+        </div>
+        {first !== undefined && !file.binary && (
+          <div className="flex shrink-0 items-center gap-1">
+            <HunkButtons hunk={first} {...links} />
+          </div>
         )}
-        <Badge variant="outline">{label}</Badge>
-        <ChangeCount {...counts} />
       </header>
       {file.binary ? (
-        <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+        <p className="p-3 text-xs text-muted-foreground">
           Binary or very large file. Its content is not shown.
         </p>
-      ) : file.hunks.length === 0 ? (
-        <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+      ) : first === undefined ? (
+        <p className="p-3 text-xs text-muted-foreground">
           No line changes (mode change or empty file).
         </p>
       ) : (
-        file.hunks.map((hunk) => (
-          <HunkView
-            key={hunk.index}
-            hunk={hunk}
-            filePath={file.filePath}
-            onReference={onReference}
-          />
-        ))
+        <>
+          <HunkLines hunk={first} {...links} />
+          {rest.map((hunk) => (
+            <div key={hunk.index}>
+              <div className="flex items-center justify-between gap-2 border-y bg-muted/30 px-3 py-0.5">
+                <code className="font-mono text-xs text-muted-foreground">{hunkHeader(hunk)}</code>
+                <div className="flex items-center gap-1">
+                  <HunkButtons hunk={hunk} {...links} />
+                </div>
+              </div>
+              <HunkLines hunk={hunk} {...links} />
+            </div>
+          ))}
+        </>
       )}
     </section>
   )
