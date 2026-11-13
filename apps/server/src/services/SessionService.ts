@@ -233,12 +233,14 @@ export class SessionService extends Context.Service<
     /** Uncommitted changes where the session works: its worktree or the project's checkout. */
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
     /**
-     * Commits everything where the session works to the branch checked out
-     * there: what the agent changed, on its own or with the human's allow.
+     * Commits where the session works to the branch checked out there: what
+     * the agent changed, on its own or with the human's allow. Only the files
+     * under `paths` when given, else everything.
      */
     readonly commit: (
       sessionId: string,
       message: string,
+      paths?: ReadonlyArray<string>,
     ) => Effect.Effect<string, SessionNotFound | SessionBusy | NothingToCommit | GitError>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     /** Every session of every project, again after each change. Most recently active first. */
@@ -1093,6 +1095,7 @@ export class SessionService extends Context.Service<
       const commit = Effect.fn("SessionService.commit")(function* (
         sessionId: string,
         message: string,
+        paths?: ReadonlyArray<string>,
       ) {
         const session = yield* get(sessionId)
         // A commit in the middle of a turn could capture half of the agent's work.
@@ -1101,7 +1104,7 @@ export class SessionService extends Context.Service<
         }
         const status = yield* git.status(session.worktreePath)
         if (status.entries.length === 0) return yield* new NothingToCommit({ sessionId })
-        const hash = yield* git.commit(session.worktreePath, message.trim())
+        const hash = yield* git.commit(session.worktreePath, message.trim(), paths)
         const subject = message.trim().split("\n")[0] ?? ""
         // A checkout can have switched branches since the session started.
         const branch = status.branch ?? session.branch

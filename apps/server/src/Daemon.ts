@@ -18,6 +18,7 @@ import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { GitLabHandlers } from "./rpc/GitLabHandlers.ts"
 import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
+import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
@@ -31,6 +32,7 @@ import { GitService } from "./services/GitService.ts"
 import { HistoryImport } from "./services/HistoryImport.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
+import { PullRequestService } from "./services/PullRequestService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 
@@ -39,7 +41,9 @@ import { SessionService } from "./services/SessionService.ts"
  * Claude Code runtime and Claude Code history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
-  Layer.merge(HistoryImport.layer, SessionService.layer).pipe(
+  Layer.merge(HistoryImport.layer, PullRequestService.layer).pipe(
+    // Pull requests are opened from what a session committed.
+    Layer.provideMerge(SessionService.layer),
     Layer.provideMerge(ApprovalService.layer),
     // What new threads start with, when the human or the project set a default.
     Layer.provideMerge(PreferencesService.layer),
@@ -64,6 +68,7 @@ export const RpcHandlers = Layer.mergeAll(
   ClaudeHandlers,
   PreferencesHandlers,
   ExtensionsHandlers,
+  PullRequestsHandlers,
 )
 
 /**

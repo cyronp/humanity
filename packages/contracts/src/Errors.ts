@@ -222,6 +222,16 @@ export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("Noth
   }
 }
 
+/** A push or pull request that can't be made from where the session stands; `reason` says why. */
+export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavailable>()(
+  "PullRequestUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
 export class ClaudeAccountNotFound extends Schema.TaggedError<ClaudeAccountNotFound>()(
   "ClaudeAccountNotFound",
   { accountId: Schema.String },

@@ -286,3 +286,59 @@ describe("GitService", () => {
     }),
   )
 })
+
+describe("GitService commits and pushes", () => {
+  it.live("commits only the files it is given, untracked and deleted ones included", () =>
+    Effect.gen(function* () {
+      const repo = yield* tempRepo({ "README.md": "# fixture\n", "a.txt": "a\n", "b.txt": "b\n" })
+      writeFileSync(join(repo, "a.txt"), "a changed\n")
+      rmSync(join(repo, "b.txt"))
+      writeFileSync(join(repo, "c.txt"), "new\n")
+      writeFileSync(join(repo, "README.md"), "# left out\n")
+
+      yield* withGit((service) => service.commit(repo, "pick some", ["a.txt", "b.txt", "c.txt"]))
+
+      const committed = git(repo, "show", "--name-status", "--format=", "HEAD")
+        .trim()
+        .split("\n")
+        .sort()
+      assert.deepStrictEqual(committed, ["A\tc.txt", "D\tb.txt", "M\ta.txt"])
+      assert.strictEqual(git(repo, "status", "--porcelain").trim(), "M README.md")
+    }),
+  )
+
+  it.live("reads a file name as itself, never as a pattern", () =>
+    Effect.gen(function* () {
+      const repo = yield* tempRepo()
+      writeFileSync(join(repo, "a.ts"), "a\n")
+      writeFileSync(join(repo, "b.ts"), "b\n")
+
+      const error = yield* withGit((service) => Effect.flip(service.commit(repo, "glob", ["*.ts"])))
+      assert.strictEqual(error._tag, "GitCommandFailed")
+      assert.strictEqual(git(repo, "rev-list", "--count", "HEAD").trim(), "1")
+    }),
+  )
+
+  it.live("pushes a branch to origin and makes it the upstream", () =>
+    Effect.gen(function* () {
+      const remote = yield* tempDir("humanity-remote-")
+      git(remote, "init", "--quiet", "--bare", "--initial-branch=main")
+      const repo = yield* tempRepo()
+      git(repo, "remote", "add", "origin", remote)
+      git(repo, "checkout", "--quiet", "-b", "feat/push")
+      writeFileSync(join(repo, "a.txt"), "a\n")
+      git(repo, "add", "--all")
+      git(repo, "commit", "--quiet", "--message", "feat")
+
+      yield* withGit((service) => service.push(repo, "feat/push"))
+
+      assert.strictEqual(
+        git(remote, "rev-parse", "refs/heads/feat/push").trim(),
+        git(repo, "rev-parse", "HEAD").trim(),
+      )
+      const status = yield* withGit((service) => service.status(repo))
+      assert.strictEqual(status.upstream, "origin/feat/push")
+      assert.strictEqual(status.ahead, 0)
+    }),
+  )
+})

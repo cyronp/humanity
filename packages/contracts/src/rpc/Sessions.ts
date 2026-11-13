@@ -159,9 +159,17 @@ export const SessionsRpcs = RpcGroup.make(
     success: WorkingTreeDiff,
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
-  /** Commits everything where the session works to the branch checked out there. Returns the short hash. */
+  /**
+   * Commits where the session works, to the branch checked out there: only the
+   * files under `paths` (relative to that folder) when given, else everything.
+   * Returns the short hash.
+   */
   Rpc.make("Sessions.commit", {
-    payload: { sessionId: SessionId, message: Schema.NonEmptyString },
+    payload: {
+      sessionId: SessionId,
+      message: Schema.NonEmptyString,
+      paths: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+    },
     success: Schema.String,
     error: Schema.Union([
       SessionNotFound,

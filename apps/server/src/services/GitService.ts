@@ -45,10 +45,14 @@ export class GitService extends Context.Service<
      * array straight to the process; nothing is ever interpreted by a shell.
      */
     readonly exec: (cwd: string, args: ReadonlyArray<string>) => Effect.Effect<string, GitError>
-    /** Like `exec`, but hands back the exit code instead of failing on non-zero. */
+    /**
+     * Like `exec`, but hands back the exit code instead of failing on non-zero.
+     * `env` adds variables for this one process only.
+     */
     readonly execResult: (
       cwd: string,
       args: ReadonlyArray<string>,
+      env?: Readonly<Record<string, string>>,
     ) => Effect.Effect<GitResult, GitNotInstalled>
     /** Absolute path of the repository containing `path`. */
     readonly repositoryRoot: (path: string) => Effect.Effect<string, GitError>
@@ -85,8 +89,25 @@ export class GitService extends Context.Service<
     /** Removes a worktree, discarding uncommitted changes in it. Its branch is kept. */
     readonly worktreeRemove: (cwd: string, path: string) => Effect.Effect<void, GitError>
     readonly worktreeList: (cwd: string) => Effect.Effect<ReadonlyArray<Worktree>, GitError>
-    /** Stages everything in `cwd` and commits it. Returns the new commit's short hash. */
-    readonly commit: (cwd: string, message: string) => Effect.Effect<string, GitError>
+    /**
+     * Commits the changes in `cwd`: only those under `paths` when given (other
+     * staged changes stay staged), else everything. Returns the new commit's short hash.
+     */
+    readonly commit: (
+      cwd: string,
+      message: string,
+      paths?: ReadonlyArray<string>,
+    ) => Effect.Effect<string, GitError>
+    /**
+     * Pushes `branch` to the branch of the same name on `origin` and makes it
+     * the upstream. `env` adds variables for this one process only, such as a
+     * credential header, so nothing secret ends up in the config or the command line.
+     */
+    readonly push: (
+      cwd: string,
+      branch: string,
+      env?: Readonly<Record<string, string>>,
+    ) => Effect.Effect<void, GitError>
     /**
      * Clones `url` into `target`, streaming git's progress lines. `env` adds
      * variables for this one process only, such as a credential header, so
@@ -108,14 +129,18 @@ export class GitService extends Context.Service<
       const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
         stream.pipe(Stream.decodeText(), Stream.mkString)
 
-      const execResult = (cwd: string, args: ReadonlyArray<string>) =>
+      const execResult = (
+        cwd: string,
+        args: ReadonlyArray<string>,
+        env: Readonly<Record<string, string>> = {},
+      ) =>
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(
             ChildProcess.make("git", args, {
               cwd,
               extendEnv: true,
               // Never block on a credential prompt, and keep messages parseable.
-              env: { GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+              env: { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
             }),
           )
           const [stdout, stderr, exitCode] = yield* Effect.all(
@@ -128,9 +153,13 @@ export class GitService extends Context.Service<
           Effect.mapError((cause) => new GitNotInstalled({ detail: String(cause) })),
         )
 
-      const exec = (cwd: string, args: ReadonlyArray<string>) =>
+      const exec = (
+        cwd: string,
+        args: ReadonlyArray<string>,
+        env: Readonly<Record<string, string>> = {},
+      ) =>
         Effect.gen(function* () {
-          const result = yield* execResult(cwd, args)
+          const result = yield* execResult(cwd, args, env)
           if (result.exitCode === 0) return result.stdout
           if (/not a git repository/i.test(result.stderr)) {
             return yield* new GitNotARepository({ path: cwd })
@@ -325,10 +354,32 @@ export class GitService extends Context.Service<
       const worktreeList = (cwd: string) =>
         exec(cwd, ["worktree", "list", "--porcelain"]).pipe(Effect.map(parseWorktrees))
 
-      const commit = Effect.fn("GitService.commit")(function* (cwd: string, message: string) {
-        yield* exec(cwd, ["add", "--all"])
-        yield* exec(cwd, ["commit", "--quiet", "--message", message])
+      const commit = Effect.fn("GitService.commit")(function* (
+        cwd: string,
+        message: string,
+        paths?: ReadonlyArray<string>,
+      ) {
+        if (paths === undefined || paths.length === 0) {
+          yield* exec(cwd, ["add", "--all"])
+          yield* exec(cwd, ["commit", "--quiet", "--message", message])
+        } else {
+          // Literal pathspecs: a file named `*.ts` or `:(glob)x` means only itself.
+          const pathspecs = paths.map((path) => `:(literal)${path}`)
+          yield* exec(cwd, ["add", "--all", "--", ...pathspecs])
+          // With paths, git commits only those, whatever else is staged.
+          yield* exec(cwd, ["commit", "--quiet", "--message", message, "--", ...pathspecs])
+        }
         return (yield* exec(cwd, ["rev-parse", "--short", "HEAD"])).trim()
+      })
+
+      const push = Effect.fn("GitService.push")(function* (
+        cwd: string,
+        branch: string,
+        env: Readonly<Record<string, string>> = {},
+      ) {
+        // A full refspec: never read as an option, never a different ref.
+        const ref = `refs/heads/${branch}`
+        yield* exec(cwd, ["push", "--quiet", "--set-upstream", "origin", `${ref}:${ref}`], env)
       })
 
       const clone = (url: string, target: string, env: Readonly<Record<string, string>> = {}) =>
@@ -397,6 +448,7 @@ export class GitService extends Context.Service<
         worktreeRemove,
         worktreeList,
         commit,
+        push,
         clone,
       })
     }),

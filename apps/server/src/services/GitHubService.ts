@@ -1,4 +1,5 @@
 import {
+  type CheckStatus,
   type GitHubBranch,
   type GitHubConnection,
   GitHubNotAuthenticated,
@@ -6,6 +7,9 @@ import {
   type GitHubRepo,
   GitHubRequestFailed,
   type GitHubUser,
+  type PullRequest,
+  type PullRequestCheck,
+  type PullRequestComment,
 } from "@humanity/contracts"
 import { Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
 import {
@@ -46,6 +50,147 @@ const BranchJson = Schema.Struct({
 })
 
 const ErrorJson = Schema.Struct({ message: Schema.optional(Schema.String) })
+
+const PullJson = Schema.Struct({
+  number: Schema.Int,
+  title: Schema.String,
+  body: Schema.NullOr(Schema.String),
+  html_url: Schema.String,
+  state: Schema.String,
+  draft: Schema.optional(Schema.Boolean),
+  merged_at: Schema.NullOr(Schema.String),
+  base: Schema.Struct({ ref: Schema.String }),
+  head: Schema.Struct({ ref: Schema.String, sha: Schema.String }),
+  user: Schema.NullOr(Schema.Struct({ login: Schema.String })),
+  created_at: Schema.String,
+})
+
+const AuthorJson = Schema.NullOr(Schema.Struct({ login: Schema.String, avatar_url: Schema.String }))
+
+const CheckRunsJson = Schema.Struct({
+  check_runs: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      status: Schema.String,
+      conclusion: Schema.NullOr(Schema.String),
+      html_url: Schema.NullOr(Schema.String),
+      details_url: Schema.optional(Schema.NullOr(Schema.String)),
+      started_at: Schema.NullOr(Schema.String),
+      completed_at: Schema.NullOr(Schema.String),
+      output: Schema.optional(
+        Schema.Struct({ title: Schema.optional(Schema.NullOr(Schema.String)) }),
+      ),
+    }),
+  ),
+})
+
+const CombinedStatusJson = Schema.Struct({
+  statuses: Schema.Array(
+    Schema.Struct({
+      context: Schema.String,
+      state: Schema.String,
+      description: Schema.NullOr(Schema.String),
+      target_url: Schema.NullOr(Schema.String),
+      created_at: Schema.String,
+      updated_at: Schema.String,
+    }),
+  ),
+})
+
+const IssueCommentJson = Schema.Struct({
+  id: Schema.Number,
+  user: AuthorJson,
+  body: Schema.optional(Schema.NullOr(Schema.String)),
+  created_at: Schema.String,
+  html_url: Schema.String,
+})
+
+const ReviewCommentJson = Schema.Struct({
+  id: Schema.Number,
+  user: AuthorJson,
+  body: Schema.String,
+  created_at: Schema.String,
+  html_url: Schema.String,
+  path: Schema.String,
+  line: Schema.optional(Schema.NullOr(Schema.Int)),
+  original_line: Schema.optional(Schema.NullOr(Schema.Int)),
+})
+
+const ReviewJson = Schema.Struct({
+  id: Schema.Number,
+  user: AuthorJson,
+  body: Schema.optional(Schema.NullOr(Schema.String)),
+  state: Schema.String,
+  submitted_at: Schema.optional(Schema.NullOr(Schema.String)),
+  html_url: Schema.String,
+})
+
+const toPullRequest = (pull: typeof PullJson.Type): PullRequest => ({
+  forge: "github",
+  number: pull.number,
+  title: pull.title,
+  body: pull.body ?? "",
+  url: pull.html_url,
+  state:
+    pull.merged_at !== null
+      ? "merged"
+      : pull.state === "closed"
+        ? "closed"
+        : pull.draft === true
+          ? "draft"
+          : "open",
+  base: pull.base.ref,
+  head: pull.head.ref,
+  headSha: pull.head.sha,
+  author: pull.user?.login ?? "ghost",
+  createdAt: pull.created_at,
+})
+
+/** A check run's status and conclusion, as one status. */
+export const githubCheckRunStatus = (status: string, conclusion: string | null): CheckStatus => {
+  if (status !== "completed") return status === "in_progress" ? "running" : "queued"
+  switch (conclusion) {
+    case "success":
+      return "success"
+    case "failure":
+    case "timed_out":
+    case "action_required":
+    case "startup_failure":
+      return "failure"
+    case "cancelled":
+      return "cancelled"
+    case "skipped":
+      return "skipped"
+    default:
+      return "neutral"
+  }
+}
+
+/** A commit status's state (`error`, `failure`, `pending`, `success`), as a check status. */
+export const githubCommitStatus = (state: string): CheckStatus =>
+  state === "success"
+    ? "success"
+    : state === "pending"
+      ? "running"
+      : state === "failure" || state === "error"
+        ? "failure"
+        : "neutral"
+
+const authorOf = (user: typeof AuthorJson.Type) => ({
+  author: user?.login ?? "ghost",
+  avatarUrl: user?.avatar_url ?? null,
+})
+
+/** How many items one list of a pull request may hold, so a huge one can't stall the UI. */
+const MAX_PULL_ITEMS = 500
+
+export interface NewGitHubPull {
+  readonly head: string
+  readonly base: string
+  readonly title: string
+  readonly body: string
+  readonly draft: boolean
+}
 
 const toRepo = (repo: typeof RepoJson.Type): GitHubRepo => ({
   fullName: repo.full_name,
@@ -91,6 +236,25 @@ export class GitHubService extends Context.Service<
     ) => Effect.Effect<ReadonlyArray<GitHubBranch>, GitHubError>
     /** The token for authenticated git operations, when one is available. */
     readonly token: Effect.Effect<Option.Option<Redacted.Redacted<string>>>
+    /** `branch`'s open pull request in `fullName`, else its most recently updated one. */
+    readonly findPullRequest: (
+      fullName: string,
+      branch: string,
+    ) => Effect.Effect<Option.Option<PullRequest>, GitHubError>
+    readonly createPullRequest: (
+      fullName: string,
+      pull: NewGitHubPull,
+    ) => Effect.Effect<PullRequest, GitHubError>
+    /** The check runs and commit statuses of `sha`. */
+    readonly checks: (
+      fullName: string,
+      sha: string,
+    ) => Effect.Effect<ReadonlyArray<PullRequestCheck>, GitHubError>
+    /** Conversation comments, reviews with something to say and inline comments, oldest first. */
+    readonly comments: (
+      fullName: string,
+      number: number,
+    ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitHubError>
   }
 >()("humanity/GitHubService") {
   static readonly layer = Layer.effect(
@@ -143,14 +307,26 @@ export class GitHubService extends Context.Service<
       const transportError = (error: HttpClientError.HttpClientError) =>
         new GitHubRequestFailed({ status: 0, detail: error.message })
 
+      const authorization = (token: Option.Option<Redacted.Redacted<string>>) =>
+        Option.match(token, {
+          onNone: (): Record<string, string> => ({}),
+          onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
+        })
+
       const get = (url: string, token: Option.Option<Redacted.Redacted<string>>) =>
         http
           .get(url.startsWith("http") ? url : `${GITHUB_API}${url}`, {
-            headers: Option.match(token, {
-              onNone: () => ({}),
-              onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
-            }),
+            headers: authorization(token),
           })
+          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
+
+      const post = (path: string, body: unknown, token: Redacted.Redacted<string>) =>
+        http
+          .execute(
+            HttpClientRequest.post(`${GITHUB_API}${path}`, {
+              headers: authorization(Option.some(token)),
+            }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+          )
           .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
 
       const decode =
@@ -258,6 +434,131 @@ export class GitHubService extends Context.Service<
           ).pipe(Stream.take(MAX_REPOS), Stream.runCollect)
         })
 
+      /** Every page of a list, up to `MAX_PULL_ITEMS` items. */
+      const all = <S extends Schema.Constraint>(
+        first: string,
+        schema: S,
+        token: Option.Option<Redacted.Redacted<string>>,
+      ) =>
+        Stream.paginate(first, (url: string) =>
+          Effect.gen(function* () {
+            const response = yield* get(url, token)
+            const page = yield* decode(Schema.Array(schema))(response)
+            const next = nextPageUrl(response.headers["link"])
+            return [page as ReadonlyArray<S["Type"]>, Option.fromNullishOr(next)] as const
+          }),
+        ).pipe(Stream.take(MAX_PULL_ITEMS), Stream.runCollect)
+
+      const findPullRequest = (fullName: string, branch: string) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const owner = fullName.split("/")[0] ?? ""
+          const head = encodeURIComponent(`${owner}:${branch}`)
+          const pulls = yield* get(
+            `/repos/${fullName}/pulls?head=${head}&state=all&sort=updated&direction=desc&per_page=20`,
+            token,
+          ).pipe(Effect.flatMap(decode(Schema.Array(PullJson))))
+          const chosen = pulls.find((pull) => pull.state === "open") ?? pulls[0]
+          return Option.map(Option.fromNullishOr(chosen), toPullRequest)
+        })
+
+      const createPullRequest = (fullName: string, pull: NewGitHubPull) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          const created = yield* post(`/repos/${fullName}/pulls`, pull, token).pipe(
+            Effect.flatMap(decode(PullJson)),
+          )
+          return toPullRequest(created)
+        })
+
+      const checks = (fullName: string, sha: string) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const [runs, combined] = yield* Effect.all(
+            [
+              get(`/repos/${fullName}/commits/${sha}/check-runs?per_page=100`, token).pipe(
+                Effect.flatMap(decode(CheckRunsJson)),
+              ),
+              get(`/repos/${fullName}/commits/${sha}/status?per_page=100`, token).pipe(
+                Effect.flatMap(decode(CombinedStatusJson)),
+              ),
+            ],
+            { concurrency: 2 },
+          )
+          const fromRuns = runs.check_runs.map((run): PullRequestCheck => ({
+            name: run.name,
+            status: githubCheckRunStatus(run.status, run.conclusion),
+            description: run.output?.title ?? null,
+            url: run.html_url ?? run.details_url ?? null,
+            startedAt: run.started_at,
+            finishedAt: run.completed_at,
+          }))
+          const fromStatuses = combined.statuses.map((status): PullRequestCheck => ({
+            name: status.context,
+            status: githubCommitStatus(status.state),
+            description: status.description,
+            url: status.target_url,
+            startedAt: status.created_at,
+            finishedAt: status.state === "pending" ? null : status.updated_at,
+          }))
+          return [...fromRuns, ...fromStatuses]
+        })
+
+      const comments = (fullName: string, number: number) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const base = `/repos/${fullName}`
+          const [conversation, inline, reviews] = yield* Effect.all(
+            [
+              all(`${base}/issues/${number}/comments?per_page=100`, IssueCommentJson, token),
+              all(`${base}/pulls/${number}/comments?per_page=100`, ReviewCommentJson, token),
+              all(`${base}/pulls/${number}/reviews?per_page=100`, ReviewJson, token),
+            ],
+            { concurrency: 3 },
+          )
+          const result: Array<PullRequestComment> = [
+            ...conversation.map((comment): PullRequestComment => ({
+              id: `issue-${comment.id}`,
+              kind: "comment",
+              ...authorOf(comment.user),
+              body: comment.body ?? "",
+              createdAt: comment.created_at,
+              url: comment.html_url,
+              path: null,
+              line: null,
+              reviewState: null,
+            })),
+            ...inline.map((comment): PullRequestComment => ({
+              id: `inline-${comment.id}`,
+              kind: "inline",
+              ...authorOf(comment.user),
+              body: comment.body,
+              createdAt: comment.created_at,
+              url: comment.html_url,
+              path: comment.path,
+              line: comment.line ?? comment.original_line ?? null,
+              reviewState: null,
+            })),
+            // A bare "commented" review only wraps its inline comments, listed above;
+            // a pending one is a draft only its author sees.
+            ...reviews
+              .filter((review) => review.state !== "PENDING")
+              .filter((review) => (review.body ?? "") !== "" || review.state !== "COMMENTED")
+              .map((review): PullRequestComment => ({
+                id: `review-${review.id}`,
+                kind: "review",
+                ...authorOf(review.user),
+                body: review.body ?? "",
+                createdAt: review.submitted_at ?? "",
+                url: review.html_url,
+                path: null,
+                line: null,
+                reviewState: review.state.toLowerCase(),
+              })),
+          ]
+          return result.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        })
+
       return GitHubService.of({
         whoami,
         connection,
@@ -268,6 +569,10 @@ export class GitHubService extends Context.Service<
         getRepo,
         listBranches,
         token: tokens.get,
+        findPullRequest,
+        createPullRequest,
+        checks,
+        comments,
       })
     }),
   )

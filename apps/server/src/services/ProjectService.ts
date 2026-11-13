@@ -10,17 +10,7 @@ import {
   ProjectId,
   ProjectNotFound,
 } from "@humanity/contracts"
-import {
-  Context,
-  DateTime,
-  Effect,
-  FileSystem,
-  Layer,
-  Option,
-  Redacted,
-  Schema,
-  Stream,
-} from "effect"
+import { Context, DateTime, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
 import { basename, dirname, join } from "node:path"
@@ -28,6 +18,7 @@ import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
+import { credentialEnv } from "./gitCredentials.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { iconCandidates, iconMimeType, MAX_ICON_BYTES, WORKSPACE_ROOTS } from "./projectIcon.ts"
 
@@ -273,28 +264,6 @@ export class ProjectService extends Context.Service<
         }
         return null
       })
-
-      /**
-       * Git reads this header from the environment of the one clone process, so
-       * the token is never written into the clone's config or shown in `ps`. It
-       * is only sent to URLs under `origin`, and `user` is the name that host
-       * expects next to a token.
-       */
-      const credentialEnv = (
-        origin: string,
-        user: string,
-        token: Option.Option<Redacted.Redacted<string>>,
-      ) =>
-        Option.match(token, {
-          onNone: (): Record<string, string> => ({}),
-          onSome: (value): Record<string, string> => ({
-            GIT_CONFIG_COUNT: "1",
-            GIT_CONFIG_KEY_0: `http.${origin}/.extraheader`,
-            GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(
-              `${user}:${Redacted.value(value)}`,
-            ).toString("base64")}`,
-          }),
-        })
 
       /** Clones `cloneUrl` into `target`, a folder under the repos directory that must not exist yet. */
       const cloneInto = Effect.fn("ProjectService.cloneInto")(function* (

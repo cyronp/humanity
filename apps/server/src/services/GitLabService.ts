@@ -1,4 +1,5 @@
 import {
+  type CheckStatus,
   type GitLabBranch,
   type GitLabConnection,
   GitLabNotAuthenticated,
@@ -6,6 +7,9 @@ import {
   type GitLabRepo,
   GitLabRequestFailed,
   type GitLabUser,
+  type PullRequest,
+  type PullRequestCheck,
+  type PullRequestComment,
 } from "@humanity/contracts"
 import { Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
 import {
@@ -79,6 +83,106 @@ const toRepo = (repo: typeof RepoJson.Type): GitLabRepo => ({
 /** Upper bound for the lists, so a huge instance can't stall the UI. */
 const MAX_ITEMS = 1000
 
+const MergeRequestJson = Schema.Struct({
+  iid: Schema.Int,
+  title: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  web_url: Schema.String,
+  state: Schema.String,
+  draft: Schema.optional(Schema.Boolean),
+  work_in_progress: Schema.optional(Schema.Boolean),
+  target_branch: Schema.String,
+  source_branch: Schema.String,
+  sha: Schema.optional(Schema.NullOr(Schema.String)),
+  author: Schema.optional(Schema.NullOr(Schema.Struct({ username: Schema.String }))),
+  created_at: Schema.String,
+})
+
+const PipelineJson = Schema.Struct({ id: Schema.Int })
+
+const JobJson = Schema.Struct({
+  name: Schema.String,
+  stage: Schema.optional(Schema.NullOr(Schema.String)),
+  status: Schema.String,
+  web_url: Schema.optional(Schema.NullOr(Schema.String)),
+  started_at: Schema.optional(Schema.NullOr(Schema.String)),
+  finished_at: Schema.optional(Schema.NullOr(Schema.String)),
+  allow_failure: Schema.optional(Schema.Boolean),
+})
+
+const NoteJson = Schema.Struct({
+  id: Schema.Int,
+  body: Schema.String,
+  author: Schema.Struct({
+    username: Schema.String,
+    avatar_url: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+  created_at: Schema.String,
+  system: Schema.Boolean,
+  type: Schema.optional(Schema.NullOr(Schema.String)),
+  position: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        new_path: Schema.optional(Schema.NullOr(Schema.String)),
+        old_path: Schema.optional(Schema.NullOr(Schema.String)),
+        new_line: Schema.optional(Schema.NullOr(Schema.Int)),
+        old_line: Schema.optional(Schema.NullOr(Schema.Int)),
+      }),
+    ),
+  ),
+})
+
+const toMergeRequest = (mr: typeof MergeRequestJson.Type): PullRequest => ({
+  forge: "gitlab",
+  number: mr.iid,
+  title: mr.title,
+  body: mr.description ?? "",
+  url: mr.web_url,
+  state:
+    mr.state === "merged"
+      ? "merged"
+      : mr.state === "opened"
+        ? mr.draft === true || mr.work_in_progress === true
+          ? "draft"
+          : "open"
+        : "closed",
+  base: mr.target_branch,
+  head: mr.source_branch,
+  headSha: mr.sha ?? "",
+  author: mr.author?.username ?? "ghost",
+  createdAt: mr.created_at,
+})
+
+/** A pipeline job's status as a check status. A job allowed to fail never fails the checks. */
+export const gitlabJobStatus = (status: string, allowFailure: boolean): CheckStatus => {
+  switch (status) {
+    case "success":
+      return "success"
+    case "failed":
+      return allowFailure ? "neutral" : "failure"
+    case "running":
+      return "running"
+    case "canceled":
+    case "canceling":
+      return "cancelled"
+    case "skipped":
+      return "skipped"
+    case "manual":
+      return "neutral"
+    default:
+      // created, pending, preparing, scheduled, waiting_for_resource, ...
+      return "queued"
+  }
+}
+
+export interface NewGitLabMergeRequest {
+  readonly sourceBranch: string
+  readonly targetBranch: string
+  readonly title: string
+  readonly description: string
+  readonly draft: boolean
+}
+
 const REPOS_PAGE = "/projects?membership=true&archived=false&order_by=last_activity_at&per_page=100"
 
 export class GitLabService extends Context.Service<
@@ -102,6 +206,25 @@ export class GitLabService extends Context.Service<
     ) => Effect.Effect<ReadonlyArray<GitLabBranch>, GitLabError>
     /** The instance in use, and its token for authenticated git operations when there is one. */
     readonly credentials: Effect.Effect<GitLabCredentials>
+    /** `branch`'s open merge request in `fullPath`, else its most recently updated one. */
+    readonly findMergeRequest: (
+      fullPath: string,
+      branch: string,
+    ) => Effect.Effect<Option.Option<PullRequest>, GitLabError>
+    readonly createMergeRequest: (
+      fullPath: string,
+      mergeRequest: NewGitLabMergeRequest,
+    ) => Effect.Effect<PullRequest, GitLabError>
+    /** The jobs of the merge request's latest pipeline. */
+    readonly checks: (
+      fullPath: string,
+      iid: number,
+    ) => Effect.Effect<ReadonlyArray<PullRequestCheck>, GitLabError>
+    /** Its human notes, inline ones included, oldest first. */
+    readonly comments: (
+      fullPath: string,
+      mergeRequest: PullRequest,
+    ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitLabError>
   }
 >()("humanity/GitLabService") {
   static readonly layer = Layer.effect(
@@ -154,15 +277,25 @@ export class GitLabService extends Context.Service<
       const transportError = (error: HttpClientError.HttpClientError) =>
         new GitLabRequestFailed({ status: 0, detail: error.message })
 
+      const authorization = (token: Option.Option<Redacted.Redacted<string>>) =>
+        Option.match(token, {
+          onNone: (): Record<string, string> => ({}),
+          onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
+        })
+
       /** `path` is relative to the instance's API, so the token can only go to its own instance. */
       const get = (path: string, { host, token }: GitLabCredentials) =>
         http
-          .get(`${gitlabApi(host)}${path}`, {
-            headers: Option.match(token, {
-              onNone: () => ({}),
-              onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
-            }),
-          })
+          .get(`${gitlabApi(host)}${path}`, { headers: authorization(token) })
+          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
+
+      const post = (path: string, body: unknown, { host, token }: GitLabCredentials) =>
+        http
+          .execute(
+            HttpClientRequest.post(`${gitlabApi(host)}${path}`, {
+              headers: authorization(token),
+            }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+          )
           .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
 
       const decode =
@@ -274,6 +407,87 @@ export class GitLabService extends Context.Service<
           )
         })
 
+      const project = (fullPath: string) => `/projects/${encodeURIComponent(fullPath)}`
+
+      const findMergeRequest = (fullPath: string, branch: string) =>
+        Effect.gen(function* () {
+          const using = yield* credentials
+          const mergeRequests = yield* get(
+            `${project(fullPath)}/merge_requests?source_branch=${encodeURIComponent(branch)}&state=all&order_by=updated_at&sort=desc&per_page=20`,
+            using,
+          ).pipe(Effect.flatMap(decode(Schema.Array(MergeRequestJson))))
+          const chosen = mergeRequests.find((mr) => mr.state === "opened") ?? mergeRequests[0]
+          return Option.map(Option.fromNullishOr(chosen), toMergeRequest)
+        })
+
+      const createMergeRequest = (fullPath: string, mergeRequest: NewGitLabMergeRequest) =>
+        Effect.gen(function* () {
+          const using = yield* requireToken
+          const created = yield* post(
+            `${project(fullPath)}/merge_requests`,
+            {
+              source_branch: mergeRequest.sourceBranch,
+              target_branch: mergeRequest.targetBranch,
+              // GitLab marks a merge request as a draft by its title.
+              title: mergeRequest.draft ? `Draft: ${mergeRequest.title}` : mergeRequest.title,
+              description: mergeRequest.description,
+            },
+            using,
+          ).pipe(Effect.flatMap(decode(MergeRequestJson)))
+          return toMergeRequest(created)
+        })
+
+      const checks = (fullPath: string, iid: number) =>
+        Effect.gen(function* () {
+          const using = yield* credentials
+          const pipelines = yield* get(
+            `${project(fullPath)}/merge_requests/${iid}/pipelines?per_page=1`,
+            using,
+          ).pipe(Effect.flatMap(decode(Schema.Array(PipelineJson))))
+          const latest = pipelines[0]
+          if (latest === undefined) return []
+          const jobs = yield* pages(
+            `${project(fullPath)}/pipelines/${latest.id}/jobs?per_page=100`,
+            JobJson,
+            using,
+          ).pipe(Stream.take(MAX_ITEMS), Stream.runCollect)
+          return jobs.map((job): PullRequestCheck => ({
+            name: job.name,
+            status: gitlabJobStatus(job.status, job.allow_failure === true),
+            description: job.stage ?? null,
+            url: job.web_url ?? null,
+            startedAt: job.started_at ?? null,
+            finishedAt: job.finished_at ?? null,
+          }))
+        })
+
+      const comments = (fullPath: string, mergeRequest: PullRequest) =>
+        Effect.gen(function* () {
+          const using = yield* credentials
+          const notes = yield* pages(
+            `${project(fullPath)}/merge_requests/${mergeRequest.number}/notes?sort=asc&order_by=created_at&per_page=100`,
+            NoteJson,
+            using,
+          ).pipe(Stream.take(MAX_ITEMS), Stream.runCollect)
+          return notes
+            .filter((note) => !note.system)
+            .map((note): PullRequestComment => {
+              const position = note.type === "DiffNote" ? note.position : null
+              return {
+                id: `note-${note.id}`,
+                kind: position ? "inline" : "comment",
+                author: note.author.username,
+                avatarUrl: note.author.avatar_url ?? null,
+                body: note.body,
+                createdAt: note.created_at,
+                url: `${mergeRequest.url}#note_${note.id}`,
+                path: position ? (position.new_path ?? position.old_path ?? null) : null,
+                line: position ? (position.new_line ?? position.old_line ?? null) : null,
+                reviewState: null,
+              }
+            })
+        })
+
       return GitLabService.of({
         connection,
         saveToken,
@@ -283,6 +497,10 @@ export class GitLabService extends Context.Service<
         getRepo,
         listBranches,
         credentials,
+        findMergeRequest,
+        createMergeRequest,
+        checks,
+        comments,
       })
     }),
   )
