@@ -13,6 +13,8 @@
   --color-git-added: var(--git-added);
   --color-git-deleted: var(--git-deleted);
   --color-git-renamed: var(--git-renamed);
+  --color-git-merged: var(--git-merged);
+  --color-git-draft: var(--git-draft);
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -90,6 +92,8 @@
   --git-added: #16a34a;
   --git-deleted: #dc2626;
   --git-renamed: #0d9488;
+  --git-merged: #7c3aed;
+  --git-draft: #0284c7;
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -130,6 +134,8 @@
   --git-added: #4ade80;
   --git-deleted: #f87171;
   --git-renamed: #2dd4bf;
+  --git-merged: #a78bfa;
+  --git-draft: #38bdf8;
   --sidebar: oklch(0.145 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

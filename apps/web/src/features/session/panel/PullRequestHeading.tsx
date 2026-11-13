@@ -1,24 +1,55 @@
 import type { PullRequest, PullRequestState } from "@humanity/contracts"
 import { cn } from "cn"
-import { ExternalLink } from "lucide-react"
+import {
+  ExternalLink,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { forgeTerms } from "./publication.ts"
 
-const STATE: Record<PullRequestState, { readonly label: string; readonly className: string }> = {
-  open: { label: "Open", className: "bg-emerald-600 text-white" },
-  draft: { label: "Draft", className: "bg-muted-foreground text-background" },
-  merged: { label: "Merged", className: "bg-violet-600 text-white" },
-  closed: { label: "Closed", className: "bg-red-600 text-white" },
+/**
+ * Each state in the colour git already has for it here: added, deleted and
+ * merged follow the theme, so the pill reads the same in light and dark.
+ */
+const STATE: Record<
+  PullRequestState,
+  { readonly label: string; readonly Icon: typeof GitMerge; readonly className: string }
+> = {
+  open: { label: "Open", Icon: GitPullRequest, className: "bg-git-added text-background" },
+  draft: {
+    label: "Draft",
+    Icon: GitPullRequestDraft,
+    className: "bg-git-draft text-background",
+  },
+  merged: { label: "Merged", Icon: GitMerge, className: "bg-git-merged text-background" },
+  closed: {
+    label: "Closed",
+    Icon: GitPullRequestClosed,
+    className: "bg-git-deleted text-background",
+  },
+}
+
+/** A pull request's state as a pill: its icon and its name, in its colour. */
+export function PullRequestStateBadge({ state }: { readonly state: PullRequestState }) {
+  const { label, Icon, className } = STATE[state]
+  return (
+    <Badge className={cn("shrink-0 font-semibold", className)}>
+      <Icon strokeWidth={2.5} />
+      {label}
+    </Badge>
+  )
 }
 
 /** A pull request's state, title and number, linked to its page, and the branches it joins. */
 export function PullRequestHeading({ pullRequest }: { readonly pullRequest: PullRequest }) {
   const terms = forgeTerms(pullRequest.forge)
-  const state = STATE[pullRequest.state]
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-start gap-2">
-        <Badge className={cn("shrink-0", state.className)}>{state.label}</Badge>
+        <PullRequestStateBadge state={pullRequest.state} />
         <a
           href={pullRequest.url}
           target="_blank"
