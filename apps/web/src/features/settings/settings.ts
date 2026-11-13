@@ -23,7 +23,7 @@ export const SECTION_INFO: Record<
   },
   repositories: {
     label: "Repositories",
-    keywords: ["github", "gh", "cli", "token", "clone", "sign in"],
+    keywords: ["github", "gitlab", "gh", "glab", "cli", "token", "clone", "sign in", "self-hosted"],
   },
   projects: {
     label: "Projects",

@@ -17,6 +17,7 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
       "Projects.addLocal": ({ path }) =>
         Effect.tap(projects.addLocal(path), (project) => imports.syncInBackground(project.id)),
       "Projects.cloneFromGitHub": ({ fullName }) => projects.cloneFromGitHub(fullName),
+      "Projects.cloneFromGitLab": ({ fullPath }) => projects.cloneFromGitLab(fullPath),
       // Stop the project's agents before their worktrees disappear.
       "Projects.remove": ({ projectId }) =>
         Effect.andThen(sessions.stopProject(projectId), projects.remove(projectId)).pipe(

@@ -4,6 +4,7 @@ import {
   GitBranchExists,
   GitCommandFailed,
   GitInvalidBranchName,
+  GITLAB_FULL_PATH_PATTERN,
   GitNotARepository,
   GitNotInstalled,
   GitRefNotFound,
@@ -407,4 +408,25 @@ export const parseGitHubFullName = (remoteUrl: string | undefined): string | und
   if (remoteUrl === undefined) return undefined
   const match = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim())
   return match ? `${match[1]}/${match[2]}` : undefined
+}
+
+/**
+ * The instance and `group/name` of a remote URL (https or ssh) on one of the
+ * GitLab `hosts`, otherwise `undefined`. Hosts are compared without their
+ * port, since ssh and https use different ones.
+ */
+export const parseGitLabRemote = (
+  remoteUrl: string | undefined,
+  hosts: ReadonlyArray<string>,
+): { readonly host: string; readonly fullPath: string } | undefined => {
+  if (remoteUrl === undefined) return undefined
+  const match = /^(?:[a-z+]+:\/\/)?(?:[^@/\s]+@)?([^:/\s]+)(?::\d+)?[:/](.+?)(?:\.git)?\/?$/i.exec(
+    remoteUrl.trim(),
+  )
+  const name = match?.[1]?.toLowerCase()
+  const fullPath = match?.[2]
+  if (name === undefined || fullPath === undefined) return undefined
+  if (!GITLAB_FULL_PATH_PATTERN.test(fullPath)) return undefined
+  const host = hosts.find((candidate) => candidate.replace(/:\d+$/, "").toLowerCase() === name)
+  return host === undefined ? undefined : { host, fullPath }
 }

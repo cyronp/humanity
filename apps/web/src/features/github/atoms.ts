@@ -24,8 +24,17 @@ export const githubBranchesAtom = Atom.family((fullName: string) =>
   HumanityClient.query("GitHub.listBranches", { fullName }),
 )
 
+/** A repository to clone: `owner/repo` on GitHub, or `group/name` on the connected GitLab instance. */
+export type CloneTarget =
+  | { readonly provider: "github"; readonly fullName: string }
+  | { readonly provider: "gitlab"; readonly fullPath: string }
+
+/** The repository's name as its host writes it. */
+export const cloneTargetName = (target: CloneTarget): string =>
+  target.provider === "github" ? target.fullName : target.fullPath
+
 export interface CloneProgress {
-  readonly fullName: string
+  readonly target: CloneTarget
   /** git's progress output so far, newest last, capped. */
   readonly lines: ReadonlyArray<string>
   readonly project: Project | undefined
@@ -38,13 +47,24 @@ const reduceClone = (state: CloneProgress, event: CloneEvent): CloneProgress =>
     ? { ...state, lines: [...state.lines, event.line].slice(-MAX_LINES) }
     : { ...state, project: event.project }
 
+/** One of several streams, typed as a single stream that can fail the way any of them does. */
+const asOne = <S extends Stream.Stream<unknown, unknown, unknown>>(
+  stream: S,
+): Stream.Stream<Stream.Success<S>, Stream.Error<S>, Stream.Services<S>> => stream as never
+
 /** Starts a clone and follows its progress until the project is added. */
-export const cloneAtom = HumanityClient.runtime.fn((fullName: string) =>
+export const cloneAtom = HumanityClient.runtime.fn((target: CloneTarget) =>
   Stream.unwrap(
     HumanityClient.use((client) =>
-      Effect.succeed(client("Projects.cloneFromGitHub", { fullName })),
+      Effect.succeed(
+        asOne(
+          target.provider === "github"
+            ? client("Projects.cloneFromGitHub", { fullName: target.fullName })
+            : client("Projects.cloneFromGitLab", { fullPath: target.fullPath }),
+        ),
+      ),
     ),
   ).pipe(
-    Stream.scan((): CloneProgress => ({ fullName, lines: [], project: undefined }), reduceClone),
+    Stream.scan((): CloneProgress => ({ target, lines: [], project: undefined }), reduceClone),
   ),
 )

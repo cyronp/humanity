@@ -60,6 +60,26 @@ describe("ProjectService", () => {
     }),
   )
 
+  it.live("reads a GitLab remote, subgroups included", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo()
+      git(repo, "remote", "add", "origin", "git@gitlab.com:acme/tools/widgets.git")
+
+      const project = yield* ProjectService.use((projects) => projects.addLocal(repo)).pipe(
+        Effect.provide(services(home)),
+      )
+
+      assert.strictEqual(project.githubFullName, null)
+      assert.deepStrictEqual(project.gitlab, { host: "gitlab.com", fullPath: "acme/tools/widgets" })
+      // It survives the round trip through the database.
+      const listed = yield* ProjectService.use((projects) => projects.list).pipe(
+        Effect.provide(services(home)),
+      )
+      assert.deepStrictEqual(listed[0]?.gitlab, project.gitlab)
+    }),
+  )
+
   it.live("rejects missing paths, non-repositories and duplicates with tagged errors", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()

@@ -16,6 +16,7 @@ import claudeAccounts from "./migrations/0011_claude_accounts.ts"
 import openThreadPolicy from "./migrations/0012_open_thread_policy.ts"
 import defaultAutonomy from "./migrations/0013_default_autonomy.ts"
 import dropPolicyAndHunkDecisions from "./migrations/0014_drop_policy_and_hunk_decisions.ts"
+import projectGitLab from "./migrations/0015_project_gitlab.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
@@ -33,6 +34,7 @@ const migrations = {
   "0012_open_thread_policy": openThreadPolicy,
   "0013_default_autonomy": defaultAutonomy,
   "0014_drop_policy_and_hunk_decisions": dropPolicyAndHunkDecisions,
+  "0015_project_gitlab": projectGitLab,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

@@ -2,6 +2,7 @@ import {
   Autonomy,
   type CloneEvent,
   CloneTargetExists,
+  GITLAB_DEFAULT_HOST,
   PathNotFound,
   type Project,
   ProjectAlreadyExists,
@@ -26,7 +27,8 @@ import { basename, dirname, join } from "node:path"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
-import { type GitError, GitService, parseGitHubFullName } from "./GitService.ts"
+import { type GitLabError, GitLabService } from "./GitLabService.ts"
+import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { iconCandidates, iconMimeType, MAX_ICON_BYTES, WORKSPACE_ROOTS } from "./projectIcon.ts"
 
 const ProjectRow = Schema.Struct({
@@ -34,6 +36,8 @@ const ProjectRow = Schema.Struct({
   name: Schema.String,
   local_path: Schema.String,
   github_full_name: Schema.NullOr(Schema.String),
+  gitlab_host: Schema.NullOr(Schema.String),
+  gitlab_full_path: Schema.NullOr(Schema.String),
   default_branch: Schema.String,
   default_autonomy: Schema.NullOr(Autonomy),
   created_at: Schema.String,
@@ -44,6 +48,10 @@ const toProject = (row: typeof ProjectRow.Type): Project => ({
   name: row.name,
   localPath: row.local_path,
   githubFullName: row.github_full_name,
+  gitlab:
+    row.gitlab_host === null || row.gitlab_full_path === null
+      ? null
+      : { host: row.gitlab_host, fullPath: row.gitlab_full_path },
   defaultBranch: row.default_branch,
   defaultAutonomy: row.default_autonomy,
   createdAt: row.created_at,
@@ -87,6 +95,16 @@ export class ProjectService extends Context.Service<
       CloneEvent,
       GitHubError | CloneTargetExists | ProjectAlreadyExists | PathNotFound | GitError
     >
+    /**
+     * Clones `group/name` of the connected GitLab instance into
+     * `<home>/repos/<host>/<group>/<name>`, the same way.
+     */
+    readonly cloneFromGitLab: (
+      fullPath: string,
+    ) => Stream.Stream<
+      CloneEvent,
+      GitLabError | CloneTargetExists | ProjectAlreadyExists | PathNotFound | GitError
+    >
   }
 >()("humanity/ProjectService") {
   static readonly layer = Layer.effect(
@@ -97,6 +115,7 @@ export class ProjectService extends Context.Service<
       const git = yield* GitService
       const config = yield* ServerConfig
       const github = yield* GitHubService
+      const gitlab = yield* GitLabService
 
       const selectAll = SqlSchema.findAll({
         Request: Schema.Void,
@@ -135,11 +154,15 @@ export class ProjectService extends Context.Service<
           return yield* new ProjectAlreadyExists({ localPath })
         }
 
+        const origin = yield* git.originUrl(localPath)
+        // A remote is GitLab's when it is on gitlab.com or on the instance Humanity is connected to.
+        const gitlabHosts = [(yield* gitlab.credentials).host, GITLAB_DEFAULT_HOST]
         const project: Project = {
           id: ProjectId.make(randomUUID()),
           name: basename(localPath),
           localPath,
-          githubFullName: parseGitHubFullName(yield* git.originUrl(localPath)) ?? null,
+          githubFullName: parseGitHubFullName(origin) ?? null,
+          gitlab: parseGitLabRemote(origin, gitlabHosts) ?? null,
           defaultBranch: yield* git.defaultBranch(localPath),
           defaultAutonomy: null,
           createdAt: DateTime.formatIso(yield* DateTime.now),
@@ -150,6 +173,8 @@ export class ProjectService extends Context.Service<
             name: project.name,
             local_path: project.localPath,
             github_full_name: project.githubFullName,
+            gitlab_host: project.gitlab?.host ?? null,
+            gitlab_full_path: project.gitlab?.fullPath ?? null,
             default_branch: project.defaultBranch,
             created_at: project.createdAt,
           })}
@@ -251,53 +276,85 @@ export class ProjectService extends Context.Service<
 
       /**
        * Git reads this header from the environment of the one clone process, so
-       * the token is never written into the clone's config or shown in `ps`.
+       * the token is never written into the clone's config or shown in `ps`. It
+       * is only sent to URLs under `origin`, and `user` is the name that host
+       * expects next to a token.
        */
-      const credentialEnv = (token: Option.Option<Redacted.Redacted<string>>) =>
+      const credentialEnv = (
+        origin: string,
+        user: string,
+        token: Option.Option<Redacted.Redacted<string>>,
+      ) =>
         Option.match(token, {
           onNone: (): Record<string, string> => ({}),
           onSome: (value): Record<string, string> => ({
             GIT_CONFIG_COUNT: "1",
-            GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+            GIT_CONFIG_KEY_0: `http.${origin}/.extraheader`,
             GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(
-              `x-access-token:${Redacted.value(value)}`,
+              `${user}:${Redacted.value(value)}`,
             ).toString("base64")}`,
           }),
         })
+
+      /** Clones `cloneUrl` into `target`, a folder under the repos directory that must not exist yet. */
+      const cloneInto = Effect.fn("ProjectService.cloneInto")(function* (
+        cloneUrl: string,
+        target: string,
+        env: Record<string, string>,
+      ) {
+        if (!isInsideDir(config.reposDir, target)) {
+          return yield* new CloneTargetExists({ path: target })
+        }
+        const projects = yield* list
+        if (projects.some((project) => samePath(project.localPath, target))) {
+          return yield* new ProjectAlreadyExists({ localPath: target })
+        }
+        if (yield* fs.exists(target).pipe(Effect.orElseSucceed(() => true))) {
+          return yield* new CloneTargetExists({ path: target })
+        }
+        yield* fs.makeDirectory(dirname(target), { recursive: true }).pipe(Effect.orDie)
+
+        const progress = git
+          .clone(cloneUrl, target, env)
+          .pipe(Stream.map((line): CloneEvent => ({ _tag: "Progress", line })))
+        const added = Stream.fromEffect(
+          addLocal(target).pipe(Effect.map((project): CloneEvent => ({ _tag: "Cloned", project }))),
+        )
+        return Stream.concat(progress, added).pipe(
+          // A failed or abandoned clone leaves nothing behind; the folder did not exist before.
+          Stream.onExit((exit) =>
+            exit._tag === "Success"
+              ? Effect.void
+              : fs.remove(target, { recursive: true }).pipe(Effect.ignore),
+          ),
+        )
+      })
 
       const cloneFromGitHub = (fullName: string) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const repo = yield* github.getRepo(fullName)
-            const target = join(config.reposDir, repo.owner, repo.name)
-            if (!isInsideDir(config.reposDir, target)) {
-              return yield* new CloneTargetExists({ path: target })
-            }
-            const projects = yield* list
-            if (projects.some((project) => samePath(project.localPath, target))) {
-              return yield* new ProjectAlreadyExists({ localPath: target })
-            }
-            if (yield* fs.exists(target).pipe(Effect.orElseSucceed(() => true))) {
-              return yield* new CloneTargetExists({ path: target })
-            }
-            yield* fs.makeDirectory(dirname(target), { recursive: true }).pipe(Effect.orDie)
-            const env = credentialEnv(yield* github.token)
-
-            const progress = git
-              .clone(repo.cloneUrl, target, env)
-              .pipe(Stream.map((line): CloneEvent => ({ _tag: "Progress", line })))
-            const added = Stream.fromEffect(
-              addLocal(target).pipe(
-                Effect.map((project): CloneEvent => ({ _tag: "Cloned", project })),
-              ),
+            const env = credentialEnv("https://github.com", "x-access-token", yield* github.token)
+            return yield* cloneInto(
+              repo.cloneUrl,
+              join(config.reposDir, repo.owner, repo.name),
+              env,
             )
-            return Stream.concat(progress, added).pipe(
-              // A failed or abandoned clone leaves nothing behind; the folder did not exist before.
-              Stream.onExit((exit) =>
-                exit._tag === "Success"
-                  ? Effect.void
-                  : fs.remove(target, { recursive: true }).pipe(Effect.ignore),
-              ),
+          }),
+        )
+
+      const cloneFromGitLab = (fullPath: string) =>
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const repo = yield* gitlab.getRepo(fullPath)
+            const { host, token } = yield* gitlab.credentials
+            // `oauth2` is accepted with a personal access token and with the CLI's OAuth login.
+            const env = credentialEnv(`https://${host}`, "oauth2", token)
+            return yield* cloneInto(
+              repo.cloneUrl,
+              // A port's colon cannot be part of a folder name on Windows.
+              join(config.reposDir, host.replace(":", "_"), ...repo.fullPath.split("/")),
+              env,
             )
           }),
         )
@@ -310,6 +367,7 @@ export class ProjectService extends Context.Service<
         remove,
         icon,
         cloneFromGitHub,
+        cloneFromGitLab,
       })
     }),
   )

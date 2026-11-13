@@ -15,6 +15,7 @@ import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
+import { GitLabHandlers } from "./rpc/GitLabHandlers.ts"
 import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
@@ -24,6 +25,8 @@ import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { ExtensionsService } from "./services/ExtensionsService.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
+import { GitLabService } from "./services/GitLabService.ts"
+import { GitLabToken } from "./services/GitLabToken.ts"
 import { GitService } from "./services/GitService.ts"
 import { HistoryImport } from "./services/HistoryImport.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
@@ -55,6 +58,7 @@ export const RpcHandlers = Layer.mergeAll(
   ProjectsHandlers,
   GitHandlers,
   GitHubHandlers,
+  GitLabHandlers,
   SessionsHandlers,
   ApprovalsHandlers,
   ClaudeHandlers,
@@ -64,7 +68,7 @@ export const RpcHandlers = Layer.mergeAll(
 
 /**
  * Routes, handlers and services. Still needs config, auth token, database,
- * platform, agent runner, the Claude Code runtime, GitHub and an HTTP server.
+ * platform, agent runner, the Claude Code runtime, GitHub, GitLab and an HTTP server.
  */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
 
@@ -115,6 +119,12 @@ const GitHubLive = GitHubService.layer.pipe(
   Layer.provide(FetchHttpClient.layer),
 )
 
+/** GitLab likewise: a saved token, or the one from `glab` or `GITLAB_TOKEN`, for its instance. */
+const GitLabLive = GitLabService.layer.pipe(
+  Layer.provide(GitLabToken.layer),
+  Layer.provide(FetchHttpClient.layer),
+)
+
 const HttpServerLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig
@@ -134,6 +144,7 @@ export const Daemon = HttpRouter.serve(
   Layer.provide(ClaudeCode.layer),
   Layer.provide(ClaudeHistory.layer),
   Layer.provide(GitHubLive),
+  Layer.provide(GitLabLive),
   Layer.provide(HttpServerLive),
   Layer.provide(DatabaseLive),
   Layer.provide(NodeServices.layer),

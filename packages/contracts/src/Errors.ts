@@ -163,6 +163,40 @@ export class GitHubRequestFailed extends Schema.TaggedError<GitHubRequestFailed>
   }
 }
 
+export class GitLabNotAuthenticated extends Schema.TaggedError<GitLabNotAuthenticated>()(
+  "GitLabNotAuthenticated",
+  { reason: Schema.Literals(["no_token", "rejected"]) },
+) {
+  override get message() {
+    return this.reason === "no_token"
+      ? "GitLab is not connected. In Settings, under Repositories, sign in with the GitLab CLI (`glab auth login`) or add a token."
+      : "GitLab rejected the token. In Settings, under Repositories, replace it, or run `glab auth login` again."
+  }
+}
+
+export class GitLabRateLimited extends Schema.TaggedError<GitLabRateLimited>()(
+  "GitLabRateLimited",
+  { resetAt: Schema.NullOr(Schema.String) },
+) {
+  override get message() {
+    return this.resetAt === null
+      ? "GitLab's API rate limit was reached. Try again in a few minutes."
+      : `GitLab's API rate limit was reached. It resets at ${new Date(this.resetAt).toLocaleTimeString()}.`
+  }
+}
+
+export class GitLabRequestFailed extends Schema.TaggedError<GitLabRequestFailed>()(
+  "GitLabRequestFailed",
+  { status: Schema.Number, detail: Schema.String },
+) {
+  override get message() {
+    if (this.status === 404) return `GitLab could not find that repository (${this.detail}).`
+    return this.status === 0
+      ? `Could not reach GitLab: ${this.detail}`
+      : `GitLab answered ${this.status}: ${this.detail}`
+  }
+}
+
 export class CloneTargetExists extends Schema.TaggedError<CloneTargetExists>()(
   "CloneTargetExists",
   { path: Schema.String },

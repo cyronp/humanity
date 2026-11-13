@@ -2,11 +2,11 @@ import type { GitHubConnection } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { LoaderCircle, RefreshCw } from "lucide-react"
-import { type FormEvent, type ReactNode, useCallback, useId, useState } from "react"
+import { type FormEvent, useCallback, useId, useState } from "react"
+import { ConnectOption } from "@/components/ConnectOption"
 import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
 import { NumberedStep } from "@/components/NumberedStep"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -103,32 +103,6 @@ function ConnectionLine({ connection }: { readonly connection: GitHubConnection 
   )
 }
 
-/** One of the ways to connect: what it is, whether it is the one in use, and what to do. */
-function Option({
-  title,
-  description,
-  inUse,
-  children,
-}: {
-  readonly title: string
-  readonly description: string
-  readonly inUse: boolean
-  readonly children: ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-4 py-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <h4 className="font-medium">{title}</h4>
-          {inUse && <Badge>In use</Badge>}
-        </div>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </div>
-  )
-}
-
 function CliOption({
   connection,
   waiting,
@@ -139,7 +113,7 @@ function CliOption({
   const install = installCliCommand(navigator.userAgent)
   const first = connection.cliInstalled ? 1 : 2
   return (
-    <Option
+    <ConnectOption
       title="GitHub CLI"
       description="Sign in once in a terminal. Humanity asks the GitHub CLI for its login when it needs it and never stores it."
       inUse={connection.source === "cli"}
@@ -181,7 +155,7 @@ function CliOption({
           </NumberedStep>
         </ol>
       )}
-    </Option>
+    </ConnectOption>
   )
 }
 
@@ -219,7 +193,7 @@ function TokenOption({
   }
 
   return (
-    <Option
+    <ConnectOption
       title="Access token"
       description="Paste a personal access token instead. A saved token is used before the GitHub CLI."
       inUse={saved}
@@ -267,6 +241,6 @@ function TokenOption({
           message={error}
         />
       )}
-    </Option>
+    </ConnectOption>
   )
 }

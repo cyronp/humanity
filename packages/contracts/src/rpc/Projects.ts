@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
+import { GitLabFullPath } from "../domain/GitLab.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
 import {
@@ -9,6 +10,9 @@ import {
   GitHubNotAuthenticated,
   GitHubRateLimited,
   GitHubRequestFailed,
+  GitLabNotAuthenticated,
+  GitLabRateLimited,
+  GitLabRequestFailed,
   GitNotARepository,
   GitNotInstalled,
   PathNotFound,
@@ -39,6 +43,23 @@ export const ProjectsRpcs = RpcGroup.make(
       GitHubNotAuthenticated,
       GitHubRateLimited,
       GitHubRequestFailed,
+      CloneTargetExists,
+      ProjectAlreadyExists,
+      PathNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+    ]),
+    stream: true,
+  }),
+  /** The same for a repository of the connected GitLab instance. */
+  Rpc.make("Projects.cloneFromGitLab", {
+    payload: { fullPath: GitLabFullPath },
+    success: CloneEvent,
+    error: Schema.Union([
+      GitLabNotAuthenticated,
+      GitLabRateLimited,
+      GitLabRequestFailed,
       CloneTargetExists,
       ProjectAlreadyExists,
       PathNotFound,

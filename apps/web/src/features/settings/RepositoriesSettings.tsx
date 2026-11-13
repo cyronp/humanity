@@ -1,4 +1,5 @@
 import { GitHubConnect } from "@/features/github/GitHubConnect"
+import { GitLabConnect } from "@/features/gitlab/GitLabConnect"
 
 export function RepositoriesSettings() {
   return (
@@ -8,11 +9,13 @@ export function RepositoriesSettings() {
           Repositories
         </h2>
         <p className="max-w-prose text-sm text-muted-foreground">
-          Where projects come from. Once GitHub is connected, Humanity lists your repositories and
-          clones the one you pick, private ones included.
+          Where projects come from. Once GitHub or GitLab is connected, Humanity lists your
+          repositories there and clones the one you pick, private ones included. Both can be
+          connected at once.
         </p>
       </div>
       <GitHubConnect />
+      <GitLabConnect />
     </section>
   )
 }

@@ -13,7 +13,8 @@ export function RepositoriesStep() {
       <GitHubConnect />
       <p className="text-xs text-muted-foreground">
         This step is optional. Public repositories and folders already on this computer can be added
-        without it, and you can change it later in Settings, at the bottom of the sidebar.
+        without it, and you can change it later in Settings, at the bottom of the sidebar. GitLab is
+        connected there too.
       </p>
     </div>
   )

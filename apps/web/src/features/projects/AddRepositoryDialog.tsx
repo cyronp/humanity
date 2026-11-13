@@ -1,9 +1,22 @@
 import { useAtom, useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { GitHubConnection, GitHubRepo, Project } from "@humanity/contracts"
+import {
+  GITLAB_DEFAULT_HOST,
+  type GitHubRepo,
+  type GitLabRepo,
+  type Project,
+} from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Cause, Exit } from "effect"
 import { AsyncResult, Atom } from "effect/reactivity"
-import { ArrowLeft, BookMarked, Download, FolderOpen, FolderPlus, Lock } from "lucide-react"
+import {
+  ArrowLeft,
+  BookMarked,
+  Download,
+  FolderGit2,
+  FolderOpen,
+  FolderPlus,
+  Lock,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
@@ -19,10 +32,22 @@ import {
 } from "@/components/ui/command"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cloneAtom, githubConnectionAtom, reposAtom } from "@/features/github/atoms"
+import {
+  cloneAtom,
+  type CloneTarget,
+  cloneTargetName,
+  githubConnectionAtom,
+  reposAtom,
+} from "@/features/github/atoms"
 import { isConnected } from "@/features/github/connection"
-import { GitHubIcon } from "@/features/github/GitHubIcon"
-import { addableRepos, repoNeedle, typedChoice } from "@/features/github/repoInput"
+import {
+  addableGitLabRepos,
+  addableRepos,
+  repoNeedle,
+  typedChoice,
+} from "@/features/github/repoInput"
+import { gitlabConnectionAtom, gitlabReposAtom } from "@/features/gitlab/atoms"
+import { isGitLabConnected } from "@/features/gitlab/connection"
 import { openSettings } from "@/features/settings/settings"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { describeCause } from "@/lib/errors"
@@ -33,8 +58,8 @@ import { addLocalProjectAtom, projectsAtom } from "./atoms.ts"
 /**
  * Adds a repository as a project: a searchable palette at the top of the
  * page, like the branch picker, listing the repositories of the connected
- * GitHub account. Typing `owner/repo`, a GitHub URL or a folder path offers
- * that repository too.
+ * GitHub and GitLab accounts. Typing `owner/repo`, a GitHub or GitLab URL or a
+ * folder path offers that repository too.
  */
 export function AddRepositoryDialog() {
   const open = useAddRepositoryOpen()
@@ -45,7 +70,7 @@ export function AddRepositoryDialog() {
         if (!next) closeAddRepository()
       }}
       title="Add a repository"
-      description="Search your GitHub repositories for one to add as a project"
+      description="Search your GitHub and GitLab repositories for one to add as a project"
       className="top-3 sm:max-w-xl"
     >
       <AddRepository />
@@ -55,7 +80,7 @@ export function AddRepositoryDialog() {
 
 /** What is being added right now, in the words shown while it runs. */
 type Job =
-  | { readonly kind: "clone"; readonly fullName: string }
+  | { readonly kind: "clone"; readonly target: CloneTarget }
   | { readonly kind: "local"; readonly path: string }
 
 /** Lives only while the palette is open, so every opening starts from the list. */
@@ -88,9 +113,9 @@ function AddRepository() {
     void navigate({ to: "/", search: { project: cloned.id } })
   }, [cloned, navigate, refreshProjects])
 
-  const startCloning = (fullName: string) => {
-    setJob({ kind: "clone", fullName })
-    startClone(fullName)
+  const startCloning = (target: CloneTarget) => {
+    setJob({ kind: "clone", target })
+    startClone(target)
   }
 
   const addFolder = async (path: string) => {
@@ -114,7 +139,7 @@ function AddRepository() {
   return (
     <div className="flex flex-col gap-3 p-4" aria-live="polite">
       <span className="text-sm font-medium">
-        {job.kind === "clone" ? `Cloning ${job.fullName}…` : `Adding ${job.path}…`}
+        {job.kind === "clone" ? `Cloning ${cloneTargetName(job.target)}…` : `Adding ${job.path}…`}
       </span>
       {job.kind === "clone" && error === undefined && (
         <>
@@ -160,21 +185,44 @@ function RepositoryList({
   onAddFolder,
   onOpen,
 }: {
-  readonly onClone: (fullName: string) => void
+  readonly onClone: (target: CloneTarget) => void
   readonly onAddFolder: (path: string) => void
   readonly onOpen: (project: Project) => void
 }) {
   const [search, setSearch] = useState("")
   const connection = useAtomValue(githubConnectionAtom)
+  const gitlabConnection = useAtomValue(gitlabConnectionAtom)
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
   const github = AsyncResult.isSuccess(connection) ? connection.value : undefined
+  const gitlab = AsyncResult.isSuccess(gitlabConnection) ? gitlabConnection.value : undefined
   const connected = github !== undefined && isConnected(github)
+  const gitlabConnected = gitlab !== undefined && isGitLabConnected(gitlab)
   const [repos, setRepos] = useState<ReadonlyArray<GitHubRepo>>()
-  const typed = typedChoice(search, repos ?? [], projects)
-  const needle = repoNeedle(search)
-  // Until the account is known, and then its repositories, the list is still loading.
-  const loading = AsyncResult.isInitial(connection) || (connected && repos === undefined)
+  const [gitlabRepos, setGitlabRepos] = useState<ReadonlyArray<GitLabRepo>>()
+  const typed = typedChoice(
+    search,
+    repos ?? [],
+    projects,
+    gitlab === undefined ? undefined : { host: gitlab.host, repos: gitlabRepos ?? [] },
+  )
+  const needle = repoNeedle(search, gitlab?.host)
+  const accountsPending =
+    AsyncResult.isInitial(connection) || AsyncResult.isInitial(gitlabConnection)
+  // Until the accounts are known, and then their repositories, the list is still loading.
+  const loading =
+    accountsPending ||
+    (connected && repos === undefined) ||
+    (gitlabConnected && gitlabRepos === undefined)
+  // What keeps repositories from being listed, when no account lists any.
+  const unlisted =
+    accountsPending || connected || gitlabConnected
+      ? undefined
+      : AsyncResult.isFailure(connection)
+        ? describeCause(connection.cause)
+        : (github?.problem ??
+          gitlab?.problem ??
+          "Neither GitHub nor GitLab is connected, so your repositories are not listed.")
 
   return (
     <Command
@@ -186,23 +234,38 @@ function RepositoryList({
       <CommandInput
         value={search}
         onValueChange={setSearch}
-        placeholder="Search your repositories, or paste owner/repo or a folder path"
+        placeholder="Search your repositories, or paste owner/repo, a URL or a folder path"
       />
       <CommandList className="max-h-96">
         {!loading && (
           <CommandEmpty className="px-6 text-muted-foreground">
-            {connected
-              ? "No repository matches. Paste owner/repo, a GitHub URL or the path of a folder on this computer to add another."
-              : "Paste owner/repo or a GitHub URL to clone a public repository, or the path of a folder on this computer."}
+            {connected || gitlabConnected
+              ? "No repository matches. Paste owner/repo, a GitHub or GitLab URL or the path of a folder on this computer to add another."
+              : "Paste owner/repo or a GitHub or GitLab URL to clone a public repository, or the path of a folder on this computer."}
           </CommandEmpty>
         )}
         {typed !== undefined && (
           <CommandGroup heading="From what you typed">
             {typed.kind === "clone" && (
-              <CommandItem value={typed.fullName} onSelect={() => onClone(typed.fullName)}>
+              <CommandItem
+                value={typed.fullName}
+                onSelect={() => onClone({ provider: "github", fullName: typed.fullName })}
+              >
                 <Download className="text-muted-foreground" />
                 <span className="truncate">
                   Clone <span className="font-medium">{typed.fullName}</span> from GitHub
+                </span>
+              </CommandItem>
+            )}
+            {typed.kind === "cloneGitLab" && (
+              <CommandItem
+                value={typed.fullPath}
+                onSelect={() => onClone({ provider: "gitlab", fullPath: typed.fullPath })}
+              >
+                <Download className="text-muted-foreground" />
+                <span className="truncate">
+                  Clone <span className="font-medium">{typed.fullPath}</span> from{" "}
+                  {gitlab?.host ?? "GitLab"}
                 </span>
               </CommandItem>
             )}
@@ -216,7 +279,11 @@ function RepositoryList({
             )}
             {typed.kind === "added" && (
               <CommandItem
-                value={typed.project.githubFullName ?? typed.project.name}
+                value={
+                  typed.project.githubFullName ??
+                  typed.project.gitlab?.fullPath ??
+                  typed.project.name
+                }
                 onSelect={() => onOpen(typed.project)}
               >
                 <FolderOpen className="text-muted-foreground" />
@@ -239,9 +306,21 @@ function RepositoryList({
             />
           </>
         )}
-        {AsyncResult.isInitial(connection) && <ListSkeleton />}
+        {gitlab !== undefined && gitlabConnected && (
+          <>
+            {(typed !== undefined || connected) && <CommandSeparator />}
+            <GitLabRepos
+              host={gitlab.host}
+              username={gitlab.user?.username ?? ""}
+              projects={projects}
+              onLoaded={setGitlabRepos}
+              onClone={onClone}
+            />
+          </>
+        )}
+        {accountsPending && <ListSkeleton />}
       </CommandList>
-      <ConnectionFooter connection={connection} />
+      {unlisted !== undefined && <ConnectionFooter reason={unlisted} />}
     </Command>
   )
 }
@@ -257,7 +336,7 @@ function GitHubRepos({
   readonly projects: ReadonlyArray<Project>
   /** Hands the whole list up, so typed text is only offered when the list lacks it. */
   readonly onLoaded: (repos: ReadonlyArray<GitHubRepo>) => void
-  readonly onClone: (fullName: string) => void
+  readonly onClone: (target: CloneTarget) => void
 }) {
   const repos = useAtomValue(reposAtom)
   const now = useNow(60_000)
@@ -280,9 +359,55 @@ function GitHubRepos({
       {addable.map((repo) => (
         <RepoRow
           key={repo.fullName}
+          name={repo.fullName}
           repo={repo}
           now={now}
-          onSelect={() => onClone(repo.fullName)}
+          onSelect={() => onClone({ provider: "github", fullName: repo.fullName })}
+        />
+      ))}
+    </CommandGroup>
+  )
+}
+
+/** The same for the connected GitLab instance. */
+function GitLabRepos({
+  host,
+  username,
+  projects,
+  onLoaded,
+  onClone,
+}: {
+  readonly host: string
+  readonly username: string
+  readonly projects: ReadonlyArray<Project>
+  readonly onLoaded: (repos: ReadonlyArray<GitLabRepo>) => void
+  readonly onClone: (target: CloneTarget) => void
+}) {
+  const repos = useAtomValue(gitlabReposAtom)
+  const now = useNow(60_000)
+  const loaded = AsyncResult.isSuccess(repos) ? repos.value : undefined
+  useEffect(() => {
+    if (loaded !== undefined) onLoaded(loaded)
+  }, [loaded, onLoaded])
+
+  if (AsyncResult.isFailure(repos)) {
+    return (
+      <p className="px-3 py-6 text-center text-sm text-destructive">{describeCause(repos.cause)}</p>
+    )
+  }
+  if (loaded === undefined) return <ListSkeleton />
+
+  const addable = addableGitLabRepos(loaded, projects, host)
+  if (addable.length === 0) return null
+  return (
+    <CommandGroup heading={`${host === GITLAB_DEFAULT_HOST ? "GitLab" : host} · ${username}`}>
+      {addable.map((repo) => (
+        <RepoRow
+          key={repo.fullPath}
+          name={repo.fullPath}
+          repo={repo}
+          now={now}
+          onSelect={() => onClone({ provider: "gitlab", fullPath: repo.fullPath })}
         />
       ))}
     </CommandGroup>
@@ -291,11 +416,14 @@ function GitHubRepos({
 
 /** Two lines, like a branch: the repository and when it last changed, then what it is. */
 function RepoRow({
+  name,
   repo,
   now,
   onSelect,
 }: {
-  readonly repo: GitHubRepo
+  /** The repository as its host writes it: `owner/repo` or `group/subgroup/name`. */
+  readonly name: string
+  readonly repo: Pick<GitHubRepo, "description" | "private" | "updatedAt">
   readonly now: number
   readonly onSelect: () => void
 }) {
@@ -303,7 +431,7 @@ function RepoRow({
   const ago = formatTimeAgo(repo.updatedAt, now)
   return (
     <CommandItem
-      value={repo.fullName}
+      value={name}
       keywords={repo.description === null ? [] : [repo.description]}
       onSelect={onSelect}
       className="items-start"
@@ -311,7 +439,7 @@ function RepoRow({
       <Icon className="mt-0.5 text-muted-foreground" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-medium">{repo.fullName}</span>
+          <span className="truncate font-medium">{name}</span>
           {repo.private && <span className="shrink-0 text-xs text-muted-foreground">private</span>}
           {ago !== "" && (
             <span className="shrink-0 text-xs text-muted-foreground">
@@ -338,20 +466,11 @@ function ListSkeleton() {
   )
 }
 
-/** Says why no repositories are listed, and where to fix it. Nothing when GitHub is connected. */
-function ConnectionFooter({
-  connection,
-}: {
-  readonly connection: AsyncResult.AsyncResult<GitHubConnection, unknown>
-}) {
-  if (AsyncResult.isInitial(connection)) return null
-  if (AsyncResult.isSuccess(connection) && connection.value.user !== null) return null
-  const reason = AsyncResult.isFailure(connection)
-    ? describeCause(connection.cause)
-    : (connection.value.problem ?? "GitHub is not connected, so your repositories are not listed.")
+/** Says why no repositories are listed, and where to fix it. */
+function ConnectionFooter({ reason }: { readonly reason: string }) {
   return (
     <div className="-mx-1 mt-1 -mb-1 flex items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
-      <GitHubIcon className="size-3.5" />
+      <FolderGit2 className="size-3.5 shrink-0" />
       <span className="min-w-0 flex-1">{reason}</span>
       <Button
         variant="outline"
@@ -361,7 +480,7 @@ function ConnectionFooter({
           openSettings("repositories")
         }}
       >
-        Connect GitHub
+        Connect an account
       </Button>
     </div>
   )

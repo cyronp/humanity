@@ -19,6 +19,9 @@ export interface ServerConfigShape {
   readonly authTokenPath: string
   /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
   readonly githubTokenPath: string
+  /** A GitLab token the human saved from the UI, and the instance it is for. Same lifetime. */
+  readonly gitlabTokenPath: string
+  readonly gitlabHostPath: string
   /** Humanity's own MCP servers, in Claude Code's `.mcp.json` format. Exists once one is added. */
   readonly mcpConfigPath: string
   /** The local Claude Code plugin Humanity's own skills live in: `<pluginDir>/skills/<name>/SKILL.md`. */
@@ -47,6 +50,8 @@ const make = (options: {
     accountsDir: join(home, "accounts"),
     authTokenPath: join(home, "auth-token"),
     githubTokenPath: join(home, "github-token"),
+    gitlabTokenPath: join(home, "gitlab-token"),
+    gitlabHostPath: join(home, "gitlab-host"),
     mcpConfigPath: join(home, "mcp.json"),
     pluginDir: join(home, "plugin"),
     webDist: options.webDist,

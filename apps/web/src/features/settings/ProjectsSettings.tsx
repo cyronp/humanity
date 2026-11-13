@@ -116,6 +116,18 @@ function ProjectSettings({ projects }: { readonly projects: ReadonlyArray<Projec
             </a>
           </Row>
         )}
+        {project.gitlab !== null && (
+          <Row label="GitLab">
+            <a
+              href={`https://${project.gitlab.host}/${project.gitlab.fullPath}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-4 hover:underline"
+            >
+              {project.gitlab.fullPath}
+            </a>
+          </Row>
+        )}
         <Row label="Default branch">
           <code className="font-mono text-xs">{project.defaultBranch}</code>
         </Row>

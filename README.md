@@ -10,6 +10,7 @@ The agent (Claude, through the Claude Agent SDK) works on its own by default: it
 - **git** on your `PATH`.
 - **A Claude login.** Run `claude auth login` once with your Claude Pro, Max, Team or Enterprise account (or the bundled CLI's own `auth login` command, shown in the first-run guide). An `ANTHROPIC_API_KEY` in the environment also works, but Claude Code then bills that key instead of your plan.
 - Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), a token saved in Humanity (Settings, under Repositories, or the first-run guide), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
+- Optional, for GitLab (gitlab.com or a self-hosted instance): the [GitLab CLI](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`), a token saved in Humanity together with the instance's host (Settings, under Repositories), or a `GITLAB_TOKEN` (with `GITLAB_HOST` for an instance of your own). A personal access token with the `read_api` and `read_repository` scopes is enough. The token is only ever sent to its own instance, over https.
 
 ## Getting started
 
@@ -31,7 +32,7 @@ The daemon also prints which Claude account the agent will run as. The first vis
 
 Then:
 
-1. **Add a repository** from the project menu in the header. Your GitHub repositories are listed once GitHub is connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub URL or the path of a local git repository adds that instead.
+1. **Add a repository** from the project menu in the header. Your GitHub and GitLab repositories are listed once those accounts are connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub or GitLab URL or the path of a local git repository adds that instead.
 2. **Start a thread** from the home page. Pick the branch your checkout should be on (local or `origin/…`), the permissions, and write a first message. The thread works in your checkout; **Set up worktree** in its header moves it into a branch `humanity/<id>-<title>` and a worktree of its own.
 3. **Work with the agent.** It runs on its own unless the thread is set to ask. In a thread that asks, a file change opens the review panel and a command shows a card above the message box; the session status turns to **waiting for you** until you decide.
 4. **Commit** the work from the **Changes** tab.
@@ -77,6 +78,8 @@ npm start          # serves the web app and the API on http://127.0.0.1:7420
 | `HUMANITY_HOME`     | `~/.humanity` | Data directory                                        |
 | `HUMANITY_PORT`     | `7420`        | Daemon port. It always binds to `127.0.0.1`           |
 | `GITHUB_TOKEN`      | (none)        | Used when no token is saved and `gh` is not logged in |
+| `GITLAB_TOKEN`      | (none)        | The same for GitLab and `glab`                        |
+| `GITLAB_HOST`       | `gitlab.com`  | The GitLab instance `GITLAB_TOKEN` is for             |
 
 Everything Humanity writes lives in the data directory:
 
@@ -85,13 +88,15 @@ Everything Humanity writes lives in the data directory:
 ├─ humanity.db                       projects, sessions, messages, tool calls, decisions
 ├─ auth-token                        the daemon's access token
 ├─ github-token                      a GitHub token saved from the UI, only while one is saved
+├─ gitlab-token, gitlab-host         the same for GitLab, with the instance the token is for
 ├─ worktrees/<project>/<session>/    one git worktree per session
 └─ repos/<owner>/<repo>/             clones made from GitHub
+   repos/<host>/<group>/<repo>/      clones made from GitLab
 ```
 
 Claude Code itself keeps its login and its session transcripts (used to resume sessions) in its own config directory, `~/.claude` or `CLAUDE_CONFIG_DIR`, as it does for your terminal sessions. Humanity never reads or stores your Claude credentials.
 
-API keys and tokens are never stored in the database. The GitHub token is passed to `git clone` only as a header for that one process, so it never ends up in a clone's configuration.
+API keys and tokens are never stored in the database. The GitHub or GitLab token is passed to `git clone` only as a header for that one process, so it never ends up in a clone's configuration.
 
 ## Development
 

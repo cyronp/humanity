@@ -31,6 +31,7 @@ const project = (name: string, githubFullName: string | null): Project => ({
   name,
   localPath: `/repos/${name}`,
   githubFullName,
+  gitlab: null,
   defaultBranch: "main",
   defaultAutonomy: null,
   createdAt: "2026-11-01T00:00:00Z",

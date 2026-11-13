@@ -10,6 +10,8 @@ export const Project = Schema.Struct({
   /** Absolute path of the user's repository. The agent never works inside it. */
   localPath: Schema.String,
   githubFullName: Schema.NullOr(Schema.String),
+  /** The GitLab repository its `origin` points at: the instance and `group/name`. */
+  gitlab: Schema.NullOr(Schema.Struct({ host: Schema.String, fullPath: Schema.String })),
   defaultBranch: Schema.String,
   /**
    * The autonomy this project's new threads start with, or `null` to follow

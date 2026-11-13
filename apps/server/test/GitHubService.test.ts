@@ -11,7 +11,7 @@ import { GITHUB_API, GitHubService, nextPageUrl } from "../src/services/GitHubSe
 import { GitHubToken } from "../src/services/GitHubToken.ts"
 import { GitService } from "../src/services/GitService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
-import { git, tempDir, tempRepo } from "./helpers.ts"
+import { git, offlineGitLab, tempDir, tempRepo } from "./helpers.ts"
 
 interface Reply {
   readonly status?: number
@@ -298,6 +298,7 @@ describe("cloning from GitHub", () => {
     ProjectService.layer.pipe(
       Layer.provideMerge(GitService.layer),
       Layer.provideMerge(github(client, token)),
+      Layer.provideMerge(offlineGitLab),
       Layer.provideMerge(DatabaseLive),
       Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
       Layer.provideMerge(NodeServices.layer),
