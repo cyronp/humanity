@@ -1,7 +1,6 @@
 import type { ProposedChange } from "@humanity/contracts"
 import { useEffect, useEffectEvent } from "react"
-import { Kbd } from "@/components/ui/kbd"
-import { ChangeReview } from "./ChangeReview.tsx"
+import { ChangeCard } from "./ChangeCard.tsx"
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -9,10 +8,10 @@ const isTyping = (target: EventTarget | null) =>
 
 /**
  * Every file change the agent waits on, each allowed or denied as a whole.
- * Keyboard, for the change at the top (or the one a link named): `a` allow,
- * `d` deny, `c` comment.
+ * Keyboard, outside the message box, for the oldest change (or the one a link
+ * named): `a` allow, `d` deny, `c` comment.
  */
-export function ReviewPanel({
+export function ChangeCards({
   changes,
   file,
 }: {
@@ -64,23 +63,10 @@ export function ReviewPanel({
     return () => window.removeEventListener("keydown", listener)
   }, [])
 
-  if (changes.length === 0) {
-    return (
-      <p className="p-6 text-center text-sm text-muted-foreground">
-        Nothing is waiting for you. In a thread that asks first, each file change appears here until
-        you allow or deny it.
-      </p>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-8 p-4">
-      <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Kbd>a</Kbd> allow · <Kbd>d</Kbd> deny · <Kbd>c</Kbd> comment
-      </p>
-      {changes.map((change) => (
-        <ChangeReview key={change.id} change={change} />
-      ))}
+  return changes.map((change) => (
+    // A solid base: the card's own amber tint is see-through.
+    <div key={change.id} className="rounded-lg bg-background">
+      <ChangeCard change={change} />
     </div>
-  )
+  ))
 }

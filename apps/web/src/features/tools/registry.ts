@@ -15,7 +15,7 @@ export interface ToolCallProps {
 export interface ToolRenderer {
   readonly name: string
   readonly match: (toolName: string, input: unknown) => boolean
-  /** One line, used in the chat and the timeline. */
+  /** One line, used in the chat. */
   readonly Summary: FC<ToolCallProps>
   /** The expanded view. */
   readonly Detail: FC<ToolCallProps>

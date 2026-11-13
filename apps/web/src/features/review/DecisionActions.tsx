@@ -14,8 +14,8 @@ export interface Verdict {
 /**
  * The answer to anything the agent waits on, a file change or a tool call
  * alike: deny (with a word for the agent), allow once, or allow this tool for
- * the rest of the thread. The buttons carry `data-decide` so the review
- * panel's shortcuts can press them.
+ * the rest of the thread. The buttons carry `data-decide` so the pending
+ * change cards' shortcuts can press them.
  */
 export function DecisionActions({
   toolName,

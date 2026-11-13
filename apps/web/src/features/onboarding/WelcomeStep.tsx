@@ -17,7 +17,7 @@ const PRINCIPLES: ReadonlyArray<{
   {
     icon: FileDiff,
     title: "On its own by default",
-    body: "A thread reads, edits and runs commands without stopping. Every call it makes shows in the chat and the timeline.",
+    body: "A thread reads, edits and runs commands without stopping. Every call it makes shows in the chat.",
   },
   {
     icon: ShieldCheck,

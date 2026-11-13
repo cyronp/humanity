@@ -22,7 +22,7 @@ const STATUS_ICON = {
   denied: <Ban className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />,
 } as const
 
-/** The one-line summary of a call, from its renderer. Shared by the chat and the timeline. */
+/** The one-line summary of a call, from its renderer. Used in the chat. */
 export function ToolSummary(props: ToolCallProps) {
   const { Summary } = findRenderer(toolRenderers, props.toolName, props.input)
   return <Summary {...props} />
