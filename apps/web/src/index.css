@@ -9,6 +9,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-git-modified: var(--git-modified);
+  --color-git-added: var(--git-added);
+  --color-git-deleted: var(--git-deleted);
+  --color-git-renamed: var(--git-renamed);
+  --color-git-merged: var(--git-merged);
+  --color-git-draft: var(--git-draft);
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -79,7 +85,16 @@
   --radius: 0.625rem;
   /* Accent used only where Claude itself is shown (its mark, the connection step). */
   --claude: oklch(0.65 0.14 40);
-  --sidebar: oklch(0.985 0 0);
+  /* The chat area and the sidebar trade places: the chat is the lighter grey, the sidebar the page colour. */
+  --chat: oklch(0.985 0 0);
+  /* File status colours: the hues of VS Code's Git decorations, saturated to stand out on this theme. */
+  --git-modified: #d97706;
+  --git-added: #16a34a;
+  --git-deleted: #dc2626;
+  --git-renamed: #0d9488;
+  --git-merged: #7c3aed;
+  --git-draft: #0284c7;
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -114,7 +129,14 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+  --chat: oklch(0.205 0 0);
+  --git-modified: #fbbf24;
+  --git-added: #4ade80;
+  --git-deleted: #f87171;
+  --git-renamed: #2dd4bf;
+  --git-merged: #a78bfa;
+  --git-draft: #38bdf8;
+  --sidebar: oklch(0.145 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -127,6 +149,12 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /*
+     * The few places that scroll natively (the transcript, code blocks, text
+     * fields) get a thin bar in the colours of the ScrollArea's.
+     */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
   body {
     @apply bg-background text-foreground;

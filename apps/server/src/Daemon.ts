@@ -6,54 +6,72 @@ import { createServer } from "node:http"
 import { AgentRunnerLive } from "./agent/AgentRunnerLive.ts"
 import { AuthToken } from "./AuthToken.ts"
 import { ClaudeCode } from "./claude/ClaudeCode.ts"
+import { ClaudeHistory } from "./claude/ClaudeHistory.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
+import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
+import { GitLabHandlers } from "./rpc/GitLabHandlers.ts"
+import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
+import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
+import { ExtensionsService } from "./services/ExtensionsService.ts"
+import { ForgeSync } from "./services/ForgeSync.ts"
 import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
+import { GitLabService } from "./services/GitLabService.ts"
+import { GitLabToken } from "./services/GitLabToken.ts"
 import { GitService } from "./services/GitService.ts"
-import { PolicyService } from "./services/PolicyService.ts"
+import { HistoryImport } from "./services/HistoryImport.ts"
+import { PreferencesService } from "./services/PreferencesService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
+import { PullRequestService } from "./services/PullRequestService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 
 /**
- * Domain services, built on whatever config, database, platform, agent runner
- * and Claude Code runtime they are given. Tests swap in the fake runner here.
+ * Domain services, built on whatever config, database, platform, agent runner,
+ * Claude Code runtime and Claude Code history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
-  SessionService.layer.pipe(
+  Layer.merge(HistoryImport.layer, PullRequestService.layer).pipe(
+    Layer.provideMerge(ForgeSync.layer),
+    Layer.provideMerge(SessionService.layer),
     Layer.provideMerge(ApprovalService.layer),
-    Layer.provideMerge(PolicyService.layer),
+    Layer.provideMerge(PreferencesService.layer),
     Layer.provideMerge(ProjectService.layer),
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
+    Layer.provideMerge(ClaudeAccountService.layer),
+    Layer.provideMerge(ExtensionsService.layer),
   ),
-  ClaudeAccountService.layer,
 )
 
 export const RpcHandlers = Layer.mergeAll(
   ProjectsHandlers,
   GitHandlers,
   GitHubHandlers,
+  GitLabHandlers,
   SessionsHandlers,
   ApprovalsHandlers,
   ClaudeHandlers,
+  PreferencesHandlers,
+  ExtensionsHandlers,
+  PullRequestsHandlers,
 )
 
 /**
  * Routes, handlers and services. Still needs config, auth token, database,
- * platform, agent runner, the Claude Code runtime, GitHub and an HTTP server.
+ * platform, agent runner, the Claude Code runtime, GitHub, GitLab and an HTTP server.
  */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
 
@@ -71,7 +89,6 @@ const Banner = Layer.effectDiscard(
   }),
 )
 
-/** One line for the terminal: which Claude account the agent will run as. */
 export const describeClaudeForBanner = (status: ClaudeStatus): string => {
   const connection = status.connection
   switch (connection._tag) {
@@ -98,9 +115,15 @@ const ClaudeBanner = Layer.effectDiscard(
   }).pipe(Effect.forkScoped),
 )
 
-/** GitHub over the real network, with the token from `gh` or `GITHUB_TOKEN`. */
+/** GitHub over the real network, with a saved token or the one from `gh` or `GITHUB_TOKEN`. */
 const GitHubLive = GitHubService.layer.pipe(
   Layer.provide(GitHubToken.layer),
+  Layer.provide(FetchHttpClient.layer),
+)
+
+/** GitLab likewise: a saved token, or the one from `glab` or `GITLAB_TOKEN`, for its instance. */
+const GitLabLive = GitLabService.layer.pipe(
+  Layer.provide(GitLabToken.layer),
   Layer.provide(FetchHttpClient.layer),
 )
 
@@ -114,14 +137,16 @@ const HttpServerLive = Layer.unwrap(
 /** The whole daemon as one layer. Needs only a `ServerConfig`. */
 // No per-request log: the RPC socket URL carries the auth token in its query string.
 export const Daemon = HttpRouter.serve(
-  Layer.merge(Banner, ClaudeBanner).pipe(Layer.provideMerge(App)),
+  Layer.mergeAll(Banner, ClaudeBanner, HistoryImport.background).pipe(Layer.provideMerge(App)),
   { disableLogger: true },
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
   // After the runner: both it and the account check run on this Claude Code.
   Layer.provide(ClaudeCode.layer),
+  Layer.provide(ClaudeHistory.layer),
   Layer.provide(GitHubLive),
+  Layer.provide(GitLabLive),
   Layer.provide(HttpServerLive),
   Layer.provide(DatabaseLive),
   Layer.provide(NodeServices.layer),

@@ -1,6 +1,6 @@
 /**
- * Where a hunk stands in review. `"edited"` is reserved for post-MVP: a hunk
- * whose lines the human rewrote before approving it.
+ * Where the change a hunk belongs to stands. Every hunk of a change shares
+ * it; hunks decided one by one only exist on changes from before that ended.
  */
 export type HunkStatus = "pending" | "approved" | "rejected"
 
@@ -16,12 +16,11 @@ export interface DiffHunk {
   readonly lines: ReadonlyArray<string>
 }
 
-/** A hunk under review. */
 export interface Hunk extends DiffHunk {
   readonly id: string
   readonly status: HunkStatus
+  /** Only on hunks from when each one was decided separately. */
   readonly comment?: string
-  // post-MVP: readonly editedLines?: ReadonlyArray<string>
 }
 
 export type ChangeKind = "create" | "modify"
@@ -36,13 +35,4 @@ export interface FileDiff {
   /** True when git reports a binary change; there are no hunks to show. */
   readonly binary: boolean
   readonly hunks: ReadonlyArray<DiffHunk>
-}
-
-export type ReviewOutcome = "applied" | "partially_applied" | "rejected"
-
-/** The human's verdict on a single hunk. */
-export interface HunkDecision {
-  readonly index: number
-  readonly decision: "approved" | "rejected"
-  readonly comment?: string | undefined
 }

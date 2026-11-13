@@ -1,0 +1,44 @@
+import type { SVGProps } from "react"
+import { cn } from "cn"
+
+/**
+ * Humanity's brand mark: a 24×24 pixel halftone of the head of Michelangelo's
+ * David. Each layer is one path of 1×1 cells at a fixed opacity, all drawn in
+ * `currentColor`; at 24px every cell lands on one CSS pixel. The favicon
+ * (`public/favicon.svg`) is the same mark in blue-500.
+ */
+const LAYERS: ReadonlyArray<readonly [opacity: number, d: string]> = [
+  [
+    0.25,
+    "M11 0h3v1h-3zM17 0h1v1h-1zM6 1h1v1h-1zM20 1h1v1h-1zM9 2h1v1h-1zM22 2h1v1h-1zM10 3h2v1h-2zM14 3h1v1h-1zM17 3h1v1h-1zM19 3h1v1h-1zM10 4h1v1h-1zM15 4h1v1h-1zM19 4h1v1h-1zM16 5h3v1h-3zM22 5h1v1h-1zM9 6h1v1h-1zM11 6h1v1h-1zM13 6h2v1h-2zM21 6h1v1h-1zM4 7h3v1h-3zM8 7h1v1h-1zM12 7h1v1h-1zM23 7h1v1h-1zM4 8h1v1h-1zM13 8h2v1h-2zM17 8h1v1h-1zM8 9h1v1h-1zM10 9h1v1h-1zM15 9h3v1h-3zM21 9h1v1h-1zM23 9h1v1h-1zM2 10h3v1h-3zM8 10h2v1h-2zM18 10h1v1h-1zM21 10h2v1h-2zM5 11h1v1h-1zM7 11h3v1h-3zM17 11h1v1h-1zM21 11h1v1h-1zM3 12h1v1h-1zM5 12h1v1h-1zM21 12h1v1h-1zM0 13h2v1h-2zM3 14h1v1h-1zM2 15h3v1h-3zM18 15h2v1h-2zM1 16h1v1h-1zM5 16h2v1h-2zM1 17h1v1h-1zM3 17h1v1h-1zM5 17h1v1h-1zM20 17h1v1h-1zM8 18h2v1h-2zM2 19h2v1h-2zM5 19h1v1h-1zM8 19h1v1h-1zM9 20h3v1h-3zM19 20h1v1h-1zM1 21h4v1h-4zM12 21h1v1h-1zM1 22h3v1h-3zM1 23h4v1h-4z",
+  ],
+  [
+    0.5,
+    "M10 0h1v1h-1zM14 0h1v1h-1zM16 0h1v1h-1zM20 0h2v1h-2zM19 1h1v1h-1zM5 2h1v1h-1zM8 2h1v1h-1zM10 2h2v1h-2zM20 2h2v1h-2zM4 3h1v1h-1zM12 3h1v1h-1zM15 3h1v1h-1zM7 4h1v1h-1zM9 4h1v1h-1zM14 4h1v1h-1zM22 4h1v1h-1zM2 5h1v1h-1zM5 6h4v1h-4zM11 7h1v1h-1zM16 7h1v1h-1zM20 7h1v1h-1zM22 7h1v1h-1zM3 8h1v1h-1zM12 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM23 8h1v1h-1zM3 9h1v1h-1zM11 9h1v1h-1zM13 9h1v1h-1zM22 9h1v1h-1zM0 10h1v1h-1zM10 10h1v1h-1zM16 10h1v1h-1zM20 10h1v1h-1zM0 11h2v1h-2zM4 11h1v1h-1zM20 11h1v1h-1zM4 12h1v1h-1zM8 12h3v1h-3zM20 12h1v1h-1zM3 13h3v1h-3zM7 13h3v1h-3zM11 13h3v1h-3zM6 14h2v1h-2zM9 14h1v1h-1zM11 14h3v1h-3zM18 14h2v1h-2zM7 15h1v1h-1zM12 15h2v1h-2zM20 15h1v1h-1zM3 16h2v1h-2zM7 16h1v1h-1zM12 16h2v1h-2zM16 16h1v1h-1zM20 16h1v1h-1zM2 17h1v1h-1zM6 17h9v1h-9zM17 17h2v1h-2zM5 18h1v1h-1zM7 18h1v1h-1zM10 18h4v1h-4zM18 18h1v1h-1zM9 19h7v1h-7zM19 19h1v1h-1zM3 20h3v1h-3zM12 20h6v1h-6zM5 21h1v1h-1zM11 21h1v1h-1zM13 21h6v1h-6zM12 22h4v1h-4zM17 22h1v1h-1zM16 23h1v1h-1z",
+  ],
+  [
+    0.75,
+    "M15 0h1v1h-1zM18 0h2v1h-2zM7 1h2v1h-2zM18 1h1v1h-1zM21 1h1v1h-1zM13 2h1v1h-1zM15 2h5v1h-5zM8 3h1v1h-1zM13 3h1v1h-1zM16 3h1v1h-1zM21 3h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM8 4h1v1h-1zM13 4h1v1h-1zM6 5h4v1h-4zM3 6h1v1h-1zM10 6h1v1h-1zM15 6h5v1h-5zM22 6h1v1h-1zM2 7h2v1h-2zM14 7h2v1h-2zM17 7h1v1h-1zM19 7h1v1h-1zM1 8h1v1h-1zM15 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM12 9h1v1h-1zM19 9h1v1h-1zM1 10h1v1h-1zM11 10h1v1h-1zM14 10h2v1h-2zM10 11h3v1h-3zM15 11h2v1h-2zM18 11h1v1h-1zM11 12h3v1h-3zM6 13h1v1h-1zM10 13h1v1h-1zM14 13h1v1h-1zM17 13h2v1h-2zM20 13h1v1h-1zM8 14h1v1h-1zM10 14h1v1h-1zM14 14h1v1h-1zM17 14h1v1h-1zM20 14h1v1h-1zM9 15h3v1h-3zM14 15h1v1h-1zM2 16h1v1h-1zM8 16h4v1h-4zM14 16h2v1h-2zM17 16h3v1h-3zM15 17h1v1h-1zM19 17h1v1h-1zM1 18h3v1h-3zM6 18h1v1h-1zM14 18h2v1h-2zM17 18h1v1h-1zM19 18h1v1h-1zM6 19h1v1h-1zM16 19h1v1h-1zM8 20h1v1h-1zM18 20h1v1h-1zM10 21h1v1h-1zM5 22h2v1h-2zM11 22h1v1h-1zM16 22h1v1h-1zM5 23h3v1h-3zM10 23h6v1h-6z",
+  ],
+  [
+    1,
+    "M9 1h9v1h-9zM6 2h2v1h-2zM12 2h1v1h-1zM5 3h3v1h-3zM9 3h1v1h-1zM22 3h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM3 5h1v1h-1zM2 6h1v1h-1zM18 7h1v1h-1zM2 8h1v1h-1zM19 8h1v1h-1zM1 9h2v1h-2zM20 9h1v1h-1zM12 10h2v1h-2zM19 10h1v1h-1zM13 11h2v1h-2zM19 11h1v1h-1zM14 12h6v1h-6zM15 13h2v1h-2zM19 13h1v1h-1zM15 14h2v1h-2zM8 15h1v1h-1zM15 15h3v1h-3zM16 17h1v1h-1zM16 18h1v1h-1zM7 19h1v1h-1zM17 19h2v1h-2zM6 20h2v1h-2zM6 21h4v1h-4zM7 22h4v1h-4zM8 23h2v1h-2z",
+  ],
+]
+
+export function BrandMark({ className, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      className={cn("text-blue-500", className)}
+      {...props}
+    >
+      {LAYERS.map(([opacity, d]) => (
+        <path key={opacity} fillOpacity={opacity} d={d} />
+      ))}
+    </svg>
+  )
+}

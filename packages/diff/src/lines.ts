@@ -42,3 +42,44 @@ export const countChanges = (
   }
   return { added, removed }
 }
+
+/**
+ * How a message points the agent at one row of a diff: `path:line` in the
+ * file as it is now. A removed line no longer has a place there, so it is
+ * named by the number it had before the change, and says so.
+ */
+export const lineReference = (filePath: string, line: DiffLine): string | undefined => {
+  if (line.newNumber !== undefined) return `${filePath}:${line.newNumber}`
+  if (line.oldNumber !== undefined) return `${filePath}:${line.oldNumber} (removed line)`
+  return undefined
+}
+
+const span = (start: number, lines: number) =>
+  lines === 1 ? `${start}` : `${start}-${start + lines - 1}`
+
+/**
+ * How a message points the agent at a whole hunk: the lines it covers in the
+ * file as it is now, or the old ones when the hunk only removed lines.
+ */
+export const hunkReference = (filePath: string, hunk: DiffHunk): string =>
+  hunk.newLines > 0
+    ? `${filePath}:${span(hunk.newStart, hunk.newLines)}`
+    : `${filePath}:${span(hunk.oldStart, hunk.oldLines)} (removed lines)`
+
+/**
+ * Where each row sits in the file as it is now, for opening it in an editor.
+ * A removed line is no longer there, so it points at the line that took its
+ * place: the next one still in the file, else the one after the last. Meta
+ * rows, and a hunk that keeps no line at all, have no place.
+ */
+export const currentLineNumbers = (rows: ReadonlyArray<DiffLine>): Array<number | undefined> => {
+  const kept = rows.map((row) => row.newNumber)
+  return rows.map((row, position) => {
+    if (row.newNumber !== undefined) return row.newNumber
+    if (row.kind !== "remove") return undefined
+    const next = kept.slice(position + 1).find((number) => number !== undefined)
+    if (next !== undefined) return next
+    const previous = kept.slice(0, position).findLast((number) => number !== undefined)
+    return previous === undefined ? undefined : previous + 1
+  })
+}

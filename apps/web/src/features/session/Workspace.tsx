@@ -1,18 +1,16 @@
-import type { Project } from "@humanity/contracts"
+import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
-import { PanelRightClose, PanelRightOpen } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Composer } from "@/features/chat/Composer"
+import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
+import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
+import { QuestionPanel } from "@/features/questions/QuestionPanel"
+import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
-import { ReviewPanel } from "@/features/review/ReviewPanel"
-import { TimelinePanel } from "@/features/timeline/TimelinePanel"
-import { ChangesPanel } from "./ChangesPanel.tsx"
+import { SessionPanel } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
+import { SourceControlButton } from "./SourceControlButton.tsx"
 import {
   approvalForToolUse,
   isBusy,
@@ -20,47 +18,69 @@ import {
   pendingConfirmations,
   type SessionView,
 } from "./state.ts"
+import { UsageMeters } from "./UsageMeters.tsx"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
-  readonly hunk?: number | undefined
 }
 
-/** Chat in the middle; review and timeline tabs on the right. */
+/**
+ * Chat in the middle, with whatever the agent waits on pinned above the
+ * message box; the worktree's diff on the right.
+ */
 export function Workspace({
   project,
   view,
   search,
-  onSearchChange,
 }: {
   readonly project: Project
   readonly view: SessionView
   readonly search: WorkspaceSearch
-  readonly onSearchChange: (search: WorkspaceSearch) => void
 }) {
   const { session } = view
   const changes = pendingChanges(view)
   const confirmations = pendingConfirmations(view)
   const waiting = changes.length + confirmations.length
-  const [panelOpen, setPanelOpen] = useState(changes.length > 0 || search.file !== undefined)
-  const [tab, setTab] = useState("review")
-  const bottom = useRef<HTMLDivElement>(null)
+  // The oldest question takes the message box's place; every other call keeps its card.
+  const asked = confirmations.find((confirmation) => confirmation.toolName === QUESTION_TOOL)
+  const questions = asked === undefined ? undefined : parseQuestions(asked.input)
+  const cards =
+    questions === undefined ? confirmations : confirmations.filter((each) => each !== asked)
+  const [panelOpen, setPanelOpen] = useState(false)
+  // Grows whenever the agent may have written files, so what shows them refreshes.
+  const activity = Object.keys(view.toolCalls).length + view.approvals.length
+  // The diff panel's reference buttons write into the message box.
+  const composer = useRef<ComposerHandle>(null)
+  const canReference = acceptsMessages(session) && questions === undefined
 
-  // A new change to review opens the panel on the review tab.
-  const pendingCount = changes.length
-  const [seenPending, setSeenPending] = useState(pendingCount)
-  if (pendingCount !== seenPending) {
-    setSeenPending(pendingCount)
-    if (pendingCount > seenPending) {
-      setPanelOpen(true)
-      setTab("review")
-    }
-  }
-
-  // Keep the newest output in view as it streams in.
+  // The message box floats over the transcript; the transcript leaves room for its height.
+  const [dock, setDock] = useState<HTMLDivElement | null>(null)
+  const [dockHeight, setDockHeight] = useState(0)
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" })
-  }, [view.messages.length, view.draft, confirmations.length])
+    if (dock === null) return
+    const observer = new ResizeObserver(() => setDockHeight(dock.offsetHeight))
+    observer.observe(dock)
+    return () => observer.disconnect()
+  }, [dock])
+
+  // Beside the chat, the panel runs to the top and the header ends where it
+  // begins. Alone on a narrow screen, the header keeps the full width.
+  const [panel, setPanel] = useState<HTMLElement | null>(null)
+  const [measuredWidth, setMeasuredWidth] = useState(0)
+  useEffect(() => {
+    const row = panel?.parentElement
+    if (panel === null || row === null || row === undefined) return
+    // The observer also reports once as soon as it starts.
+    const observer = new ResizeObserver(() => {
+      const width = panel.offsetWidth
+      setMeasuredWidth(width < row.clientWidth ? width : 0)
+    })
+    observer.observe(panel)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [panel])
+  const panelWidth = panel === null ? 0 : measuredWidth
+  useAppHeaderInsetEnd(panelWidth)
 
   // A blocked agent is visible from other tabs too.
   useEffect(() => {
@@ -80,95 +100,100 @@ export function Workspace({
         project={project}
         session={session}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPanelOpen((open) => !open)}
-            aria-expanded={panelOpen}
-          >
-            {panelOpen ? <PanelRightClose /> : <PanelRightOpen />}
-            Review
-            {changes.length > 0 && (
-              <Badge className="bg-amber-500 text-black">{changes.length}</Badge>
-            )}
-          </Button>
+          <SourceControlButton
+            session={session}
+            open={panelOpen}
+            onToggle={() => setPanelOpen((open) => !open)}
+          />
         }
       />
       <div className="flex min-h-0 flex-1">
-        <div className={cn("flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
-              {view.messages.length === 0 && view.draft === "" && (
+        <div className={cn("relative flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
+          <div className="min-h-0 flex-1">
+            <MessageList
+              bottomInset={dockHeight}
+              messages={view.messages}
+              toolCalls={view.toolCalls}
+              draft={view.draft}
+              working={session.status === "running"}
+              approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
+              worktreePath={session.worktreePath}
+              empty={
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  Ask the agent about this repository. It reads freely; every change it proposes
-                  waits for you.
+                  Ask the agent about this repository. How much it does without asking is this
+                  thread's permissions, next to the message box.
                 </p>
-              )}
-              <MessageList
-                messages={view.messages}
-                toolCalls={view.toolCalls}
-                draft={view.draft}
-                approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
-                worktreePath={session.worktreePath}
-              />
-              {view.error !== null && <ErrorNote title="The agent stopped" message={view.error} />}
-              <div ref={bottom} />
-            </div>
+              }
+              footer={
+                view.error !== null ? (
+                  <ErrorNote title="The agent stopped" message={view.error} />
+                ) : undefined
+              }
+            />
           </div>
-          <div className="border-t bg-background">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4">
-              {confirmations.map((confirmation) => (
-                <ConfirmationCard key={confirmation.id} confirmation={confirmation} />
-              ))}
-              {changes.length > 0 && !panelOpen && (
-                <button
-                  type="button"
-                  onClick={() => setPanelOpen(true)}
-                  className="rounded-lg border-2 border-amber-500 bg-amber-500/5 p-3 text-left text-sm font-medium"
-                >
-                  The agent is waiting for your review of {changes.length} change
-                  {changes.length === 1 ? "" : "s"}. Open the review panel.
-                </button>
-              )}
-              <Composer
-                sessionId={session.id}
-                disabled={session.status === "ended"}
-                busy={isBusy(session.status)}
-              />
+          {/*
+            Floats over the transcript, which scrolls behind the message box.
+            It stops below the app header: when what waits for the human is
+            taller than that, its cards scroll and the message box stays put.
+            Both parts reserve the same scrollbar gutter as the transcript, so
+            all three centre on the same column.
+          */}
+          <div
+            ref={setDock}
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-[calc(100%-3.5rem)] flex-col"
+          >
+            {(cards.length > 0 || changes.length > 0) && (
+              <div className="min-h-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto">
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-4 *:pointer-events-auto">
+                  {cards.map((confirmation) => (
+                    // A solid base: the card's own amber tint is see-through.
+                    <div key={confirmation.id} className="rounded-lg bg-background">
+                      <ConfirmationCard confirmation={confirmation} />
+                    </div>
+                  ))}
+                  <ChangeCards changes={changes} file={search.file} />
+                </div>
+              </div>
+            )}
+            <div className="max-h-[calc(100svh-3.5rem)] shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
+                <UsageMeters sessionId={session.id} usage={view.usage} />
+                {asked !== undefined && questions !== undefined ? (
+                  <QuestionPanel key={asked.id} confirmation={asked} questions={questions} />
+                ) : (
+                  <Composer
+                    ref={composer}
+                    sessionId={session.id}
+                    projectId={session.projectId}
+                    autonomy={session.autonomy}
+                    model={session.model}
+                    effort={session.effort}
+                    disabled={!acceptsMessages(session)}
+                    busy={isBusy(session.status)}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
         {panelOpen && (
-          <aside className="flex min-h-0 w-full flex-col border-l lg:w-[55%] lg:max-w-4xl">
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
-              <TabsList className="m-2">
-                <TabsTrigger value="review">
-                  Review
-                  {changes.length > 0 && (
-                    <Badge className="ml-1 bg-amber-500 text-black">{changes.length}</Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                <TabsTrigger value="changes">Changes</TabsTrigger>
-              </TabsList>
-              <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto">
-                <ReviewPanel
-                  changes={changes}
-                  file={search.file}
-                  hunk={search.hunk}
-                  onFocusChange={(file, hunk) => onSearchChange({ file, hunk })}
-                />
-              </TabsContent>
-              <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto">
-                <TimelinePanel view={view} />
-              </TabsContent>
-              <TabsContent value="changes" className="min-h-0 flex-1 overflow-y-auto">
-                <ChangesPanel
-                  session={session}
-                  activity={Object.keys(view.toolCalls).length + view.approvals.length}
-                />
-              </TabsContent>
-            </Tabs>
+          <aside
+            ref={setPanel}
+            className={cn(
+              "flex min-h-0 w-full flex-col border-l lg:w-[55%] lg:max-w-4xl",
+              // Alone on a narrow screen, it sits under the full-width header.
+              panelWidth === 0 && "pt-12",
+            )}
+          >
+            <SessionPanel
+              session={session}
+              activity={activity}
+              onReference={
+                canReference
+                  ? (reference) => composer.current?.insert({ kind: "reference", reference })
+                  : undefined
+              }
+            />
           </aside>
         )}
       </div>

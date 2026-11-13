@@ -9,6 +9,13 @@ export const Branch = Schema.Struct({
   upstream: Schema.NullOr(Schema.String),
   commit: Schema.String,
   subject: Schema.String,
+  author: Schema.String,
+  /** When the last commit was made (committer date, ISO 8601). */
+  committedAt: Schema.String,
+  /** Commits the branch has that its upstream lacks; 0 without an upstream. */
+  ahead: Schema.Number,
+  /** Commits its upstream has that the branch lacks; 0 without an upstream. */
+  behind: Schema.Number,
 })
 export type Branch = typeof Branch.Type
 

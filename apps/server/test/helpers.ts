@@ -9,6 +9,8 @@ import { DatabaseLive } from "../src/db/Database.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
 import { GitHubService } from "../src/services/GitHubService.ts"
 import { GitHubToken } from "../src/services/GitHubToken.ts"
+import { GitLabService } from "../src/services/GitLabService.ts"
+import { GitLabToken } from "../src/services/GitLabToken.ts"
 
 /** A temp directory removed when the scope closes. */
 export const tempDir = (prefix = "humanity-test-") =>
@@ -66,9 +68,18 @@ export const offlineGitHub = GitHubService.layer.pipe(
   Layer.provide(offlineHttp),
 )
 
-/** Config, platform, an on-disk database rooted at `home`, and an offline GitHub. */
-export const baseLayer = (home: string) =>
-  Layer.mergeAll(DatabaseLive, offlineGitHub).pipe(
+/** GitLab likewise. */
+export const offlineGitLab = GitLabService.layer.pipe(
+  Layer.provide(GitLabToken.layerTest(undefined)),
+  Layer.provide(offlineHttp),
+)
+
+/**
+ * Config, platform, an on-disk database rooted at `home`, and an offline
+ * GitHub and GitLab. A test that follows pull requests passes its own GitHub.
+ */
+export const baseLayer = (home: string, github: Layer.Layer<GitHubService> = offlineGitHub) =>
+  Layer.mergeAll(DatabaseLive, github, offlineGitLab).pipe(
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
     Layer.provideMerge(NodeServices.layer),
   )

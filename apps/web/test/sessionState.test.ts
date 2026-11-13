@@ -28,6 +28,11 @@ const session: Session = {
   title: "Test",
   branch: "humanity/s1-test",
   worktreePath: "/home/me/.humanity/worktrees/p1/s1",
+  inWorktree: true,
+  origin: "humanity",
+  model: null,
+  effort: null,
+  autonomy: "ask",
   status: "idle",
   createdAt: "2026-11-09T00:00:00.000Z",
   updatedAt: "2026-11-09T00:00:00.000Z",
@@ -59,6 +64,7 @@ const snapshot = (overrides: Partial<Extract<SessionEvent, { _tag: "Snapshot" }>
     messages: [],
     toolCalls: [],
     approvals: [],
+    usage: { context: null, plan: null },
     ...overrides,
   }) satisfies SessionEvent
 

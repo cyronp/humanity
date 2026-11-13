@@ -12,6 +12,7 @@ export default tseslint.config(
       "apps/web/src/routeTree.gen.ts",
       // shadcn/ui components are vendored from the registry; keep them as generated.
       "apps/web/src/components/ui/**",
+      "apps/web/src/hooks/use-mobile.ts",
     ],
   },
   js.configs.recommended,

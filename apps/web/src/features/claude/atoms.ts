@@ -1,11 +1,22 @@
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** The Claude account agent sessions run as (cached by the daemon for a short while). */
+/** The active Claude account: the one new threads run as (cached by the daemon for a short while). */
 export const claudeStatusAtom = HumanityClient.query(
   "Claude.status",
   { refresh: false },
   { reactivityKeys: [keys.claude] },
 )
 
-/** Same RPC with `refresh: true`: forces a new check, then refreshes `claudeStatusAtom`. */
-export const refreshClaudeStatusAtom = HumanityClient.mutation("Claude.status")
+/** Every Claude account with its status, the default login first. */
+export const claudeAccountsAtom = HumanityClient.query(
+  "Claude.accounts",
+  { refresh: false },
+  { reactivityKeys: [keys.claude] },
+)
+
+/** Same RPC as a mutation: asks again (with `refresh: true`, right away), then refreshes both queries. */
+export const refreshClaudeAccountsAtom = HumanityClient.mutation("Claude.accounts")
+
+export const addClaudeAccountAtom = HumanityClient.mutation("Claude.addAccount")
+export const removeClaudeAccountAtom = HumanityClient.mutation("Claude.removeAccount")
+export const setActiveClaudeAccountAtom = HumanityClient.mutation("Claude.setActiveAccount")

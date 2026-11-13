@@ -94,6 +94,24 @@ export class SessionEnded extends Schema.TaggedError<SessionEnded>()("SessionEnd
   }
 }
 
+export class AttachmentRejected extends Schema.TaggedError<AttachmentRejected>()(
+  "AttachmentRejected",
+  { name: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return this.name === "" ? this.reason : `${this.name}: ${this.reason}`
+  }
+}
+
+export class AttachmentNotFound extends Schema.TaggedError<AttachmentNotFound>()(
+  "AttachmentNotFound",
+  { attachmentId: Schema.String },
+) {
+  override get message() {
+    return "This attachment is no longer stored."
+  }
+}
+
 export class ApprovalNotFound extends Schema.TaggedError<ApprovalNotFound>()("ApprovalNotFound", {
   id: Schema.String,
 }) {
@@ -111,22 +129,14 @@ export class ApprovalAlreadyDecided extends Schema.TaggedError<ApprovalAlreadyDe
   }
 }
 
-export class IncompleteReview extends Schema.TaggedError<IncompleteReview>()("IncompleteReview", {
-  missing: Schema.Array(Schema.Int),
-}) {
-  override get message() {
-    return `Decide every hunk before submitting. Still undecided: ${this.missing.join(", ")}.`
-  }
-}
-
 export class GitHubNotAuthenticated extends Schema.TaggedError<GitHubNotAuthenticated>()(
   "GitHubNotAuthenticated",
   { reason: Schema.Literals(["no_token", "rejected"]) },
 ) {
   override get message() {
     return this.reason === "no_token"
-      ? "No GitHub token found. Run `gh auth login`, or export GITHUB_TOKEN (a fine-grained token with read access to your repositories), then restart the daemon."
-      : "GitHub rejected the token. Run `gh auth login` again or replace GITHUB_TOKEN."
+      ? "GitHub is not connected. In Settings, under Repositories, sign in with the GitHub CLI (`gh auth login`) or add a token."
+      : "GitHub rejected the token. In Settings, under Repositories, replace it, or run `gh auth login` again."
   }
 }
 
@@ -153,6 +163,40 @@ export class GitHubRequestFailed extends Schema.TaggedError<GitHubRequestFailed>
   }
 }
 
+export class GitLabNotAuthenticated extends Schema.TaggedError<GitLabNotAuthenticated>()(
+  "GitLabNotAuthenticated",
+  { reason: Schema.Literals(["no_token", "rejected"]) },
+) {
+  override get message() {
+    return this.reason === "no_token"
+      ? "GitLab is not connected. In Settings, under Repositories, sign in with the GitLab CLI (`glab auth login`) or add a token."
+      : "GitLab rejected the token. In Settings, under Repositories, replace it, or run `glab auth login` again."
+  }
+}
+
+export class GitLabRateLimited extends Schema.TaggedError<GitLabRateLimited>()(
+  "GitLabRateLimited",
+  { resetAt: Schema.NullOr(Schema.String) },
+) {
+  override get message() {
+    return this.resetAt === null
+      ? "GitLab's API rate limit was reached. Try again in a few minutes."
+      : `GitLab's API rate limit was reached. It resets at ${new Date(this.resetAt).toLocaleTimeString()}.`
+  }
+}
+
+export class GitLabRequestFailed extends Schema.TaggedError<GitLabRequestFailed>()(
+  "GitLabRequestFailed",
+  { status: Schema.Number, detail: Schema.String },
+) {
+  override get message() {
+    if (this.status === 404) return `GitLab could not find that repository (${this.detail}).`
+    return this.status === 0
+      ? `Could not reach GitLab: ${this.detail}`
+      : `GitLab answered ${this.status}: ${this.detail}`
+  }
+}
+
 export class CloneTargetExists extends Schema.TaggedError<CloneTargetExists>()(
   "CloneTargetExists",
   { path: Schema.String },
@@ -174,6 +218,84 @@ export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("Noth
   sessionId: Schema.String,
 }) {
   override get message() {
-    return "There are no changes in this session's worktree to commit."
+    return "There are no uncommitted changes where this session works."
+  }
+}
+
+/** A push or pull request that can't be made from where the session stands; `reason` says why. */
+export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavailable>()(
+  "PullRequestUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class ClaudeAccountNotFound extends Schema.TaggedError<ClaudeAccountNotFound>()(
+  "ClaudeAccountNotFound",
+  { accountId: Schema.String },
+) {
+  override get message() {
+    return "This account does not exist any more. Reload the list of accounts."
+  }
+}
+
+export class ClaudeAccountInUse extends Schema.TaggedError<ClaudeAccountInUse>()(
+  "ClaudeAccountInUse",
+  { accountId: Schema.String, sessions: Schema.Number },
+) {
+  override get message() {
+    return this.sessions === 1
+      ? "One open thread still runs as this account. End it before removing the account."
+      : `${this.sessions} open threads still run as this account. End them before removing the account.`
+  }
+}
+
+export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNameInvalid>()(
+  "ClaudeAccountNameInvalid",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
+/** The Claude Code config folder given for a new account cannot be used. */
+export class ClaudeAccountFolderInvalid extends Schema.TaggedError<ClaudeAccountFolderInvalid>()(
+  "ClaudeAccountFolderInvalid",
+  { folder: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
+/** Claude Code could not say how much of the plan is used right now. */
+export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailable>()(
+  "PlanUsageUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return `Could not read the plan's usage: ${this.reason}`
+  }
+}
+
+/** An MCP server or skill could not be saved as given. */
+export class ExtensionInvalid extends Schema.TaggedError<ExtensionInvalid>()("ExtensionInvalid", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class ExtensionNotFound extends Schema.TaggedError<ExtensionNotFound>()(
+  "ExtensionNotFound",
+  { kind: Schema.Literals(["mcp", "skill"]), name: Schema.String },
+) {
+  override get message() {
+    const what = this.kind === "mcp" ? "MCP server" : "skill"
+    return `The ${what} "${this.name}" does not exist any more. Reload the settings.`
   }
 }

@@ -9,7 +9,7 @@ import { Predicate } from "effect"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import { isInsideDir } from "../paths.ts"
 
-/** Tools whose effect on a file can be simulated, and so reviewed hunk by hunk. */
+/** Tools whose effect on a file can be simulated, and so shown as a diff before they run. */
 const SIMULATORS: Record<string, (original: string, input: Record<string, unknown>) => Simulation> =
   {
     Edit: (original, input) =>
@@ -33,12 +33,15 @@ export type ReviewTarget =
       /** Relative to the worktree, with forward slashes. */
       readonly filePath: string
     }
-  /** The call cannot be reviewed as hunks; ask for an allow or deny instead. */
+  /** The call cannot be shown as a diff; ask for an allow or deny of the call instead. */
   | { readonly _tag: "Confirm" }
   /** The call must not run at all. */
   | { readonly _tag: "Deny"; readonly message: string }
 
 /** Where a `review` tool call would write, or why it cannot be reviewed as a file change. */
+const outsideMessage = (rawPath: string, workdir: string) =>
+  `DENIED: ${rawPath} is outside the folder this session works in (${workdir}). Only files inside it can be changed.`
+
 export const reviewTarget = (
   toolName: string,
   input: Record<string, unknown>,
@@ -53,7 +56,7 @@ export const reviewTarget = (
   if (!isInsideDir(worktree, absolutePath)) {
     return {
       _tag: "Deny",
-      message: `DENIED: ${rawPath} is outside this session's worktree (${worktree}). Only files inside the worktree can be changed.`,
+      message: outsideMessage(rawPath, worktree),
     }
   }
   return {
@@ -61,6 +64,30 @@ export const reviewTarget = (
     absolutePath,
     filePath: relative(worktree, absolutePath).split(sep).join("/"),
   }
+}
+
+/**
+ * Why a `review` tool the session lets through without a review must still be
+ * denied, if it must: a file outside the worktree. `undefined` when it may run.
+ * Covers tools without a simulator too, through their `notebook_path`.
+ */
+export const outsideWorktreeDenial = (
+  toolName: string,
+  input: Record<string, unknown>,
+  worktree: string,
+): string | undefined => {
+  const target = reviewTarget(toolName, input, worktree)
+  if (target._tag === "Deny") return target.message
+  if (target._tag === "Target") return undefined
+  for (const key of ["file_path", "notebook_path"]) {
+    const rawPath = input[key]
+    if (!Predicate.isString(rawPath) || rawPath.trim() === "") continue
+    const absolutePath = isAbsolute(rawPath) ? resolve(rawPath) : resolve(worktree, rawPath)
+    if (!isInsideDir(worktree, absolutePath)) {
+      return outsideMessage(rawPath, worktree)
+    }
+  }
+  return undefined
 }
 
 export type PlannedChange =

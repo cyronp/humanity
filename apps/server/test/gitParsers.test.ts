@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseGitHubFullName } from "../src/services/GitService.ts"
+import { parseGitHubFullName, parseGitLabRemote } from "../src/services/GitService.ts"
 import { FIELD, parseBranches, parseStatus, parseWorktrees } from "../src/services/gitParsers.ts"
 
 describe("parseStatus", () => {
@@ -56,11 +56,42 @@ describe("parseBranches", () => {
   const row = (...fields: Array<string>) => fields.join(FIELD)
 
   it("separates local from remote branches and skips the remote HEAD pointer", () => {
+    const date = "2026-11-10T21:58:00-03:00"
     const output = [
-      row("refs/heads/main", "main", "*", "origin/main", "abc1234", "initial commit"),
-      row("refs/heads/topic", "topic", " ", "", "def5678", "wip: a | b"),
-      row("refs/remotes/origin/HEAD", "origin", " ", "", "abc1234", "initial commit"),
-      row("refs/remotes/origin/main", "origin/main", " ", "", "abc1234", "initial commit"),
+      row(
+        "refs/heads/main",
+        "main",
+        "*",
+        "origin/main",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "ahead 2, behind 1",
+      ),
+      row("refs/heads/topic", "topic", " ", "", "def5678", "wip: a | b", "Bo", date, ""),
+      row(
+        "refs/remotes/origin/HEAD",
+        "origin",
+        " ",
+        "",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "",
+      ),
+      row(
+        "refs/remotes/origin/main",
+        "origin/main",
+        " ",
+        "",
+        "abc1234",
+        "initial commit",
+        "Ana",
+        date,
+        "",
+      ),
       "",
     ].join("\n")
 
@@ -72,6 +103,10 @@ describe("parseBranches", () => {
         upstream: "origin/main",
         commit: "abc1234",
         subject: "initial commit",
+        author: "Ana",
+        committedAt: date,
+        ahead: 2,
+        behind: 1,
       },
       {
         name: "topic",
@@ -80,6 +115,10 @@ describe("parseBranches", () => {
         upstream: null,
         commit: "def5678",
         subject: "wip: a | b",
+        author: "Bo",
+        committedAt: date,
+        ahead: 0,
+        behind: 0,
       },
       {
         name: "origin/main",
@@ -88,6 +127,10 @@ describe("parseBranches", () => {
         upstream: null,
         commit: "abc1234",
         subject: "initial commit",
+        author: "Ana",
+        committedAt: date,
+        ahead: 0,
+        behind: 0,
       },
     ])
   })
@@ -133,5 +176,42 @@ describe("parseGitHubFullName", () => {
   it("ignores other hosts and missing remotes", () => {
     expect(parseGitHubFullName("https://gitlab.com/acme/widgets.git")).toBeUndefined()
     expect(parseGitHubFullName(undefined)).toBeUndefined()
+  })
+})
+
+describe("parseGitLabRemote", () => {
+  const hosts = ["git.acme.dev:8443", "gitlab.com"]
+
+  it("understands https and ssh remotes, subgroups included", () => {
+    expect(parseGitLabRemote("https://gitlab.com/acme/widgets.git", hosts)).toEqual({
+      host: "gitlab.com",
+      fullPath: "acme/widgets",
+    })
+    expect(parseGitLabRemote("git@gitlab.com:acme/tools/widgets.git", hosts)).toEqual({
+      host: "gitlab.com",
+      fullPath: "acme/tools/widgets",
+    })
+    expect(parseGitLabRemote("https://oauth2@GitLab.com/acme/my.repo/", hosts)).toEqual({
+      host: "gitlab.com",
+      fullPath: "acme/my.repo",
+    })
+  })
+
+  it("matches a self-hosted instance whatever port the remote uses", () => {
+    const expected = { host: "git.acme.dev:8443", fullPath: "acme/widgets" }
+    expect(parseGitLabRemote("https://git.acme.dev:8443/acme/widgets.git", hosts)).toEqual(expected)
+    expect(parseGitLabRemote("ssh://git@git.acme.dev:2222/acme/widgets.git", hosts)).toEqual(
+      expected,
+    )
+    expect(parseGitLabRemote("git@git.acme.dev:acme/widgets.git", hosts)).toEqual(expected)
+  })
+
+  it("ignores other hosts, local paths and missing remotes", () => {
+    expect(parseGitLabRemote("https://github.com/acme/widgets.git", hosts)).toBeUndefined()
+    expect(parseGitLabRemote("https://notgitlab.com/acme/widgets.git", hosts)).toBeUndefined()
+    expect(parseGitLabRemote("C:\\code\\widgets", hosts)).toBeUndefined()
+    expect(parseGitLabRemote("/home/me/widgets", hosts)).toBeUndefined()
+    expect(parseGitLabRemote("https://gitlab.com/widgets", hosts)).toBeUndefined()
+    expect(parseGitLabRemote(undefined, hosts)).toBeUndefined()
   })
 })

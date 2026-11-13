@@ -1,6 +1,5 @@
 export * from "./hunks.ts"
 export * from "./lines.ts"
-export * from "./messages.ts"
 export * from "./parse.ts"
 export * from "./simulate.ts"
 export * from "./types.ts"

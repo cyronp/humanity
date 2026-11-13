@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Hunk } from "./Diff.ts"
+import { QuestionAnswers } from "./Question.ts"
 import { SessionId } from "./Session.ts"
 
 export const ChangeId = Schema.String.pipe(Schema.brand("ChangeId"))
@@ -17,19 +18,25 @@ export const ProposedChangeStatus = Schema.Literals([
 ])
 export type ProposedChangeStatus = typeof ProposedChangeStatus.Type
 
-/** A file change the agent wants to make, split into hunks for review. */
+/**
+ * A file change the agent wants to make, shown as a diff. The human allows or
+ * denies it as a whole. `partially_applied` only exists on changes decided
+ * before that, when hunks were decided one by one.
+ */
 export const ProposedChange = Schema.Struct({
   id: ChangeId,
   sessionId: SessionId,
   toolUseId: Schema.String,
   toolName: Schema.String,
-  /** Relative to the session's worktree, with forward slashes. */
+  /** Relative to the folder the session works in, with forward slashes. */
   filePath: Schema.String,
   kind: Schema.Literals(["create", "modify"]),
   originalContent: Schema.String,
   proposedContent: Schema.String,
   hunks: Schema.Array(Hunk),
   status: ProposedChangeStatus,
+  /** What the human told the agent with a denial. */
+  comment: Schema.optional(Schema.String),
   createdAt: Schema.String,
   decidedAt: Schema.optional(Schema.String),
 })
@@ -47,6 +54,8 @@ export const PendingConfirmation = Schema.Struct({
   input: Schema.Unknown,
   status: ConfirmationStatus,
   comment: Schema.optional(Schema.String),
+  /** What the human answered, when the call was the agent asking a question. */
+  answers: Schema.optional(QuestionAnswers),
   createdAt: Schema.String,
   decidedAt: Schema.optional(Schema.String),
 })
@@ -66,13 +75,12 @@ export const ApprovalRecord = Schema.Struct({
 })
 export type ApprovalRecord = typeof ApprovalRecord.Type
 
-export const HunkDecisionInput = Schema.Struct({
-  /** The hunk's 1-based index. */
-  index: Schema.Int,
-  decision: Schema.Literals(["approved", "rejected"]),
-  comment: Schema.optional(Schema.String),
-})
-export type HunkDecisionInput = typeof HunkDecisionInput.Type
+/** The human's answer to a request, whichever kind it is. */
+export const ApprovalDecision = Schema.Literals(["allow", "deny"])
+export type ApprovalDecision = typeof ApprovalDecision.Type
+
+export const approvalToolName = (approval: Approval): string =>
+  approval._tag === "change" ? approval.change.toolName : approval.confirmation.toolName
 
 export const approvalToolUseId = (approval: Approval): string =>
   approval._tag === "change" ? approval.change.toolUseId : approval.confirmation.toolUseId

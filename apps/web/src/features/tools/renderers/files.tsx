@@ -103,6 +103,12 @@ export const editRenderer: ToolRenderer = {
             The replaced snippet only; line numbers are relative to it.
           </p>
         )}
+        {changeOf(props)?.comment !== undefined && (
+          <p>
+            <span className="text-muted-foreground">You told the agent: </span>
+            {changeOf(props)?.comment}
+          </p>
+        )}
         {hunks.map((hunk) => {
           const status = "status" in hunk ? hunk.status : "pending"
           const comment = "comment" in hunk ? hunk.comment : undefined

@@ -1,6 +1,7 @@
 import { cn } from "cn"
 import { type ReactNode, useMemo } from "react"
 import { CodeBlock } from "../CodeBlock.tsx"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function Path({ path }: { readonly path: string }) {
   return (
@@ -25,7 +26,6 @@ export function Field({
   )
 }
 
-/** A tool's text output, or its error. */
 export function OutputText({
   text,
   error = false,
@@ -34,19 +34,27 @@ export function OutputText({
   readonly error?: boolean
 }) {
   return (
-    <pre
+    <ScrollArea
       className={cn(
-        "max-h-80 overflow-auto rounded-md border p-2 font-mono whitespace-pre-wrap break-all",
+        "rounded-md border",
         error ? "border-red-500/40 bg-red-500/5 text-red-700 dark:text-red-300" : "bg-muted/40",
       )}
+      viewportClassName="max-h-80"
     >
-      {text === "" ? "(empty)" : text}
-    </pre>
+      <pre className="p-2 font-mono whitespace-pre-wrap break-all">
+        {text === "" ? "(empty)" : text}
+      </pre>
+    </ScrollArea>
   )
 }
 
-/** Any value as highlighted JSON: the fallback view of inputs and outputs. */
-export function JsonBlock({ value }: { readonly value: unknown }) {
+export function JsonBlock({
+  value,
+  className = "max-h-80",
+}: {
+  readonly value: unknown
+  readonly className?: string
+}) {
   const json = useMemo(() => {
     try {
       return JSON.stringify(value, null, 2) ?? "undefined"
@@ -54,5 +62,5 @@ export function JsonBlock({ value }: { readonly value: unknown }) {
       return String(value)
     }
   }, [value])
-  return <CodeBlock code={json} language="json" className="max-h-80" />
+  return <CodeBlock code={json} language="json" className={className} />
 }

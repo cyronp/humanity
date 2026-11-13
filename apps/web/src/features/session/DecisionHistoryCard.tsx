@@ -3,9 +3,10 @@ import type { ApprovalRecord, Project } from "@humanity/contracts"
 import { Link } from "@tanstack/react-router"
 import { AsyncView } from "@/components/AsyncView"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { describeDecision } from "@/features/timeline/timeline"
+import { describeDecision } from "./decisions.ts"
 import { ApprovalBadge } from "@/features/tools/ToolCallCard"
 import { historyAtom } from "./atoms.ts"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const when = (record: ApprovalRecord) => {
   const approval = record.approval
@@ -16,14 +17,14 @@ const when = (record: ApprovalRecord) => {
   return { iso: at, label: new Date(at).toLocaleString() }
 }
 
-/** Every review and confirmation across the project's sessions, newest first. */
+/** Everything the human allowed or denied across the project's sessions, newest first. */
 export function DecisionHistoryCard({ project }: { readonly project: Project }) {
   const history = useAtomValue(historyAtom(project.id))
   return (
     <Card>
       <CardHeader>
         <CardTitle>Decision history</CardTitle>
-        <CardDescription>What you approved, rejected and allowed, across sessions.</CardDescription>
+        <CardDescription>What you allowed and denied, across sessions.</CardDescription>
       </CardHeader>
       <CardContent>
         <AsyncView result={history} errorTitle="Could not load the decision history">
@@ -31,19 +32,21 @@ export function DecisionHistoryCard({ project }: { readonly project: Project }) 
             records.length === 0 ? (
               <p className="text-sm text-muted-foreground">No decisions yet.</p>
             ) : (
-              <ul className="flex max-h-96 flex-col divide-y overflow-y-auto rounded-md border text-sm">
-                {records.map((record) => (
-                  <HistoryRow
-                    key={
-                      record.approval._tag === "change"
-                        ? record.approval.change.id
-                        : record.approval.confirmation.id
-                    }
-                    project={project}
-                    record={record}
-                  />
-                ))}
-              </ul>
+              <ScrollArea className="rounded-md border" viewportClassName="max-h-96">
+                <ul className="flex flex-col divide-y text-sm">
+                  {records.map((record) => (
+                    <HistoryRow
+                      key={
+                        record.approval._tag === "change"
+                          ? record.approval.change.id
+                          : record.approval.confirmation.id
+                      }
+                      project={project}
+                      record={record}
+                    />
+                  ))}
+                </ul>
+              </ScrollArea>
             )
           }
         </AsyncView>
@@ -63,10 +66,10 @@ function HistoryRow({
   const sessionId =
     approval._tag === "change" ? approval.change.sessionId : approval.confirmation.sessionId
   const time = when(record)
-  // A change still under review links straight to its first hunk.
+  // A change still waiting links straight to it.
   const search =
     approval._tag === "change" && approval.change.status === "pending"
-      ? { file: approval.change.filePath, hunk: approval.change.hunks[0]?.index ?? 1 }
+      ? { file: approval.change.filePath }
       : {}
   return (
     <li>

@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { Approval } from "./Approval.ts"
-import { ChatMessage, Session, SessionStatus, ToolCall } from "./Session.ts"
+import { ChatMessage, Session, SessionStatus, SessionUsage, ToolCall } from "./Session.ts"
 
 /** Events streamed by `Sessions.subscribe`. */
 export const SessionEvent = Schema.Union([
@@ -11,7 +11,10 @@ export const SessionEvent = Schema.Union([
     toolCalls: Schema.Array(ToolCall),
     /** Every approval of the session, pending and decided. */
     approvals: Schema.Array(Approval),
+    usage: SessionUsage,
   }),
+  /** The context window or the plan's limits moved. */
+  Schema.TaggedStruct("UsageUpdated", { usage: SessionUsage }),
   Schema.TaggedStruct("SessionStatusChanged", {
     status: SessionStatus,
     /** Why the session stopped, when it stopped because of an error. */

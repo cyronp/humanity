@@ -63,7 +63,7 @@ export function StatusCard({ project }: { readonly project: Project }) {
             value.files.length === 0 ? null : (
               <div className="flex flex-col gap-6">
                 {value.files.map((file) => (
-                  <FileDiffView key={file.filePath} file={file} />
+                  <FileDiffView key={`${file.kind}:${file.filePath}`} file={file} />
                 ))}
               </div>
             )

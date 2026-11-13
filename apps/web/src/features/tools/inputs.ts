@@ -66,7 +66,6 @@ export const parseReadOutput = (
   return { firstLine: Number(first[1]), lines }
 }
 
-/** Non-empty output lines, for Glob and Grep result lists. */
 export const resultLines = (output: string): Array<string> =>
   output
     .replace(/\r\n/g, "\n")

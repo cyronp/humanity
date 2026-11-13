@@ -2,6 +2,16 @@
 
 > This document is the brief for building the MVP of **Humanity**. Read it fully before writing code. Work milestone by milestone, and stop to ask the human whenever a decision is ambiguous or not covered here. That habit is the product's philosophy, so practice it while building it.
 
+## Amendment: autonomy first (2026-11-12)
+
+The product pivoted away from mandatory human approval. Where this section and the rest of this document disagree, this section wins.
+
+- **Threads run on their own by default.** A new thread starts in Auto mode: edits, commands, web and MCP tools run without asking. The premise in section 1 ("every file mutation is reviewed before it touches disk") no longer holds.
+- **Asking first is a mode of a thread**, not the product's rule. The modes are "Ask me", "Accept edits" and "Auto mode". A new thread takes its project's default (Settings, under Projects), else the mode the human pinned for every project, else Auto mode. It never inherits the mode of another thread. The mode can be changed while the agent works.
+- **A request is answered as a whole.** A file change (shown as a diff) and any other tool call take the same answer: Allow, Always allow in this thread, or Deny with an optional comment. There are no per-hunk decisions and no partial application. This supersedes section 5.3, the `hunk_decisions` table, the hunk-applying and agent-message parts of `packages/diff`, the per-hunk payload of `Approvals.decideChange`, the `j`/`k`/`r`/`Enter` review shortcuts and `?hunk=` deep links.
+- **There is no per-project tool policy.** What a tool is (a read, a file change, anything else) is fixed in `packages/contracts`; only the thread's mode decides what asks. This supersedes section 5.1, `PolicyService`, `Projects.getPolicy`/`setPolicy` and the `deny` mode. "Always allow" is scoped to the thread and kept in memory.
+- **Unchanged:** never `bypassPermissions`; every call that is not a read still reaches `canUseTool`, so settings files cannot pre-approve a tool; a tool Humanity does not know asks in a thread that asks; a question from the agent always reaches the human; every tool call is rendered; worktree isolation is one click away.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
@@ -14,14 +24,14 @@ Core principles:
 2. **Rejections are conversations.** A rejection carries a comment that goes back to the agent as feedback, so it can correct course.
 3. **Autonomy is configured per action type, not globally.** Reads are automatic, edits are reviewed, shell commands are confirmed.
 4. **Everything the agent does is visible.** Tool calls (including MCP tools and Skills) are rendered as first-class, readable objects, not raw logs.
-5. **The agent never works in the user's working copy.** Each session runs in its own git worktree and branch.
+5. **Isolation is one click away.** A session starts in the project's checkout. The human can move it into its own git worktree and `humanity/…` branch at any time between turns.
 
 ## 2. MVP scope
 
 ### In scope
 
 - Add a project from a local git repository path, or by cloning a GitHub repository.
-- List, create and switch branches; each agent session gets its own worktree.
+- List, create and switch branches; a session works in the project's checkout until the human sets up a worktree for it.
 - Chat with the agent (Claude Agent SDK) with streamed, markdown-rendered responses.
 - Intercept file-mutating tools and route them through a hunk-by-hunk review UI.
 - Approve, reject (with comment) or partially approve proposed changes.
@@ -72,7 +82,7 @@ Core principles:
 
 ### Verify before coding
 
-Before Milestone 1, check current docs and record findings in `docs/notes/api-verification.md`:
+Before Milestone 1, check the current docs for:
 
 - Claude Agent SDK: `query()` options, `canUseTool` signature and return shape, permission modes, `allowedTools`, `settingSources`, session resume, streaming input mode, interrupts, the message types it emits, and the current names and input shapes of built-in tools (`Edit`, `Write`, `Bash`, etc.). Docs: https://code.claude.com/docs/en/agent-sdk/overview and https://code.claude.com/docs/en/agent-sdk/permissions
 - Effect 4: RPC (WebSocket protocol, streaming RPCs), `ChildProcess`, SQL + SQLite driver + `Migrator`, `HttpClient`, `AtomRpc`. Docs: https://effect.website/docs
@@ -109,7 +119,6 @@ humanity/
 ├─ packages/
 │  ├─ contracts/     RpcGroups, Schemas, event/union types shared by server and web
 │  └─ diff/          Pure hunk logic on top of jsdiff (no I/O, fully unit-tested)
-├─ docs/notes/       Decisions and API verification notes
 ├─ turbo.json
 ├─ package.json      npm workspaces root
 ├─ eslint.config.js
@@ -122,7 +131,7 @@ Turborepo tasks: `dev`, `build`, `lint`, `typecheck`, `test`. Root scripts must 
 
 - Data directory: `~/.humanity/` (override with `HUMANITY_HOME`).
   - `humanity.db` — SQLite database.
-  - `worktrees/<projectId>/<sessionId>/` — one git worktree per session.
+  - `worktrees/<projectId>/<sessionId>/` — the worktree of a session that has one.
   - `repos/<owner>/<repo>/` — clones made from GitHub.
   - `auth-token` — daemon auth token.
 - The daemon listens on `127.0.0.1` only (default port 7420, configurable).
@@ -153,7 +162,7 @@ Each project has a policy mapping tools to one of four modes:
 
 `canUseTool` is a Promise-based callback. Bridge it into Effect:
 
-1. The `AgentRunner` runs the SDK `query()` with `cwd` set to the session's worktree and `canUseTool` implemented via a `ManagedRuntime` (or equivalent) that runs an Effect program.
+1. The `AgentRunner` runs the SDK `query()` with `cwd` set to the folder the session works in (its worktree, or the project's checkout) and `canUseTool` implemented via a `ManagedRuntime` (or equivalent) that runs an Effect program.
 2. That program asks `PolicyService` for the tool's mode.
 3. For `review` / `confirm`, it creates a `PendingApproval` with a `Deferred`, stores it in `ApprovalService` (a `Ref<Map>` or `SynchronizedRef`), persists it, publishes an event on the session's `PubSub`, then awaits the `Deferred`.
 4. The UI receives the event through a streaming RPC, the human decides, and the `Approvals.decide` RPC completes the `Deferred`.
@@ -164,7 +173,7 @@ Each project has a policy mapping tools to one of four modes:
 
 When a `review` tool is called:
 
-1. Read the current file content from the worktree (`""` if the file doesn't exist).
+1. Read the current file content from the session's folder (`""` if the file doesn't exist).
 2. Compute the full proposed content by simulating the tool on that content (for `Edit`: replace `old_string` with `new_string`, honoring `replace_all`; for `Write`: the given content). If simulation fails (e.g. `old_string` not found), deny immediately with an explanatory message.
 3. Use `packages/diff` to build a `ProposedChange` with hunks (`structuredPatch`).
 4. Wait for the human. Outcomes:
@@ -206,7 +215,7 @@ interface ProposedChange {
   sessionId: string
   toolUseId: string
   toolName: string
-  filePath: string         // relative to the worktree
+  filePath: string         // relative to the session's folder
   kind: "create" | "modify"
   originalContent: string
   proposedContent: string
@@ -244,7 +253,7 @@ Keep the raw SDK message alongside the normalized form in the DB so renderers ca
 Use Effect SQL with `Migrator`; one migration file per change. Initial tables:
 
 - `projects` — id, name, local_path, github_full_name (nullable), default_branch, policy_json, created_at
-- `sessions` — id, project_id, sdk_session_id, title, branch, worktree_path, status, created_at, updated_at
+- `sessions` — id, project_id, sdk_session_id, title, branch, worktree_path (the folder the agent works in), in_worktree, status, created_at, updated_at
 - `messages` — id, session_id, role, normalized_json, raw_json, created_at
 - `tool_calls` — id, session_id, tool_use_id, tool_name, input_json, output_json, status, started_at, finished_at
 - `proposed_changes` — fields from `ProposedChange` (hunks stored as JSON)
@@ -260,7 +269,7 @@ Each is an Effect service with a live layer and a test layer.
 - **GitService** — wraps the git CLI with `ChildProcess`. Always use the array form (`command`, `args[]`), never interpolate user input into a shell string. Use machine-readable output: `git status --porcelain=v2`, `git worktree list --porcelain`, `git branch --format=...`, `git diff --no-color`. Operations: listBranches, currentBranch, createBranch, checkout, status, diff (parsed with jsdiff's `parsePatch` so the same hunk UI can show the worktree's diff), worktreeAdd, worktreeRemove, clone (stream progress lines to the UI), commit. Errors are tagged (`GitNotARepository`, `GitBranchExists`, `GitCommandFailed` with stderr, ...).
 - **GitHubService** — Effect `HttpClient` against the GitHub REST API. Token from `gh auth token` if the gh CLI is available, otherwise `GITHUB_TOKEN` env (recommend a fine-grained token in the README). Endpoints: authenticated user's repos, a repo, its branches. Schemas only describe fields actually used. Handle pagination via the `Link` header as a `Stream`; map rate-limit responses (`x-ratelimit-*` headers) to a tagged error.
 - **ProjectService** — add local project (validate it's a git repo), clone from GitHub into `~/.humanity/repos`, list, remove (never deletes the user's repo on disk, only Humanity's records and worktrees).
-- **SessionService** — create a session: create branch `humanity/<short-id>-<slug>` from the chosen base branch and a worktree for it; list; resume (via the SDK's session resume using `sdk_session_id`); send message; interrupt; end session (optionally remove worktree).
+- **SessionService** — create a session in the project's checkout, switching it to the chosen branch first; set up a worktree on request (branch `humanity/<short-id>-<slug>` from the checkout's HEAD; only between turns; the conversation resumes there and the agent is told it moved); list; resume (via the SDK's session resume using `sdk_session_id`); send message; interrupt; end session (optionally remove worktree).
 - **AgentRunner** — owns SDK `query()` calls. Use streaming input mode so the user can send follow-up messages and interrupt. Set `settingSources` to include the project so `CLAUDE.md`, Skills and project settings load. Convert the SDK's async iterable into an Effect `Stream`, normalize messages, persist them and publish events.
 - **ApprovalService** — pending approvals registry, `Deferred` handling, persistence, expiration on restart.
 - **PolicyService** — reads/writes per-project tool policies, resolves a tool name to a mode (with `mcp__<server>__<tool>` pattern support).
@@ -272,7 +281,7 @@ Define `RpcGroup`s in `packages/contracts`. Suggested surface:
 - `Projects`: `list`, `addLocal`, `cloneFromGitHub` (streaming progress), `remove`, `getPolicy`, `setPolicy`
 - `Git`: `branches`, `createBranch`, `status`, `diff`
 - `GitHub`: `listRepos`, `listBranches`, `whoami`
-- `Sessions`: `list`, `get`, `create`, `sendMessage`, `interrupt`, `end`, `subscribe` (streaming `SessionEvent`s; on subscribe, first replay current state: messages, pending approvals)
+- `Sessions`: `list`, `get`, `create`, `setupWorktree`, `sendMessage`, `interrupt`, `end`, `subscribe` (streaming `SessionEvent`s; on subscribe, first replay current state: messages, pending approvals)
 - `Approvals`: `listPending`, `decideChange` (per-hunk decisions + comments), `decideConfirmation`
 
 All errors are tagged and declared in the schema so the UI can show precise messages.
@@ -290,7 +299,7 @@ The router owns navigation and params only. Data comes from atoms (`AtomRpc` que
 
 ### Session workspace layout
 
-- **Header**: project name, branch + worktree indicator, session status badge (`running`, `waiting for you`, ...), interrupt button.
+- **Header**: project name, branch + worktree indicator, session status badge (`running`, `waiting for you`, ...), a "Source Control" button that opens the right panel, interrupt button. While the session works in the checkout, the panel's title bar offers "Set up worktree", left of its refresh button.
 - **Center — chat**: messages rendered with Streamdown; tool calls inline as compact cards (one-line summary, expandable).
 - **Right panel — Review** (opens automatically when an approval is pending): list of pending changes; per file, hunks rendered with Shiki highlighting, each with Approve / Reject buttons and a comment field; bulk "Approve all" / "Reject all"; a Submit button that sends all hunk decisions at once. Keyboard shortcuts: `j`/`k` move between hunks, `a` approve, `r` reject, `c` comment, `Enter` submit.
 - **Right panel — Timeline** (tab): chronological list of tool calls, Skill loads and decisions, with durations.
@@ -327,9 +336,9 @@ Tailwind + shadcn/ui with light and dark mode. Use Shiki's dual-theme output wir
 
 ## 12. Milestones
 
-Complete each milestone fully (lint, typecheck and tests passing) and commit before starting the next. At the end of each, write a short summary in `docs/notes/progress.md`.
+Complete each milestone fully (lint, typecheck and tests passing) and commit before starting the next.
 
-**M0 — Scaffold.** npm workspaces + Turborepo, TypeScript strict, ESLint + Prettier, Vitest, empty `apps/server`, `apps/web`, `packages/contracts`, `packages/diff`. API verification notes written (section 3).
+**M0 — Scaffold.** npm workspaces + Turborepo, TypeScript strict, ESLint + Prettier, Vitest, empty `apps/server`, `apps/web`, `packages/contracts`, `packages/diff`. Current APIs checked (section 3).
 *Done when:* `npm run lint`, `npm run typecheck`, `npm run test` and `npm run dev` work from the root.
 
 **M1 — Daemon foundation.** Effect HTTP server on `127.0.0.1`, RPC over WebSocket with token auth, SQLite + migrations, `Projects.list/addLocal/remove`. Web app connects via `AtomRpc` and shows the project list.
@@ -355,9 +364,9 @@ Complete each milestone fully (lint, typecheck and tests passing) and commit bef
 ## 13. Engineering rules
 
 - Never call the git CLI with shell-interpolated strings; always argument arrays.
-- Never write outside `~/.humanity/` or the session's worktree. The user's original working copy is never modified by the agent.
+- Never write outside `~/.humanity/` or the folder the session works in: its worktree, or the project's checkout until it has one.
 - No `any` in contracts. Validate every RPC payload and DB row with `Schema`.
 - Errors are tagged, typed and shown in the UI with actionable messages; no silent failures.
 - Keep `packages/diff` free of I/O and framework dependencies.
 - Keep components small; the review panel and renderers are the heart of the product, so prioritize their clarity and keyboard ergonomics.
-- When the spec and reality disagree, or a decision isn't covered here, **ask the human** rather than guessing silently. Record decisions in `docs/notes/decisions.md`.
+- When the spec and reality disagree, or a decision isn't covered here, **ask the human** rather than guessing silently.

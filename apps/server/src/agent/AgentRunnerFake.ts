@@ -1,3 +1,9 @@
+import {
+  formatOpenedThread,
+  OPEN_THREAD_TOOL,
+  type ReasoningEffort,
+  toolMode,
+} from "@humanity/contracts"
 import { simulateEdit, simulateWrite } from "@humanity/diff"
 import { Context, Effect, Fiber, Layer, Option, Queue, Ref, Stream } from "effect"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -5,11 +11,13 @@ import { dirname, isAbsolute, join } from "node:path"
 import {
   type AgentRunOptions,
   AgentRunner,
+  type AgentExtensions,
+  type AgentUserMessage,
+  type OpenThreadRequest,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
 
-/** One scripted beat of an agent turn. */
 export type FakeStep =
   | { readonly text: string }
   | {
@@ -21,20 +29,23 @@ export type FakeStep =
   /** Keeps the turn busy until it is interrupted, like a long tool call. */
   | { readonly hang: true }
 
-/** Decides what the fake agent does with each user message. */
 export type FakeScript = (prompt: string, turn: number) => ReadonlyArray<FakeStep>
 
 export interface PermissionLogEntry extends ToolPermissionRequest {
   readonly decision: PermissionDecision | "interrupted"
 }
 
-/** Lets tests inspect what the fake agent was asked to do and what it was told. */
 export class FakeAgentLog extends Context.Service<
   FakeAgentLog,
   {
     readonly runs: Ref.Ref<ReadonlyArray<AgentRunOptions>>
     readonly prompts: Ref.Ref<ReadonlyArray<string>>
+    /** Every user message as the agent received it, files included. */
+    readonly sent: Ref.Ref<ReadonlyArray<AgentUserMessage>>
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
+    readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
+    readonly effortChanges: Ref.Ref<ReadonlyArray<ReasoningEffort | undefined>>
+    readonly extensionChanges: Ref.Ref<ReadonlyArray<AgentExtensions>>
   }
 >()("humanity/test/FakeAgentLog") {}
 
@@ -70,7 +81,7 @@ const executeTool = (cwd: string, step: Extract<FakeStep, { tool: string }>) => 
 /**
  * A scripted stand-in for the Agent SDK. It emits SDK-shaped messages, asks
  * `canUseTool` exactly where the real SDK would (anything not in
- * `allowedTools`, after the policy guard), and honors interrupts by aborting
+ * `allowedTools`, after the permission guard), and honors interrupts by aborting
  * the pending permission request.
  */
 export const AgentRunnerFake = (script: FakeScript) =>
@@ -101,14 +112,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           const decide = (step: Extract<FakeStep, { tool: string }>, toolUseId: string) =>
             Effect.gen(function* () {
-              const mode = options.toolMode(step.tool, toolUseId)
-              if (mode === "deny") {
-                return {
-                  behavior: "deny",
-                  message: `The project's Humanity policy denies ${step.tool}.`,
-                } satisfies PermissionDecision
-              }
-              if (mode === "auto" && options.allowedTools.includes(step.tool)) {
+              if (toolMode(step.tool) === "auto" && options.allowedTools.includes(step.tool)) {
                 return { behavior: "allow" } satisfies PermissionDecision
               }
               const request = { toolName: step.tool, input: step.input, toolUseId }
@@ -176,9 +180,20 @@ export const AgentRunnerFake = (script: FakeScript) =>
                 ])
                 const decision = yield* decide(step, toolUseId)
                 const result =
-                  decision.behavior === "allow"
-                    ? executeTool(options.cwd, step)
-                    : { content: decision.message, isError: true }
+                  decision.behavior !== "allow"
+                    ? { content: decision.message, isError: true }
+                    : step.tool === OPEN_THREAD_TOOL
+                      ? // Humanity's own tool really runs, like Edit and Write.
+                        yield* options.openThread(step.input as unknown as OpenThreadRequest).pipe(
+                          Effect.match({
+                            onSuccess: (thread) => ({
+                              content: formatOpenedThread(thread),
+                              isError: false,
+                            }),
+                            onFailure: (error) => ({ content: error.reason, isError: true }),
+                          }),
+                        )
+                      : executeTool(options.cwd, step)
                 yield* emit({
                   type: "user",
                   message: {
@@ -229,10 +244,11 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           return {
             messages: Stream.fromQueue(outbox),
-            send: (text: string) =>
-              Ref.update(log.prompts, (all) => [...all, text]).pipe(
+            send: (message: AgentUserMessage) =>
+              Ref.update(log.prompts, (all) => [...all, message.text]).pipe(
+                Effect.andThen(Ref.update(log.sent, (all) => [...all, message])),
                 Effect.tap(() => Effect.sync(() => pending++)),
-                Effect.andThen(Queue.offer(prompts, text)),
+                Effect.andThen(Queue.offer(prompts, message.text)),
                 Effect.asVoid,
               ),
             interrupt: Ref.get(current).pipe(
@@ -246,6 +262,19 @@ export const AgentRunnerFake = (script: FakeScript) =>
                 }),
               ),
             ),
+            setModel: (model: string | undefined) =>
+              Ref.update(log.modelChanges, (all) => [...all, model]),
+            setEffort: (effort: ReasoningEffort | undefined) =>
+              Ref.update(log.effortChanges, (all) => [...all, effort]),
+            applyExtensions: (extensions: AgentExtensions) =>
+              Ref.update(log.extensionChanges, (all) => [...all, extensions]),
+            // Each turn fills another tenth of a 200k window.
+            contextUsage: Effect.sync(() => ({ usedTokens: turn * 20_000, maxTokens: 200_000 })),
+            planUsage: Effect.succeed({
+              fiveHour: { utilization: 62, resetsAt: "2099-01-01T00:00:00.000Z" },
+              sevenDay: { utilization: 30, resetsAt: "2099-01-05T00:00:00.000Z" },
+              models: [{ name: "Fable", utilization: 80, resetsAt: null }],
+            }),
           }
         })
 
@@ -259,7 +288,11 @@ export const AgentRunnerFake = (script: FakeScript) =>
           return FakeAgentLog.of({
             runs: yield* Ref.make<ReadonlyArray<AgentRunOptions>>([]),
             prompts: yield* Ref.make<ReadonlyArray<string>>([]),
+            sent: yield* Ref.make<ReadonlyArray<AgentUserMessage>>([]),
             permissions: yield* Ref.make<ReadonlyArray<PermissionLogEntry>>([]),
+            modelChanges: yield* Ref.make<ReadonlyArray<string | undefined>>([]),
+            effortChanges: yield* Ref.make<ReadonlyArray<ReasoningEffort | undefined>>([]),
+            extensionChanges: yield* Ref.make<ReadonlyArray<AgentExtensions>>([]),
           })
         }),
       ),

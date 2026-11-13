@@ -1,45 +1,23 @@
 import {
   type Approval,
   ApprovalAlreadyDecided,
+  type ApprovalDecision,
   ApprovalNotFound,
   ChangeId,
   ConfirmationId,
   ConfirmationStatus,
   Hunk,
-  type HunkDecisionInput,
-  IncompleteReview,
   type PendingConfirmation,
-  type ProjectNotFound,
   type ProposedChange,
   ProposedChangeStatus,
+  QUESTION_TOOL,
+  QuestionAnswers,
   SessionId,
+  TALK_ABOUT_IT_MESSAGE,
 } from "@humanity/contracts"
-import {
-  applyHunks,
-  approvedIndexes,
-  formatPartialApplicationMessage,
-  formatRejectionMessage,
-  reviewOutcome,
-  withDecisions,
-} from "@humanity/diff"
-import {
-  Context,
-  DateTime,
-  Deferred,
-  Effect,
-  FileSystem,
-  Layer,
-  Option,
-  Schema,
-  Semaphore,
-} from "effect"
+import { Context, DateTime, Deferred, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
-import { randomUUID } from "node:crypto"
-import { dirname, join } from "node:path"
 import type { PermissionDecision } from "../agent/AgentRunner.ts"
-import { SessionRepo } from "../db/SessionRepo.ts"
-import { isInsideDir } from "../paths.ts"
-import { PolicyService } from "./PolicyService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
 /** An approval the agent is blocked on, with the deferred its `canUseTool` awaits. */
@@ -59,6 +37,7 @@ const ChangeRow = Schema.Struct({
   proposed_content: Schema.String,
   hunks_json: Schema.fromJsonString(Schema.Array(Hunk)),
   status: ProposedChangeStatus,
+  comment: Schema.NullOr(Schema.String),
   created_at: Schema.String,
   decided_at: Schema.NullOr(Schema.String),
 })
@@ -74,6 +53,7 @@ const toChange = (row: typeof ChangeRow.Type): ProposedChange => ({
   proposedContent: row.proposed_content,
   hunks: row.hunks_json,
   status: row.status,
+  ...(row.comment === null ? {} : { comment: row.comment }),
   createdAt: row.created_at,
   ...(row.decided_at === null ? {} : { decidedAt: row.decided_at }),
 })
@@ -86,6 +66,7 @@ const ConfirmationRow = Schema.Struct({
   input_json: Schema.fromJsonString(Schema.Unknown),
   status: ConfirmationStatus,
   comment: Schema.NullOr(Schema.String),
+  answers_json: Schema.NullOr(Schema.fromJsonString(QuestionAnswers)),
   created_at: Schema.String,
   decided_at: Schema.NullOr(Schema.String),
 })
@@ -98,17 +79,35 @@ const toConfirmation = (row: typeof ConfirmationRow.Type): PendingConfirmation =
   input: row.input_json,
   status: row.status,
   ...(row.comment === null ? {} : { comment: row.comment }),
+  ...(row.answers_json === null ? {} : { answers: row.answers_json }),
   createdAt: row.created_at,
   ...(row.decided_at === null ? {} : { decidedAt: row.decided_at }),
 })
+
+const asRecord = (input: unknown): Record<string, unknown> =>
+  input !== null && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : {}
 
 const HunksJson = Schema.fromJsonString(Schema.Array(Hunk))
 
 const interruptedMessage =
   "The session was interrupted before the human decided. Nothing was applied."
 
-const conflictMessage = (filePath: string) =>
-  `NOT APPLIED: ${filePath} changed on disk while your change was under review, so none of it was written. Re-read the file before proposing the change again.`
+/** What the agent is told when the human denies a file change. Nothing was written. */
+export const changeDeniedMessage = (filePath: string, comment: string | undefined): string =>
+  comment
+    ? `DENIED by the human reviewer: your change to ${filePath} was not applied and the file on disk is unchanged. They said: ${comment}`
+    : `DENIED by the human reviewer: your change to ${filePath} was not applied and the file on disk is unchanged. Ask how to proceed if the change is necessary.`
+
+/** How a request is decided, whichever kind it is. */
+export interface DecisionOptions {
+  readonly decision: ApprovalDecision
+  /** Sent to the agent with a denial. */
+  readonly comment?: string | undefined
+  /** Also stop asking about this tool for the rest of the thread. Only with `allow`. */
+  readonly allowForSession?: boolean | undefined
+}
 
 const byCreation = (a: Approval, b: Approval) => {
   const at = (approval: Approval) =>
@@ -129,21 +128,23 @@ export class ApprovalService extends Context.Service<
     readonly requestConfirmation: (
       confirmation: PendingConfirmation,
     ) => Effect.Effect<PermissionDecision>
+    /** The whole file change: allowed, the agent's tool applies it; denied, nothing is written. */
     readonly decideChange: (
       changeId: string,
-      decisions: ReadonlyArray<HunkDecisionInput>,
-    ) => Effect.Effect<ProposedChange, ApprovalNotFound | ApprovalAlreadyDecided | IncompleteReview>
+      options: DecisionOptions,
+    ) => Effect.Effect<ProposedChange, ApprovalNotFound | ApprovalAlreadyDecided>
     readonly decideConfirmation: (
       confirmationId: string,
-      options: {
-        readonly decision: "allow" | "deny"
-        readonly comment?: string | undefined
-        readonly alwaysAllow?: boolean | undefined
+      options: DecisionOptions & {
+        /** The answers to an `AskUserQuestion` call; they become the tool's input. */
+        readonly answers?: QuestionAnswers | undefined
       },
-    ) => Effect.Effect<
-      PendingConfirmation,
-      ApprovalNotFound | ApprovalAlreadyDecided | ProjectNotFound
-    >
+    ) => Effect.Effect<PendingConfirmation, ApprovalNotFound | ApprovalAlreadyDecided>
+    /**
+     * Whether the human chose to stop being asked about this tool in this
+     * thread. Kept in memory: after a daemon restart the thread asks again.
+     */
+    readonly allowsInSession: (sessionId: string, toolName: string) => boolean
     /** Every approval of a session, oldest first. */
     readonly listForSession: (sessionId: string) => Effect.Effect<ReadonlyArray<Approval>>
     readonly pendingCount: (sessionId: string) => Effect.Effect<number>
@@ -155,12 +156,18 @@ export class ApprovalService extends Context.Service<
     ApprovalService,
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      const fs = yield* FileSystem.FileSystem
       const events = yield* SessionEvents
-      const sessions = yield* SessionRepo
-      const policies = yield* PolicyService
 
       const waiters = new Map<string, Waiter>()
+      /** Per thread, the tools the human allowed for the rest of it. */
+      const allowedInSession = new Map<string, Set<string>>()
+      const allowsInSession = (sessionId: string, toolName: string) =>
+        allowedInSession.get(sessionId)?.has(toolName) === true
+      const allowInSession = (sessionId: string, toolName: string) => {
+        const tools = allowedInSession.get(sessionId) ?? new Set<string>()
+        tools.add(toolName)
+        allowedInSession.set(sessionId, tools)
+      }
       const decisionLock = yield* Semaphore.make(1)
       const now = Effect.map(DateTime.now, DateTime.formatIso)
 
@@ -205,6 +212,7 @@ export class ApprovalService extends Context.Service<
             UPDATE proposed_changes SET ${sql.update({
               hunks_json: hunks,
               status: change.status,
+              comment: change.comment ?? null,
               decided_at: change.decidedAt ?? null,
             })}
             WHERE id = ${change.id}
@@ -216,6 +224,8 @@ export class ApprovalService extends Context.Service<
           UPDATE confirmations SET ${sql.update({
             status: confirmation.status,
             comment: confirmation.comment ?? null,
+            answers_json:
+              confirmation.answers === undefined ? null : JSON.stringify(confirmation.answers),
             decided_at: confirmation.decidedAt ?? null,
           })}
           WHERE id = ${confirmation.id}
@@ -323,34 +333,7 @@ export class ApprovalService extends Context.Service<
           return waiter
         })
 
-      /** Writes the approved hunks for a partial approval, unless the file moved underneath. */
-      const applyPartially = (change: ProposedChange) =>
-        Effect.gen(function* () {
-          const session = yield* sessions.get(change.sessionId)
-          if (Option.isNone(session)) return false
-          const worktree = session.value.worktreePath
-          const path = join(worktree, change.filePath)
-          if (!isInsideDir(worktree, path)) return false
-
-          const exists = yield* fs.exists(path)
-          const current = exists ? yield* fs.readFileString(path) : ""
-          if (current !== change.originalContent || (!exists && change.kind === "modify")) {
-            return false
-          }
-          const content = applyHunks(
-            change.originalContent,
-            change.hunks,
-            approvedIndexes(change.hunks),
-          )
-          yield* fs.makeDirectory(dirname(path), { recursive: true })
-          yield* fs.writeFileString(path, content)
-          return true
-        }).pipe(
-          Effect.catch(() => Effect.succeed(false)),
-          Effect.catchDefect(() => Effect.succeed(false)),
-        )
-
-      const decideChange = (changeId: string, decisions: ReadonlyArray<HunkDecisionInput>) =>
+      const decideChange = (changeId: string, options: DecisionOptions) =>
         decisionLock.withPermits(1)(
           Effect.gen(function* () {
             const stored = yield* getChange(changeId)
@@ -359,73 +342,39 @@ export class ApprovalService extends Context.Service<
               Option.map(stored, (change) => change.status),
             )
             const change = Option.getOrThrow(stored)
+            const allowed = options.decision === "allow"
+            const comment = options.comment?.trim()
 
-            const decided = new Set(decisions.map((decision) => decision.index))
-            const missing = change.hunks
-              .map((hunk) => hunk.index)
-              .filter((index) => !decided.has(index))
-            if (missing.length > 0) return yield* new IncompleteReview({ missing })
-
-            const hunks = withDecisions(change.hunks, decisions)
-            const outcome = reviewOutcome(hunks)
-            const decidedAt = yield* now
-            let resolved: ProposedChange
-            let decision: PermissionDecision
-
-            if (outcome === "applied") {
-              resolved = { ...change, hunks, status: "applied", decidedAt }
-              decision = { behavior: "allow" }
-            } else if (outcome === "rejected") {
-              resolved = { ...change, hunks, status: "rejected", decidedAt }
-              decision = {
-                behavior: "deny",
-                message: formatRejectionMessage(change.filePath, hunks),
-              }
-            } else {
-              const candidate: ProposedChange = { ...change, hunks }
-              const written = yield* applyPartially(candidate)
-              resolved = {
-                ...candidate,
-                status: written ? "partially_applied" : "rejected",
-                decidedAt,
-              }
-              decision = {
-                behavior: "deny",
-                message: written
-                  ? formatPartialApplicationMessage(change.filePath, hunks)
-                  : conflictMessage(change.filePath),
-              }
+            if (allowed && options.allowForSession === true) {
+              allowInSession(change.sessionId, change.toolName)
             }
 
+            const resolved: ProposedChange = {
+              ...change,
+              // Every hunk shares the verdict, so the diff reads as applied or not.
+              hunks: change.hunks.map((hunk) => ({
+                ...hunk,
+                status: allowed ? ("approved" as const) : ("rejected" as const),
+              })),
+              status: allowed ? "applied" : "rejected",
+              ...(!allowed && comment ? { comment } : {}),
+              decidedAt: yield* now,
+            }
             yield* saveChangeOutcome(resolved)
-            yield* Effect.forEach(
-              hunks,
-              (hunk) =>
-                sql`
-                  INSERT INTO hunk_decisions ${sql.insert({
-                    id: randomUUID(),
-                    proposed_change_id: change.id,
-                    hunk_index: hunk.index,
-                    decision: hunk.status,
-                    comment: hunk.comment ?? null,
-                    decided_at: decidedAt,
-                  })}
-                `,
-              { discard: true },
-            ).pipe(Effect.orDie)
             yield* publish({ _tag: "change", change: resolved }, "ApprovalResolved")
-            yield* Deferred.succeed(waiter.deferred, decision)
+            yield* Deferred.succeed(
+              waiter.deferred,
+              allowed
+                ? { behavior: "allow" }
+                : { behavior: "deny", message: changeDeniedMessage(change.filePath, comment) },
+            )
             return resolved
           }),
         )
 
       const decideConfirmation = (
         confirmationId: string,
-        options: {
-          readonly decision: "allow" | "deny"
-          readonly comment?: string | undefined
-          readonly alwaysAllow?: boolean | undefined
-        },
+        options: DecisionOptions & { readonly answers?: QuestionAnswers | undefined },
       ) =>
         decisionLock.withPermits(1)(
           Effect.gen(function* () {
@@ -436,30 +385,38 @@ export class ApprovalService extends Context.Service<
             )
             const confirmation = Option.getOrThrow(stored)
             const comment = options.comment?.trim()
+            const isQuestion = confirmation.toolName === QUESTION_TOOL
+            const answers = isQuestion && options.decision === "allow" ? options.answers : undefined
 
-            if (options.decision === "allow" && options.alwaysAllow === true) {
-              const session = yield* sessions.get(confirmation.sessionId)
-              if (Option.isSome(session)) {
-                yield* policies.allowTool(session.value.projectId, confirmation.toolName)
-              }
+            // A question is answered each time; it can never be allowed once and for all.
+            if (options.decision === "allow" && options.allowForSession === true && !isQuestion) {
+              allowInSession(confirmation.sessionId, confirmation.toolName)
             }
 
             const resolved: PendingConfirmation = {
               ...confirmation,
               status: options.decision === "allow" ? "allowed" : "denied",
               ...(comment ? { comment } : {}),
+              ...(answers === undefined ? {} : { answers }),
               decidedAt: yield* now,
             }
             yield* saveConfirmationOutcome(resolved)
             yield* publish({ _tag: "confirmation", confirmation: resolved }, "ApprovalResolved")
             const decision: PermissionDecision =
               options.decision === "allow"
-                ? { behavior: "allow" }
+                ? {
+                    behavior: "allow",
+                    ...(answers === undefined
+                      ? {}
+                      : { updatedInput: { ...asRecord(confirmation.input), answers } }),
+                  }
                 : {
                     behavior: "deny",
                     message: comment
                       ? `DENIED by the human reviewer: ${comment}`
-                      : `DENIED by the human reviewer: do not run this ${confirmation.toolName} call. Ask how to proceed if it is necessary.`,
+                      : isQuestion
+                        ? TALK_ABOUT_IT_MESSAGE
+                        : `DENIED by the human reviewer: do not run this ${confirmation.toolName} call. Ask how to proceed if it is necessary.`,
                   }
             yield* Deferred.succeed(waiter.deferred, decision)
             return resolved
@@ -507,6 +464,7 @@ export class ApprovalService extends Context.Service<
         requestConfirmation,
         decideChange,
         decideConfirmation,
+        allowsInSession,
         listForSession,
         pendingCount,
         expireSession,

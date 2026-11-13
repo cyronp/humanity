@@ -8,6 +8,7 @@ import {
   type Session,
   type SessionEvent,
   type SessionStatus,
+  type SessionUsage,
   type ToolCall,
 } from "@humanity/contracts"
 
@@ -30,6 +31,8 @@ export interface SessionView {
   readonly draft: string
   /** Why the session last stopped with an error, if it did. */
   readonly error: string | null
+  /** The context window and plan limits the agent last reported. */
+  readonly usage: SessionUsage
 }
 
 const byToolUseId = (toolCalls: ReadonlyArray<ToolCall>) =>
@@ -70,6 +73,7 @@ export const reduceSessionEvent = (
       approvals: event.approvals,
       draft: "",
       error: null,
+      usage: event.usage,
     }
   }
   if (view === undefined) return undefined
@@ -86,6 +90,8 @@ export const reduceSessionEvent = (
     }
     case "SessionUpdated":
       return { ...view, session: event.session }
+    case "UsageUpdated":
+      return { ...view, usage: event.usage }
     case "AgentMessage": {
       // A message can arrive both in the snapshot and live; keep one copy.
       if (view.messages.some((message) => message.id === event.message.id)) return view

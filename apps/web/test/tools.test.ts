@@ -12,7 +12,7 @@ import {
 } from "@/features/tools/inputs"
 import { findRenderer } from "@/features/tools/registry"
 import { toolRenderers } from "@/features/tools/renderers"
-import { type ToolCall, SessionId } from "@humanity/contracts"
+import { OPEN_THREAD_TOOL, type ToolCall, SessionId } from "@humanity/contracts"
 
 const ESC = "\u001b"
 
@@ -125,9 +125,20 @@ describe("renderer registry", () => {
     expect(rendererFor("mcp__github__create_issue")).toBe("MCP")
   })
 
+  it("shows Humanity's open_thread as a thread, not as any MCP tool", () => {
+    expect(rendererFor(OPEN_THREAD_TOOL)).toBe("Thread")
+    expect(rendererFor("mcp__humanity__other")).toBe("MCP")
+  })
+
   it("falls back to the generic renderer for anything else", () => {
     expect(rendererFor("TodoWrite")).toBe("Generic")
     expect(rendererFor("mcp__broken")).toBe("Generic")
+  })
+
+  it("shows a question as a question, and a malformed one as raw input", () => {
+    const input = { questions: [{ question: "Which one?", options: [{ label: "A" }] }] }
+    expect(findRenderer(toolRenderers, "AskUserQuestion", input).name).toBe("Question")
+    expect(rendererFor("AskUserQuestion")).toBe("Generic")
   })
 
   it("refuses a registry without a catch-all", () => {

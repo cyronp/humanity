@@ -1,4 +1,6 @@
 import { Schema } from "effect"
+import { Attachment } from "./Attachment.ts"
+import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
 
 export const SessionId = Schema.String.pipe(Schema.brand("SessionId"))
@@ -14,20 +16,99 @@ export const SessionStatus = Schema.Literals([
 ])
 export type SessionStatus = typeof SessionStatus.Type
 
+export const SessionOrigin = Schema.Literals(["humanity", "claude-code"])
+export type SessionOrigin = typeof SessionOrigin.Type
+
+/** How hard the model thinks before answering, as Claude Code names its effort levels. */
+export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
+export type ReasoningEffort = typeof ReasoningEffort.Type
+
 export const Session = Schema.Struct({
   id: SessionId,
   projectId: ProjectId,
   /** The Agent SDK's own session id, known after the first turn; used to resume. */
   sdkSessionId: Schema.NullOr(Schema.String),
   title: Schema.String,
+  /**
+   * The session's own `humanity/…` branch once it has a worktree. Before that,
+   * the branch the project's checkout was on when the session started.
+   */
   branch: Schema.String,
-  /** Absolute path of this session's git worktree under the data directory. */
+  /**
+   * Absolute path the agent works in: the session's own git worktree under the
+   * data directory when `inWorktree`, otherwise the project's checkout.
+   */
   worktreePath: Schema.String,
+  /** False until the human sets up a worktree; the agent works in the project's checkout until then. */
+  inWorktree: Schema.Boolean,
+  /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
+  model: Schema.NullOr(Schema.String),
+  /** How hard the model reasons, or `null` for the model's own default. */
+  effort: Schema.NullOr(ReasoningEffort),
+  /** How much the agent does without asking. */
+  autonomy: Autonomy,
   status: SessionStatus,
+  /**
+   * Where the conversation started: in Humanity, or in the Claude Code CLI,
+   * whose history Humanity imports into each project's thread history.
+   */
+  origin: SessionOrigin,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 })
 export type Session = typeof Session.Type
+
+/**
+ * Whether the human can still send messages. An ended thread is over, except
+ * one imported from Claude Code: it was never ended in Humanity, and it still
+ * works in the project's checkout, where its conversation can resume.
+ */
+export const acceptsMessages = (session: Session): boolean =>
+  session.status !== "ended" || (session.origin === "claude-code" && !session.inWorktree)
+
+/** How full the model's context window is, as Claude Code counts it. */
+export const ContextUsage = Schema.Struct({
+  usedTokens: Schema.Number,
+  maxTokens: Schema.Number,
+})
+export type ContextUsage = typeof ContextUsage.Type
+
+/** One rate-limit window of a claude.ai plan. */
+export const PlanWindow = Schema.Struct({
+  /** Percentage of the window used, 0 to 100. */
+  utilization: Schema.Number,
+  /** When the window resets (ISO 8601), if Claude Code said so. */
+  resetsAt: Schema.NullOr(Schema.String),
+})
+export type PlanWindow = typeof PlanWindow.Type
+
+/** The rate-limit windows of a claude.ai plan. A window Claude Code did not report is `null`. */
+export const PlanUsage = Schema.Struct({
+  fiveHour: Schema.NullOr(PlanWindow),
+  sevenDay: Schema.NullOr(PlanWindow),
+  /** Weekly windows that count one model only, under the name Claude Code gives it ("Fable"). */
+  models: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      utilization: Schema.Number,
+      resetsAt: Schema.NullOr(Schema.String),
+    }),
+  ),
+})
+export type PlanUsage = typeof PlanUsage.Type
+
+/**
+ * What a session last heard from Claude Code about its limits. Each part is
+ * `null` until the agent reports it; `plan` stays `null` for logins without
+ * plan limits (an API key).
+ */
+export const SessionUsage = Schema.Struct({
+  context: Schema.NullOr(ContextUsage),
+  plan: Schema.NullOr(PlanUsage),
+})
+export type SessionUsage = typeof SessionUsage.Type
+
+export const NO_USAGE: SessionUsage = { context: null, plan: null }
 
 // ---------------------------------------------------------------------------
 // Normalized messages. The raw SDK message is stored next to these in the
@@ -61,8 +142,11 @@ export const UsageSummary = Schema.Struct({
 export type UsageSummary = typeof UsageSummary.Type
 
 export const MessageContent = Schema.Union([
-  /** A message the human sent. */
-  Schema.TaggedStruct("user", { text: Schema.String }),
+  Schema.TaggedStruct("user", {
+    text: Schema.String,
+    /** Files sent with the message. Absent on messages without any. */
+    attachments: Schema.optional(Schema.Array(Attachment)),
+  }),
   Schema.TaggedStruct("assistant", {
     blocks: Schema.Array(AssistantBlock),
     /** Set for messages produced inside a subagent's tool call. */

@@ -1,77 +1,79 @@
 import { Schema } from "effect"
+import { QUESTION_TOOL } from "./Question.ts"
 
 /**
- * How much autonomy a tool gets. Unknown tools always resolve to `confirm`,
- * never to `auto`.
+ * What a tool call is, to a thread that asks before it acts:
+ *
+ * - `auto`: runs without asking in every thread (reads, the agent's own bookkeeping).
+ * - `review`: a file change, shown as a diff and approved or declined as a whole.
+ * - `confirm`: anything else with side effects, shown as the call and allowed or denied.
  */
-export const ToolMode = Schema.Literals(["auto", "review", "confirm", "deny"])
+export const ToolMode = Schema.Literals(["auto", "review", "confirm"])
 export type ToolMode = typeof ToolMode.Type
 
-/**
- * One row of a project's policy table. `pattern` is either an exact tool name
- * (`Bash`) or a prefix wildcard (`mcp__*`, `mcp__github__*`).
- */
-export const ToolRule = Schema.Struct({
-  pattern: Schema.NonEmptyString,
-  mode: ToolMode,
-})
-export type ToolRule = typeof ToolRule.Type
+/** Humanity's own MCP server, running inside the daemon: the tools the app itself gives the agent. */
+export const HUMANITY_MCP_SERVER = "humanity"
 
-export const ToolPolicy = Schema.Struct({
-  rules: Schema.Array(ToolRule),
-})
-export type ToolPolicy = typeof ToolPolicy.Type
+/** The server's tool that opens a new thread, by the short name the server registers. */
+export const OPEN_THREAD_TOOL_NAME = "open_thread"
 
-/** Mode used for any tool that no rule matches. */
-export const FALLBACK_TOOL_MODE: ToolMode = "confirm"
-
-export const DEFAULT_TOOL_POLICY: ToolPolicy = {
-  rules: [
-    // Read-only built-ins and the agent's own bookkeeping.
-    { pattern: "Read", mode: "auto" },
-    { pattern: "Glob", mode: "auto" },
-    { pattern: "Grep", mode: "auto" },
-    { pattern: "TodoWrite", mode: "auto" },
-    { pattern: "Skill", mode: "auto" },
-    // File-mutating built-ins.
-    { pattern: "Edit", mode: "review" },
-    { pattern: "Write", mode: "review" },
-    { pattern: "NotebookEdit", mode: "review" },
-    // Anything with side effects beyond the worktree's files.
-    { pattern: "Bash", mode: "confirm" },
-    { pattern: "PowerShell", mode: "confirm" },
-    { pattern: "WebFetch", mode: "confirm" },
-    { pattern: "WebSearch", mode: "confirm" },
-    { pattern: "mcp__*", mode: "confirm" },
-  ],
-}
-
-const isWildcard = (pattern: string) => pattern.endsWith("*")
-
-const matches = (pattern: string, toolName: string): boolean =>
-  isWildcard(pattern) ? toolName.startsWith(pattern.slice(0, -1)) : pattern === toolName
+/** The same tool as the agent calls it. */
+export const OPEN_THREAD_TOOL = `mcp__${HUMANITY_MCP_SERVER}__${OPEN_THREAD_TOOL_NAME}`
 
 /**
- * Resolve a tool name to its mode. An exact rule beats a wildcard, a longer
- * wildcard beats a shorter one, and no match means `confirm`.
+ * Tools no thread asks about: read-only built-ins, the agent's own bookkeeping,
+ * and opening a thread (the new thread follows its own permissions).
  */
-export const resolveToolMode = (policy: ToolPolicy, toolName: string): ToolMode => {
-  let best: ToolRule | undefined
-  for (const rule of policy.rules) {
-    if (!matches(rule.pattern, toolName)) continue
-    if (!isWildcard(rule.pattern)) return rule.mode
-    if (best === undefined || rule.pattern.length > best.pattern.length) best = rule
-  }
-  return best?.mode ?? FALLBACK_TOOL_MODE
-}
+export const AUTO_TOOLS: ReadonlyArray<string> = [
+  "Read",
+  "Glob",
+  "Grep",
+  "TodoWrite",
+  "Skill",
+  OPEN_THREAD_TOOL,
+]
 
-/** Returns a policy where `pattern` maps to `mode`, replacing an existing rule for it. */
-export const setToolRule = (policy: ToolPolicy, pattern: string, mode: ToolMode): ToolPolicy => {
-  const exists = policy.rules.some((rule) => rule.pattern === pattern)
-  return {
-    rules: exists
-      ? policy.rules.map((rule) => (rule.pattern === pattern ? { pattern, mode } : rule))
-      : [...policy.rules, { pattern, mode }],
+/** File-mutating built-ins. */
+const EDIT_TOOLS: ReadonlyArray<string> = ["Edit", "Write", "NotebookEdit"]
+
+/**
+ * What a tool is. The same for every project; how much of it a thread asks
+ * about is the thread's `Autonomy`. A tool Humanity does not know is never
+ * `auto`. A question for the human is always something to answer.
+ */
+export const toolMode = (toolName: string): ToolMode =>
+  toolName === QUESTION_TOOL
+    ? "confirm"
+    : AUTO_TOOLS.includes(toolName)
+      ? "auto"
+      : EDIT_TOOLS.includes(toolName)
+        ? "review"
+        : "confirm"
+
+/**
+ * How much a thread's agent does without the human. Humanity's own presets,
+ * not the SDK's permission modes: every call still reaches Humanity's
+ * permission check.
+ *
+ * - `ask`: file changes and other tools with side effects wait for the human.
+ * - `accept_edits`: file changes inside the thread's folder are applied without asking.
+ * - `auto`: nothing waits, except a question the agent asks the human.
+ */
+export const Autonomy = Schema.Literals(["ask", "accept_edits", "auto"])
+export type Autonomy = typeof Autonomy.Type
+
+/** What a new thread runs with when neither the project nor the human set a default. */
+export const DEFAULT_AUTONOMY: Autonomy = "auto"
+
+/** The mode a call gets once the thread's autonomy is applied to what the tool is. */
+export const applyAutonomy = (autonomy: Autonomy, mode: ToolMode): ToolMode => {
+  switch (autonomy) {
+    case "ask":
+      return mode
+    case "accept_edits":
+      return mode === "review" ? "auto" : mode
+    case "auto":
+      return "auto"
   }
 }
 

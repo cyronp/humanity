@@ -7,6 +7,10 @@ export const ClaudeHandlers = ClaudeRpcs.toLayer(
     const account = yield* ClaudeAccountService
     return ClaudeRpcs.of({
       "Claude.status": ({ refresh }) => account.status({ refresh }),
+      "Claude.accounts": ({ refresh }) => account.accounts({ refresh }),
+      "Claude.addAccount": ({ name, configDir }) => account.add(name, configDir),
+      "Claude.removeAccount": ({ accountId }) => account.remove(accountId),
+      "Claude.setActiveAccount": ({ accountId }) => account.setActive(accountId),
     })
   }),
 )

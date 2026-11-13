@@ -26,14 +26,22 @@ export const keys = {
   projects: "projects",
   /** The Claude account sessions run as. */
   claude: "claude",
+  /** How GitHub is reached, and so which repositories it lists. */
+  github: "github",
+  /** How GitLab is reached, and so which repositories it lists. */
+  gitlab: "gitlab",
+  /** MCP servers and skills: Humanity's own and each repository's. */
+  extensions: "extensions",
+  /** The human's own choices, like the pinned defaults of new threads. */
+  preferences: "preferences",
   /** Branches, status and diff of one project's repository. */
   git: (projectId: string) => `git:${projectId}`,
   /** The session list of one project. */
   sessions: (projectId: string) => `sessions:${projectId}`,
-  /** The tool policy of one project. */
-  policy: (projectId: string) => `policy:${projectId}`,
   /** Uncommitted changes of one session worktree. */
   sessionDiff: (sessionId: string) => `session-diff:${sessionId}`,
+  /** Where one session's branch stands against its remote, and its pull request. */
+  publication: (sessionId: string) => `publication:${sessionId}`,
   /** The decision history of one project. */
   history: (projectId: string) => `history:${projectId}`,
 } as const

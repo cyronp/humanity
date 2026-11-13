@@ -1,5 +1,5 @@
-import { parseMcpToolName } from "@humanity/contracts"
-import { Sparkles } from "lucide-react"
+import { parseMcpToolName, parseQuestions, QUESTION_TOOL } from "@humanity/contracts"
+import { MessageCircleQuestion, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Markdown } from "@/features/chat/Markdown"
 import { describeInput, stringField } from "../inputs.ts"
@@ -78,6 +78,53 @@ export const subagentRenderer: ToolRenderer = {
             </div>
           </Field>
         )}
+      </div>
+    )
+  },
+}
+
+export const questionRenderer: ToolRenderer = {
+  name: "Question",
+  match: (toolName, input) => toolName === QUESTION_TOOL && parseQuestions(input) !== undefined,
+  Summary: ({ input }) => {
+    const questions = parseQuestions(input) ?? []
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <MessageCircleQuestion className="size-3.5 shrink-0 text-amber-600" />
+        <span className="text-muted-foreground">Asked</span>
+        <span className="truncate">{questions[0]?.question}</span>
+        {questions.length > 1 && (
+          <span className="shrink-0 text-muted-foreground">+{questions.length - 1} more</span>
+        )}
+      </span>
+    )
+  },
+  Detail: ({ input, approval }) => {
+    const confirmation = approval?._tag === "confirmation" ? approval.confirmation : undefined
+    const unanswered =
+      confirmation?.status === "denied"
+        ? "You chose to talk about it instead."
+        : confirmation?.status === "expired"
+          ? "Not answered."
+          : confirmation?.status === "pending"
+            ? "Waiting for your answer."
+            : undefined
+    return (
+      <div className="flex flex-col gap-2">
+        {(parseQuestions(input) ?? []).map((question) => (
+          <Field key={question.question} label={question.question}>
+            {confirmation?.answers?.[question.question] !== undefined ? (
+              <p className="font-medium">{confirmation.answers[question.question]}</p>
+            ) : (
+              <ul className="list-disc pl-4 text-muted-foreground">
+                {question.options.map((option) => (
+                  <li key={option.label}>{option.label}</li>
+                ))}
+              </ul>
+            )}
+          </Field>
+        ))}
+        {unanswered !== undefined && <p className="text-muted-foreground">{unanswered}</p>}
       </div>
     )
   },

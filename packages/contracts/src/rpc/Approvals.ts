@@ -2,19 +2,19 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import {
   Approval,
+  ApprovalDecision,
   ApprovalRecord,
   ChangeId,
   ConfirmationId,
-  HunkDecisionInput,
   PendingConfirmation,
   ProposedChange,
 } from "../domain/Approval.ts"
 import { ProjectId } from "../domain/Project.ts"
+import { QuestionAnswers } from "../domain/Question.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
   ApprovalAlreadyDecided,
   ApprovalNotFound,
-  IncompleteReview,
   ProjectNotFound,
   SessionNotFound,
 } from "../Errors.ts"
@@ -31,20 +31,29 @@ export const ApprovalsRpcs = RpcGroup.make(
     success: Schema.Array(Approval),
     error: SessionNotFound,
   }),
-  /** One decision per hunk, all at once. The change is applied, partly applied or rejected. */
+  /** The whole file change at once: allowed, it is applied; denied, nothing is written. */
   Rpc.make("Approvals.decideChange", {
-    payload: { changeId: ChangeId, decisions: Schema.Array(HunkDecisionInput) },
+    payload: {
+      changeId: ChangeId,
+      decision: ApprovalDecision,
+      /** Sent to the agent with a denial. */
+      comment: Schema.optional(Schema.String),
+      /** Also stop asking about this tool for the rest of the thread. Only with `allow`. */
+      allowForSession: Schema.optional(Schema.Boolean),
+    },
     success: ProposedChange,
-    error: Schema.Union([ApprovalNotFound, ApprovalAlreadyDecided, IncompleteReview]),
+    error: Schema.Union([ApprovalNotFound, ApprovalAlreadyDecided]),
   }),
   Rpc.make("Approvals.decideConfirmation", {
     payload: {
       confirmationId: ConfirmationId,
-      decision: Schema.Literals(["allow", "deny"]),
+      decision: ApprovalDecision,
       /** Sent to the agent with a denial. */
       comment: Schema.optional(Schema.String),
-      /** Also set this tool to `auto` in the project's policy. Only with `allow`. */
-      alwaysAllow: Schema.optional(Schema.Boolean),
+      /** Also stop asking about this tool for the rest of the thread. Only with `allow`. */
+      allowForSession: Schema.optional(Schema.Boolean),
+      /** The human's answers to an `AskUserQuestion` call. Only with `allow`. */
+      answers: Schema.optional(QuestionAnswers),
     },
     success: PendingConfirmation,
     error: Schema.Union([ApprovalNotFound, ApprovalAlreadyDecided]),

@@ -12,7 +12,20 @@ export interface ServerConfigShape {
   readonly databasePath: string
   readonly worktreesDir: string
   readonly reposDir: string
+  /** Files attached to messages: `<attachmentsDir>/<sessionId>/<attachmentId>`. */
+  readonly attachmentsDir: string
+  /** Claude Code config folders of added accounts: `<accountsDir>/<accountId>`. */
+  readonly accountsDir: string
   readonly authTokenPath: string
+  /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
+  readonly githubTokenPath: string
+  /** A GitLab token the human saved from the UI, and the instance it is for. Same lifetime. */
+  readonly gitlabTokenPath: string
+  readonly gitlabHostPath: string
+  /** Humanity's own MCP servers, in Claude Code's `.mcp.json` format. Exists once one is added. */
+  readonly mcpConfigPath: string
+  /** The local Claude Code plugin Humanity's own skills live in: `<pluginDir>/skills/<name>/SKILL.md`. */
+  readonly pluginDir: string
   /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
   /** Origin the human should open. Differs from the daemon's own in development (Vite). */
@@ -33,7 +46,14 @@ const make = (options: {
     databasePath: join(home, "humanity.db"),
     worktreesDir: join(home, "worktrees"),
     reposDir: join(home, "repos"),
+    attachmentsDir: join(home, "attachments"),
+    accountsDir: join(home, "accounts"),
     authTokenPath: join(home, "auth-token"),
+    githubTokenPath: join(home, "github-token"),
+    gitlabTokenPath: join(home, "gitlab-token"),
+    gitlabHostPath: join(home, "gitlab-host"),
+    mcpConfigPath: join(home, "mcp.json"),
+    pluginDir: join(home, "plugin"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }
@@ -51,6 +71,8 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         const config = make(options)
         yield* fs.makeDirectory(config.worktreesDir, { recursive: true })
         yield* fs.makeDirectory(config.reposDir, { recursive: true })
+        yield* fs.makeDirectory(config.attachmentsDir, { recursive: true })
+        yield* fs.makeDirectory(config.accountsDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

@@ -1,5 +1,4 @@
 import { assert, describe, it } from "@effect/vitest"
-import { DEFAULT_TOOL_POLICY } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
@@ -23,7 +22,7 @@ describe("ProjectService", () => {
 
       assert.strictEqual(project.defaultBranch, "main")
       assert.strictEqual(project.githubFullName, null)
-      assert.deepStrictEqual(project.policy, DEFAULT_TOOL_POLICY)
+      assert.isNull(project.defaultAutonomy)
       assert.isTrue(existsSync(join(home, "humanity.db")))
     }),
   )
@@ -58,6 +57,26 @@ describe("ProjectService", () => {
 
       assert.strictEqual(project.localPath.toLowerCase(), repo.toLowerCase())
       assert.strictEqual(project.githubFullName, "acme/widgets")
+    }),
+  )
+
+  it.live("reads a GitLab remote, subgroups included", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo()
+      git(repo, "remote", "add", "origin", "git@gitlab.com:acme/tools/widgets.git")
+
+      const project = yield* ProjectService.use((projects) => projects.addLocal(repo)).pipe(
+        Effect.provide(services(home)),
+      )
+
+      assert.strictEqual(project.githubFullName, null)
+      assert.deepStrictEqual(project.gitlab, { host: "gitlab.com", fullPath: "acme/tools/widgets" })
+      // It survives the round trip through the database.
+      const listed = yield* ProjectService.use((projects) => projects.list).pipe(
+        Effect.provide(services(home)),
+      )
+      assert.deepStrictEqual(listed[0]?.gitlab, project.gitlab)
     }),
   )
 
