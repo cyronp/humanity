@@ -1,6 +1,7 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { ProposedChange } from "@humanity/contracts"
 import { countChanges } from "@humanity/diff"
+import { cn } from "cn"
 import { Exit } from "effect"
 import { FilePlus, FileDiff as FileDiffIcon } from "lucide-react"
 import { useState } from "react"
@@ -8,6 +9,7 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { ChangeCount } from "@/features/diff/FileDiffView"
+import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
 import { HunkView } from "@/features/diff/HunkView"
 import { decideChangeAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
@@ -50,8 +52,11 @@ export function ChangeCard({ change }: { readonly change: ProposedChange }) {
       <ItemContent className="min-w-0 gap-3">
         <ItemTitle className="line-clamp-none flex-wrap">
           The agent wants to {change.kind === "create" ? "create" : "change"}
-          <code className="font-mono text-sm break-all">{change.filePath}</code>
-          <Badge variant="outline">{change.kind === "create" ? "new file" : change.toolName}</Badge>
+          <code className={cn("font-mono text-sm break-all", fileNameClass(change.kind))}>
+            {change.filePath}
+          </code>
+          <FileStatusLetter kind={change.kind} />
+          <Badge variant="outline">{change.toolName}</Badge>
           <ChangeCount {...countChanges(change.hunks)} />
         </ItemTitle>
         <DecisionActions

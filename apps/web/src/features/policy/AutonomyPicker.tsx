@@ -79,7 +79,7 @@ export function AutonomyPicker({
             "text-muted-foreground hover:text-foreground",
             value === "ask" && "text-sky-600 hover:text-sky-700 dark:text-sky-400",
             value === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
-            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400"
+            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
           )}
           aria-label={`Autonomy: ${current.label}`}
         >

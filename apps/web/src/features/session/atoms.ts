@@ -75,6 +75,27 @@ export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
 
 export const commitAtom = HumanityClient.mutation("Sessions.commit")
 
+/** The session's branch against its remote, and its pull request. */
+export const publicationAtom = Atom.family((sessionId: SessionId) =>
+  HumanityClient.query(
+    "PullRequests.publication",
+    { sessionId },
+    { reactivityKeys: [keys.publication(sessionId)] },
+  ),
+)
+
+/** The branch's pull request with its checks and comments, or `null`. */
+export const pullRequestDetailsAtom = Atom.family((sessionId: SessionId) =>
+  HumanityClient.query(
+    "PullRequests.details",
+    { sessionId },
+    { reactivityKeys: [keys.publication(sessionId)] },
+  ),
+)
+
+export const pushAtom = HumanityClient.mutation("PullRequests.push")
+export const createPullRequestAtom = HumanityClient.mutation("PullRequests.create")
+
 export const historyAtom = Atom.family((projectId: ProjectId) =>
   HumanityClient.query(
     "Approvals.history",

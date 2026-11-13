@@ -1,18 +1,17 @@
 import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
-import { PanelRightClose, PanelRightOpen } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { QuestionPanel } from "@/features/questions/QuestionPanel"
 import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
-import { ChangesPanel } from "./ChangesPanel.tsx"
+import { SessionPanel } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
 import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
+import { SourceControlButton } from "./SourceControlButton.tsx"
 import {
   approvalForToolUse,
   isBusy,
@@ -49,6 +48,8 @@ export function Workspace({
   const cards =
     questions === undefined ? confirmations : confirmations.filter((each) => each !== asked)
   const [panelOpen, setPanelOpen] = useState(false)
+  // Grows whenever the agent may have written files, so what shows them refreshes.
+  const activity = Object.keys(view.toolCalls).length + view.approvals.length
   // The diff panel's reference buttons write into the message box.
   const composer = useRef<ComposerHandle>(null)
   const canReference = acceptsMessages(session) && questions === undefined
@@ -62,6 +63,25 @@ export function Workspace({
     observer.observe(dock)
     return () => observer.disconnect()
   }, [dock])
+
+  // Beside the chat, the panel runs to the top and the header ends where it
+  // begins. Alone on a narrow screen, the header keeps the full width.
+  const [panel, setPanel] = useState<HTMLElement | null>(null)
+  const [measuredWidth, setMeasuredWidth] = useState(0)
+  useEffect(() => {
+    const row = panel?.parentElement
+    if (panel === null || row === null || row === undefined) return
+    // The observer also reports once as soon as it starts.
+    const observer = new ResizeObserver(() => {
+      const width = panel.offsetWidth
+      setMeasuredWidth(width < row.clientWidth ? width : 0)
+    })
+    observer.observe(panel)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [panel])
+  const panelWidth = panel === null ? 0 : measuredWidth
+  useAppHeaderInsetEnd(panelWidth)
 
   // A blocked agent is visible from other tabs too.
   useEffect(() => {
@@ -83,15 +103,11 @@ export function Workspace({
         actions={
           <>
             <SetupWorktreeButton session={session} />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPanelOpen((open) => !open)}
-              aria-expanded={panelOpen}
-            >
-              {panelOpen ? <PanelRightClose /> : <PanelRightOpen />}
-              Review
-            </Button>
+            <SourceControlButton
+              session={session}
+              open={panelOpen}
+              onToggle={() => setPanelOpen((open) => !open)}
+            />
           </>
         }
       />
@@ -165,18 +181,23 @@ export function Workspace({
           </div>
         </div>
         {panelOpen && (
-          <aside className="flex min-h-0 w-full flex-col border-l pt-12 lg:w-[55%] lg:max-w-4xl">
-            <ScrollArea className="min-h-0 flex-1">
-              <ChangesPanel
-                session={session}
-                activity={Object.keys(view.toolCalls).length + view.approvals.length}
-                onReference={
-                  canReference
-                    ? (reference) => composer.current?.insert({ kind: "reference", reference })
-                    : undefined
-                }
-              />
-            </ScrollArea>
+          <aside
+            ref={setPanel}
+            className={cn(
+              "flex min-h-0 w-full flex-col border-l lg:w-[55%] lg:max-w-4xl",
+              // Alone on a narrow screen, it sits under the full-width header.
+              panelWidth === 0 && "pt-12",
+            )}
+          >
+            <SessionPanel
+              session={session}
+              activity={activity}
+              onReference={
+                canReference
+                  ? (reference) => composer.current?.insert({ kind: "reference", reference })
+                  : undefined
+              }
+            />
           </aside>
         )}
       </div>

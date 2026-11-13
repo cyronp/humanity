@@ -1,9 +1,10 @@
 import { cn } from "cn"
-import { createContext, type ReactNode, useContext, useState } from "react"
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
 
 const HeaderSlot = createContext<HTMLElement | null>(null)
+const HeaderInsetEnd = createContext<(pixels: number) => void>(() => undefined)
 
 /**
  * A blur that is strongest at the top and fades out downwards, so content
@@ -39,14 +40,20 @@ function ProgressiveBlur({ className }: { readonly className?: string }) {
  * The header over every page of the app. It is transparent: content scrolls
  * underneath, softened by a progressive blur. Pages fill it with
  * `<AppHeader>`; pages scrolling under it leave `pt-14` of room at their top.
+ * A page with a full-height panel on its right gives the header that panel's
+ * width with `useAppHeaderInsetEnd`, and the header ends where it begins.
  */
 export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [insetEnd, setInsetEnd] = useState(0)
   const { state, isMobile } = useSidebar()
   return (
     <HeaderSlot.Provider value={slot}>
-      {children}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20">
+      <HeaderInsetEnd.Provider value={setInsetEnd}>{children}</HeaderInsetEnd.Provider>
+      <header
+        className="pointer-events-none absolute top-0 left-0 z-20"
+        style={{ right: insetEnd }}
+      >
         <ProgressiveBlur className="absolute inset-x-0 top-0 h-20" />
         <div className="pointer-events-auto relative flex h-12 items-center gap-2 px-3">
           {/* The toggle lives in the sidebar; it shows here only when the sidebar is hidden. */}
@@ -56,6 +63,18 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
       </header>
     </HeaderSlot.Provider>
   )
+}
+
+/**
+ * Ends the app header `pixels` before the right edge, for as long as the
+ * calling page stays mounted, so a panel there can run to the top.
+ */
+export function useAppHeaderInsetEnd(pixels: number) {
+  const setInsetEnd = useContext(HeaderInsetEnd)
+  useEffect(() => {
+    setInsetEnd(pixels)
+    return () => setInsetEnd(0)
+  }, [pixels, setInsetEnd])
 }
 
 /** Puts a page's breadcrumb (`children`) and its `actions` into the app header. */
