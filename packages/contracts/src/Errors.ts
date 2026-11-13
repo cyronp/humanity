@@ -261,6 +261,16 @@ export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNa
   }
 }
 
+/** The Claude Code config folder given for a new account cannot be used. */
+export class ClaudeAccountFolderInvalid extends Schema.TaggedError<ClaudeAccountFolderInvalid>()(
+  "ClaudeAccountFolderInvalid",
+  { folder: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
 /** Claude Code could not say how much of the plan is used right now. */
 export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailable>()(
   "PlanUsageUnavailable",

@@ -68,14 +68,20 @@ export const DEFAULT_CLAUDE_ACCOUNT = "default"
 /**
  * One Claude Code login Humanity can run sessions as. The default account is
  * the human's own Claude Code login; every other one is a separate Claude Code
- * config folder under Humanity's data directory, signed in on its own.
- * Humanity stores only the name: the credential stays in that folder.
+ * config folder, either one Humanity made under its data directory or one the
+ * human already had (like `~/.claude-personal`), signed in on its own.
+ * Humanity stores only the name and the folder: the credential stays in it.
  */
 export const ClaudeAccount = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   /** The human's own Claude Code login. It cannot be removed. */
   isDefault: Schema.Boolean,
+  /**
+   * The account runs on a config folder the human picked, not one Humanity
+   * made. Removing the account leaves that folder and its login alone.
+   */
+  linkedFolder: Schema.Boolean,
   /** New threads run as this account. Exactly one account is active. */
   active: Schema.Boolean,
   status: ClaudeStatus,

@@ -98,8 +98,11 @@ const subtitleFor = (account: ClaudeAccount, connection: ClaudeConnection): stri
         ? "Sessions run on this plan, exactly like Claude Code in a terminal."
         : "Sessions run on this credential. Usage is billed to it, not to a Claude plan."
     case "SignedOut":
-      return account.isDefault
-        ? "Sign in once with Claude Code. Humanity picks the login up automatically."
+      if (account.isDefault) {
+        return "Sign in once with Claude Code. Humanity picks the login up automatically."
+      }
+      return account.linkedFolder
+        ? "This folder has no login yet. Sign in to it with the command below."
         : "Sign in to this account with the command below. It gets a login of its own, next to your default one."
     case "Unavailable":
       return "Humanity runs Claude Code through the Agent SDK, and it did not start."
@@ -187,10 +190,15 @@ function SignInSteps({ account }: { readonly account: ClaudeAccount }) {
           </CollapsibleContent>
         </Collapsible>
       )}
-      {account.isDefault && (
+      {(account.isDefault || account.linkedFolder) && (
         <p className="text-xs text-muted-foreground">
-          The login is read from <code className="break-all">{status.configDir}</code>. If you use a
-          custom <code>CLAUDE_CONFIG_DIR</code>, sign in with the same one.
+          The login is read from <code className="break-all">{status.configDir}</code>.
+          {account.isDefault && (
+            <>
+              {" "}
+              If you use a custom <code>CLAUDE_CONFIG_DIR</code>, sign in with the same one.
+            </>
+          )}
         </p>
       )}
     </div>
@@ -260,7 +268,15 @@ function RemoveAccount({
         <DialogHeader>
           <DialogTitle>Remove “{account.name}”?</DialogTitle>
           <DialogDescription>
-            Its login and the conversations Claude Code kept for it are deleted from this computer.
+            {account.linkedFolder ? (
+              <>
+                Humanity stops using it. Its folder{" "}
+                <code className="break-all">{account.status.configDir}</code> stays as it is, with
+                its login and conversations.
+              </>
+            ) : (
+              "Its login and the conversations Claude Code kept for it are deleted from this computer."
+            )}{" "}
             Ended threads that ran as it stay readable. The Claude account itself is not touched.
           </DialogDescription>
         </DialogHeader>

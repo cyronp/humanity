@@ -36,9 +36,11 @@ export function useClaudeAccounts() {
     [check],
   )
 
+  /** Without `configDir` the account gets a new login; with it, it runs on that existing folder. */
   const add = useCallback(
-    async (name: string) => {
-      const exit = await addAccount({ payload: { name }, reactivityKeys })
+    async (name: string, configDir?: string) => {
+      const payload = configDir === undefined ? { name } : { name, configDir }
+      const exit = await addAccount({ payload, reactivityKeys })
       return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
     },
     [addAccount],

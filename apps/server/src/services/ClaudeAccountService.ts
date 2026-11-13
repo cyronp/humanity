@@ -1,5 +1,6 @@
 import {
   type ClaudeAccount,
+  ClaudeAccountFolderInvalid,
   ClaudeAccountInUse,
   ClaudeAccountNameInvalid,
   ClaudeAccountNotFound,
@@ -14,15 +15,17 @@ import {
   Exit,
   FileSystem,
   Layer,
+  Option,
   Result,
   Schema,
 } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
-import { join } from "node:path"
+import { homedir } from "node:os"
+import { isAbsolute, join, resolve } from "node:path"
 import { classifyAccount } from "../claude/account.ts"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
-import { isInsideDir } from "../paths.ts"
+import { expandHome, isInsideDir, isSamePath } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 
 /** A working login rarely changes; anything else is re-checked soon, so a fresh login shows up. */
@@ -33,13 +36,24 @@ const ACTIVE_ACCOUNT_KEY = "active_claude_account"
 const DEFAULT_NAME = "Default login"
 const MAX_NAME_LENGTH = 60
 
-const AccountRow = Schema.Struct({ id: Schema.String, name: Schema.String })
+const AccountRow = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  config_dir: Schema.NullOr(Schema.String),
+})
+type AccountRow = typeof AccountRow.Type
 const ActiveRow = Schema.Struct({ value_json: Schema.fromJsonString(Schema.String) })
 const CountRow = Schema.Struct({ count: Schema.Number })
 
 interface StatusCheck {
   readonly cached: Effect.Effect<ClaudeStatus>
   readonly invalidate: Effect.Effect<void>
+}
+
+/** An added account's config folder, and whether the human picked it. */
+interface AccountFolder {
+  readonly dir: string
+  readonly linked: boolean
 }
 
 export class ClaudeAccountService extends Context.Service<
@@ -51,9 +65,16 @@ export class ClaudeAccountService extends Context.Service<
     readonly accounts: (options: {
       readonly refresh: boolean
     }) => Effect.Effect<ReadonlyArray<ClaudeAccount>>
-    /** Adds an account with an empty Claude Code config folder of its own: signed out until the human signs in. */
-    readonly add: (name: string) => Effect.Effect<ClaudeAccount, ClaudeAccountNameInvalid>
-    /** Removes an added account and its config folder. Never the default login. */
+    /**
+     * Adds an account. Without `configDir` it gets an empty Claude Code config
+     * folder of its own: signed out until the human signs in. With it, the
+     * account runs on that existing folder, which Humanity never writes to.
+     */
+    readonly add: (
+      name: string,
+      configDir?: string,
+    ) => Effect.Effect<ClaudeAccount, ClaudeAccountNameInvalid | ClaudeAccountFolderInvalid>
+    /** Removes an added account, and its config folder when Humanity made it. Never the default login. */
     readonly remove: (
       accountId: string,
     ) => Effect.Effect<void, ClaudeAccountNotFound | ClaudeAccountInUse>
@@ -75,7 +96,11 @@ export class ClaudeAccountService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const sql = yield* SqlClient.SqlClient
 
-      const dirOf = (accountId: string) => join(config.accountsDir, accountId)
+      const ownDirOf = (accountId: string) => join(config.accountsDir, accountId)
+      const folderOf = (row: AccountRow): AccountFolder =>
+        row.config_dir === null
+          ? { dir: ownDirOf(row.id), linked: false }
+          : { dir: row.config_dir, linked: true }
 
       const check = (configDir: string | undefined) =>
         Effect.gen(function* () {
@@ -116,7 +141,8 @@ export class ClaudeAccountService extends Context.Service<
       const selectAccounts = SqlSchema.findAll({
         Request: Schema.Void,
         Result: AccountRow,
-        execute: () => sql`SELECT id, name FROM claude_accounts ORDER BY created_at, rowid`,
+        execute: () =>
+          sql`SELECT id, name, config_dir FROM claude_accounts ORDER BY created_at, rowid`,
       })
       const selectActive = SqlSchema.findOneOption({
         Request: Schema.String,
@@ -134,8 +160,13 @@ export class ClaudeAccountService extends Context.Service<
 
       // One cached check per account, made when the account first appears.
       const checks = new Map<string, StatusCheck>()
+      const folders = new Map<string, AccountFolder>()
       checks.set(DEFAULT_CLAUDE_ACCOUNT, yield* makeCheck(undefined))
-      for (const row of yield* added) checks.set(row.id, yield* makeCheck(dirOf(row.id)))
+      for (const row of yield* added) {
+        const folder = folderOf(row)
+        folders.set(row.id, folder)
+        checks.set(row.id, yield* makeCheck(folder.dir))
+      }
 
       const activeId = Effect.gen(function* () {
         const stored = yield* selectActive(ACTIVE_ACCOUNT_KEY).pipe(
@@ -165,6 +196,7 @@ export class ClaudeAccountService extends Context.Service<
           id: row.id,
           name: row.name,
           isDefault: row.id === DEFAULT_CLAUDE_ACCOUNT,
+          linkedFolder: folders.get(row.id)?.linked ?? false,
           active: row.id === active,
           status,
         }))
@@ -178,7 +210,45 @@ export class ClaudeAccountService extends Context.Service<
           })
         }).pipe(Effect.withSpan("ClaudeAccountService.accounts"))
 
-      const add = Effect.fn("ClaudeAccountService.add")(function* (requested: string) {
+      /** Checks a folder the human picked and returns its absolute path. Only reads it. */
+      const linkableFolder = Effect.fn("ClaudeAccountService.linkableFolder")(function* (
+        requested: string,
+      ) {
+        const given = requested.trim()
+        const invalid = (reason: string) =>
+          Effect.fail(new ClaudeAccountFolderInvalid({ folder: given, reason }))
+        if (given === "") return yield* invalid("Give the path of the folder.")
+        const expanded = expandHome(given, homedir())
+        if (!isAbsolute(expanded)) {
+          return yield* invalid(
+            "Give the full path of the folder, like ~/.claude-personal or C:\\Users\\you\\.claude-personal.",
+          )
+        }
+        const dir = resolve(expanded)
+        if (isSamePath(dir, config.home) || isInsideDir(config.home, dir)) {
+          return yield* invalid(
+            "That folder is inside Humanity's data directory. Pick a Claude Code folder of your own.",
+          )
+        }
+        if (isSamePath(dir, claude.configDir)) {
+          return yield* invalid("That folder is the default login's already. Pick another one.")
+        }
+        for (const row of yield* added) {
+          if (isSamePath(dir, folderOf(row).dir)) {
+            return yield* invalid(`That folder is the account “${row.name}” already.`)
+          }
+        }
+        const info = yield* Effect.option(fs.stat(dir))
+        if (Option.isNone(info)) return yield* invalid(`There is no folder at ${dir}.`)
+        if (info.value.type !== "Directory")
+          return yield* invalid(`${dir} is a file, not a folder.`)
+        return dir
+      })
+
+      const add = Effect.fn("ClaudeAccountService.add")(function* (
+        requested: string,
+        configDir?: string,
+      ) {
         const name = requested.trim()
         if (name === "") {
           return yield* new ClaudeAccountNameInvalid({ reason: "Give the account a name." })
@@ -189,12 +259,17 @@ export class ClaudeAccountService extends Context.Service<
           })
         }
         const id = randomUUID()
+        const linked = configDir === undefined ? null : yield* linkableFolder(configDir)
         const createdAt = DateTime.formatIso(yield* DateTime.now)
-        yield* fs.makeDirectory(dirOf(id), { recursive: true }).pipe(Effect.orDie)
+        if (linked === null) {
+          yield* fs.makeDirectory(ownDirOf(id), { recursive: true }).pipe(Effect.orDie)
+        }
         yield* sql`
-          INSERT INTO claude_accounts ${sql.insert({ id, name, created_at: createdAt })}
+          INSERT INTO claude_accounts ${sql.insert({ id, name, config_dir: linked, created_at: createdAt })}
         `.pipe(Effect.orDie)
-        checks.set(id, yield* makeCheck(dirOf(id)))
+        const folder = folderOf({ id, name, config_dir: linked })
+        folders.set(id, folder)
+        checks.set(id, yield* makeCheck(folder.dir))
         return yield* describe({ id, name }, yield* activeId, false)
       })
 
@@ -207,9 +282,11 @@ export class ClaudeAccountService extends Context.Service<
 
         yield* sql`DELETE FROM claude_accounts WHERE id = ${accountId}`.pipe(Effect.orDie)
         checks.delete(accountId)
-        const dir = dirOf(accountId)
-        // Only ever a folder Humanity created for this account.
-        if (isInsideDir(config.accountsDir, dir)) {
+        const folder = folders.get(accountId)
+        folders.delete(accountId)
+        const dir = ownDirOf(accountId)
+        // Only ever a folder Humanity created for this account; a linked one is the human's.
+        if (folder?.linked !== true && isInsideDir(config.accountsDir, dir)) {
           yield* fs.remove(dir, { recursive: true, force: true }).pipe(
             Effect.catch((error) =>
               Effect.logWarning("could not remove the account's config folder", {
@@ -238,11 +315,7 @@ export class ClaudeAccountService extends Context.Service<
         setActive,
         activeId,
         configDirFor: (accountId) =>
-          Effect.sync(() =>
-            accountId === null || accountId === DEFAULT_CLAUDE_ACCOUNT || !checks.has(accountId)
-              ? undefined
-              : dirOf(accountId),
-          ),
+          Effect.sync(() => (accountId === null ? undefined : folders.get(accountId)?.dir)),
       }
     }),
   )

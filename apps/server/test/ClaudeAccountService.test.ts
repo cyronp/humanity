@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer, Ref } from "effect"
 import { TestClock } from "effect/testing"
-import { existsSync } from "node:fs"
+import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ReportedAccount } from "../src/claude/account.ts"
 import { ClaudeCode, ClaudeProbeFailed, type ProbeResult } from "../src/claude/ClaudeCode.ts"
@@ -43,6 +43,27 @@ const setup = (initial: ReportedAccount | "fail") =>
       ),
     )
     return { account, probes, service }
+  })
+
+/** Runs `body` with a service whose database stays open until the body is done. */
+const withService = <A, E, R>(
+  body: (service: ClaudeAccountService["Service"]) => Effect.Effect<A, E, R>,
+) =>
+  Effect.gen(function* () {
+    const account = yield* Ref.make<ReportedAccount | "fail">(SUBSCRIPTION)
+    const probes = yield* Ref.make(0)
+    const home = yield* tempDir()
+    const run = Effect.gen(function* () {
+      return yield* body(yield* ClaudeAccountService)
+    })
+    return yield* run.pipe(
+      Effect.provide(
+        ClaudeAccountService.layer.pipe(
+          Layer.provide(scripted(account, probes)),
+          Layer.provide(baseLayer(home)),
+        ),
+      ),
+    )
   })
 
 describe("ClaudeAccountService", () => {
@@ -181,6 +202,52 @@ describe("ClaudeAccountService", () => {
           assert.isUndefined(yield* service.configDirFor(work.id))
         }).pipe(Effect.provide(layer))
       }),
+  )
+
+  it.effect("runs an account on an existing folder and leaves the folder when it is removed", () =>
+    withService((service) =>
+      Effect.gen(function* () {
+        const folder = yield* tempDir()
+        writeFileSync(join(folder, ".credentials.json"), "{}")
+
+        const personal = yield* service.add("Personal", `  ${folder}  `)
+        assert.isTrue(personal.linkedFolder)
+        assert.strictEqual(personal.status.configDir, folder)
+        assert.strictEqual(yield* service.configDirFor(personal.id), folder)
+
+        const listed = (yield* service.accounts({ refresh: false })).find(
+          (account) => account.id === personal.id,
+        )
+        assert.isTrue(listed?.linkedFolder)
+
+        yield* service.remove(personal.id)
+        assert.isTrue(existsSync(join(folder, ".credentials.json")))
+        assert.isUndefined(yield* service.configDirFor(personal.id))
+      }),
+    ),
+  )
+
+  it.effect("refuses a folder that is missing, a file, relative or already an account", () =>
+    withService((service) =>
+      Effect.gen(function* () {
+        const folder = yield* tempDir()
+        const file = join(folder, "settings.json")
+        writeFileSync(file, "{}")
+
+        const reasonFor = (configDir: string) =>
+          Effect.map(Effect.flip(service.add("Personal", configDir)), (error) => error.message)
+
+        assert.include(yield* reasonFor(join(folder, "missing")), "There is no folder at")
+        assert.include(yield* reasonFor(file), "is a file, not a folder")
+        assert.include(yield* reasonFor(".claude-personal"), "full path")
+        assert.include(yield* reasonFor("   "), "Give the path")
+        assert.include(yield* reasonFor("/home/me/.claude"), "default login")
+
+        yield* service.add("Personal", folder)
+        assert.include(yield* reasonFor(folder), "“Personal” already")
+        assert.strictEqual((yield* service.accounts({ refresh: false })).length, 2)
+      }),
+    ),
   )
 
   it.effect("refuses a nameless account and never removes the default login", () =>

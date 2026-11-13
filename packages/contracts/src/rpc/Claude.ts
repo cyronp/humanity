@@ -1,7 +1,12 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { ClaudeAccount, ClaudeStatus } from "../domain/Claude.ts"
-import { ClaudeAccountInUse, ClaudeAccountNameInvalid, ClaudeAccountNotFound } from "../Errors.ts"
+import {
+  ClaudeAccountFolderInvalid,
+  ClaudeAccountInUse,
+  ClaudeAccountNameInvalid,
+  ClaudeAccountNotFound,
+} from "../Errors.ts"
 
 export const ClaudeRpcs = RpcGroup.make(
   /**
@@ -18,11 +23,16 @@ export const ClaudeRpcs = RpcGroup.make(
     payload: { refresh: Schema.Boolean },
     success: Schema.Array(ClaudeAccount),
   }),
-  /** Adds a signed-out account with its own Claude Code config folder. The human signs in to it next. */
+  /**
+   * Adds an account. Without `configDir` it gets a new, signed-out Claude Code
+   * config folder of its own and the human signs in to it next. With it, the
+   * account runs on that existing folder (`~` is the daemon's home directory),
+   * which Humanity never creates, changes or deletes.
+   */
   Rpc.make("Claude.addAccount", {
-    payload: { name: Schema.String },
+    payload: { name: Schema.String, configDir: Schema.optional(Schema.String) },
     success: ClaudeAccount,
-    error: ClaudeAccountNameInvalid,
+    error: Schema.Union([ClaudeAccountNameInvalid, ClaudeAccountFolderInvalid]),
   }),
   /** Removes an added account and its login. Refused while an open thread runs as it. */
   Rpc.make("Claude.removeAccount", {
