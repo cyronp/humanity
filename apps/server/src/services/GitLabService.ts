@@ -11,13 +11,20 @@ import {
   type PullRequestCheck,
   type PullRequestComment,
 } from "@humanity/contracts"
-import { Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Clock, Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
 import {
   HttpClient,
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http"
+import {
+  type ForgePage,
+  forgeScope,
+  makeForgeGate,
+  quotaFromHeaders,
+  retryAfter,
+} from "./ForgeGate.ts"
 import { nextPageUrl } from "./GitHubService.ts"
 import { GitLabToken } from "./GitLabToken.ts"
 
@@ -249,15 +256,29 @@ export class GitLabService extends Context.Service<
         }),
       )
 
-      /** Turns a non-2xx response into the matching tagged error. */
-      const checkStatus = (response: HttpClientResponse.HttpClientResponse) =>
+      const gate = yield* makeForgeGate
+      const scopeOf = ({ host, token }: GitLabCredentials) => forgeScope(host, token)
+
+      /**
+       * Turns a response that is neither 2xx nor `304 Not Modified` into the
+       * matching tagged error. A rate limit also keeps `scope` away from the
+       * instance until it lifts.
+       */
+      const checkStatus = (response: HttpClientResponse.HttpClientResponse, scope: string) =>
         Effect.gen(function* () {
-          if (response.status >= 200 && response.status < 300) return response
+          if ((response.status >= 200 && response.status < 300) || response.status === 304) {
+            yield* gate.answered(scope)
+            return response
+          }
           if (response.status === 429) {
-            const reset = Number(response.headers["ratelimit-reset"])
+            const now = yield* Clock.currentTimeMillis
+            const reset = Number(response.headers["ratelimit-reset"]) * 1000
+            const resumeAt =
+              retryAfter(response.headers["retry-after"], now) ??
+              (Number.isFinite(reset) && reset > 0 ? reset : undefined)
+            yield* gate.limited(scope, resumeAt)
             return yield* new GitLabRateLimited({
-              resetAt:
-                Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : null,
+              resetAt: resumeAt === undefined ? null : new Date(resumeAt).toISOString(),
             })
           }
           if (response.status === 401) {
@@ -283,24 +304,86 @@ export class GitLabService extends Context.Service<
           onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
         })
 
-      /** `path` is relative to the instance's API, so the token can only go to its own instance. */
-      const get = (path: string, { host, token }: GitLabCredentials) =>
-        http
-          .get(`${gitlabApi(host)}${path}`, { headers: authorization(token) })
-          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
-
-      const post = (path: string, body: unknown, { host, token }: GitLabCredentials) =>
-        http
-          .execute(
-            HttpClientRequest.post(`${gitlabApi(host)}${path}`, {
-              headers: authorization(token),
-            }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+      /**
+       * Every request goes through here: refused at once while the instance's
+       * rate limit keeps this token away, a few at a time otherwise, and what
+       * the answer says of the quota is kept for the next one.
+       */
+      const send = (request: HttpClientRequest.HttpClientRequest, using: GitLabCredentials) =>
+        Effect.gen(function* () {
+          const scope = scopeOf(using)
+          const resumeAt = yield* gate.pausedUntil(scope)
+          if (resumeAt !== null) {
+            return yield* new GitLabRateLimited({ resetAt: new Date(resumeAt).toISOString() })
+          }
+          const response = yield* gate.withPermit(
+            http.execute(request).pipe(Effect.mapError(transportError)),
           )
-          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
+          yield* gate.observe(scope, quotaFromHeaders(response.headers, "ratelimit-"))
+          return yield* checkStatus(response, scope)
+        })
+
+      /** `path` is relative to the instance's API, so the token can only go to its own instance. */
+      const get = (path: string, using: GitLabCredentials) =>
+        send(
+          HttpClientRequest.get(`${gitlabApi(using.host)}${path}`, {
+            headers: authorization(using.token),
+          }),
+          using,
+        )
+
+      /**
+       * A GET that revalidates: it sends the `ETag` of the last answer, and a
+       * `304 Not Modified` hands that answer back without the instance building
+       * and sending it again.
+       */
+      const read = (
+        path: string,
+        using: GitLabCredentials,
+      ): Effect.Effect<ForgePage, GitLabError> =>
+        Effect.gen(function* () {
+          const key = `${scopeOf(using)}\
+${path}`
+          const known = gate.recall(key)
+          const response = yield* send(
+            HttpClientRequest.get(`${gitlabApi(using.host)}${path}`, {
+              headers: {
+                ...authorization(using.token),
+                ...(known === undefined ? {} : { "if-none-match": known.etag }),
+              },
+            }),
+            using,
+          )
+          if (response.status === 304 && known !== undefined) {
+            return { status: 200, headers: { link: known.link }, json: Effect.succeed(known.json) }
+          }
+          const json = yield* response.json.pipe(
+            Effect.mapError(
+              (error) =>
+                new GitLabRequestFailed({
+                  status: response.status,
+                  detail: `unexpected response: ${String(error)}`,
+                }),
+            ),
+          )
+          const etag = response.headers["etag"]
+          const link = response.headers["link"]
+          if (etag === undefined) gate.forget(key)
+          else gate.remember(key, { etag, json, link })
+          return { status: response.status, headers: { link }, json: Effect.succeed(json) }
+        })
+
+      const post = (path: string, body: unknown, using: GitLabCredentials) =>
+        send(
+          HttpClientRequest.post(`${gitlabApi(using.host)}${path}`, {
+            headers: authorization(using.token),
+          }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+          using,
+        )
 
       const decode =
         <S extends Schema.Constraint>(schema: S) =>
-        (response: HttpClientResponse.HttpClientResponse) =>
+        (response: Pick<ForgePage, "status" | "json">) =>
           response.json.pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(schema as never)),
             Effect.map((value) => value as S["Type"]),
@@ -314,21 +397,25 @@ export class GitLabService extends Context.Service<
           )
 
       /** The path of the next page, when the `Link` header names one on this same instance. */
-      const nextPath = (response: HttpClientResponse.HttpClientResponse, host: string) => {
+      const nextPath = (response: Pick<ForgePage, "headers">, host: string) => {
         const next = nextPageUrl(response.headers["link"])
         const api = gitlabApi(host)
         return next?.startsWith(`${api}/`) ? Option.some(next.slice(api.length)) : Option.none()
       }
 
-      /** Every page of a list, starting at `first`. */
+      /** Every page of a list, starting at `first`; `fetch` is `read` for a list worth revalidating. */
       const pages = <S extends Schema.Constraint>(
         first: string,
         schema: S,
         using: GitLabCredentials,
+        fetch: (
+          path: string,
+          using: GitLabCredentials,
+        ) => Effect.Effect<ForgePage, GitLabError> = get,
       ) =>
         Stream.paginate(first, (path: string) =>
           Effect.gen(function* () {
-            const response = yield* get(path, using)
+            const response = yield* fetch(path, using)
             const page = yield* decode(Schema.Array(schema))(response)
             return [page as ReadonlyArray<S["Type"]>, nextPath(response, using.host)] as const
           }),
@@ -412,7 +499,7 @@ export class GitLabService extends Context.Service<
       const findMergeRequest = (fullPath: string, branch: string) =>
         Effect.gen(function* () {
           const using = yield* credentials
-          const mergeRequests = yield* get(
+          const mergeRequests = yield* read(
             `${project(fullPath)}/merge_requests?source_branch=${encodeURIComponent(branch)}&state=all&order_by=updated_at&sort=desc&per_page=20`,
             using,
           ).pipe(Effect.flatMap(decode(Schema.Array(MergeRequestJson))))
@@ -440,7 +527,7 @@ export class GitLabService extends Context.Service<
       const checks = (fullPath: string, iid: number) =>
         Effect.gen(function* () {
           const using = yield* credentials
-          const pipelines = yield* get(
+          const pipelines = yield* read(
             `${project(fullPath)}/merge_requests/${iid}/pipelines?per_page=1`,
             using,
           ).pipe(Effect.flatMap(decode(Schema.Array(PipelineJson))))
@@ -450,6 +537,7 @@ export class GitLabService extends Context.Service<
             `${project(fullPath)}/pipelines/${latest.id}/jobs?per_page=100`,
             JobJson,
             using,
+            read,
           ).pipe(Stream.take(MAX_ITEMS), Stream.runCollect)
           return jobs.map((job): PullRequestCheck => ({
             name: job.name,
@@ -468,6 +556,7 @@ export class GitLabService extends Context.Service<
             `${project(fullPath)}/merge_requests/${mergeRequest.number}/notes?sort=asc&order_by=created_at&per_page=100`,
             NoteJson,
             using,
+            read,
           ).pipe(Stream.take(MAX_ITEMS), Stream.runCollect)
           return notes
             .filter((note) => !note.system)

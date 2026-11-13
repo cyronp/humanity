@@ -11,13 +11,20 @@ import {
   type PullRequestCheck,
   type PullRequestComment,
 } from "@humanity/contracts"
-import { Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Clock, Context, Effect, flow, Layer, Option, Redacted, Schema, Stream } from "effect"
 import {
   HttpClient,
   type HttpClientError,
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http"
+import {
+  type ForgePage,
+  forgeScope,
+  makeForgeGate,
+  quotaFromHeaders,
+  retryAfter,
+} from "./ForgeGate.ts"
 import { GitHubToken } from "./GitHubToken.ts"
 
 export const GITHUB_API = "https://api.github.com"
@@ -278,26 +285,53 @@ export class GitHubService extends Context.Service<
         }),
       )
 
-      /** Turns a non-2xx response into the matching tagged error. */
-      const checkStatus = (response: HttpClientResponse.HttpClientResponse) =>
+      const gate = yield* makeForgeGate
+      const scopeOf = (token: Option.Option<Redacted.Redacted<string>>) =>
+        forgeScope("github.com", token)
+
+      const errorMessage = (response: HttpClientResponse.HttpClientResponse) =>
+        response.json.pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(ErrorJson)),
+          Effect.map((json) => json.message ?? ""),
+          Effect.catch(() => Effect.succeed("")),
+        )
+
+      /**
+       * Turns a response that is neither 2xx nor `304 Not Modified` into the
+       * matching tagged error. A rate limit also keeps `scope` away from GitHub
+       * until it lifts.
+       */
+      const checkStatus = (response: HttpClientResponse.HttpClientResponse, scope: string) =>
         Effect.gen(function* () {
-          if (response.status >= 200 && response.status < 300) return response
-          const remaining = response.headers["x-ratelimit-remaining"]
-          if ((response.status === 403 || response.status === 429) && remaining === "0") {
-            const reset = Number(response.headers["x-ratelimit-reset"])
-            return yield* new GitHubRateLimited({
-              resetAt: Number.isFinite(reset) ? new Date(reset * 1000).toISOString() : null,
-            })
+          if ((response.status >= 200 && response.status < 300) || response.status === 304) {
+            yield* gate.answered(scope)
+            return response
           }
-          if (response.status === 429) return yield* new GitHubRateLimited({ resetAt: null })
           if (response.status === 401) {
             return yield* new GitHubNotAuthenticated({ reason: "rejected" })
           }
-          const body = yield* response.json.pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(ErrorJson)),
-            Effect.map((json) => json.message ?? ""),
-            Effect.catch(() => Effect.succeed("")),
-          )
+          const body = yield* errorMessage(response)
+          // The primary limit says so with a spent quota; a secondary one with
+          // `Retry-After` or in words.
+          if (
+            response.status === 429 ||
+            (response.status === 403 &&
+              (response.headers["x-ratelimit-remaining"] === "0" ||
+                response.headers["retry-after"] !== undefined ||
+                /secondary rate limit|abuse detection/i.test(body)))
+          ) {
+            const now = yield* Clock.currentTimeMillis
+            const reset = Number(response.headers["x-ratelimit-reset"]) * 1000
+            const resumeAt =
+              retryAfter(response.headers["retry-after"], now) ??
+              (response.headers["x-ratelimit-remaining"] === "0" && Number.isFinite(reset)
+                ? reset
+                : undefined)
+            yield* gate.limited(scope, resumeAt)
+            return yield* new GitHubRateLimited({
+              resetAt: resumeAt === undefined ? null : new Date(resumeAt).toISOString(),
+            })
+          }
           return yield* new GitHubRequestFailed({
             status: response.status,
             detail: body || `request to ${response.request.url} failed`,
@@ -313,25 +347,85 @@ export class GitHubService extends Context.Service<
           onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
         })
 
+      /**
+       * Every request goes through here: refused at once while GitHub's rate
+       * limit keeps this token away, a few at a time otherwise, and what the
+       * answer says of the quota is kept for the next one.
+       */
+      const send = (
+        request: HttpClientRequest.HttpClientRequest,
+        token: Option.Option<Redacted.Redacted<string>>,
+      ) =>
+        Effect.gen(function* () {
+          const scope = scopeOf(token)
+          const resumeAt = yield* gate.pausedUntil(scope)
+          if (resumeAt !== null) {
+            return yield* new GitHubRateLimited({ resetAt: new Date(resumeAt).toISOString() })
+          }
+          const response = yield* gate.withPermit(
+            http.execute(request).pipe(Effect.mapError(transportError)),
+          )
+          yield* gate.observe(scope, quotaFromHeaders(response.headers, "x-ratelimit-"))
+          return yield* checkStatus(response, scope)
+        })
+
+      const absolute = (url: string) => (url.startsWith("http") ? url : `${GITHUB_API}${url}`)
+
       const get = (url: string, token: Option.Option<Redacted.Redacted<string>>) =>
-        http
-          .get(url.startsWith("http") ? url : `${GITHUB_API}${url}`, {
-            headers: authorization(token),
-          })
-          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
+        send(HttpClientRequest.get(absolute(url), { headers: authorization(token) }), token)
+
+      /**
+       * A GET that revalidates: it sends the `ETag` of the last answer, and a
+       * `304 Not Modified` hands that answer back. GitHub does not count a 304
+       * against the rate limit, so asking again for what did not change is free.
+       */
+      const read = (
+        url: string,
+        token: Option.Option<Redacted.Redacted<string>>,
+      ): Effect.Effect<ForgePage, GitHubError> =>
+        Effect.gen(function* () {
+          const key = `${scopeOf(token)}\
+${absolute(url)}`
+          const known = gate.recall(key)
+          const response = yield* send(
+            HttpClientRequest.get(absolute(url), {
+              headers: {
+                ...authorization(token),
+                ...(known === undefined ? {} : { "if-none-match": known.etag }),
+              },
+            }),
+            token,
+          )
+          if (response.status === 304 && known !== undefined) {
+            return { status: 200, headers: { link: known.link }, json: Effect.succeed(known.json) }
+          }
+          const json = yield* response.json.pipe(
+            Effect.mapError(
+              (error) =>
+                new GitHubRequestFailed({
+                  status: response.status,
+                  detail: `unexpected response: ${String(error)}`,
+                }),
+            ),
+          )
+          const etag = response.headers["etag"]
+          const link = response.headers["link"]
+          if (etag === undefined) gate.forget(key)
+          else gate.remember(key, { etag, json, link })
+          return { status: response.status, headers: { link }, json: Effect.succeed(json) }
+        })
 
       const post = (path: string, body: unknown, token: Redacted.Redacted<string>) =>
-        http
-          .execute(
-            HttpClientRequest.post(`${GITHUB_API}${path}`, {
-              headers: authorization(Option.some(token)),
-            }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
-          )
-          .pipe(Effect.mapError(transportError), Effect.flatMap(checkStatus))
+        send(
+          HttpClientRequest.post(`${GITHUB_API}${path}`, {
+            headers: authorization(Option.some(token)),
+          }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+          Option.some(token),
+        )
 
       const decode =
         <S extends Schema.Constraint>(schema: S) =>
-        (response: HttpClientResponse.HttpClientResponse) =>
+        (response: Pick<ForgePage, "status" | "json">) =>
           response.json.pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(schema as never)),
             Effect.map((value) => value as S["Type"]),
@@ -442,7 +536,7 @@ export class GitHubService extends Context.Service<
       ) =>
         Stream.paginate(first, (url: string) =>
           Effect.gen(function* () {
-            const response = yield* get(url, token)
+            const response = yield* read(url, token)
             const page = yield* decode(Schema.Array(schema))(response)
             const next = nextPageUrl(response.headers["link"])
             return [page as ReadonlyArray<S["Type"]>, Option.fromNullishOr(next)] as const
@@ -454,7 +548,7 @@ export class GitHubService extends Context.Service<
           const token = yield* tokens.get
           const owner = fullName.split("/")[0] ?? ""
           const head = encodeURIComponent(`${owner}:${branch}`)
-          const pulls = yield* get(
+          const pulls = yield* read(
             `/repos/${fullName}/pulls?head=${head}&state=all&sort=updated&direction=desc&per_page=20`,
             token,
           ).pipe(Effect.flatMap(decode(Schema.Array(PullJson))))
@@ -476,10 +570,10 @@ export class GitHubService extends Context.Service<
           const token = yield* tokens.get
           const [runs, combined] = yield* Effect.all(
             [
-              get(`/repos/${fullName}/commits/${sha}/check-runs?per_page=100`, token).pipe(
+              read(`/repos/${fullName}/commits/${sha}/check-runs?per_page=100`, token).pipe(
                 Effect.flatMap(decode(CheckRunsJson)),
               ),
-              get(`/repos/${fullName}/commits/${sha}/status?per_page=100`, token).pipe(
+              read(`/repos/${fullName}/commits/${sha}/status?per_page=100`, token).pipe(
                 Effect.flatMap(decode(CombinedStatusJson)),
               ),
             ],
