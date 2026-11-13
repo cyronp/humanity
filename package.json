@@ -1,6 +1,7 @@
 {
   "name": "humanity",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Human-in-the-loop coding agent: the agent proposes, the human approves hunk by hunk.",

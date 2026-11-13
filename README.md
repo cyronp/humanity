@@ -116,3 +116,15 @@ npm run format      # Prettier
 | `packages/contracts` | Schemas and RPC groups shared by both                                                         |
 | `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, parsing, tool simulation                         |
 | `docs/spec.md`       | The MVP specification                                                                         |
+
+## Security
+
+The daemon binds to `127.0.0.1` only and needs its token to connect. Threads in Auto mode run commands without asking, so use **Ask me** for anything you do not trust. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
