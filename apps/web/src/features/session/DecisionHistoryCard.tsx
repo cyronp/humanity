@@ -17,14 +17,14 @@ const when = (record: ApprovalRecord) => {
   return { iso: at, label: new Date(at).toLocaleString() }
 }
 
-/** Every review and confirmation across the project's sessions, newest first. */
+/** Everything the human allowed or denied across the project's sessions, newest first. */
 export function DecisionHistoryCard({ project }: { readonly project: Project }) {
   const history = useAtomValue(historyAtom(project.id))
   return (
     <Card>
       <CardHeader>
         <CardTitle>Decision history</CardTitle>
-        <CardDescription>What you approved, rejected and allowed, across sessions.</CardDescription>
+        <CardDescription>What you allowed and denied, across sessions.</CardDescription>
       </CardHeader>
       <CardContent>
         <AsyncView result={history} errorTitle="Could not load the decision history">
@@ -66,10 +66,10 @@ function HistoryRow({
   const sessionId =
     approval._tag === "change" ? approval.change.sessionId : approval.confirmation.sessionId
   const time = when(record)
-  // A change still under review links straight to its first hunk.
+  // A change still waiting links straight to it.
   const search =
     approval._tag === "change" && approval.change.status === "pending"
-      ? { file: approval.change.filePath, hunk: approval.change.hunks[0]?.index ?? 1 }
+      ? { file: approval.change.filePath }
       : {}
   return (
     <li>

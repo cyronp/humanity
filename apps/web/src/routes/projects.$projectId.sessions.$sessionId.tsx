@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react"
 import { type Project, SessionId } from "@humanity/contracts"
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
@@ -13,20 +13,16 @@ import { sessionViewAtom } from "@/features/session/atoms"
 import { Workspace } from "@/features/session/Workspace"
 import { describeCause } from "@/lib/errors"
 
-/** `?file=<path>&hunk=<n>` deep-links to a hunk under review. */
+/** `?file=<path>` deep-links to a file change waiting for an answer. */
 const WorkspaceSearch = Schema.Struct({
   file: Schema.optional(Schema.String),
-  hunk: Schema.optional(Schema.Int),
 })
 
 export const Route = createFileRoute("/projects/$projectId/sessions/$sessionId")({
   validateSearch: (search: Record<string, unknown>) =>
-    Schema.decodeUnknownSync(WorkspaceSearch)({
-      ...(typeof search["file"] === "string" ? { file: search["file"] } : {}),
-      ...(search["hunk"] !== undefined && Number.isInteger(Number(search["hunk"]))
-        ? { hunk: Number(search["hunk"]) }
-        : {}),
-    }),
+    Schema.decodeUnknownSync(WorkspaceSearch)(
+      typeof search["file"] === "string" ? { file: search["file"] } : {},
+    ),
   component: SessionRoute,
 })
 
@@ -55,7 +51,6 @@ function LiveSession({
 }) {
   const result = useAtomValue(sessionViewAtom(sessionId))
   const search = Route.useSearch()
-  const navigate = useNavigate({ from: Route.fullPath })
   const view = AsyncResult.isSuccess(result) ? result.value : undefined
 
   if (AsyncResult.isFailure(result) && view === undefined) {
@@ -79,20 +74,5 @@ function LiveSession({
       </div>
     )
   }
-  return (
-    <Workspace
-      project={project}
-      view={view}
-      search={search}
-      onSearchChange={(next) =>
-        void navigate({
-          search: {
-            ...(next.file === undefined ? {} : { file: next.file }),
-            ...(next.hunk === undefined ? {} : { hunk: next.hunk }),
-          },
-          replace: true,
-        })
-      }
-    />
-  )
+  return <Workspace project={project} view={view} search={search} />
 }

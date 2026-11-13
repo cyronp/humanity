@@ -9,7 +9,7 @@ import { Predicate } from "effect"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import { isInsideDir } from "../paths.ts"
 
-/** Tools whose effect on a file can be simulated, and so reviewed hunk by hunk. */
+/** Tools whose effect on a file can be simulated, and so shown as a diff before they run. */
 const SIMULATORS: Record<string, (original: string, input: Record<string, unknown>) => Simulation> =
   {
     Edit: (original, input) =>
@@ -33,7 +33,7 @@ export type ReviewTarget =
       /** Relative to the worktree, with forward slashes. */
       readonly filePath: string
     }
-  /** The call cannot be reviewed as hunks; ask for an allow or deny instead. */
+  /** The call cannot be shown as a diff; ask for an allow or deny of the call instead. */
   | { readonly _tag: "Confirm" }
   /** The call must not run at all. */
   | { readonly _tag: "Deny"; readonly message: string }

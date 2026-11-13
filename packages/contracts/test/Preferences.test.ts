@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest"
-import { NO_PINS, togglePin } from "../src/index.ts"
+import { newThreadAutonomy, NO_PINS, togglePin } from "../src/index.ts"
+
+describe("newThreadAutonomy", () => {
+  it("is Auto mode when nothing says otherwise", () => {
+    expect(newThreadAutonomy(undefined, NO_PINS)).toBe("auto")
+    expect(newThreadAutonomy({ defaultAutonomy: null }, NO_PINS)).toBe("auto")
+  })
+
+  it("follows the human's pin, and the project's own default over it", () => {
+    const pinned = { autonomy: "ask" as const }
+    expect(newThreadAutonomy({ defaultAutonomy: null }, pinned)).toBe("ask")
+    expect(newThreadAutonomy({ defaultAutonomy: "accept_edits" }, pinned)).toBe("accept_edits")
+    expect(newThreadAutonomy({ defaultAutonomy: "auto" }, pinned)).toBe("auto")
+  })
+})
 
 describe("togglePin", () => {
   it("keeps one pin per setting: pinning another moves it, pinning it again removes it", () => {

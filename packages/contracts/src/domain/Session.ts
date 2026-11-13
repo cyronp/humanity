@@ -45,7 +45,7 @@ export const Session = Schema.Struct({
   model: Schema.NullOr(Schema.String),
   /** How hard the model reasons, or `null` for the model's own default. */
   effort: Schema.NullOr(ReasoningEffort),
-  /** How much the agent may do without asking, on top of the project's policy. */
+  /** How much the agent does without asking. */
   autonomy: Autonomy,
   status: SessionStatus,
   /**

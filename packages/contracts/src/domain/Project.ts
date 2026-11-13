@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { ToolPolicy } from "./Policy.ts"
+import { Autonomy } from "./Policy.ts"
 
 export const ProjectId = Schema.String.pipe(Schema.brand("ProjectId"))
 export type ProjectId = typeof ProjectId.Type
@@ -11,7 +11,11 @@ export const Project = Schema.Struct({
   localPath: Schema.String,
   githubFullName: Schema.NullOr(Schema.String),
   defaultBranch: Schema.String,
-  policy: ToolPolicy,
+  /**
+   * The autonomy this project's new threads start with, or `null` to follow
+   * the human's default for every project.
+   */
+  defaultAutonomy: Schema.NullOr(Autonomy),
   createdAt: Schema.String,
 })
 export type Project = typeof Project.Type

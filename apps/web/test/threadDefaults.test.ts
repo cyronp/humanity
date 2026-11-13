@@ -26,20 +26,28 @@ const models: ReadonlyArray<ClaudeModel> = [
 ]
 
 describe("threadDefaults", () => {
-  it("starts on Claude Code's defaults and Ask me when there is no thread yet", () => {
-    expect(threadDefaults([], models)).toEqual({ model: null, effort: null, autonomy: "ask" })
+  it("starts on Claude Code's defaults and Auto mode when there is no thread yet", () => {
+    expect(threadDefaults([], models)).toEqual({ model: null, effort: null, autonomy: "auto" })
   })
 
-  it("follows the most recently active thread, not older ones", () => {
+  it("follows the most recent thread's model and effort, never its autonomy", () => {
     const sessions = [
-      session("latest", { model: "opus", effort: "high", autonomy: "accept_edits" }),
-      session("older", { model: "sonnet", effort: "low", autonomy: "auto" }),
+      session("latest", { model: "opus", effort: "high", autonomy: "ask" }),
+      session("older", { model: "sonnet", effort: "low", autonomy: "accept_edits" }),
     ]
     expect(threadDefaults(sessions, models)).toEqual({
       model: "opus",
       effort: "high",
-      autonomy: "accept_edits",
+      autonomy: "auto",
     })
+  })
+
+  it("starts on the project's autonomy over the pinned one", () => {
+    const pinned = { autonomy: "ask" as const, effort: null }
+    expect(threadDefaults([], models, pinned, { defaultAutonomy: null }).autonomy).toBe("ask")
+    expect(threadDefaults([], models, pinned, { defaultAutonomy: "accept_edits" }).autonomy).toBe(
+      "accept_edits",
+    )
   })
 
   it("drops a model Claude Code no longer offers, keeping the rest", () => {

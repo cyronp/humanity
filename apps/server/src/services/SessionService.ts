@@ -1,6 +1,7 @@
 import {
   acceptsMessages,
   applyAutonomy,
+  AUTO_TOOLS,
   type Attachment,
   type AttachmentContent,
   AttachmentNotFound,
@@ -36,6 +37,8 @@ import {
   type SessionStatus,
   type SessionUsage,
   NothingToCommit,
+  newThreadAutonomy,
+  toolMode,
   type WorkingTreeDiff,
   type ToolCall,
 } from "@humanity/contracts"
@@ -73,7 +76,7 @@ import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
-import { PolicyService } from "./PolicyService.ts"
+import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
@@ -231,8 +234,7 @@ export class SessionService extends Context.Service<
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
     /**
      * Commits everything where the session works to the branch checked out
-     * there. Every change the agent made in it was approved by the human, hunk
-     * by hunk, unless the session's autonomy let it through.
+     * there: what the agent changed, on its own or with the human's allow.
      */
     readonly commit: (
       sessionId: string,
@@ -253,7 +255,7 @@ export class SessionService extends Context.Service<
       const git = yield* GitService
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
-      const policies = yield* PolicyService
+      const preferences = yield* PreferencesService
       const accounts = yield* ClaudeAccountService
       const extensions = yield* ExtensionsService
       const claude = yield* ClaudeCode
@@ -334,7 +336,7 @@ export class SessionService extends Context.Service<
           return yield* whileWaiting(session.id, approvals.requestConfirmation(confirmation))
         })
 
-      /** The review flow: simulate the edit, split it into hunks, wait for the human's verdict. */
+      /** A file change: simulate the edit, show its diff, wait for the human to allow or deny it. */
       const review = (session: Session, request: ToolPermissionRequest) =>
         Effect.gen(function* () {
           const target = reviewTarget(request.toolName, request.input, session.worktreePath)
@@ -394,38 +396,34 @@ export class SessionService extends Context.Service<
         )
 
       /**
-       * Every tool call that is not pre-approved lands here. The policy and the
-       * session's autonomy are read fresh on each call, so a change in either
-       * applies to running agents.
+       * Every tool call that is not pre-approved lands here. The session's
+       * autonomy is read fresh on each call, so a change applies to a running agent.
        */
       const decide =
         (session: Session, state: { readonly denied: Set<string> }) =>
         (request: ToolPermissionRequest): Effect.Effect<PermissionDecision> =>
           Effect.gen(function* () {
             const decision: PermissionDecision = yield* Effect.gen(function* () {
-              const projectMode = policies.modeFor(session.projectId, request.toolName)
+              const tool = toolMode(request.toolName)
               const autonomy = yield* currentAutonomy(session.id)
               // No amount of autonomy answers a question for the human.
               const mode =
                 request.toolName === QUESTION_TOOL
-                  ? projectMode
-                  : applyAutonomy(autonomy, projectMode)
+                  ? tool
+                  : approvals.allowsInSession(session.id, request.toolName)
+                    ? "auto"
+                    : applyAutonomy(autonomy, tool)
               switch (mode) {
                 case "auto": {
-                  // A file change let through without a review still stays inside the worktree.
+                  // A file change let through without asking still stays inside the worktree.
                   const denial =
-                    projectMode === "review"
+                    tool === "review"
                       ? outsideWorktreeDenial(request.toolName, request.input, session.worktreePath)
                       : undefined
                   return denial === undefined
                     ? ({ behavior: "allow" } as const)
                     : ({ behavior: "deny", message: denial } as const)
                 }
-                case "deny":
-                  return {
-                    behavior: "deny",
-                    message: `DENIED: this project's Humanity policy does not allow ${request.toolName}.`,
-                  } as const
                 case "review":
                   return yield* review(session, request)
                 case "confirm":
@@ -630,8 +628,6 @@ export class SessionService extends Context.Service<
             const existing = active.get(session.id)
             if (existing !== undefined) return existing
 
-            // Loads the policy into the cache that every tool call reads synchronously.
-            const policy = yield* policies.get(session.projectId).pipe(Effect.orDie)
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
             const state: ActiveRun = {
@@ -651,22 +647,7 @@ export class SessionService extends Context.Service<
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
                 extensions: { mcpServers: added.mcpServers, plugins: added.plugins },
-                // Only exact `auto` names. If the policy later tightens one of them, the
-                // PreToolUse guard (which reads `toolMode` live) still routes it to a human.
-                allowedTools: policy.rules
-                  .filter(
-                    (rule) =>
-                      rule.mode === "auto" &&
-                      !rule.pattern.endsWith("*") &&
-                      rule.pattern !== QUESTION_TOOL,
-                  )
-                  .map((rule) => rule.pattern),
-                toolMode: (toolName, toolUseId) => {
-                  const mode = policies.modeFor(session.projectId, toolName)
-                  // Denied before canUseTool runs: still shown as a denial, not a failure.
-                  if (mode === "deny" && toolUseId !== undefined) state.denied.add(toolUseId)
-                  return mode
-                },
+                allowedTools: AUTO_TOOLS,
                 canUseTool: decide(session, state),
                 openThread: openThread(session),
               })
@@ -872,7 +853,8 @@ export class SessionService extends Context.Service<
           inWorktree: false,
           model: options.model?.trim() || null,
           effort: options.effort ?? null,
-          autonomy: options.autonomy ?? DEFAULT_AUTONOMY,
+          autonomy:
+            options.autonomy ?? newThreadAutonomy(project, yield* preferences.pinnedDefaults),
           status: "idle",
           origin: "humanity",
           createdAt: timestamp,
@@ -909,8 +891,8 @@ export class SessionService extends Context.Service<
 
       /**
        * Humanity's `open_thread` tool for the agent of `parent`: a new thread
-       * in the same project, started on the prompt. It asks before it acts
-       * like any thread, whatever the autonomy of the one that opened it.
+       * in the same project, started on the prompt. Its autonomy is the
+       * default for new threads there, not that of the thread that opened it.
        */
       const openThread =
         (parent: Session) =>

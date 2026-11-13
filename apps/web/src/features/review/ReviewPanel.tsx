@@ -1,106 +1,56 @@
 import type { ProposedChange } from "@humanity/contracts"
-import { useEffect, useEffectEvent, useMemo, useState } from "react"
+import { useEffect, useEffectEvent } from "react"
 import { Kbd } from "@/components/ui/kbd"
-import { ChangeReview, hunkKey, type ReviewRefs } from "./ChangeReview.tsx"
-import { useReviewDrafts } from "./useReviewDrafts.ts"
-
-interface Target {
-  readonly changeId: string
-  readonly filePath: string
-  readonly index: number
-}
+import { ChangeReview } from "./ChangeReview.tsx"
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
 /**
- * Every pending file change, hunk by hunk. Keyboard: `j`/`k` move between
- * hunks, `a` approve, `r` reject, `c` comment, `Enter` submit the change the
- * focused hunk belongs to (`Ctrl+Enter` from inside a comment).
+ * Every file change the agent waits on, each allowed or denied as a whole.
+ * Keyboard, for the change at the top (or the one a link named): `a` allow,
+ * `d` deny, `c` comment.
  */
 export function ReviewPanel({
   changes,
   file,
-  hunk,
-  onFocusChange,
 }: {
   readonly changes: ReadonlyArray<ProposedChange>
-  /** Deep link: the hunk to focus first, from `?file=&hunk=`. */
+  /** Deep link: the change to act on first, from `?file=`. */
   readonly file: string | undefined
-  readonly hunk: number | undefined
-  readonly onFocusChange: (file: string, hunk: number) => void
 }) {
-  const drafts = useReviewDrafts()
-  // Filled by the hunks' ref callbacks; one object for the panel's lifetime.
-  const [refs] = useState<ReviewRefs>(() => ({ hunks: new Map(), comments: new Map() }))
-  const targets = useMemo<Array<Target>>(
-    () =>
-      changes.flatMap((change) =>
-        change.hunks.map((h) => ({
-          changeId: change.id,
-          filePath: change.filePath,
-          index: h.index,
-        })),
-      ),
-    [changes],
-  )
-  const [focusKey, setFocusKey] = useState<string>()
+  const current = changes.find((change) => change.filePath === file) ?? changes[0]
+  const currentId = current?.id
 
-  // The deep link wins when it names a hunk that is under review.
-  const linked = targets.find((target) => target.filePath === file && target.index === hunk)
-  const focused =
-    targets.find((target) => hunkKey(target.changeId, target.index) === focusKey) ??
-    linked ??
-    targets[0]
+  const within = (selector: string) =>
+    currentId === undefined
+      ? null
+      : document.querySelector<HTMLElement>(`[data-change-id="${currentId}"] ${selector}`)
 
-  const focus = (target: Target | undefined) => {
-    if (target === undefined) return
-    setFocusKey(hunkKey(target.changeId, target.index))
-    onFocusChange(target.filePath, target.index)
-  }
-
-  // Keep the focused hunk on screen.
-  const focusedKey = focused ? hunkKey(focused.changeId, focused.index) : undefined
+  // Keep the change the shortcuts act on in view.
   useEffect(() => {
-    if (focusedKey === undefined) return
-    refs.hunks.get(focusedKey)?.scrollIntoView({ block: "nearest", behavior: "smooth" })
-  }, [focusedKey])
+    if (currentId === undefined) return
+    document
+      .querySelector(`[data-change-id="${currentId}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [currentId])
 
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (focused === undefined || event.altKey || event.metaKey) return
-    const key = hunkKey(focused.changeId, focused.index)
-
+    if (currentId === undefined || event.altKey || event.metaKey || event.ctrlKey) return
     if (isTyping(event.target)) {
-      const inComment = event.target === refs.comments.get(key)
       if (event.key === "Escape") (event.target as HTMLElement).blur()
-      else if (inComment && event.key === "Enter" && event.ctrlKey) {
-        event.preventDefault()
-        document.querySelector<HTMLButtonElement>(`[data-submit="${focused.changeId}"]`)?.click()
-      }
       return
     }
-    if (event.ctrlKey) return
-
-    const position = targets.findIndex((target) => hunkKey(target.changeId, target.index) === key)
     switch (event.key) {
-      case "j":
-        focus(targets[Math.min(position + 1, targets.length - 1)])
-        break
-      case "k":
-        focus(targets[Math.max(position - 1, 0)])
-        break
       case "a":
-        drafts.decide(focused.changeId, focused.index, "approved")
+        within('[data-decide="allow"]')?.click()
         break
-      case "r":
-        drafts.decide(focused.changeId, focused.index, "rejected")
+      case "d":
+        within('[data-decide="deny"]')?.click()
         break
       case "c":
-        refs.comments.get(key)?.focus()
-        break
-      case "Enter":
-        document.querySelector<HTMLButtonElement>(`[data-submit="${focused.changeId}"]`)?.click()
+        within('[data-decide="comment"]')?.focus()
         break
       default:
         return
@@ -117,7 +67,8 @@ export function ReviewPanel({
   if (changes.length === 0) {
     return (
       <p className="p-6 text-center text-sm text-muted-foreground">
-        Nothing to review. Proposed file changes appear here and wait for you.
+        Nothing is waiting for you. In a thread that asks first, each file change appears here until
+        you allow or deny it.
       </p>
     )
   }
@@ -125,20 +76,10 @@ export function ReviewPanel({
   return (
     <div className="flex flex-col gap-8 p-4">
       <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Kbd>j</Kbd>/<Kbd>k</Kbd> move · <Kbd>a</Kbd> approve · <Kbd>r</Kbd> reject · <Kbd>c</Kbd>{" "}
-        comment · <Kbd>Enter</Kbd> submit
+        <Kbd>a</Kbd> allow · <Kbd>d</Kbd> deny · <Kbd>c</Kbd> comment
       </p>
       {changes.map((change) => (
-        <ChangeReview
-          key={change.id}
-          change={change}
-          drafts={drafts}
-          focusedIndex={focused?.changeId === change.id ? focused.index : undefined}
-          onFocusHunk={(index) =>
-            focus(targets.find((target) => target.changeId === change.id && target.index === index))
-          }
-          refs={refs}
-        />
+        <ChangeReview key={change.id} change={change} />
       ))}
     </div>
   )

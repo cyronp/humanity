@@ -20,7 +20,7 @@ const project = (id: string, name: string): Project => ({
   localPath: `/repos/${name}`,
   githubFullName: null,
   defaultBranch: "main",
-  policy: { rules: [] },
+  defaultAutonomy: null,
   createdAt: "2026-11-01T00:00:00.000Z",
 })
 

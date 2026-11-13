@@ -36,8 +36,6 @@ export const keys = {
   git: (projectId: string) => `git:${projectId}`,
   /** The session list of one project. */
   sessions: (projectId: string) => `sessions:${projectId}`,
-  /** The tool policy of one project. */
-  policy: (projectId: string) => `policy:${projectId}`,
   /** Uncommitted changes of one session worktree. */
   sessionDiff: (sessionId: string) => `session-diff:${sessionId}`,
   /** The decision history of one project. */

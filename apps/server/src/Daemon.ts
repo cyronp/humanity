@@ -26,7 +26,6 @@ import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitService } from "./services/GitService.ts"
 import { HistoryImport } from "./services/HistoryImport.ts"
-import { PolicyService } from "./services/PolicyService.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
 import { ProjectService } from "./services/ProjectService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
@@ -39,7 +38,8 @@ import { SessionService } from "./services/SessionService.ts"
 export const Services = Layer.mergeAll(
   Layer.merge(HistoryImport.layer, SessionService.layer).pipe(
     Layer.provideMerge(ApprovalService.layer),
-    Layer.provideMerge(PolicyService.layer),
+    // What new threads start with, when the human or the project set a default.
+    Layer.provideMerge(PreferencesService.layer),
     Layer.provideMerge(ProjectService.layer),
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
@@ -49,7 +49,6 @@ export const Services = Layer.mergeAll(
     // Humanity's own MCP servers and skills, given to every run.
     Layer.provideMerge(ExtensionsService.layer),
   ),
-  PreferencesService.layer,
 )
 
 export const RpcHandlers = Layer.mergeAll(

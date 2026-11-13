@@ -5,7 +5,6 @@ import {
   threadHref,
   type PlanUsage,
   type SessionEvent,
-  setToolRule,
 } from "@humanity/contracts"
 import { Effect, Fiber, Ref, Stream } from "effect"
 import { SqlClient } from "effect/sql"
@@ -15,8 +14,6 @@ import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
-import openThreadPolicy from "../src/db/migrations/0012_open_thread_policy.ts"
-import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import {
   matchModel,
@@ -615,7 +612,7 @@ describe("SessionService", () => {
     }),
   )
 
-  it.live("runs auto tools without asking and denies deny-mode tools outright", () =>
+  it.live("runs read-only tools without ever asking, and the rest by the thread's autonomy", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup({ "app.ts": "export const a = 1\n" })
 
@@ -623,10 +620,6 @@ describe("SessionService", () => {
         const sessions = yield* SessionService
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
-        const policy = yield* PolicyService.use((policies) => policies.get(project.id))
-        yield* PolicyService.use((policies) =>
-          policies.set(project.id, setToolRule(policy, "WebFetch", "deny")),
-        )
         const session = yield* sessions.create({ projectId: project.id, prompt: "go" })
         yield* waitForStatus(session.id, "idle")
 
@@ -635,16 +628,20 @@ describe("SessionService", () => {
           snapshot.toolCalls.map((call) => [call.toolName, call.status]),
           [
             ["Read", "succeeded"],
-            ["WebFetch", "denied"],
+            ["WebFetch", "succeeded"],
           ],
         )
-        assert.match(snapshot.toolCalls[1]?.output?.content ?? "", /policy/)
+        // Read is pre-approved; WebFetch reached Humanity, which let the thread run it.
+        assert.deepStrictEqual(
+          (yield* Ref.get(log.permissions)).map((entry) => [entry.toolName, entry.decision]),
+          [["WebFetch", { behavior: "allow" }]],
+        )
         // Neither call reached a human.
-        assert.deepStrictEqual(yield* Ref.get(log.permissions), [])
         assert.deepStrictEqual(snapshot.approvals, [])
         const [run] = yield* Ref.get(log.runs)
         assert.includeMembers([...(run?.allowedTools ?? [])], ["Read", "Glob", "Grep"])
         assert.notInclude([...(run?.allowedTools ?? [])], "Edit")
+        assert.notInclude([...(run?.allowedTools ?? [])], "WebFetch")
         assert.strictEqual(run?.cwd, session.worktreePath)
       }).pipe(
         Effect.provide(
@@ -837,59 +834,66 @@ describe("SessionService", () => {
     }),
   )
 
-  it.live("opens a thread the agent asked for, on its model and effort, without asking", () =>
-    Effect.gen(function* () {
-      const { home, repo } = yield* setup()
-      const script: FakeScript = (prompt) =>
-        prompt === "delegate"
-          ? [
-              {
-                tool: OPEN_THREAD_TOOL,
-                input: {
-                  prompt: "Fix the flaky login test",
-                  title: "Flaky login",
-                  model: "opus",
-                  effort: "high",
+  it.live(
+    "opens a thread the agent asked for, on its model and effort, even from one that asks",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup()
+        const script: FakeScript = (prompt) =>
+          prompt === "delegate"
+            ? [
+                {
+                  tool: OPEN_THREAD_TOOL,
+                  input: {
+                    prompt: "Fix the flaky login test",
+                    title: "Flaky login",
+                    model: "opus",
+                    effort: "high",
+                  },
                 },
-              },
-              { text: "Opened." },
-            ]
-          : [{ text: "On it." }]
+                { text: "Opened." },
+              ]
+            : [{ text: "On it." }]
 
-      yield* Effect.gen(function* () {
-        const sessions = yield* SessionService
-        const log = yield* FakeAgentLog
-        const project = yield* addProject(repo)
-        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
-        yield* waitForStatus(parent.id, "idle")
+        yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const log = yield* FakeAgentLog
+          const project = yield* addProject(repo)
+          const parent = yield* sessions.create({
+            projectId: project.id,
+            prompt: "delegate",
+            autonomy: "ask",
+          })
+          yield* waitForStatus(parent.id, "idle")
 
-        const call = (yield* contents(parent.id)).toolCalls.find(
-          (toolCall) => toolCall.toolName === OPEN_THREAD_TOOL,
-        )
-        assert.strictEqual(call?.status, "succeeded")
-        assert.deepStrictEqual(yield* Ref.get(log.permissions), [])
-        const opened = (yield* sessions.list(project.id)).find(
-          (session) => session.id !== parent.id,
-        )
-        // The agent is handed the link it puts in its reply.
-        assert.include(
-          call?.output?.content,
-          `[Flaky login](${threadHref(project.id, opened?.id ?? "")})`,
-        )
+          const call = (yield* contents(parent.id)).toolCalls.find(
+            (toolCall) => toolCall.toolName === OPEN_THREAD_TOOL,
+          )
+          assert.strictEqual(call?.status, "succeeded")
+          assert.deepStrictEqual(yield* Ref.get(log.permissions), [])
+          const opened = (yield* sessions.list(project.id)).find(
+            (session) => session.id !== parent.id,
+          )
+          // The agent is handed the link it puts in its reply.
+          assert.include(
+            call?.output?.content,
+            `[Flaky login](${threadHref(project.id, opened?.id ?? "")})`,
+          )
 
-        const child = yield* waitForStatus(opened?.id ?? "", "idle")
-        assert.strictEqual(child.title, "Flaky login")
-        assert.strictEqual(child.worktreePath, project.localPath)
-        assert.strictEqual(child.autonomy, "ask")
-        const childRun = (yield* Ref.get(log.runs))[1]
-        assert.strictEqual(childRun?.model, "opus")
-        assert.strictEqual(childRun?.effort, "high")
-        assert.deepStrictEqual(yield* Ref.get(log.prompts), [
-          "delegate",
-          "Fix the flaky login test",
-        ])
-      }).pipe(Effect.provide(services(home, script)))
-    }),
+          const child = yield* waitForStatus(opened?.id ?? "", "idle")
+          assert.strictEqual(child.title, "Flaky login")
+          assert.strictEqual(child.worktreePath, project.localPath)
+          // Not the autonomy of the thread that opened it: the default for new threads.
+          assert.strictEqual(child.autonomy, "auto")
+          const childRun = (yield* Ref.get(log.runs))[1]
+          assert.strictEqual(childRun?.model, "opus")
+          assert.strictEqual(childRun?.effort, "high")
+          assert.deepStrictEqual(yield* Ref.get(log.prompts), [
+            "delegate",
+            "Fix the flaky login test",
+          ])
+        }).pipe(Effect.provide(services(home, script)))
+      }),
   )
 
   it.live("tells the agent why no thread was opened", () =>
@@ -908,49 +912,6 @@ describe("SessionService", () => {
         assert.match(call?.output?.content ?? "", /No thread was opened/)
         assert.strictEqual((yield* sessions.list(project.id)).length, 1)
       }).pipe(Effect.provide(services(home, script)))
-    }),
-  )
-
-  it.live("asks before opening a thread where the project's policy says so", () =>
-    Effect.gen(function* () {
-      const { home, repo } = yield* setup()
-      const script: FakeScript = () => [{ tool: OPEN_THREAD_TOOL, input: { prompt: "More" } }]
-
-      yield* Effect.gen(function* () {
-        const sessions = yield* SessionService
-        const policies = yield* PolicyService
-        const project = yield* addProject(repo)
-        yield* policies.set(project.id, setToolRule(project.policy, OPEN_THREAD_TOOL, "confirm"))
-        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
-
-        yield* waitForStatus(parent.id, "waiting_for_human")
-        assert.strictEqual((yield* sessions.list(project.id)).length, 1)
-      }).pipe(Effect.provide(services(home, script)))
-    }),
-  )
-
-  it.live("gives projects from before open_thread its rule, and keeps a rule they chose", () =>
-    Effect.gen(function* () {
-      const { home, repo } = yield* setup()
-
-      yield* Effect.gen(function* () {
-        const policies = yield* PolicyService
-        const project = yield* addProject(repo)
-        const before = {
-          rules: project.policy.rules.filter((rule) => rule.pattern !== OPEN_THREAD_TOOL),
-        }
-
-        yield* policies.set(project.id, before)
-        yield* openThreadPolicy
-        assert.deepStrictEqual(yield* policies.get(project.id), {
-          rules: [...before.rules, { pattern: OPEN_THREAD_TOOL, mode: "auto" }],
-        })
-
-        const chosen = setToolRule(before, OPEN_THREAD_TOOL, "deny")
-        yield* policies.set(project.id, chosen)
-        yield* openThreadPolicy
-        assert.deepStrictEqual(yield* policies.get(project.id), chosen)
-      }).pipe(Effect.provide(services(home, () => [])))
     }),
   )
 

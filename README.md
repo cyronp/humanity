@@ -1,8 +1,8 @@
 # Humanity
 
-A coding agent built around one rule: **human in the loop, not AI in the loop.**
+An app for running coding agents in threads, with you in charge of how much each one does on its own.
 
-The agent (Claude, through the Claude Agent SDK) proposes; you decide, change by change, while it works. Every file edit is split into hunks that you approve, reject with a comment, or partly approve before anything touches disk. Shell commands and MCP tools wait for an explicit allow. Each session runs in its own git worktree and branch, so the agent never works in your checkout.
+The agent (Claude, through the Claude Agent SDK) works on its own by default: it reads, edits files and runs commands without stopping, and every call it makes is shown as it happens. Any thread can instead ask first, so that file changes and commands wait for you to allow or deny them. A thread starts in your checkout and can be moved into its own git worktree and branch.
 
 ## Requirements
 
@@ -32,36 +32,37 @@ The daemon also prints which Claude account the agent will run as. The first vis
 Then:
 
 1. **Add a repository** from the project menu in the header. Your GitHub repositories are listed once GitHub is connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub URL or the path of a local git repository adds that instead.
-2. **Start a session** from the home page. Pick the branch to start from (local or `origin/…`) and write a first message. Humanity creates a branch `humanity/<id>-<title>` and a worktree for it.
-3. **Work with the agent.** It reads freely. When it wants to change a file, the review panel opens; when it wants to run a command, a card appears above the message box. The session status turns to **waiting for you** until you decide.
-4. **Commit** what you approved from the **Changes** tab. Commits go to the session branch only.
+2. **Start a thread** from the home page. Pick the branch your checkout should be on (local or `origin/…`), the permissions, and write a first message. The thread works in your checkout; **Set up worktree** in its header moves it into a branch `humanity/<id>-<title>` and a worktree of its own.
+3. **Work with the agent.** It runs on its own unless the thread is set to ask. In a thread that asks, a file change opens the review panel and a command shows a card above the message box; the session status turns to **waiting for you** until you decide.
+4. **Commit** the work from the **Changes** tab.
 
-### Reviewing changes
+### Permissions
 
-Each hunk has **Approve** and **Reject** buttons and a comment field. A change is submitted all at once, after every hunk has a verdict:
+Each thread has one of three modes, chosen next to the message box and changeable while the agent works:
 
-| Outcome       | What happens on disk                    | What the agent is told                                                                                                               |
-| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| All approved  | The agent's tool applies the change     | Nothing special: the edit succeeded                                                                                                  |
-| All rejected  | Nothing                                 | `REJECTED by the human reviewer…` with your comment for each hunk                                                                    |
-| Some approved | Humanity writes only the approved hunks | `PARTIALLY APPLIED by the human reviewer…`: which hunks were applied, which were rejected and why, and that it must re-read the file |
+| Mode             | What waits for you                                                               |
+| ---------------- | -------------------------------------------------------------------------------- |
+| **Auto mode**    | Nothing, except a question the agent asks you. The default for new threads       |
+| **Accept edits** | Commands, web and MCP tools. File changes inside the thread's folder are applied |
+| **Ask me**       | File changes and commands, web and MCP tools                                     |
 
-Keyboard shortcuts in the review panel: `j` / `k` next / previous hunk, `a` approve, `r` reject, `c` comment, `Enter` submit (`Ctrl+Enter` from inside a comment, `Esc` to leave it). Links of the form `…/sessions/<id>?file=src/app.ts&hunk=2` open a specific hunk.
+Reads (`Read`, `Glob`, `Grep`), the agent's own bookkeeping (`TodoWrite`, `Skill`) and opening a new thread never ask, in any mode.
 
-### Tool policies
+A new thread starts in its project's mode (Settings, under Projects), else the mode you pinned in the message box's permissions menu, else Auto mode. Threads that already exist keep theirs.
 
-Each project has a policy (in Settings, under Projects) that gives every tool one of four modes:
+### Answering a request
 
-| Mode      | Meaning                | Default for                                                                          |
-| --------- | ---------------------- | ------------------------------------------------------------------------------------ |
-| `auto`    | Runs without asking    | `Read`, `Glob`, `Grep`, `TodoWrite`, `Skill`                                         |
-| `review`  | Hunk-by-hunk review    | `Edit`, `Write`, `NotebookEdit` (shown as an allow/deny card)                        |
-| `confirm` | Allow or deny the call | `Bash`, `PowerShell`, `WebFetch`, `WebSearch`, `mcp__*`, **and any tool not listed** |
-| `deny`    | Never runs             | nothing                                                                              |
+A file change is shown as a diff in the review panel; a command or tool call as a card above the message box. Both take the same answer:
 
-Rules are exact tool names or prefixes ending in `*` (for example `mcp__github__*`). Changes apply immediately, also to agents that are already running. "Always allow" on a confirmation card sets that tool to `auto` for the project.
+| Answer                          | What happens                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------- |
+| **Allow**                       | The agent's tool runs                                                              |
+| **Always allow in this thread** | The tool runs, and that tool stops asking in this thread until the daemon restarts |
+| **Deny**                        | Nothing runs or is written; the agent is told, with your comment if you wrote one  |
 
-The agent loads the repository's own `CLAUDE.md`, skills and `.claude/settings.json`, but a settings file can never pre-approve a tool that the policy routes to you.
+Keyboard shortcuts in the review panel: `a` allow, `d` deny, `c` comment (`Esc` to leave it). A link of the form `…/sessions/<id>?file=src/app.ts` opens the change to that file.
+
+The agent loads your Claude Code user settings and the repository's own `CLAUDE.md`, skills and `.claude/settings.json`, but a settings file can never pre-approve a tool on Humanity's behalf: the thread's mode decides.
 
 ## Running it for real
 
@@ -103,10 +104,10 @@ npm run build       # production build
 npm run format      # Prettier
 ```
 
-| Path                 | What it is                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------- |
-| `apps/server`        | The Effect 4 daemon: RPC over WebSocket, the Agent SDK bridge, approvals, git, GitHub, SQLite     |
-| `apps/web`           | Vite + React 19 + TanStack Router + shadcn/ui, data through Effect Atom (`AtomRpc`)               |
-| `packages/contracts` | Schemas and RPC groups shared by both                                                             |
-| `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, partial application, tool simulation, agent messages |
-| `docs/spec.md`       | The MVP specification                                                                             |
+| Path                 | What it is                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `apps/server`        | The Effect 4 daemon: RPC over WebSocket, the Agent SDK bridge, approvals, git, GitHub, SQLite |
+| `apps/web`           | Vite + React 19 + TanStack Router + shadcn/ui, data through Effect Atom (`AtomRpc`)           |
+| `packages/contracts` | Schemas and RPC groups shared by both                                                         |
+| `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, parsing, tool simulation                         |
+| `docs/spec.md`       | The MVP specification                                                                         |

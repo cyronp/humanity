@@ -6,7 +6,12 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import { type ContextUsage, HUMANITY_MCP_SERVER, type ReasoningEffort } from "@humanity/contracts"
+import {
+  type ContextUsage,
+  HUMANITY_MCP_SERVER,
+  type ReasoningEffort,
+  toolMode,
+} from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
@@ -56,9 +61,9 @@ class Inbox<T> implements AsyncIterable<T> {
   }
 }
 
-const SYSTEM_PROMPT_APPEND = `You are running inside Humanity, a human-in-the-loop coding app.
-Every file change you propose is reviewed by a human, hunk by hunk, before it reaches disk; shell commands and MCP tools need the human's explicit approval.
-When a tool call is denied or only partly applied, the message you receive is the human's decision and feedback. Follow it, and re-read files before editing them again.
+const SYSTEM_PROMPT_APPEND = `You are running inside Humanity, an app where a human runs coding agents in threads.
+The human chooses how much each thread does on its own. Depending on that, a file change, shell command or MCP tool may wait for them to allow or deny it.
+When a tool call is denied, the message you receive is the human's decision and feedback. Follow it instead of retrying the same call.
 When the human asks you to open or start a new thread, use the mcp__humanity__open_thread tool. Do not use it on your own initiative.`
 
 const errorMessage = (cause: unknown) =>
@@ -77,27 +82,21 @@ const quietly = <A, B>(ask: () => Promise<A>, read: (answer: A) => B | undefined
   )
 
 /**
- * The project's policy runs before the SDK applies permission rules from
- * settings files, so a repository cannot pre-approve a tool Humanity wants a
- * human to see: anything not `auto` is forced into `canUseTool`.
+ * Runs before the SDK applies permission rules from settings files, so a
+ * repository cannot pre-approve a tool on Humanity's behalf: anything not
+ * `auto` is forced into `canUseTool`, where the thread's autonomy decides.
  */
-const policyGuard =
-  (options: AgentRunOptions): HookCallback =>
-  async (input, toolUseId) => {
-    if (input.hook_event_name !== "PreToolUse") return {}
-    const mode = options.toolMode(input.tool_name, toolUseId)
-    if (mode === "auto") return {}
-    return {
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: mode === "deny" ? "deny" : "ask",
-        permissionDecisionReason:
-          mode === "deny"
-            ? `The project's Humanity policy denies ${input.tool_name}.`
-            : "Humanity requires a human decision for this tool.",
-      },
-    }
+const permissionGuard: HookCallback = async (input) => {
+  if (input.hook_event_name !== "PreToolUse") return {}
+  if (toolMode(input.tool_name) === "auto") return {}
+  return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "ask",
+      permissionDecisionReason: "Humanity decides this tool by the thread's permissions.",
+    },
   }
+}
 
 /**
  * A user message for the Messages API. Files go first, each document titled
@@ -189,13 +188,13 @@ export const AgentRunnerLive = Layer.effect(
             permissionMode: "default",
             allowedTools: [...options.allowedTools],
             canUseTool,
-            hooks: { PreToolUse: [{ hooks: [policyGuard(options)], onFailure: "block" }] },
+            hooks: { PreToolUse: [{ hooks: [permissionGuard], onFailure: "block" }] },
             // Loads the human's user settings (e.g. `attribution` for commit trailers)
             // and the repository's CLAUDE.md, skills and project settings.
             settingSources: ["user", "project"],
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
-            // Humanity's own servers and skills. Their MCP tools still go through the policy.
+            // Humanity's own servers and skills. Their MCP tools still reach `canUseTool`.
             mcpServers: mcpServers(options.extensions),
             plugins: options.extensions.plugins.map((path) => ({
               type: "local" as const,

@@ -10,6 +10,9 @@ export const addLocalProjectAtom = HumanityClient.mutation("Projects.addLocal")
 
 export const removeProjectAtom = HumanityClient.mutation("Projects.remove")
 
+/** The autonomy a project's new threads start with; `null` follows the human's default. */
+export const setDefaultAutonomyAtom = HumanityClient.mutation("Projects.setDefaultAutonomy")
+
 /** The favicon found in a project's repository, or `null`. Kept while the page is open. */
 export const projectIconAtom = Atom.family((projectId: ProjectId) =>
   HumanityClient.query("Projects.icon", { projectId }, { reactivityKeys: [keys.projects] }).pipe(

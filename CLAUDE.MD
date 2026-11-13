@@ -1,8 +1,8 @@
 # Humanity
 
-Humanity is a human-in-the-loop coding agent app: the agent proposes, the human approves each change hunk by hunk before it touches disk.
+Humanity is an app for running coding agents in threads. Agents run on their own by default; any thread can instead ask the human to allow or deny each file change and command.
 
-The full MVP specification is the source of truth for scope, stack and architecture:
+The full MVP specification is the source of truth for scope, stack and architecture. Its "Amendment: autonomy first" section overrides the human-in-the-loop parts that follow it:
 
 @docs/spec.md
 
@@ -31,7 +31,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 - Pin every `effect` and `@effect/*` package to the **same exact version**. Use the import paths the installed version actually exports; don't copy beta-era `effect/unstable/*` paths from examples without checking.
 - Never substitute a library from the spec's stack without asking.
 - Call the git CLI with argument arrays only, never shell-interpolated strings.
-- Never use the SDK's `bypassPermissions` mode. Unknown tools default to `confirm`.
+- Never use the SDK's `bypassPermissions` mode: every call that is not a read reaches Humanity's own permission check, where the thread's autonomy decides. A tool Humanity does not know is never pre-approved; it asks in a thread that asks.
 - Never write outside `~/.humanity/` or the folder a session works in (its worktree, or the project's checkout until it has one).
 - Never store API keys or tokens in the database.
 

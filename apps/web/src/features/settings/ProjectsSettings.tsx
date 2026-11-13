@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ProjectPolicy } from "@/features/policy/ProjectPolicy"
+import { ProjectPermissions } from "@/features/policy/ProjectPermissions"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom, removeProjectAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
@@ -32,7 +32,7 @@ import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { closeSettings } from "./settings.ts"
 
-/** The projects Humanity works on: one at a time, with its tool policy and the way to remove it. */
+/** The projects Humanity works on: one at a time, with its permissions and the way to remove it. */
 export function ProjectsSettings() {
   const projects = useAtomValue(projectsAtom)
 
@@ -122,7 +122,7 @@ function ProjectSettings({ projects }: { readonly projects: ReadonlyArray<Projec
       </dl>
 
       <div className="border-b py-5">
-        <ProjectPolicy key={project.id} project={project} />
+        <ProjectPermissions key={project.id} project={project} />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 py-4">

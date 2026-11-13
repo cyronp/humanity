@@ -6,22 +6,15 @@ import {
   ConfirmationId,
   type PendingConfirmation,
   type ProposedChange,
-  setToolRule,
   TALK_ABOUT_IT_MESSAGE,
 } from "@humanity/contracts"
-import {
-  applyHunks,
-  formatPartialApplicationMessage,
-  formatRejectionMessage,
-  withDecisions,
-} from "@humanity/diff"
 import { Effect, Ref } from "effect"
-import { SqlClient } from "effect/sql"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
-import { ApprovalService } from "../src/services/ApprovalService.ts"
-import { PolicyService } from "../src/services/PolicyService.ts"
+import { ApprovalService, changeDeniedMessage } from "../src/services/ApprovalService.ts"
+import { PreferencesService } from "../src/services/PreferencesService.ts"
+import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
 import {
@@ -54,7 +47,7 @@ const writeScript: FakeScript = (_prompt, turn) =>
       ]
     : [{ text: "OK." }]
 
-/** Starts a session whose agent immediately asks for a review, and waits for it. */
+/** A repository whose agent immediately proposes that change. */
 const startWithPendingChange = (script: FakeScript = writeScript) =>
   Effect.gen(function* () {
     const { home, repo } = yield* setup({ "data.txt": ORIGINAL })
@@ -96,16 +89,17 @@ const decisionFor = (toolName: string) =>
     )
   })
 
+/** A thread that asks before it acts: what these flows are about. New threads run on their own. */
 const createSession = (repo: string, prompt = "Make the changes") =>
   Effect.gen(function* () {
     const sessions = yield* SessionService
     const project = yield* addProject(repo)
-    const session = yield* sessions.create({ projectId: project.id, prompt })
+    const session = yield* sessions.create({ projectId: project.id, prompt, autonomy: "ask" })
     return { project, session }
   })
 
-describe("review flow", () => {
-  it.live("blocks the agent until every hunk is decided, then lets the SDK apply it", () =>
+describe("file changes", () => {
+  it.live("blocks the agent until the human allows the change, then lets the SDK apply it", () =>
     Effect.gen(function* () {
       const { home, repo, script } = yield* startWithPendingChange()
 
@@ -130,11 +124,12 @@ describe("review flow", () => {
         const file = join(session.worktreePath, "data.txt")
         assert.strictEqual(readFileSync(file, "utf8"), ORIGINAL)
 
-        const resolved = yield* approvals.decideChange(
-          change.id,
-          [1, 2, 3].map((index) => ({ index, decision: "approved" as const })),
-        )
+        const resolved = yield* approvals.decideChange(change.id, { decision: "allow" })
         assert.strictEqual(resolved.status, "applied")
+        assert.deepStrictEqual(
+          resolved.hunks.map((hunk) => hunk.status),
+          ["approved", "approved", "approved"],
+        )
 
         assert.deepStrictEqual((yield* decisionFor("Write")).decision, { behavior: "allow" })
         yield* waitForStatus(session.id, "idle")
@@ -145,109 +140,53 @@ describe("review flow", () => {
     }),
   )
 
-  it.live("applies only the approved hunks and tells the agent exactly what happened", () =>
+  it.live("denying a change leaves the file alone and tells the agent why", () =>
     Effect.gen(function* () {
       const { home, repo, script } = yield* startWithPendingChange()
 
       yield* Effect.gen(function* () {
         const approvals = yield* ApprovalService
-        const sql = yield* SqlClient.SqlClient
         const { session } = yield* createSession(repo)
         const change = yield* pendingChange(session.id)
 
-        const decisions = [
-          { index: 1, decision: "approved" as const },
-          {
-            index: 2,
-            decision: "rejected" as const,
-            comment: "Keep the old validation, it's used by the CLI",
-          },
-          { index: 3, decision: "approved" as const },
-        ]
-        const resolved = yield* approvals.decideChange(change.id, decisions)
-        assert.strictEqual(resolved.status, "partially_applied")
-
-        const decided = withDecisions(change.hunks, decisions)
-        const expectedContent = applyHunks(ORIGINAL, change.hunks, [1, 3])
-        const file = join(session.worktreePath, "data.txt")
-        assert.strictEqual(readFileSync(file, "utf8"), expectedContent)
-        assert.include(expectedContent, "CHANGED 3\n")
-        assert.include(expectedContent, "line 20\n")
-        assert.include(expectedContent, "CHANGED 37\n")
-
-        const { decision } = yield* decisionFor("Write")
-        assert.deepStrictEqual(decision, {
-          behavior: "deny",
-          message: formatPartialApplicationMessage("data.txt", decided),
+        const resolved = yield* approvals.decideChange(change.id, {
+          decision: "deny",
+          comment: "  Keep the old validation, it's used by the CLI.  ",
         })
-        assert.strictEqual(
-          decision !== "interrupted" && decision.behavior === "deny" ? decision.message : "",
-          [
-            "PARTIALLY APPLIED by the human reviewer to data.txt.",
-            'Applied: hunks 1, 3. Rejected: hunk 2 — "Keep the old validation, it\'s used by the CLI".',
-            "The file on disk now differs from what you proposed. Re-read it before making further edits.",
-          ].join("\n"),
-        )
-
-        // The SDK reports the denial; the fake must not have written the full proposal.
-        yield* waitForStatus(session.id, "idle")
-        assert.strictEqual(readFileSync(file, "utf8"), expectedContent)
-
-        const rows = yield* sql<{
-          hunk_index: number
-          decision: string
-          comment: string | null
-        }>`SELECT hunk_index, decision, comment FROM hunk_decisions ORDER BY hunk_index`
-        assert.deepStrictEqual(
-          rows.map((row) => [row.hunk_index, row.decision, row.comment]),
-          [
-            [1, "approved", null],
-            [2, "rejected", "Keep the old validation, it's used by the CLI"],
-            [3, "approved", null],
-          ],
-        )
-        const stored = (yield* contents(session.id)).approvals.find(
-          (approval) => approval._tag === "change",
-        )
-        assert.strictEqual(
-          stored?._tag === "change" ? stored.change.hunks[1]?.comment : undefined,
-          "Keep the old validation, it's used by the CLI",
-        )
-      }).pipe(Effect.provide(services(home, script)))
-    }),
-  )
-
-  it.live("rejecting every hunk leaves the file alone and returns the comments", () =>
-    Effect.gen(function* () {
-      const { home, repo, script } = yield* startWithPendingChange()
-
-      yield* Effect.gen(function* () {
-        const approvals = yield* ApprovalService
-        const { session } = yield* createSession(repo)
-        const change = yield* pendingChange(session.id)
-
-        const decisions = [
-          { index: 1, decision: "rejected" as const, comment: "No." },
-          { index: 2, decision: "rejected" as const },
-          { index: 3, decision: "rejected" as const, comment: "Not this either." },
-        ]
-        const resolved = yield* approvals.decideChange(change.id, decisions)
         assert.strictEqual(resolved.status, "rejected")
+        assert.strictEqual(resolved.comment, "Keep the old validation, it's used by the CLI.")
+        assert.deepStrictEqual(
+          resolved.hunks.map((hunk) => hunk.status),
+          ["rejected", "rejected", "rejected"],
+        )
 
         const { decision } = yield* decisionFor("Write")
         assert.deepStrictEqual(decision, {
           behavior: "deny",
-          message: formatRejectionMessage("data.txt", withDecisions(change.hunks, decisions)),
+          message:
+            "DENIED by the human reviewer: your change to data.txt was not applied and the file on disk is unchanged. They said: Keep the old validation, it's used by the CLI.",
         })
         yield* waitForStatus(session.id, "idle")
         assert.strictEqual(readFileSync(join(session.worktreePath, "data.txt"), "utf8"), ORIGINAL)
         const snapshot = yield* contents(session.id)
         assert.strictEqual(snapshot.toolCalls[0]?.status, "denied")
+        const stored = snapshot.approvals[0]
+        assert.strictEqual(
+          stored?._tag === "change" ? stored.change.comment : undefined,
+          "Keep the old validation, it's used by the CLI.",
+        )
       }).pipe(Effect.provide(services(home, script)))
     }),
   )
 
-  it.live("requires a decision for every hunk and accepts only one verdict", () =>
+  it("a denial without a comment still says nothing was written", () => {
+    assert.strictEqual(
+      changeDeniedMessage("src/app.ts", undefined),
+      "DENIED by the human reviewer: your change to src/app.ts was not applied and the file on disk is unchanged. Ask how to proceed if the change is necessary.",
+    )
+  })
+
+  it.live("a change is answered once", () =>
     Effect.gen(function* () {
       const { home, repo, script } = yield* startWithPendingChange()
 
@@ -256,22 +195,48 @@ describe("review flow", () => {
         const { session } = yield* createSession(repo)
         const change = yield* pendingChange(session.id)
 
-        const incomplete = yield* Effect.flip(
-          approvals.decideChange(change.id, [{ index: 2, decision: "approved" }]),
-        )
-        assert.strictEqual(incomplete._tag, "IncompleteReview")
-        assert.deepStrictEqual(
-          incomplete._tag === "IncompleteReview" ? incomplete.missing : [],
-          [1, 3],
-        )
-
-        const all = [1, 2, 3].map((index) => ({ index, decision: "approved" as const }))
-        yield* approvals.decideChange(change.id, all)
-        const twice = yield* Effect.flip(approvals.decideChange(change.id, all))
+        yield* approvals.decideChange(change.id, { decision: "allow" })
+        const twice = yield* Effect.flip(approvals.decideChange(change.id, { decision: "deny" }))
         assert.strictEqual(twice._tag, "ApprovalAlreadyDecided")
 
-        const unknown = yield* Effect.flip(approvals.decideChange(ChangeId.make("nope"), all))
+        const unknown = yield* Effect.flip(
+          approvals.decideChange(ChangeId.make("nope"), { decision: "allow" }),
+        )
         assert.strictEqual(unknown._tag, "ApprovalNotFound")
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("'always allow in this thread' stops asking about that tool, there only", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup({ "data.txt": ORIGINAL })
+      const script: FakeScript = (_prompt, turn) => [
+        { tool: "Write", input: { file_path: "data.txt", content: `turn ${turn}\n` } },
+        { tool: "Bash", input: { command: "echo done" }, output: "done" },
+      ]
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const approvals = yield* ApprovalService
+        const { session } = yield* createSession(repo)
+        const change = yield* pendingChange(session.id)
+        yield* approvals.decideChange(change.id, { decision: "allow", allowForSession: true })
+        assert.isTrue(approvals.allowsInSession(session.id, "Write"))
+        // Only the tool that was allowed: the command still asks.
+        const command = yield* pendingConfirmation(session.id)
+        yield* approvals.decideConfirmation(command.id, { decision: "allow" })
+        yield* waitForStatus(session.id, "idle")
+
+        yield* sessions.sendMessage(session.id, "again")
+        const again = yield* pendingConfirmation(session.id)
+        assert.strictEqual(again.toolName, "Bash")
+        // The second Write ran without a request of its own.
+        assert.strictEqual(readFileSync(join(session.worktreePath, "data.txt"), "utf8"), "turn 2\n")
+        assert.lengthOf(
+          (yield* contents(session.id)).approvals.filter((each) => each._tag === "change"),
+          1,
+        )
+        assert.isFalse(approvals.allowsInSession("another-thread", "Write"))
       }).pipe(Effect.provide(services(home, script)))
     }),
   )
@@ -301,18 +266,13 @@ describe("review flow", () => {
         assert.strictEqual(readFileSync(join(session.worktreePath, "data.txt"), "utf8"), ORIGINAL)
         assert.strictEqual((yield* sessions.get(session.id)).status, "interrupted")
 
-        const late = yield* Effect.flip(
-          approvals.decideChange(
-            change.id,
-            [1, 2, 3].map((index) => ({ index, decision: "approved" as const })),
-          ),
-        )
+        const late = yield* Effect.flip(approvals.decideChange(change.id, { decision: "allow" }))
         assert.strictEqual(late._tag, "ApprovalAlreadyDecided")
       }).pipe(Effect.provide(services(home, script)))
     }),
   )
 
-  it.live("creates new files through review", () =>
+  it.live("shows a new file as a change to allow", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
       const script: FakeScript = () => [
@@ -331,7 +291,7 @@ describe("review flow", () => {
         assert.strictEqual(change.originalContent, "")
         assert.isFalse(existsSync(join(session.worktreePath, "src/new.ts")))
 
-        yield* approvals.decideChange(change.id, [{ index: 1, decision: "approved" }])
+        yield* approvals.decideChange(change.id, { decision: "allow" })
         yield* waitForStatus(session.id, "idle")
         assert.strictEqual(
           readFileSync(join(session.worktreePath, "src/new.ts"), "utf8"),
@@ -362,7 +322,7 @@ describe("review flow", () => {
         ])
         assert.strictEqual(change.proposedContent, "const a = 1\nconst b = 3\n")
 
-        yield* approvals.decideChange(change.id, [{ index: 1, decision: "approved" }])
+        yield* approvals.decideChange(change.id, { decision: "allow" })
         yield* waitForStatus(session.id, "idle")
         assert.strictEqual(
           readFileSync(join(session.worktreePath, "app.ts"), "utf8"),
@@ -372,7 +332,7 @@ describe("review flow", () => {
     }),
   )
 
-  it.live("denies at once, without asking, edits that cannot be reviewed", () =>
+  it.live("denies at once, without asking, edits that cannot be shown as a change", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup({ "app.ts": "const a = 1\n" })
       const outside = join(home, "outside.txt")
@@ -401,33 +361,6 @@ describe("review flow", () => {
         assert.match(messages[3] ?? "", /unchanged/)
         assert.isFalse(existsSync(outside))
         assert.deepStrictEqual((yield* contents(session.id)).approvals, [])
-      }).pipe(Effect.provide(services(home, script)))
-    }),
-  )
-
-  it.live("a file changed during review is not partially overwritten", () =>
-    Effect.gen(function* () {
-      const { home, repo, script } = yield* startWithPendingChange()
-
-      yield* Effect.gen(function* () {
-        const approvals = yield* ApprovalService
-        const { session } = yield* createSession(repo)
-        const change = yield* pendingChange(session.id)
-        const file = join(session.worktreePath, "data.txt")
-        writeFileSync(file, "edited by the human meanwhile\n")
-
-        const resolved = yield* approvals.decideChange(change.id, [
-          { index: 1, decision: "approved" },
-          { index: 2, decision: "rejected" },
-          { index: 3, decision: "approved" },
-        ])
-        assert.strictEqual(resolved.status, "rejected")
-        assert.strictEqual(readFileSync(file, "utf8"), "edited by the human meanwhile\n")
-        const { decision } = yield* decisionFor("Write")
-        assert.match(
-          decision !== "interrupted" && decision.behavior === "deny" ? decision.message : "",
-          /^NOT APPLIED: data\.txt changed on disk/,
-        )
       }).pipe(Effect.provide(services(home, script)))
     }),
   )
@@ -496,24 +429,22 @@ describe("confirm flow", () => {
     }),
   )
 
-  it.live("'always allow' updates the policy so the next call runs without asking", () =>
+  it.live("'always allow in this thread' runs the next call without asking", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
 
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const approvals = yield* ApprovalService
-        const policies = yield* PolicyService
         const log = yield* FakeAgentLog
         const { project, session } = yield* createSession(repo)
         const confirmation = yield* pendingConfirmation(session.id)
 
         yield* approvals.decideConfirmation(confirmation.id, {
           decision: "allow",
-          alwaysAllow: true,
+          allowForSession: true,
         })
         yield* waitForStatus(session.id, "idle")
-        assert.strictEqual(policies.modeFor(project.id, "Bash"), "auto")
 
         yield* sessions.sendMessage(session.id, "again")
         yield* waitForStatus(session.id, "idle")
@@ -526,6 +457,14 @@ describe("confirm flow", () => {
           snapshot.toolCalls.map((call) => call.status),
           ["succeeded", "succeeded"],
         )
+
+        // Another thread of the same project that asks still asks.
+        const other = yield* sessions.create({
+          projectId: project.id,
+          prompt: "run it",
+          autonomy: "ask",
+        })
+        assert.strictEqual((yield* pendingConfirmation(other.id)).toolName, "Bash")
       }).pipe(Effect.provide(services(home, bashScript)))
     }),
   )
@@ -556,7 +495,6 @@ describe("confirm flow", () => {
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const approvals = yield* ApprovalService
-        const policies = yield* PolicyService
         const project = yield* addProject(repo)
         // Even "Auto mode" cannot answer for the human.
         const session = yield* sessions.create({
@@ -569,7 +507,7 @@ describe("confirm flow", () => {
 
         const resolved = yield* approvals.decideConfirmation(confirmation.id, {
           decision: "allow",
-          alwaysAllow: true,
+          allowForSession: true,
           answers: { [QUESTION]: "Luxon" },
         })
         assert.deepStrictEqual(resolved.answers, { [QUESTION]: "Luxon" })
@@ -580,12 +518,15 @@ describe("confirm flow", () => {
         })
         yield* waitForStatus(session.id, "idle")
         // "Always allow" means nothing for a question: the next one is asked again.
-        assert.strictEqual(policies.modeFor(project.id, "AskUserQuestion"), "confirm")
+        assert.isFalse(approvals.allowsInSession(session.id, "AskUserQuestion"))
+        yield* sessions.sendMessage(session.id, "And for dates?")
+        assert.strictEqual((yield* pendingConfirmation(session.id)).toolName, "AskUserQuestion")
         const stored = (yield* contents(session.id)).approvals[0]
         assert.deepStrictEqual(
           stored?._tag === "confirmation" ? stored.confirmation.answers : undefined,
           { [QUESTION]: "Luxon" },
         )
+        yield* sessions.interrupt(session.id)
       }).pipe(Effect.provide(services(home, questionScript)))
     }),
   )
@@ -620,33 +561,6 @@ describe("confirm flow", () => {
       }).pipe(Effect.provide(services(home, script)))
     }),
   )
-
-  it.live("a policy tightened mid-session applies to the very next call", () =>
-    Effect.gen(function* () {
-      const { home, repo } = yield* setup()
-      const script: FakeScript = () => [
-        { tool: "Read", input: { file_path: "README.md" }, output: "# fixture" },
-      ]
-
-      yield* Effect.gen(function* () {
-        const sessions = yield* SessionService
-        const policies = yield* PolicyService
-        const { project, session } = yield* createSession(repo, "read it")
-        yield* waitForStatus(session.id, "idle")
-        assert.lengthOf((yield* contents(session.id)).approvals, 0)
-
-        const policy = yield* policies.get(project.id)
-        yield* policies.set(project.id, {
-          rules: policy.rules.map((rule) =>
-            rule.pattern === "Read" ? { pattern: "Read", mode: "confirm" as const } : rule,
-          ),
-        })
-        yield* sessions.sendMessage(session.id, "read it again")
-        const confirmation = yield* pendingConfirmation(session.id)
-        assert.strictEqual(confirmation.toolName, "Read")
-      }).pipe(Effect.provide(services(home, script)))
-    }),
-  )
 })
 
 describe("autonomy", () => {
@@ -663,7 +577,62 @@ describe("autonomy", () => {
       return { project, session }
     })
 
-  it.live("accept_edits applies an edit inside the worktree without a review", () =>
+  it.live(
+    "a new thread runs on its own, unless the human's or the project's default says otherwise",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup()
+
+        yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const projects = yield* ProjectService
+          const preferences = yield* PreferencesService
+          const project = yield* addProject(repo)
+          assert.isNull(project.defaultAutonomy)
+          const create = (autonomy?: Autonomy) =>
+            Effect.map(
+              sessions.create({ projectId: project.id, ...(autonomy ? { autonomy } : {}) }),
+              (session) => session.autonomy,
+            )
+
+          assert.strictEqual(yield* create(), "auto")
+
+          // The human's default for every project.
+          yield* preferences.setPinnedDefaults({ autonomy: "ask", effort: null })
+          assert.strictEqual(yield* create(), "ask")
+
+          // The project's own default wins over it, and is kept.
+          const updated = yield* projects.setDefaultAutonomy(project.id, "accept_edits")
+          assert.strictEqual(updated.defaultAutonomy, "accept_edits")
+          assert.strictEqual((yield* projects.get(project.id)).defaultAutonomy, "accept_edits")
+          assert.strictEqual(yield* create(), "accept_edits")
+
+          // What the human picks for one thread wins over both.
+          assert.strictEqual(yield* create("auto"), "auto")
+
+          yield* projects.setDefaultAutonomy(project.id, null)
+          assert.strictEqual(yield* create(), "ask")
+        }).pipe(Effect.provide(services(home, () => [])))
+      }),
+  )
+
+  it.live("a thread on its own runs a command without asking", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "run it" })
+        yield* waitForStatus(session.id, "idle")
+        const snapshot = yield* contents(session.id)
+        assert.strictEqual(snapshot.toolCalls[0]?.status, "succeeded")
+        assert.lengthOf(snapshot.approvals, 0)
+      }).pipe(Effect.provide(services(home, bashScript)))
+    }),
+  )
+
+  it.live("accept_edits applies an edit inside the worktree without asking", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup({ "data.txt": ORIGINAL })
 
@@ -725,29 +694,6 @@ describe("autonomy", () => {
     }),
   )
 
-  it.live("auto never overrides a deny rule", () =>
-    Effect.gen(function* () {
-      const { home, repo } = yield* setup()
-
-      yield* Effect.gen(function* () {
-        const policies = yield* PolicyService
-        const project = yield* addProject(repo)
-        const policy = yield* policies.get(project.id)
-        yield* policies.set(project.id, setToolRule(policy, "Bash", "deny"))
-        const sessions = yield* SessionService
-        const session = yield* sessions.create({
-          projectId: project.id,
-          prompt: "run it",
-          autonomy: "auto",
-        })
-        yield* waitForStatus(session.id, "idle")
-        const snapshot = yield* contents(session.id)
-        assert.strictEqual(snapshot.toolCalls[0]?.status, "denied")
-        assert.lengthOf(snapshot.approvals, 0)
-      }).pipe(Effect.provide(services(home, bashScript)))
-    }),
-  )
-
   it.live("a change of autonomy mid-session applies to the very next call", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
@@ -781,9 +727,9 @@ describe("autonomy", () => {
         const sessions = yield* SessionService
         const project = yield* addProject(repo)
         const session = yield* sessions.create({ projectId: project.id })
-        assert.strictEqual(session.autonomy, "ask")
+        assert.strictEqual(session.autonomy, "auto")
         yield* sessions.end(session.id, { removeWorktree: false })
-        const result = yield* sessions.setAutonomy(session.id, "auto").pipe(Effect.flip)
+        const result = yield* sessions.setAutonomy(session.id, "ask").pipe(Effect.flip)
         assert.strictEqual(result._tag, "SessionEnded")
       }).pipe(Effect.provide(services(home, bashScript)))
     }),
@@ -820,8 +766,8 @@ describe("restart", () => {
 // Type-only guards: the snapshot exposes both approval shapes.
 export type _Shapes = [ProposedChange, PendingConfirmation]
 
-describe("committing approved work", () => {
-  it.live("commits the approved changes to the session branch, never the user's checkout", () =>
+describe("committing the work", () => {
+  it.live("commits the changes to the session branch, never the user's checkout", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup({ "app.ts": "const a = 1\n" })
       const script: FakeScript = (_prompt, turn) =>
@@ -839,7 +785,7 @@ describe("committing approved work", () => {
         const sessions = yield* SessionService
         const approvals = yield* ApprovalService
         const project = yield* addProject(repo)
-        const created = yield* sessions.create({ projectId: project.id })
+        const created = yield* sessions.create({ projectId: project.id, autonomy: "ask" })
         const session = yield* sessions.setupWorktree(created.id)
         yield* sessions.sendMessage(session.id, "Make the changes")
 
@@ -847,7 +793,7 @@ describe("committing approved work", () => {
         assert.strictEqual(nothingYet._tag, "SessionBusy")
 
         const change = yield* pendingChange(session.id)
-        yield* approvals.decideChange(change.id, [{ index: 1, decision: "approved" }])
+        yield* approvals.decideChange(change.id, { decision: "allow" })
         yield* waitForStatus(session.id, "idle")
 
         const preview = yield* sessions.diff(session.id)

@@ -129,14 +129,6 @@ export class ApprovalAlreadyDecided extends Schema.TaggedError<ApprovalAlreadyDe
   }
 }
 
-export class IncompleteReview extends Schema.TaggedError<IncompleteReview>()("IncompleteReview", {
-  missing: Schema.Array(Schema.Int),
-}) {
-  override get message() {
-    return `Decide every hunk before submitting. Still undecided: ${this.missing.join(", ")}.`
-  }
-}
-
 export class GitHubNotAuthenticated extends Schema.TaggedError<GitHubNotAuthenticated>()(
   "GitHubNotAuthenticated",
   { reason: Schema.Literals(["no_token", "rejected"]) },

@@ -1,10 +1,4 @@
-import type {
-  ContextUsage,
-  OpenedThread,
-  PlanUsage,
-  ReasoningEffort,
-  ToolMode,
-} from "@humanity/contracts"
+import type { ContextUsage, OpenedThread, PlanUsage, ReasoningEffort } from "@humanity/contracts"
 import { Context, Data, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
@@ -77,23 +71,18 @@ export interface AgentRunOptions {
   readonly effort: ReasoningEffort | undefined
   /** Humanity's MCP servers and skills, as they are when the run starts. */
   readonly extensions: AgentExtensions
-  /** Tools that run without asking: exactly the project's `auto` tools. */
+  /** Tools that run without asking in every thread: Humanity's `auto` tools. */
   readonly allowedTools: ReadonlyArray<string>
   /**
-   * The project's policy, consulted before any permission rule from settings
-   * files. `toolUseId` identifies the call when the SDK provides it.
-   */
-  readonly toolMode: (toolName: string, toolUseId: string | undefined) => ToolMode
-  /**
-   * Decides every tool call that is not in `allowedTools`. The effect is
+   * Decides every tool call that is not in `allowedTools`, whatever the
+   * repository's or the human's settings files pre-approve. The effect is
    * interrupted if the agent aborts the call (for example on interrupt), so
    * anything waiting for a human must clean up in a finalizer.
    */
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
   /**
    * Humanity's `open_thread` tool: starts a new thread in the session's
-   * project on the given prompt. The call itself goes through the policy like
-   * any other tool before this runs.
+   * project on the given prompt.
    */
   readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
 }

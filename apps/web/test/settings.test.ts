@@ -15,7 +15,7 @@ describe("matchSections", () => {
     expect(matchSections("account")).toEqual(["providers"])
     expect(matchSections(" api key ")).toEqual(["providers"])
     expect(matchSections("github")).toEqual(["repositories"])
-    expect(matchSections("policy")).toEqual(["projects"])
+    expect(matchSections("permissions")).toEqual(["projects"])
     expect(matchSections("sign in")).toEqual(["providers", "repositories"])
   })
 

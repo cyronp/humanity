@@ -31,19 +31,21 @@ export const ApprovalsHandlers = ApprovalsRpcs.toLayer(
         Effect.andThen(sessions.get(sessionId), () =>
           Effect.map(approvals.listForSession(sessionId), (all) => all.filter(isPendingApproval)),
         ),
-      "Approvals.decideChange": ({ changeId, decisions }) =>
-        approvals.decideChange(changeId, decisions),
+      "Approvals.decideChange": ({ changeId, decision, comment, allowForSession }) =>
+        approvals.decideChange(changeId, { decision, comment, allowForSession }),
       "Approvals.decideConfirmation": ({
         confirmationId,
         decision,
         comment,
-        alwaysAllow,
+        allowForSession,
         answers,
       }) =>
-        approvals
-          .decideConfirmation(confirmationId, { decision, comment, alwaysAllow, answers })
-          // The confirmation belongs to an existing project; a missing one is a bug, not a user error.
-          .pipe(Effect.catchTag("ProjectNotFound", Effect.die)),
+        approvals.decideConfirmation(confirmationId, {
+          decision,
+          comment,
+          allowForSession,
+          answers,
+        }),
     })
   }),
 )

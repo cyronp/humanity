@@ -31,9 +31,9 @@ import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
 /**
  * The home page: one message box, like any AI chat. It starts a new session
- * in the repository the human prompted last, with that thread's model,
- * reasoning effort and autonomy (or the pinned effort and autonomy), unless
- * they pick otherwise.
+ * in the repository the human prompted last, with that thread's model and
+ * reasoning effort (or the pinned effort) and the project's or the human's
+ * default autonomy, unless they pick otherwise.
  */
 export function NewChat({
   projectId,
@@ -48,16 +48,17 @@ export function NewChat({
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)
   const { pinned } = usePinnedDefaults()
-  const defaults = threadDefaults(
-    recent,
-    AsyncResult.isSuccess(status) ? status.value.models : undefined,
-    pinned,
-  )
   // Until the human picks one, follow the last prompted project as it loads.
   const project =
     list.find((candidate) => candidate.id === projectId) ??
     list.find((candidate) => candidate.id === lastProjectId) ??
     list[0]
+  const defaults = threadDefaults(
+    recent,
+    AsyncResult.isSuccess(status) ? status.value.models : undefined,
+    pinned,
+    project,
+  )
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4 pt-14 pb-10">
@@ -68,7 +69,7 @@ export function NewChat({
         <h1 className="text-2xl font-semibold tracking-tight">What should we work on?</h1>
         <p className="max-w-md text-sm text-muted-foreground">
           The agent works in your checkout; set up a worktree from the session to give it its own
-          branch. Every change it proposes waits for your review.
+          branch. It runs on its own unless you choose to be asked first.
         </p>
       </div>
       {AsyncResult.match(projects, {
@@ -113,7 +114,7 @@ function NewChatForm({
   defaults,
 }: {
   readonly project: Project
-  /** The pinned defaults, else how the last thread was left; each setting follows them until the human picks another. */
+  /** What a new thread starts with here; each setting follows it until the human picks another. */
   readonly defaults: ThreadDefaults
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })

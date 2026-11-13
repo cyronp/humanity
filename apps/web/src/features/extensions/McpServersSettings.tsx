@@ -60,8 +60,8 @@ export function McpServersSettings({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Servers added here reach every project. Each tool call still asks you first, unless the
-          project's policy allows <code className="font-mono text-xs">mcp__*</code> tools.
+          Servers added here reach every project. A thread that asks first asks about each of their
+          tool calls; a thread in Auto mode runs them.
         </p>
         <Button variant="outline" size="sm" onClick={() => setEditing({ kind: "import" })}>
           <ClipboardPaste />

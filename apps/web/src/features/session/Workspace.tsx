@@ -27,7 +27,6 @@ import { UsageMeters } from "./UsageMeters.tsx"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
-  readonly hunk?: number | undefined
 }
 
 /** Chat in the middle; review and timeline tabs on the right. */
@@ -35,12 +34,10 @@ export function Workspace({
   project,
   view,
   search,
-  onSearchChange,
 }: {
   readonly project: Project
   readonly view: SessionView
   readonly search: WorkspaceSearch
-  readonly onSearchChange: (search: WorkspaceSearch) => void
 }) {
   const { session } = view
   const changes = pendingChanges(view)
@@ -126,8 +123,8 @@ export function Workspace({
               worktreePath={session.worktreePath}
               empty={
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  Ask the agent about this repository. It reads freely; every change it proposes
-                  waits for you.
+                  Ask the agent about this repository. How much it does without asking is this
+                  thread's permissions, next to the message box.
                 </p>
               }
               footer={
@@ -159,7 +156,7 @@ export function Workspace({
                   onClick={() => setPanelOpen(true)}
                   className="rounded-lg border-2 border-amber-500 bg-background bg-linear-to-b from-amber-500/5 to-amber-500/5 p-3 text-left text-sm font-medium"
                 >
-                  The agent is waiting for your review of {changes.length} change
+                  The agent is waiting for you to allow {changes.length} file change
                   {changes.length === 1 ? "" : "s"}. Open the review panel.
                 </button>
               )}
@@ -196,12 +193,7 @@ export function Workspace({
               </TabsList>
               <TabsContent value="review" asChild>
                 <ScrollArea className="min-h-0 flex-1">
-                  <ReviewPanel
-                    changes={changes}
-                    file={search.file}
-                    hunk={search.hunk}
-                    onFocusChange={(file, hunk) => onSearchChange({ file, hunk })}
-                  />
+                  <ReviewPanel changes={changes} file={search.file} />
                 </ScrollArea>
               </TabsContent>
               <TabsContent value="timeline" asChild>

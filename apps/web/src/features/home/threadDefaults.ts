@@ -1,7 +1,7 @@
 import {
   type Autonomy,
   type ClaudeModel,
-  DEFAULT_AUTONOMY,
+  newThreadAutonomy,
   NO_PINS,
   type PinnedDefaults,
   type ReasoningEffort,
@@ -16,9 +16,10 @@ export interface ThreadDefaults {
 }
 
 /**
- * A new thread starts the way the last one was left: its model, reasoning
- * effort and autonomy. A pinned effort or autonomy wins over the last
- * thread's. The branch is not inherited; it follows the checkout.
+ * A new thread starts on the model and reasoning effort the last one was left
+ * with; a pinned effort wins over the last thread's. Its autonomy is never
+ * inherited from a thread: it is the project's default, else the pinned one,
+ * else Auto mode. The branch follows the checkout.
  *
  * `sessions` is most recently active first. `models` is what Claude Code
  * offers now, or `undefined` while that is still loading: a model it no
@@ -28,6 +29,7 @@ export const threadDefaults = (
   sessions: ReadonlyArray<Session>,
   models: ReadonlyArray<ClaudeModel> | undefined,
   pinned: PinnedDefaults = NO_PINS,
+  project?: { readonly defaultAutonomy: Autonomy | null },
 ): ThreadDefaults => {
   const last = sessions[0]
   const offered =
@@ -43,6 +45,6 @@ export const threadDefaults = (
         : pinned.effort === "default"
           ? null
           : pinned.effort,
-    autonomy: pinned.autonomy ?? last?.autonomy ?? DEFAULT_AUTONOMY,
+    autonomy: newThreadAutonomy(project, pinned),
   }
 }

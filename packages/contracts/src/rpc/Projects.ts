@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
-import { ToolPolicy } from "../domain/Policy.ts"
+import { Autonomy } from "../domain/Policy.ts"
 import { Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
 import {
   CloneTargetExists,
@@ -58,15 +58,13 @@ export const ProjectsRpcs = RpcGroup.make(
     success: Schema.NullOr(ProjectIcon),
     error: ProjectNotFound,
   }),
-  Rpc.make("Projects.getPolicy", {
-    payload: { projectId: ProjectId },
-    success: ToolPolicy,
-    error: ProjectNotFound,
-  }),
-  /** Takes effect immediately, including for agents that are already running. */
-  Rpc.make("Projects.setPolicy", {
-    payload: { projectId: ProjectId, policy: ToolPolicy },
-    success: ToolPolicy,
+  /**
+   * The autonomy the project's new threads start with; `null` follows the
+   * human's default for every project. Threads that already exist keep theirs.
+   */
+  Rpc.make("Projects.setDefaultAutonomy", {
+    payload: { projectId: ProjectId, autonomy: Schema.NullOr(Autonomy) },
+    success: Project,
     error: ProjectNotFound,
   }),
 )

@@ -2,14 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   answerFor,
   collectAnswers,
-  DEFAULT_TOOL_POLICY,
   EMPTY_QUESTION_DRAFT,
   parseQuestions,
   type Question,
   QUESTION_TOOL,
-  resolveToolMode,
-  setToolRule,
   toggleOption,
+  toolMode,
   typeOwnAnswer,
 } from "../src/index.ts"
 
@@ -82,11 +80,7 @@ describe("answering a question", () => {
 })
 
 describe("the question tool's mode", () => {
-  it("always reaches the human, whatever the policy says, unless it is denied", () => {
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, QUESTION_TOOL)).toBe("confirm")
-    const auto = setToolRule(DEFAULT_TOOL_POLICY, QUESTION_TOOL, "auto")
-    expect(resolveToolMode(auto, QUESTION_TOOL)).toBe("confirm")
-    const denied = setToolRule(DEFAULT_TOOL_POLICY, QUESTION_TOOL, "deny")
-    expect(resolveToolMode(denied, QUESTION_TOOL)).toBe("deny")
+  it("is always something for the human to answer", () => {
+    expect(toolMode(QUESTION_TOOL)).toBe("confirm")
   })
 })

@@ -1,5 +1,4 @@
 import { assert, describe, it } from "@effect/vitest"
-import { DEFAULT_TOOL_POLICY } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
@@ -23,7 +22,7 @@ describe("ProjectService", () => {
 
       assert.strictEqual(project.defaultBranch, "main")
       assert.strictEqual(project.githubFullName, null)
-      assert.deepStrictEqual(project.policy, DEFAULT_TOOL_POLICY)
+      assert.isNull(project.defaultAutonomy)
       assert.isTrue(existsSync(join(home, "humanity.db")))
     }),
   )

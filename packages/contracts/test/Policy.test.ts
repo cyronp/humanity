@@ -1,73 +1,44 @@
 import { describe, expect, it } from "vitest"
 import {
   applyAutonomy,
-  DEFAULT_TOOL_POLICY,
+  AUTO_TOOLS,
+  DEFAULT_AUTONOMY,
   formatOpenedThread,
   OPEN_THREAD_TOOL,
   parseMcpToolName,
   parseThreadHref,
   ProjectId,
-  resolveToolMode,
   SessionId,
-  setToolRule,
   threadHref,
-  type ToolPolicy,
+  toolMode,
 } from "../src/index.ts"
 
-describe("resolveToolMode", () => {
-  it("applies the MVP defaults", () => {
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Read")).toBe("auto")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Glob")).toBe("auto")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Grep")).toBe("auto")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Edit")).toBe("review")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Write")).toBe("review")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "NotebookEdit")).toBe("review")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Bash")).toBe("confirm")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "PowerShell")).toBe("confirm")
-    // Subagents and anything else the CLI adds later need a human too.
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "Task")).toBe("confirm")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "WebFetch")).toBe("confirm")
-  })
-
-  it("never resolves an unknown tool to auto", () => {
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "SomeFutureTool")).toBe("confirm")
-    expect(resolveToolMode({ rules: [] }, "Read")).toBe("confirm")
-  })
-
-  it("matches every MCP tool through the wildcard", () => {
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "mcp__github__create_issue")).toBe("confirm")
-  })
-
-  it("prefers exact rules, then the longest wildcard", () => {
-    const policy: ToolPolicy = {
-      rules: [
-        { pattern: "mcp__*", mode: "confirm" },
-        { pattern: "mcp__docs__*", mode: "auto" },
-        { pattern: "mcp__docs__delete", mode: "deny" },
-      ],
+describe("toolMode", () => {
+  it("lets reads and the agent's own bookkeeping run in every thread", () => {
+    for (const tool of ["Read", "Glob", "Grep", "TodoWrite", "Skill"]) {
+      expect(toolMode(tool)).toBe("auto")
     }
-    expect(resolveToolMode(policy, "mcp__docs__search")).toBe("auto")
-    expect(resolveToolMode(policy, "mcp__docs__delete")).toBe("deny")
-    expect(resolveToolMode(policy, "mcp__other__search")).toBe("confirm")
+    expect(AUTO_TOOLS).toContain("Read")
   })
 
-  it("does not treat a tool name as a prefix without a wildcard", () => {
-    const policy: ToolPolicy = { rules: [{ pattern: "Read", mode: "auto" }] }
-    expect(resolveToolMode(policy, "ReadSecrets")).toBe("confirm")
-  })
-})
-
-describe("setToolRule", () => {
-  it("replaces an existing rule in place", () => {
-    const next = setToolRule(DEFAULT_TOOL_POLICY, "Bash", "auto")
-    expect(resolveToolMode(next, "Bash")).toBe("auto")
-    expect(next.rules).toHaveLength(DEFAULT_TOOL_POLICY.rules.length)
+  it("treats file-mutating built-ins as file changes", () => {
+    expect(toolMode("Edit")).toBe("review")
+    expect(toolMode("Write")).toBe("review")
+    expect(toolMode("NotebookEdit")).toBe("review")
   })
 
-  it("appends a rule for a tool that had none", () => {
-    const next = setToolRule(DEFAULT_TOOL_POLICY, "mcp__github__list_issues", "auto")
-    expect(resolveToolMode(next, "mcp__github__list_issues")).toBe("auto")
-    expect(resolveToolMode(next, "mcp__github__create_issue")).toBe("confirm")
+  it("treats everything else as a call to allow or deny", () => {
+    expect(toolMode("Bash")).toBe("confirm")
+    expect(toolMode("PowerShell")).toBe("confirm")
+    // Subagents and anything else the CLI adds later.
+    expect(toolMode("Task")).toBe("confirm")
+    expect(toolMode("WebFetch")).toBe("confirm")
+    expect(toolMode("mcp__github__create_issue")).toBe("confirm")
+  })
+
+  it("never takes an unknown tool, or a longer name, for one that runs by itself", () => {
+    expect(toolMode("SomeFutureTool")).toBe("confirm")
+    expect(toolMode("ReadSecrets")).toBe("confirm")
   })
 })
 
@@ -90,12 +61,10 @@ describe("parseMcpToolName", () => {
 })
 
 describe("open_thread", () => {
-  it("runs without asking by default, unlike other MCP tools, and can be tightened", () => {
+  it("runs without asking in every thread, unlike other MCP tools", () => {
     expect(OPEN_THREAD_TOOL).toBe("mcp__humanity__open_thread")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, OPEN_THREAD_TOOL)).toBe("auto")
-    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "mcp__humanity__other")).toBe("confirm")
-    const tightened = setToolRule(DEFAULT_TOOL_POLICY, OPEN_THREAD_TOOL, "confirm")
-    expect(resolveToolMode(tightened, OPEN_THREAD_TOOL)).toBe("confirm")
+    expect(toolMode(OPEN_THREAD_TOOL)).toBe("auto")
+    expect(toolMode("mcp__humanity__other")).toBe("confirm")
   })
 
   const thread = {
@@ -135,27 +104,25 @@ describe("open_thread", () => {
 })
 
 describe("applyAutonomy", () => {
-  const modes = ["auto", "review", "confirm", "deny"] as const
+  const modes = ["auto", "review", "confirm"] as const
 
-  it("ask leaves the project's mode as it is", () => {
+  it("ask leaves the tool's mode as it is", () => {
     for (const mode of modes) expect(applyAutonomy("ask", mode)).toBe(mode)
   })
 
-  it("accept_edits lets reviewed tools through and nothing else", () => {
+  it("accept_edits lets file changes through and nothing else", () => {
     expect(modes.map((mode) => applyAutonomy("accept_edits", mode))).toEqual([
       "auto",
       "auto",
       "confirm",
-      "deny",
     ])
   })
 
-  it("auto lets everything through except denied tools", () => {
-    expect(modes.map((mode) => applyAutonomy("auto", mode))).toEqual([
-      "auto",
-      "auto",
-      "auto",
-      "deny",
-    ])
+  it("auto lets everything through", () => {
+    expect(modes.map((mode) => applyAutonomy("auto", mode))).toEqual(["auto", "auto", "auto"])
+  })
+
+  it("is what a thread starts with unless a default says otherwise", () => {
+    expect(DEFAULT_AUTONOMY).toBe("auto")
   })
 })

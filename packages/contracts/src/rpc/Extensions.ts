@@ -14,7 +14,7 @@ import { ExtensionInvalid, ExtensionNotFound, ProjectNotFound } from "../Errors.
 
 /**
  * MCP servers and skills. Changes reach open threads before their next
- * message; every MCP tool call still goes through the project's policy.
+ * message; every MCP tool call still goes through the thread's permissions.
  */
 export const ExtensionsRpcs = RpcGroup.make(
   /** Humanity's own MCP servers and skills, plus the project's when one is given. */

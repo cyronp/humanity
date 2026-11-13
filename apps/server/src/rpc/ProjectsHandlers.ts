@@ -1,7 +1,6 @@
 import { ProjectsRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
 import { HistoryImport } from "../services/HistoryImport.ts"
-import { PolicyService } from "../services/PolicyService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 import { SessionEvents } from "../services/SessionEvents.ts"
 import { SessionService } from "../services/SessionService.ts"
@@ -10,7 +9,6 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
   Effect.gen(function* () {
     const projects = yield* ProjectService
     const sessions = yield* SessionService
-    const policies = yield* PolicyService
     const events = yield* SessionEvents
     const imports = yield* HistoryImport
     return ProjectsRpcs.of({
@@ -26,8 +24,8 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
           Effect.andThen(events.publishListChanged),
         ),
       "Projects.icon": ({ projectId }) => projects.icon(projectId),
-      "Projects.getPolicy": ({ projectId }) => policies.get(projectId),
-      "Projects.setPolicy": ({ projectId, policy }) => policies.set(projectId, policy),
+      "Projects.setDefaultAutonomy": ({ projectId, autonomy }) =>
+        projects.setDefaultAutonomy(projectId, autonomy),
     })
   }),
 )

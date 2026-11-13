@@ -15,7 +15,7 @@ The result gives you a markdown link to the new thread. Use it inline in your re
 
 /**
  * Humanity's own MCP server, running inside the daemon. Its tools are named
- * `mcp__humanity__<tool>` and go through the project's policy like any other.
+ * `mcp__humanity__<tool>`.
  */
 export const humanityMcpServer = (
   options: Pick<AgentRunOptions, "openThread">,

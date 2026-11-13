@@ -1,12 +1,13 @@
-import { OPEN_THREAD_TOOL } from "@humanity/contracts"
 import { Effect } from "effect"
 import { SqlClient } from "effect/sql"
 
+/** The tool's name when this migration was written; it must not follow later renames. */
+const OPEN_THREAD_TOOL = "mcp__humanity__open_thread"
+
 /**
- * Projects added before Humanity's `open_thread` tool existed get the rule new
- * projects start with: the tool runs without asking. Without it, their
- * `mcp__*` rule would hold every new thread for a confirmation. A project that
- * already has a rule for the tool keeps it.
+ * Projects added before Humanity's `open_thread` tool existed got the rule new
+ * projects started with: the tool runs without asking. Per-project tool
+ * policies are gone since `0013`; this stays for databases that already ran it.
  */
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient

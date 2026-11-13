@@ -1,14 +1,13 @@
 import {
+  Autonomy,
   type CloneEvent,
   CloneTargetExists,
-  DEFAULT_TOOL_POLICY,
   PathNotFound,
   type Project,
   ProjectAlreadyExists,
   type ProjectIcon,
   ProjectId,
   ProjectNotFound,
-  ToolPolicy,
 } from "@humanity/contracts"
 import {
   Context,
@@ -36,7 +35,7 @@ const ProjectRow = Schema.Struct({
   local_path: Schema.String,
   github_full_name: Schema.NullOr(Schema.String),
   default_branch: Schema.String,
-  policy_json: Schema.fromJsonString(ToolPolicy),
+  default_autonomy: Schema.NullOr(Autonomy),
   created_at: Schema.String,
 })
 
@@ -46,7 +45,7 @@ const toProject = (row: typeof ProjectRow.Type): Project => ({
   localPath: row.local_path,
   githubFullName: row.github_full_name,
   defaultBranch: row.default_branch,
-  policy: row.policy_json,
+  defaultAutonomy: row.default_autonomy,
   createdAt: row.created_at,
 })
 
@@ -63,6 +62,14 @@ export class ProjectService extends Context.Service<
     readonly addLocal: (
       path: string,
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
+    /**
+     * Sets the autonomy the project's new threads start with; `null` follows
+     * the human's default for every project.
+     */
+    readonly setDefaultAutonomy: (
+      projectId: string,
+      autonomy: Autonomy | null,
+    ) => Effect.Effect<Project, ProjectNotFound>
     /** Deletes Humanity's records and session worktrees. The repository itself is left alone. */
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
     /**
@@ -134,13 +141,9 @@ export class ProjectService extends Context.Service<
           localPath,
           githubFullName: parseGitHubFullName(yield* git.originUrl(localPath)) ?? null,
           defaultBranch: yield* git.defaultBranch(localPath),
-          policy: DEFAULT_TOOL_POLICY,
+          defaultAutonomy: null,
           createdAt: DateTime.formatIso(yield* DateTime.now),
         }
-        const policyJson = yield* Schema.encodeEffect(Schema.fromJsonString(ToolPolicy))(
-          project.policy,
-        ).pipe(Effect.orDie)
-
         yield* sql`
           INSERT INTO projects ${sql.insert({
             id: project.id,
@@ -148,7 +151,6 @@ export class ProjectService extends Context.Service<
             local_path: project.localPath,
             github_full_name: project.githubFullName,
             default_branch: project.defaultBranch,
-            policy_json: policyJson,
             created_at: project.createdAt,
           })}
         `.pipe(Effect.orDie)
@@ -161,6 +163,17 @@ export class ProjectService extends Context.Service<
         Result: Schema.Struct({ id: Schema.String, worktree_path: Schema.String }),
         execute: (projectId) =>
           sql`SELECT id, worktree_path FROM sessions WHERE project_id = ${projectId}`,
+      })
+
+      const setDefaultAutonomy = Effect.fn("ProjectService.setDefaultAutonomy")(function* (
+        projectId: string,
+        autonomy: Autonomy | null,
+      ) {
+        const project = yield* get(projectId)
+        yield* sql`UPDATE projects SET default_autonomy = ${autonomy} WHERE id = ${projectId}`.pipe(
+          Effect.orDie,
+        )
+        return { ...project, defaultAutonomy: autonomy }
       })
 
       const remove = Effect.fn("ProjectService.remove")(function* (projectId: string) {
@@ -289,7 +302,15 @@ export class ProjectService extends Context.Service<
           }),
         )
 
-      return ProjectService.of({ list, get, addLocal, remove, icon, cloneFromGitHub })
+      return ProjectService.of({
+        list,
+        get,
+        addLocal,
+        setDefaultAutonomy,
+        remove,
+        icon,
+        cloneFromGitHub,
+      })
     }),
   )
 }

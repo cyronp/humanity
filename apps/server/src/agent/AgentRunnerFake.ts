@@ -1,4 +1,9 @@
-import { formatOpenedThread, OPEN_THREAD_TOOL, type ReasoningEffort } from "@humanity/contracts"
+import {
+  formatOpenedThread,
+  OPEN_THREAD_TOOL,
+  type ReasoningEffort,
+  toolMode,
+} from "@humanity/contracts"
 import { simulateEdit, simulateWrite } from "@humanity/diff"
 import { Context, Effect, Fiber, Layer, Option, Queue, Ref, Stream } from "effect"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -81,7 +86,7 @@ const executeTool = (cwd: string, step: Extract<FakeStep, { tool: string }>) => 
 /**
  * A scripted stand-in for the Agent SDK. It emits SDK-shaped messages, asks
  * `canUseTool` exactly where the real SDK would (anything not in
- * `allowedTools`, after the policy guard), and honors interrupts by aborting
+ * `allowedTools`, after the permission guard), and honors interrupts by aborting
  * the pending permission request.
  */
 export const AgentRunnerFake = (script: FakeScript) =>
@@ -112,14 +117,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           const decide = (step: Extract<FakeStep, { tool: string }>, toolUseId: string) =>
             Effect.gen(function* () {
-              const mode = options.toolMode(step.tool, toolUseId)
-              if (mode === "deny") {
-                return {
-                  behavior: "deny",
-                  message: `The project's Humanity policy denies ${step.tool}.`,
-                } satisfies PermissionDecision
-              }
-              if (mode === "auto" && options.allowedTools.includes(step.tool)) {
+              if (toolMode(step.tool) === "auto" && options.allowedTools.includes(step.tool)) {
                 return { behavior: "allow" } satisfies PermissionDecision
               }
               const request = { toolName: step.tool, input: step.input, toolUseId }

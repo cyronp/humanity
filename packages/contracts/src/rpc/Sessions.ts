@@ -63,7 +63,7 @@ export const SessionsRpcs = RpcGroup.make(
       model: Schema.optional(Schema.String),
       /** The model's own default effort when absent. */
       effort: Schema.optional(ReasoningEffort),
-      /** `ask` (the project's policy as it is) when absent. */
+      /** The project's default when absent, else the human's, else `DEFAULT_AUTONOMY`. */
       autonomy: Schema.optional(Autonomy),
     },
     success: Session,

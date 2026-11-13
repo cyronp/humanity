@@ -2,6 +2,16 @@
 
 > This document is the brief for building the MVP of **Humanity**. Read it fully before writing code. Work milestone by milestone, and stop to ask the human whenever a decision is ambiguous or not covered here. That habit is the product's philosophy, so practice it while building it.
 
+## Amendment: autonomy first (2026-11-12)
+
+The product pivoted away from mandatory human approval. Where this section and the rest of this document disagree, this section wins.
+
+- **Threads run on their own by default.** A new thread starts in Auto mode: edits, commands, web and MCP tools run without asking. The premise in section 1 ("every file mutation is reviewed before it touches disk") no longer holds.
+- **Asking first is a mode of a thread**, not the product's rule. The modes are "Ask me", "Accept edits" and "Auto mode". A new thread takes its project's default (Settings, under Projects), else the mode the human pinned for every project, else Auto mode. It never inherits the mode of another thread. The mode can be changed while the agent works.
+- **A request is answered as a whole.** A file change (shown as a diff) and any other tool call take the same answer: Allow, Always allow in this thread, or Deny with an optional comment. There are no per-hunk decisions and no partial application. This supersedes section 5.3, the `hunk_decisions` table, the hunk-applying and agent-message parts of `packages/diff`, the per-hunk payload of `Approvals.decideChange`, the `j`/`k`/`r`/`Enter` review shortcuts and `?hunk=` deep links.
+- **There is no per-project tool policy.** What a tool is (a read, a file change, anything else) is fixed in `packages/contracts`; only the thread's mode decides what asks. This supersedes section 5.1, `PolicyService`, `Projects.getPolicy`/`setPolicy` and the `deny` mode. "Always allow" is scoped to the thread and kept in memory.
+- **Unchanged:** never `bypassPermissions`; every call that is not a read still reaches `canUseTool`, so settings files cannot pre-approve a tool; a tool Humanity does not know asks in a thread that asks; a question from the agent always reaches the human; every tool call is rendered; worktree isolation is one click away.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

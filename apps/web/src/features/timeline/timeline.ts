@@ -75,16 +75,15 @@ export const describeDecision = (approval: Approval): string => {
   const approved = hunks.filter((hunk) => hunk.status === "approved").length
   switch (status) {
     case "applied":
-      return `You approved all ${hunks.length} hunk${hunks.length === 1 ? "" : "s"} of ${filePath}`
+      return `You allowed the change to ${filePath}`
+    // Only on changes from when hunks were decided one by one.
     case "partially_applied":
       return `You approved ${approved} of ${hunks.length} hunks of ${filePath}`
     case "rejected":
-      return approved > 0
-        ? `${filePath} changed during review; nothing was applied`
-        : `You rejected the change to ${filePath}`
+      return `You denied the change to ${filePath}`
     case "expired":
-      return `Review of ${filePath} expired`
+      return `The change to ${filePath} expired`
     case "pending":
-      return `Waiting for your review of ${filePath}`
+      return `Waiting for you to allow the change to ${filePath}`
   }
 }

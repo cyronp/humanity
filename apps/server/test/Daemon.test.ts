@@ -140,7 +140,7 @@ describe("daemon", () => {
     }),
   )
 
-  it.live("reviews a change over the socket, end to end", () =>
+  it.live("answers a file change over the socket, end to end", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()
       const repo = yield* tempRepo({ "app.ts": "const a = 1\nconst b = 2\n" })
@@ -148,7 +148,12 @@ describe("daemon", () => {
       yield* Effect.gen(function* () {
         const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
         const project = yield* client("Projects.addLocal", { path: repo })
-        const session = yield* client("Sessions.create", { projectId: project.id, prompt: "edit" })
+        assert.isNull(project.defaultAutonomy)
+        const session = yield* client("Sessions.create", {
+          projectId: project.id,
+          prompt: "edit",
+          autonomy: "ask",
+        })
 
         const requested = yield* client("Sessions.subscribe", { sessionId: session.id }).pipe(
           Stream.filter((event) => event._tag === "ApprovalRequested"),
@@ -157,22 +162,23 @@ describe("daemon", () => {
         )
         const event = requested[0]
         if (event?._tag !== "ApprovalRequested" || event.approval._tag !== "change") {
-          return assert.fail("expected a change to review")
+          return assert.fail("expected a change to answer")
         }
         const pending = yield* client("Approvals.listPending", { sessionId: session.id })
         assert.lengthOf(pending, 1)
 
         const resolved = yield* client("Approvals.decideChange", {
           changeId: event.approval.change.id,
-          decisions: [{ index: 1, decision: "rejected", comment: "keep b" }],
+          decision: "deny",
+          comment: "keep b",
         })
         assert.strictEqual(resolved.status, "rejected")
-        assert.strictEqual(resolved.hunks[0]?.comment, "keep b")
+        assert.strictEqual(resolved.comment, "keep b")
 
         const again = yield* Effect.flip(
           client("Approvals.decideChange", {
             changeId: event.approval.change.id,
-            decisions: [{ index: 1, decision: "approved" }],
+            decision: "allow",
           }),
         )
         assert.strictEqual(again._tag, "ApprovalAlreadyDecided")
@@ -186,12 +192,13 @@ describe("daemon", () => {
           "rejected",
         )
 
-        const policy = yield* client("Projects.getPolicy", { projectId: project.id })
-        const saved = yield* client("Projects.setPolicy", {
+        const saved = yield* client("Projects.setDefaultAutonomy", {
           projectId: project.id,
-          policy: { rules: [...policy.rules, { pattern: "mcp__docs__*", mode: "auto" }] },
+          autonomy: "ask",
         })
-        assert.deepStrictEqual(saved.rules.at(-1), { pattern: "mcp__docs__*", mode: "auto" })
+        assert.strictEqual(saved.defaultAutonomy, "ask")
+        const next = yield* client("Sessions.create", { projectId: project.id })
+        assert.strictEqual(next.autonomy, "ask")
       }).pipe(
         Effect.provide(
           ClientProtocol.pipe(

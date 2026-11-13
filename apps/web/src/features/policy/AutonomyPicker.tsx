@@ -24,8 +24,15 @@ interface AutonomyOption {
 const ASK: AutonomyOption = {
   value: "ask",
   label: "Ask me",
-  description: "Follow the project's policy: you review every edit and confirm every command.",
+  description: "File changes and commands wait for you to allow or deny them.",
   icon: Hand,
+}
+
+const AUTO: AutonomyOption = {
+  value: "auto",
+  label: "Auto mode",
+  description: "Edits, commands, web and MCP tools run without asking.",
+  icon: Zap,
 }
 
 /** In the order of how much the agent may do on its own. */
@@ -34,25 +41,22 @@ export const AUTONOMY_OPTIONS: ReadonlyArray<AutonomyOption> = [
   {
     value: "accept_edits",
     label: "Accept edits",
-    description: "Edits inside the worktree are applied without review. Commands still ask.",
+    description:
+      "File changes in the thread's folder are applied without asking. Commands still ask.",
     icon: FilePen,
   },
-  {
-    value: "auto",
-    label: "Auto mode",
-    description: "Edits, commands, web and MCP tools run without asking. Denied tools stay denied.",
-    icon: Zap,
-  },
+  AUTO,
 ]
 
 const findOption = (value: string): AutonomyOption | undefined =>
   AUTONOMY_OPTIONS.find((option) => option.value === value)
 
 /**
- * How much the agent may do without the human, for one session. Anything
- * beyond "Ask me" is coloured (amber for accepted edits, purple for auto mode),
- * so a loosened session is never mistaken for a reviewed one. A new thread
- * starts in the pinned mode, or the one the last thread was left in.
+ * How much the agent does without the human, for one session. Auto mode is the
+ * usual one and reads plain; a thread that asks is coloured (sky for "Ask me",
+ * amber for accepted edits), so it is never mistaken for one that runs on its
+ * own. A new thread starts in its project's mode, else the pinned one, else
+ * Auto mode.
  */
 export function AutonomyPicker({
   value,
@@ -64,7 +68,7 @@ export function AutonomyPicker({
   readonly disabled?: boolean
 }) {
   const pins = usePinnedDefaults()
-  const current = findOption(value) ?? ASK
+  const current = findOption(value) ?? AUTO
   const Icon = current.icon
   return (
     <DropdownMenu>
@@ -73,8 +77,9 @@ export function AutonomyPicker({
           size="sm"
           className={cn(
             "text-muted-foreground hover:text-foreground",
+            value === "ask" && "text-sky-600 hover:text-sky-700 dark:text-sky-400",
             value === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
-            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
+            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400"
           )}
           aria-label={`Autonomy: ${current.label}`}
         >

@@ -150,15 +150,12 @@ describe("describeDecision", () => {
   })
 
   it("summarizes each outcome in one sentence", () => {
-    expect(describeDecision(change("applied"))).toBe("You approved all 1 hunk of src/a.ts")
+    expect(describeDecision(change("applied"))).toBe("You allowed the change to src/a.ts")
     expect(
       describeDecision(change("partially_applied", [hunk(1, "approved"), hunk(2, "rejected")])),
     ).toBe("You approved 1 of 2 hunks of src/a.ts")
     expect(describeDecision(change("rejected", [hunk(1, "rejected")]))).toBe(
-      "You rejected the change to src/a.ts",
-    )
-    expect(describeDecision(change("rejected", [hunk(1, "approved"), hunk(2, "rejected")]))).toBe(
-      "src/a.ts changed during review; nothing was applied",
+      "You denied the change to src/a.ts",
     )
   })
 })

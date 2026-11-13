@@ -27,7 +27,7 @@ export const SECTION_INFO: Record<
   },
   projects: {
     label: "Projects",
-    keywords: ["tool policy", "tools", "autonomy", "permissions", "rules", "remove", "folder"],
+    keywords: ["permissions", "autonomy", "auto mode", "new threads", "remove", "folder"],
   },
   extensions: {
     label: "MCP & Skills",
