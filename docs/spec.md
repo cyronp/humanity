@@ -299,7 +299,7 @@ The router owns navigation and params only. Data comes from atoms (`AtomRpc` que
 
 ### Session workspace layout
 
-- **Header**: project name, branch + worktree indicator, session status badge (`running`, `waiting for you`, ...), a "Set up worktree" button (before Review) while the session works in the checkout, interrupt button.
+- **Header**: project name, branch + worktree indicator, session status badge (`running`, `waiting for you`, ...), a "Source Control" button that opens the right panel, interrupt button. While the session works in the checkout, the panel's title bar offers "Set up worktree", left of its refresh button.
 - **Center — chat**: messages rendered with Streamdown; tool calls inline as compact cards (one-line summary, expandable).
 - **Right panel — Review** (opens automatically when an approval is pending): list of pending changes; per file, hunks rendered with Shiki highlighting, each with Approve / Reject buttons and a comment field; bulk "Approve all" / "Reject all"; a Submit button that sends all hunk decisions at once. Keyboard shortcuts: `j`/`k` move between hunks, `a` approve, `r` reject, `c` comment, `Enter` submit.
 - **Right panel — Timeline** (tab): chronological list of tool calls, Skill loads and decisions, with durations.

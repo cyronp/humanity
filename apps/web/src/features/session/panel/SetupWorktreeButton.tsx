@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
-import { setupWorktreeAtom } from "./atoms.ts"
-import { isBusy } from "./state.ts"
+import { setupWorktreeAtom } from "../atoms.ts"
+import { isBusy } from "../state.ts"
 
 /**
  * Moves a session that works in the project's checkout into its own branch
@@ -27,7 +27,12 @@ export function SetupWorktreeButton({ session }: { readonly session: Session }) 
     setError(undefined)
     const exit = await setup({
       payload: { sessionId: session.id },
-      reactivityKeys: [keys.sessions(session.projectId), keys.git(session.projectId)],
+      reactivityKeys: [
+        keys.sessions(session.projectId),
+        keys.git(session.projectId),
+        keys.sessionDiff(session.id),
+        keys.publication(session.id),
+      ],
     })
     setPending(false)
     if (Exit.isFailure(exit)) setError(describeCause(exit.cause))

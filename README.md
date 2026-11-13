@@ -33,7 +33,7 @@ The daemon also prints which Claude account the agent will run as. The first vis
 Then:
 
 1. **Add a repository** from the project menu in the header. Your GitHub and GitLab repositories are listed once those accounts are connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub or GitLab URL or the path of a local git repository adds that instead.
-2. **Start a thread** from the home page. Pick the branch your checkout should be on (local or `origin/…`), the permissions, and write a first message. The thread works in your checkout; **Set up worktree** in its header moves it into a branch `humanity/<id>-<title>` and a worktree of its own.
+2. **Start a thread** from the home page. Pick the branch your checkout should be on (local or `origin/…`), the permissions, and write a first message. The thread works in your checkout; **Set up worktree** in its Source Control panel moves it into a branch `humanity/<id>-<title>` and a worktree of its own.
 3. **Work with the agent.** It runs on its own unless the thread is set to ask. In a thread that asks, a file change opens the review panel and a command shows a card above the message box; the session status turns to **waiting for you** until you decide.
 4. **Commit** the work from the **Changes** tab.
 

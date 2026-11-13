@@ -10,7 +10,6 @@ import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
 import { SessionPanel } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
-import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
 import { SourceControlButton } from "./SourceControlButton.tsx"
 import {
   approvalForToolUse,
@@ -101,14 +100,11 @@ export function Workspace({
         project={project}
         session={session}
         actions={
-          <>
-            <SetupWorktreeButton session={session} />
-            <SourceControlButton
-              session={session}
-              open={panelOpen}
-              onToggle={() => setPanelOpen((open) => !open)}
-            />
-          </>
+          <SourceControlButton
+            session={session}
+            open={panelOpen}
+            onToggle={() => setPanelOpen((open) => !open)}
+          />
         }
       />
       <div className="flex min-h-0 flex-1">

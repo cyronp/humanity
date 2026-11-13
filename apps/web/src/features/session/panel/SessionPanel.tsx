@@ -10,6 +10,7 @@ import { publicationAtom, refreshPullRequestAtom, sessionDiffAtom } from "../ato
 import { CommitTab } from "./CommitTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
 import { PullRequestTab } from "./PullRequestTab.tsx"
+import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
 
 type PanelTab = "diff" | "commit" | "pull-request"
 
@@ -25,7 +26,8 @@ const TABS: ReadonlyArray<{
 
 /**
  * The side panel of a session: what changed where it works, committing and
- * publishing it, and the pull request that follows, one tab each.
+ * publishing it, and the pull request that follows, one tab each. Its title
+ * bar offers a worktree of its own while the session works in the checkout.
  */
 export function SessionPanel({
   session,
@@ -99,15 +101,18 @@ export function SessionPanel({
             </TabsTrigger>
           ))}
         </TabsList>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={refresh}
-          aria-label="Refresh"
-          title="Refresh"
-        >
-          <RefreshCw />
-        </Button>
+        <div className="flex items-center gap-1">
+          <SetupWorktreeButton session={session} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={refresh}
+            aria-label="Refresh"
+            title="Refresh"
+          >
+            <RefreshCw />
+          </Button>
+        </div>
       </div>
       <TabsContent value="diff" asChild>
         <ScrollArea className="min-h-0 flex-1">
