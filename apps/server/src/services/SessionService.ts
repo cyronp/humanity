@@ -8,6 +8,7 @@ import {
   type AttachmentUpload,
   type Autonomy,
   ChangeId,
+  type ClaudeModel,
   DEFAULT_AUTONOMY,
   DEFAULT_CLAUDE_ACCOUNT,
   type ChatMessage,
@@ -17,6 +18,7 @@ import {
   type GitInvalidBranchName,
   type GitRefNotFound,
   type MessageContent,
+  type OpenedThread,
   type PendingConfirmation,
   type PlanUsage,
   PlanUsageUnavailable,
@@ -55,6 +57,8 @@ import { join } from "node:path"
 import {
   type AgentRun,
   AgentRunner,
+  OpenThreadFailed,
+  type OpenThreadRequest,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
@@ -103,6 +107,35 @@ export const slugify = (title: string): string =>
 /** `humanity/<short-id>-<slug>` */
 export const sessionBranchName = (sessionId: string, title: string): string =>
   `humanity/${sessionId.slice(0, 8)}-${slugify(title)}`
+
+/** `Claude Haiku 5.5`, `claude-haiku-5-5` and `haiku 5.5` → `haiku-5-5` */
+const modelKey = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/^claude-/, "")
+
+/**
+ * The model an agent asked for, as one of the values Claude Code offers the
+ * account: by that value, or else by its name and version however they are
+ * written (`Haiku 5.5` and `claude-haiku-5-5` are both the `haiku` alias when
+ * that is how Claude Code lists Haiku 5.5). `undefined` when nothing matches.
+ */
+export const matchModel = (
+  models: ReadonlyArray<ClaudeModel>,
+  requested: string,
+): string | undefined => {
+  const wanted = requested.trim().toLowerCase()
+  const exact = models.find((model) => model.value.toLowerCase() === wanted)
+  if (exact !== undefined) return exact.value
+  const key = modelKey(requested)
+  if (key === "") return undefined
+  return models.find(
+    (model) => modelKey(model.value) === key || modelKey(model.displayName) === key,
+  )?.value
+}
 
 export class SessionService extends Context.Service<
   SessionService,
@@ -635,6 +668,7 @@ export class SessionService extends Context.Service<
                   return mode
                 },
                 canUseTool: decide(session, state),
+                openThread: openThread(session),
               })
               .pipe(Scope.provide(scope))
             const ready: ActiveRun = Object.assign(state, { run })
@@ -852,6 +886,65 @@ export class SessionService extends Context.Service<
         if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
       })
+
+      /**
+       * The model of an `open_thread` call as the session stores it. Checked
+       * against what Claude Code offers the account, when that is known, so a
+       * name the agent made up comes back to it instead of failing the new thread.
+       */
+      const threadModel = (requested: string | undefined) =>
+        Effect.gen(function* () {
+          const wanted = requested?.trim().toLowerCase()
+          if (!wanted || wanted === "default") return undefined
+          const { models } = yield* accounts.status({ refresh: false })
+          if (models.length === 0) return requested?.trim()
+          const known = matchModel(models, wanted)
+          if (known !== undefined) return known === "default" ? undefined : known
+          return yield* new OpenThreadFailed({
+            reason: `No thread was opened: "${requested}" is not a model this account offers. Pass one of these values as \`model\`: ${models
+              .map((model) => `${model.value} (${model.displayName})`)
+              .join(", ")}.`,
+          })
+        })
+
+      /**
+       * Humanity's `open_thread` tool for the agent of `parent`: a new thread
+       * in the same project, started on the prompt. It asks before it acts
+       * like any thread, whatever the autonomy of the one that opened it.
+       */
+      const openThread =
+        (parent: Session) =>
+        (request: OpenThreadRequest): Effect.Effect<OpenedThread, OpenThreadFailed> =>
+          Effect.gen(function* () {
+            const prompt = request.prompt.trim()
+            if (prompt === "") {
+              return yield* new OpenThreadFailed({
+                reason: "No thread was opened: the prompt is empty.",
+              })
+            }
+            const model = yield* threadModel(request.model)
+            const opened = yield* create({
+              projectId: parent.projectId,
+              title: request.title,
+              prompt,
+              model,
+              effort: request.effort,
+            }).pipe(
+              Effect.mapError(
+                (error) =>
+                  new OpenThreadFailed({
+                    reason: `No thread was opened: ${error.message || error._tag}.`,
+                  }),
+              ),
+            )
+            return {
+              sessionId: opened.id,
+              projectId: opened.projectId,
+              title: opened.title,
+              model: opened.model,
+              effort: opened.effort,
+            }
+          })
 
       const setupWorktree = Effect.fn("SessionService.setupWorktree")(function* (
         sessionId: string,

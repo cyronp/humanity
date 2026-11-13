@@ -23,6 +23,15 @@ export const ToolPolicy = Schema.Struct({
 })
 export type ToolPolicy = typeof ToolPolicy.Type
 
+/** Humanity's own MCP server, running inside the daemon: the tools the app itself gives the agent. */
+export const HUMANITY_MCP_SERVER = "humanity"
+
+/** The server's tool that opens a new thread, by the short name the server registers. */
+export const OPEN_THREAD_TOOL_NAME = "open_thread"
+
+/** The same tool as the agent calls it and as the policy names it. */
+export const OPEN_THREAD_TOOL = `mcp__${HUMANITY_MCP_SERVER}__${OPEN_THREAD_TOOL_NAME}`
+
 /** Mode used for any tool that no rule matches. */
 export const FALLBACK_TOOL_MODE: ToolMode = "confirm"
 
@@ -44,6 +53,8 @@ export const DEFAULT_TOOL_POLICY: ToolPolicy = {
     { pattern: "WebFetch", mode: "confirm" },
     { pattern: "WebSearch", mode: "confirm" },
     { pattern: "mcp__*", mode: "confirm" },
+    // Humanity's own tool: the new thread is a thread like any other, under this same policy.
+    { pattern: OPEN_THREAD_TOOL, mode: "auto" },
   ],
 }
 

@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest"
 import {
   applyAutonomy,
   DEFAULT_TOOL_POLICY,
+  formatOpenedThread,
+  OPEN_THREAD_TOOL,
   parseMcpToolName,
+  parseThreadHref,
+  ProjectId,
   resolveToolMode,
+  SessionId,
   setToolRule,
+  threadHref,
   type ToolPolicy,
 } from "../src/index.ts"
 
@@ -80,6 +86,51 @@ describe("parseMcpToolName", () => {
   it("returns undefined for built-in tools", () => {
     expect(parseMcpToolName("Bash")).toBeUndefined()
     expect(parseMcpToolName("mcp__broken")).toBeUndefined()
+  })
+})
+
+describe("open_thread", () => {
+  it("runs without asking by default, unlike other MCP tools, and can be tightened", () => {
+    expect(OPEN_THREAD_TOOL).toBe("mcp__humanity__open_thread")
+    expect(resolveToolMode(DEFAULT_TOOL_POLICY, OPEN_THREAD_TOOL)).toBe("auto")
+    expect(resolveToolMode(DEFAULT_TOOL_POLICY, "mcp__humanity__other")).toBe("confirm")
+    const tightened = setToolRule(DEFAULT_TOOL_POLICY, OPEN_THREAD_TOOL, "confirm")
+    expect(resolveToolMode(tightened, OPEN_THREAD_TOOL)).toBe("confirm")
+  })
+
+  const thread = {
+    sessionId: SessionId.make("s1"),
+    projectId: ProjectId.make("p1"),
+    title: "Fix [login]",
+    model: "opus",
+    effort: "high" as const,
+  }
+
+  it("tells the agent what runs and gives it the link to put in its reply", () => {
+    expect(formatOpenedThread(thread)).toBe(
+      [
+        'Opened the thread "Fix [login]" on opus, high effort. It is working now.',
+        "When you tell the human about it, link to it inline in your sentence, with exactly this markdown: [Fix \\[login\\]](/projects/p1/sessions/s1)",
+        "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
+      ].join("\n"),
+    )
+    expect(formatOpenedThread({ ...thread, model: null, effort: null })).toContain(
+      "on the default model. It",
+    )
+  })
+
+  it("recognises a link to a thread, and no other link", () => {
+    const target = { projectId: "p1", sessionId: "s1" }
+    expect(parseThreadHref(threadHref("p1", "s1"))).toEqual(target)
+    expect(parseThreadHref("http://127.0.0.1:7420/projects/p1/sessions/s1/")).toEqual(target)
+    expect(parseThreadHref(threadHref("a b", "c/d"))).toEqual({
+      projectId: "a b",
+      sessionId: "c/d",
+    })
+    expect(parseThreadHref("/projects/p1")).toBeUndefined()
+    expect(parseThreadHref("/projects/p1/sessions/s1/extra")).toBeUndefined()
+    expect(parseThreadHref("https://example.com/docs")).toBeUndefined()
+    expect(parseThreadHref("/projects/%E0%A4%A/sessions/s1")).toBeUndefined()
   })
 })
 

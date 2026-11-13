@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest"
 import {
   type MessageContent,
+  OPEN_THREAD_TOOL,
+  threadHref,
   type PlanUsage,
   type SessionEvent,
   setToolRule,
@@ -13,9 +15,15 @@ import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
+import openThreadPolicy from "../src/db/migrations/0012_open_thread_policy.ts"
 import { PolicyService } from "../src/services/PolicyService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
-import { SessionService, sessionBranchName, slugify } from "../src/services/SessionService.ts"
+import {
+  matchModel,
+  SessionService,
+  sessionBranchName,
+  slugify,
+} from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
 import {
   addProject,
@@ -37,6 +45,38 @@ describe("session naming", () => {
       sessionBranchName("1234abcd-ffff-4000-8000-000000000000", "Add tests"),
       "humanity/1234abcd-add-tests",
     )
+  })
+})
+
+describe("matchModel", () => {
+  const model = (value: string, displayName: string) => ({ value, displayName, description: "" })
+  const models = [
+    model("default", "Default (recommended)"),
+    model("opus", "Opus 5.5"),
+    model("haiku", "Haiku 5.5"),
+    model("claude-haiku-4-5-20251001", "Haiku 4.5"),
+    model("claude-opus-5", "Opus 5"),
+  ]
+
+  it("takes a value as Claude Code lists it", () => {
+    assert.strictEqual(matchModel(models, "haiku"), "haiku")
+    assert.strictEqual(matchModel(models, " Opus "), "opus")
+    assert.strictEqual(matchModel(models, "claude-opus-5"), "claude-opus-5")
+    assert.strictEqual(matchModel(models, "default"), "default")
+  })
+
+  it("finds a model by its name and version, however they are written", () => {
+    assert.strictEqual(matchModel(models, "claude-haiku-5-5"), "haiku")
+    assert.strictEqual(matchModel(models, "Claude Haiku 5.5"), "haiku")
+    assert.strictEqual(matchModel(models, "opus 5.5"), "opus")
+    assert.strictEqual(matchModel(models, "Haiku 4.5"), "claude-haiku-4-5-20251001")
+    assert.strictEqual(matchModel(models, "opus-5"), "claude-opus-5")
+  })
+
+  it("matches nothing rather than a different version", () => {
+    assert.isUndefined(matchModel(models, "claude-haiku-6"))
+    assert.isUndefined(matchModel(models, "gpt-5"))
+    assert.isUndefined(matchModel(models, "  "))
   })
 })
 
@@ -793,6 +833,123 @@ describe("SessionService", () => {
         assert.isTrue(existsSync(join(repo, "README.md")))
         const rows = yield* sql`SELECT id FROM sessions`
         assert.strictEqual(rows.length, 0)
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("opens a thread the agent asked for, on its model and effort, without asking", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const script: FakeScript = (prompt) =>
+        prompt === "delegate"
+          ? [
+              {
+                tool: OPEN_THREAD_TOOL,
+                input: {
+                  prompt: "Fix the flaky login test",
+                  title: "Flaky login",
+                  model: "opus",
+                  effort: "high",
+                },
+              },
+              { text: "Opened." },
+            ]
+          : [{ text: "On it." }]
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+        yield* waitForStatus(parent.id, "idle")
+
+        const call = (yield* contents(parent.id)).toolCalls.find(
+          (toolCall) => toolCall.toolName === OPEN_THREAD_TOOL,
+        )
+        assert.strictEqual(call?.status, "succeeded")
+        assert.deepStrictEqual(yield* Ref.get(log.permissions), [])
+        const opened = (yield* sessions.list(project.id)).find(
+          (session) => session.id !== parent.id,
+        )
+        // The agent is handed the link it puts in its reply.
+        assert.include(
+          call?.output?.content,
+          `[Flaky login](${threadHref(project.id, opened?.id ?? "")})`,
+        )
+
+        const child = yield* waitForStatus(opened?.id ?? "", "idle")
+        assert.strictEqual(child.title, "Flaky login")
+        assert.strictEqual(child.worktreePath, project.localPath)
+        assert.strictEqual(child.autonomy, "ask")
+        const childRun = (yield* Ref.get(log.runs))[1]
+        assert.strictEqual(childRun?.model, "opus")
+        assert.strictEqual(childRun?.effort, "high")
+        assert.deepStrictEqual(yield* Ref.get(log.prompts), [
+          "delegate",
+          "Fix the flaky login test",
+        ])
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("tells the agent why no thread was opened", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const script: FakeScript = () => [{ tool: OPEN_THREAD_TOOL, input: { prompt: "   " } }]
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+        yield* waitForStatus(parent.id, "idle")
+
+        const call = (yield* contents(parent.id)).toolCalls[0]
+        assert.strictEqual(call?.status, "failed")
+        assert.match(call?.output?.content ?? "", /No thread was opened/)
+        assert.strictEqual((yield* sessions.list(project.id)).length, 1)
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("asks before opening a thread where the project's policy says so", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const script: FakeScript = () => [{ tool: OPEN_THREAD_TOOL, input: { prompt: "More" } }]
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const policies = yield* PolicyService
+        const project = yield* addProject(repo)
+        yield* policies.set(project.id, setToolRule(project.policy, OPEN_THREAD_TOOL, "confirm"))
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+
+        yield* waitForStatus(parent.id, "waiting_for_human")
+        assert.strictEqual((yield* sessions.list(project.id)).length, 1)
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("gives projects from before open_thread its rule, and keeps a rule they chose", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const policies = yield* PolicyService
+        const project = yield* addProject(repo)
+        const before = {
+          rules: project.policy.rules.filter((rule) => rule.pattern !== OPEN_THREAD_TOOL),
+        }
+
+        yield* policies.set(project.id, before)
+        yield* openThreadPolicy
+        assert.deepStrictEqual(yield* policies.get(project.id), {
+          rules: [...before.rules, { pattern: OPEN_THREAD_TOOL, mode: "auto" }],
+        })
+
+        const chosen = setToolRule(before, OPEN_THREAD_TOOL, "deny")
+        yield* policies.set(project.id, chosen)
+        yield* openThreadPolicy
+        assert.deepStrictEqual(yield* policies.get(project.id), chosen)
       }).pipe(Effect.provide(services(home, () => [])))
     }),
   )

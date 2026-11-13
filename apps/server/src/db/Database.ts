@@ -13,6 +13,7 @@ import preferences from "./migrations/0008_preferences.ts"
 import sessionImport from "./migrations/0009_session_import.ts"
 import confirmationAnswers from "./migrations/0010_confirmation_answers.ts"
 import claudeAccounts from "./migrations/0011_claude_accounts.ts"
+import openThreadPolicy from "./migrations/0012_open_thread_policy.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
@@ -27,6 +28,7 @@ const migrations = {
   "0009_session_import": sessionImport,
   "0010_confirmation_answers": confirmationAnswers,
   "0011_claude_accounts": claudeAccounts,
+  "0012_open_thread_policy": openThreadPolicy,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

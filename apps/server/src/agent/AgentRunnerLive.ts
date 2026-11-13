@@ -6,7 +6,7 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import type { ContextUsage, ReasoningEffort } from "@humanity/contracts"
+import { type ContextUsage, HUMANITY_MCP_SERVER, type ReasoningEffort } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
@@ -17,6 +17,7 @@ import {
   AgentRunner,
   type AgentUserMessage,
 } from "./AgentRunner.ts"
+import { humanityMcpServer } from "./humanityTools.ts"
 
 /** An async iterable fed from outside: the SDK's streaming input. */
 class Inbox<T> implements AsyncIterable<T> {
@@ -57,7 +58,8 @@ class Inbox<T> implements AsyncIterable<T> {
 
 const SYSTEM_PROMPT_APPEND = `You are running inside Humanity, a human-in-the-loop coding app.
 Every file change you propose is reviewed by a human, hunk by hunk, before it reaches disk; shell commands and MCP tools need the human's explicit approval.
-When a tool call is denied or only partly applied, the message you receive is the human's decision and feedback. Follow it, and re-read files before editing them again.`
+When a tool call is denied or only partly applied, the message you receive is the human's decision and feedback. Follow it, and re-read files before editing them again.
+When the human asks you to open or start a new thread, use the mcp__humanity__open_thread tool. Do not use it on your own initiative.`
 
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause)
@@ -169,6 +171,13 @@ export const AgentRunnerLive = Layer.effect(
             }),
           )
 
+        // Humanity's own tools, under a name no server the human added can take.
+        const mcpServers = (extensions: AgentExtensions): Record<string, McpServerConfig> => ({
+          ...sdkMcpServers(extensions),
+          [HUMANITY_MCP_SERVER]: humanityTools,
+        })
+        const humanityTools = humanityMcpServer(options, runPromise)
+
         const handle = query({
           prompt: inbox,
           options: {
@@ -187,7 +196,7 @@ export const AgentRunnerLive = Layer.effect(
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
             // Humanity's own servers and skills. Their MCP tools still go through the policy.
-            mcpServers: sdkMcpServers(options.extensions),
+            mcpServers: mcpServers(options.extensions),
             plugins: options.extensions.plugins.map((path) => ({
               type: "local" as const,
               path,
@@ -241,7 +250,7 @@ export const AgentRunnerLive = Layer.effect(
           applyExtensions: (extensions: AgentExtensions) =>
             Effect.tryPromise({
               try: async () => {
-                await handle.setMcpServers(sdkMcpServers(extensions))
+                await handle.setMcpServers(mcpServers(extensions))
                 // Re-reads the plugin folders, so added, edited and removed skills show.
                 await handle.reloadPlugins()
               },

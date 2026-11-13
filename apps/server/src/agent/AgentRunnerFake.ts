@@ -1,4 +1,4 @@
-import type { ReasoningEffort } from "@humanity/contracts"
+import { formatOpenedThread, OPEN_THREAD_TOOL, type ReasoningEffort } from "@humanity/contracts"
 import { simulateEdit, simulateWrite } from "@humanity/diff"
 import { Context, Effect, Fiber, Layer, Option, Queue, Ref, Stream } from "effect"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -8,6 +8,7 @@ import {
   AgentRunner,
   type AgentExtensions,
   type AgentUserMessage,
+  type OpenThreadRequest,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
@@ -186,9 +187,20 @@ export const AgentRunnerFake = (script: FakeScript) =>
                 ])
                 const decision = yield* decide(step, toolUseId)
                 const result =
-                  decision.behavior === "allow"
-                    ? executeTool(options.cwd, step)
-                    : { content: decision.message, isError: true }
+                  decision.behavior !== "allow"
+                    ? { content: decision.message, isError: true }
+                    : step.tool === OPEN_THREAD_TOOL
+                      ? // Humanity's own tool really runs, like Edit and Write.
+                        yield* options.openThread(step.input as unknown as OpenThreadRequest).pipe(
+                          Effect.match({
+                            onSuccess: (thread) => ({
+                              content: formatOpenedThread(thread),
+                              isError: false,
+                            }),
+                            onFailure: (error) => ({ content: error.reason, isError: true }),
+                          }),
+                        )
+                      : executeTool(options.cwd, step)
                 yield* emit({
                   type: "user",
                   message: {
