@@ -2,6 +2,7 @@ import { type ProjectId, SessionId } from "@humanity/contracts"
 import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
+import { pageVisible, whileVisible } from "@/lib/visibility"
 import { reduceSessionEvent, type SessionView } from "./state.ts"
 
 export const sessionsAtom = Atom.family((projectId: ProjectId) =>
@@ -84,16 +85,6 @@ export const publicationAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** Whether this page is on screen, now and whenever that changes. */
-const pageVisible = Stream.suspend(() =>
-  Stream.concat(
-    Stream.sync(() => document.visibilityState === "visible"),
-    Stream.fromEventListener(document, "visibilitychange").pipe(
-      Stream.map(() => document.visibilityState === "visible"),
-    ),
-  ),
-).pipe(Stream.changes)
-
 /** Names the feed of one session on one branch; a new branch is a new feed. */
 export const feedKey = (sessionId: SessionId, branch: string | null): string =>
   `${sessionId}\n${branch ?? ""}`
@@ -106,16 +97,11 @@ export const feedKey = (sessionId: SessionId, branch: string | null): string =>
 export const pullRequestFeedAtom = Atom.family((key: string) => {
   const sessionId = SessionId.make(key.split("\n")[0] ?? "")
   return HumanityClient.runtime.atom(
-    pageVisible.pipe(
-      Stream.switchMap((visible) =>
-        visible
-          ? Stream.unwrap(
-              HumanityClient.use((client) =>
-                Effect.succeed(client("PullRequests.watch", { sessionId })),
-              ),
-            ).pipe(Stream.retry(Schedule.spaced("5 seconds")))
-          : Stream.never,
-      ),
+    whileVisible(
+      pageVisible,
+      Stream.unwrap(
+        HumanityClient.use((client) => Effect.succeed(client("PullRequests.watch", { sessionId }))),
+      ).pipe(Stream.retry(Schedule.spaced("5 seconds"))),
     ),
   )
 })
