@@ -20,6 +20,7 @@ import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
+import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
@@ -36,13 +37,14 @@ import { ProjectService } from "./services/ProjectService.ts"
 import { PullRequestService } from "./services/PullRequestService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
+import { UpdateService } from "./services/UpdateService.ts"
 
 /**
  * Domain services, built on whatever config, database, platform, agent runner,
  * Claude Code runtime and Claude Code history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
-  Layer.merge(HistoryImport.layer, PullRequestService.layer).pipe(
+  Layer.mergeAll(HistoryImport.layer, PullRequestService.layer, UpdateService.layer).pipe(
     Layer.provideMerge(ForgeSync.layer),
     Layer.provideMerge(SessionService.layer),
     Layer.provideMerge(ApprovalService.layer),
@@ -67,6 +69,7 @@ export const RpcHandlers = Layer.mergeAll(
   PreferencesHandlers,
   ExtensionsHandlers,
   PullRequestsHandlers,
+  UpdatesHandlers,
 )
 
 /**

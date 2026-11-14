@@ -299,3 +299,13 @@ export class ExtensionNotFound extends Schema.TaggedError<ExtensionNotFound>()(
     return `The ${what} "${this.name}" does not exist any more. Reload the settings.`
   }
 }
+
+/** Updates are installed by the desktop app, and none is connected to this daemon. */
+export class UpdatesUnavailable extends Schema.TaggedError<UpdatesUnavailable>()(
+  "UpdatesUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
