@@ -37,3 +37,15 @@ All three must pass; CI runs them with `npm run build` on Node 22 and 24. Run `n
 - Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat(web): ...`, `fix(server): ...`, `chore: ...`).
 - Keep a pull request focused on one change, and explain why it is needed.
 - For anything larger than a small fix, open an issue first so we can agree on the approach.
+
+## Releases
+
+The app's version is the one in `apps/desktop/package.json`, in [SemVer](https://semver.org/).
+
+- **Stable:** set the version (e.g. `0.1.0`), merge that to `main`, then tag the commit and push the tag:
+  ```sh
+  git tag v0.1.0
+  git push origin v0.1.0
+  ```
+  The Release workflow checks the tag matches the version, builds the Windows installer and publishes the release with generated notes. A tag with a pre-release part (`v0.2.0-beta.1`) is published as a pre-release.
+- **Nightly:** nothing to do. The Nightly workflow builds `main` every night it changed (or when run by hand) as version `<version>-nightly.<yyyymmdd>` (the next minor once `v<version>` is tagged), and replaces the single `nightly` pre-release.

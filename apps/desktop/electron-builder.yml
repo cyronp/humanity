@@ -19,3 +19,6 @@ extraResources:
 npmRebuild: false
 win:
   target: nsis
+nsis:
+  # No spaces: GitHub turns them into dots when the installer is attached to a release.
+  artifactName: ${productName}-Setup-${version}.${ext}
