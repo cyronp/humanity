@@ -2,12 +2,22 @@ import { NodeServices } from "@effect/platform-node"
 import { TOKEN_PARAM } from "@humanity/contracts"
 import { Deferred, Effect, Layer, ManagedRuntime } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { app, BrowserWindow, dialog, shell, type WebContents } from "electron"
+import {
+  app,
+  BrowserWindow,
+  type BrowserWindowConstructorOptions,
+  dialog,
+  nativeTheme,
+  shell,
+  type WebContents,
+} from "electron"
 import { mkdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
+import { join } from "node:path"
 import { resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
+import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
 
 const config = resolveDesktopConfig({
   env: process.env,
@@ -32,6 +42,17 @@ const SPLASH = `data:text/html;charset=utf-8,${encodeURIComponent(
   <body>Starting Humanity…</body>`,
 )}`
 
+/**
+ * No title bar of the system's: the web app's own top bar takes its place, and
+ * the window buttons are drawn over its right end. macOS keeps its title bar
+ * for now, where the buttons would land on the sidebar's left end instead.
+ */
+const ownsTitleBar = process.platform !== "darwin"
+const frame = (): BrowserWindowConstructorOptions =>
+  ownsTitleBar
+    ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlay(nativeTheme.shouldUseDarkColors) }
+    : {}
+
 let window: BrowserWindow | undefined
 let daemonReady = false
 
@@ -49,7 +70,16 @@ const createWindow = () => {
     minHeight: 560,
     title: "Humanity",
     autoHideMenuBar: true,
+    ...frame(),
+    // A packaged app takes its icon from the executable.
+    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  })
+  const created = window
+  // The page says which theme it is in; the window buttons follow it.
+  created.webContents.on("did-change-theme-color", (_event, color) => {
+    const dark = isDarkColor(color)
+    if (ownsTitleBar && dark !== undefined) created.setTitleBarOverlay(titleBarOverlay(dark))
   })
   window.on("closed", () => {
     window = undefined
@@ -73,6 +103,8 @@ const confine = (contents: WebContents) => {
       ? {
           action: "allow",
           overrideBrowserWindowOptions: {
+            // A tab the page opened is not the app: it gets an ordinary window.
+            titleBarStyle: "default",
             autoHideMenuBar: true,
             webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
           },

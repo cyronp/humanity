@@ -42,6 +42,8 @@ function ProgressiveBlur({ className }: { readonly className?: string }) {
  * `<AppHeader>`; pages scrolling under it leave `pt-14` of room at their top.
  * A page with a full-height panel on its right gives the header that panel's
  * width with `useAppHeaderInsetEnd`, and the header ends where it begins.
+ * In the desktop app it is also the window's title bar: it moves the window,
+ * and keeps clear of the window buttons when it reaches the right edge.
  */
 export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
@@ -55,7 +57,12 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
         style={{ right: insetEnd }}
       >
         <ProgressiveBlur className="absolute inset-x-0 top-0 h-20" />
-        <div className="pointer-events-auto relative flex h-12 items-center gap-2 px-3">
+        <div
+          className={cn(
+            "titlebar pointer-events-auto relative flex h-12 items-center gap-2 px-3",
+            insetEnd === 0 && "pr-[calc(var(--titlebar-controls)+--spacing(3))]",
+          )}
+        >
           {/* The toggle lives in the sidebar; it shows here only when the sidebar is hidden. */}
           {(state === "collapsed" || isMobile) && <SidebarTrigger />}
           <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />

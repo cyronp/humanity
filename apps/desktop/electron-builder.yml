@@ -2,6 +2,7 @@ appId: dev.humanity.desktop
 productName: Humanity
 directories:
   output: release
+icon: build/icon.png
 # The main process is one bundled file: nothing from node_modules goes into the app.
 files:
   - dist/main.cjs

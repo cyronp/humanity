@@ -19,9 +19,18 @@ const storedTheme = (): Theme | undefined => {
 
 const currentTheme = (): Theme => storedTheme() ?? systemTheme()
 
-/** shadcn and Shiki both key off the `dark` class on <html>. */
+/** The page's background, as `--chat` in each theme. */
+export const THEME_COLORS: Readonly<Record<Theme, string>> = { light: "#fafafa", dark: "#171717" }
+
+/**
+ * shadcn and Shiki both key off the `dark` class on <html>. The theme colour
+ * tells whatever frames the page, like the desktop app with its window
+ * buttons, which side of the contrast it is on.
+ */
 export const applyTheme = (): void => {
-  document.documentElement.classList.toggle("dark", currentTheme() === "dark")
+  const theme = currentTheme()
+  document.documentElement.classList.toggle("dark", theme === "dark")
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme])
 }
 
 const subscribe = (listener: () => void) => {

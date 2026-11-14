@@ -9,6 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev:desktop": "node scripts/dev.mjs",
+    "icon": "node scripts/icon.mjs",
     "start": "electron .",
     "package": "electron-builder --config electron-builder.yml",
     "lint": "eslint .",
