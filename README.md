@@ -87,8 +87,10 @@ npm start          # serves the web app and the API on http://127.0.0.1:7420
 The same daemon and web app also run as a desktop app (Electron), with nothing duplicated: the app starts the daemon as a child process and shows the web app it serves in a window.
 
 ```sh
-npm run package:desktop   # builds apps/desktop/release/Humanity Setup <version>.exe
+npm run package:desktop   # builds apps/desktop/release/Humanity-Setup-<version>.exe
 ```
+
+Ready-made installers are on the [releases page](https://github.com/cyronp/humanity/releases): one **Nightly** pre-release, rebuilt from `main` every night it changes, and **stable** releases (`v0.1.0`, …) once there are any. A nightly installs over the stable app, and may upgrade the database so that an older stable release cannot read it: back up `~/.humanity/humanity.db` before trying one.
 
 The installer is built for the machine it is built on (Windows for now) and is not code-signed, so Windows SmartScreen warns before it runs. The app's daemon listens on `127.0.0.1:7421` (`HUMANITY_DESKTOP_PORT`), apart from the `7420` of `npm start`, and shares the data directory below. Closing the app stops its daemon.
 

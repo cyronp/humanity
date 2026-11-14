@@ -1,0 +1,100 @@
+# Builds main every night it changed and publishes it as the one `nightly`
+# pre-release, replacing the previous one. Its version leads to the next
+# stable one: 0.1.0-nightly.<yyyymmdd> until v0.1.0 is tagged, then 0.2.0-nightly.…
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    name: Publish nightly
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Skip when main has not changed
+        id: changed
+        shell: bash
+        run: |
+          head=$(git rev-parse HEAD)
+          # The last line is the commit the tag points to, even for an annotated tag.
+          last=$(git ls-remote --tags origin nightly | tail -n1 | cut -f1)
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ "$last" = "$head" ]; then
+            echo "The nightly already is $head."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.build == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - if: steps.changed.outputs.build == 'true'
+        run: npm ci
+      - if: steps.changed.outputs.build == 'true'
+        run: npm run lint
+      - if: steps.changed.outputs.build == 'true'
+        run: npm run typecheck
+      - if: steps.changed.outputs.build == 'true'
+        run: npm run test
+      - name: Set the nightly version
+        id: version
+        if: steps.changed.outputs.build == 'true'
+        shell: bash
+        run: |
+          date=$(date -u +%Y%m%d)
+          current=$(node -p "require('./apps/desktop/package.json').version")
+          # Once v<version> is tagged, that version is out and nightlies lead to the next minor.
+          released=false
+          if [ -n "$(git ls-remote --tags origin "v$current")" ]; then released=true; fi
+          version=$(node -p "
+            const [core] = '$current'.split('-')
+            let [major, minor, patch] = core.split('.').map(Number)
+            if ($released) { minor += 1; patch = 0 }
+            major + '.' + minor + '.' + patch + '-nightly.$date'
+          ")
+          # After npm ci, which wants package.json and the lockfile to agree.
+          npm pkg set version="$version" --workspace @humanity/desktop
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - if: steps.changed.outputs.build == 'true'
+        run: npm run package:desktop
+      - name: Replace the nightly release
+        if: steps.changed.outputs.build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.changed.outputs.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DATE: ${{ steps.version.outputs.date }}
+        run: |
+          if gh release view nightly > /dev/null 2>&1; then
+            gh release delete nightly --cleanup-tag --yes
+          fi
+          # A tag left without its release would pin the new one to an old commit.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" > /dev/null 2>&1 || true
+          cat > notes.md <<EOF
+          Automatic build of \`main\` at $SHA ($VERSION).
+
+          Nightlies are untested previews. Installing one replaces the stable app, and it may
+          upgrade \`~/.humanity/humanity.db\` in a way an older stable release cannot read:
+          back up that file before you try a nightly if you plan to go back.
+          EOF
+          gh release create nightly apps/desktop/release/*.exe \
+            --prerelease \
+            --target "$SHA" \
+            --title "Humanity Nightly $DATE (${SHA::7})" \
+            --notes-file notes.md
