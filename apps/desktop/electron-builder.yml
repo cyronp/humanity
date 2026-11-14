@@ -22,3 +22,9 @@ win:
 nsis:
   # No spaces: GitHub turns them into dots when the installer is attached to a release.
   artifactName: ${productName}-Setup-${version}.${ext}
+# Writes latest.yml beside the installer and app-update.yml into the app, which
+# electron-updater reads. Nothing is uploaded from here: the release workflows
+# attach the files, and the app picks the stable or nightly folder at runtime.
+publish:
+  provider: generic
+  url: https://github.com/cyronp/humanity/releases/latest/download
