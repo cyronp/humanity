@@ -12,7 +12,7 @@ export const splashUrl = (mark: string, dark: boolean): string =>
 <style>
   html, body { height: 100%; margin: 0; }
   body { display: grid; place-items: center; background: ${backdropColor(dark)}; app-region: drag; }
-  svg { width: 96px; height: 96px; }
+  svg { width: 64px; height: 64px; }
 </style>
 <body>${mark}</body>`,
   )}`
