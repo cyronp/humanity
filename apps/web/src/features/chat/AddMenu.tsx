@@ -70,7 +70,7 @@ export function AddMenu({
 
   const manage = () => {
     setOpen(false)
-    openSettings("extensions")
+    openSettings("mcp")
   }
 
   return (

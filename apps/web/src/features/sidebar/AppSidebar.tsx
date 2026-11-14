@@ -5,7 +5,6 @@ import { AsyncResult } from "effect/reactivity"
 import { Search, Settings, SquarePen } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
-import { ThemeToggle } from "@/components/ThemeToggle"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -123,7 +122,6 @@ export function AppSidebar() {
           </TooltipTrigger>
           <TooltipContent>Settings</TooltipContent>
         </Tooltip>
-        <ThemeToggle />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

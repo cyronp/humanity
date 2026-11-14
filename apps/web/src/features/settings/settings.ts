@@ -6,8 +6,28 @@ import { useSyncExternalStore } from "react"
  * and from anywhere that points at a setting.
  */
 
-export const SETTINGS_SECTIONS = ["providers", "repositories", "projects", "extensions"] as const
+export const SETTINGS_SECTIONS = [
+  "general",
+  "providers",
+  "mcp",
+  "skills",
+  "projects",
+  "repositories",
+  "updates",
+  "about",
+] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
+
+/** The sections as the list shows them, a line between each group: General, the named ones, then the app itself. */
+export const SECTION_GROUPS: ReadonlyArray<{
+  readonly label?: string
+  readonly sections: ReadonlyArray<SettingsSection>
+}> = [
+  { sections: ["general"] },
+  { label: "Agent", sections: ["providers", "mcp", "skills"] },
+  { label: "Source Control", sections: ["projects", "repositories"] },
+  { sections: ["updates", "about"] },
+]
 
 export const SECTION_INFO: Record<
   SettingsSection,
@@ -17,6 +37,10 @@ export const SECTION_INFO: Record<
     readonly keywords: ReadonlyArray<string>
   }
 > = {
+  general: {
+    label: "General",
+    keywords: ["theme", "appearance", "dark mode", "light mode", "system"],
+  },
   providers: {
     label: "Providers",
     keywords: ["accounts", "claude code", "login", "sign in", "subscription", "plan", "api key"],
@@ -29,17 +53,21 @@ export const SECTION_INFO: Record<
     label: "Projects",
     keywords: ["permissions", "autonomy", "auto mode", "new threads", "remove", "folder"],
   },
-  extensions: {
-    label: "MCP & Skills",
-    keywords: [
-      "mcp",
-      "servers",
-      "skills",
-      "slash commands",
-      "plugins",
-      "integrations",
-      "extensions",
-    ],
+  mcp: {
+    label: "MCP",
+    keywords: ["model context protocol", "servers", "tools", "integrations", "extensions"],
+  },
+  skills: {
+    label: "Skills",
+    keywords: ["slash commands", "instructions", "know-how", "extensions"],
+  },
+  updates: {
+    label: "Updates",
+    keywords: ["version", "upgrade", "nightly", "stable", "release", "download", "install"],
+  },
+  about: {
+    label: "About",
+    keywords: ["version", "release", "onboarding", "help", "how humanity works", "tour"],
   },
 }
 
@@ -60,7 +88,7 @@ interface SettingsState {
   readonly items: Partial<Record<SettingsSection, string>>
 }
 
-let state: SettingsState = { open: false, section: "providers", items: {} }
+let state: SettingsState = { open: false, section: "general", items: {} }
 const listeners = new Set<() => void>()
 
 const setState = (next: SettingsState): void => {

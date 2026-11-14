@@ -1,5 +1,5 @@
 import { cn } from "cn"
-import type { ReactNode } from "react"
+import type { ComponentType, ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 
 /**
@@ -105,6 +105,87 @@ export function SettingsSplit({
         </ul>
       </nav>
       <SettingsPane>{children}</SettingsPane>
+    </div>
+  )
+}
+
+/** One setting: its name and what it does on the left, the control on the right. */
+export function SettingsRow({
+  label,
+  labelId,
+  detail,
+  children,
+}: {
+  readonly label: string
+  /** Lets the control name itself by the label, with `aria-labelledby`. */
+  readonly labelId?: string
+  readonly detail: ReactNode
+  readonly children: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 py-4">
+      <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
+        <span id={labelId} className="text-sm font-medium">
+          {label}
+        </span>
+        <span className="text-sm text-muted-foreground">{detail}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** A list of `SettingsRow`s, a line between each. */
+export function SettingsRows({ children }: { readonly children: ReactNode }) {
+  return <div className="flex flex-col divide-y border-y">{children}</div>
+}
+
+/** A choice of a few options side by side, like a theme. One is always picked. */
+export function SettingsChoice<Value extends string>({
+  labelledBy,
+  options,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  /** The id of the `SettingsRow` label that names the choice. */
+  readonly labelledBy: string
+  readonly options: ReadonlyArray<{
+    readonly value: Value
+    readonly label: string
+    readonly icon?: ComponentType<{ readonly className?: string; readonly "aria-hidden"?: "true" }>
+  }>
+  readonly value: Value
+  readonly onChange: (value: Value) => void
+  readonly disabled?: boolean
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      aria-disabled={disabled || undefined}
+      className="flex shrink-0 gap-1 rounded-lg border p-0.5"
+    >
+      {options.map(({ value: option, label, icon: Icon }) => {
+        const checked = option === value
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            disabled={disabled}
+            onClick={() => onChange(option)}
+            className={cn(
+              "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50",
+              checked && "bg-muted font-medium text-foreground",
+            )}
+          >
+            {Icon !== undefined && <Icon className="size-4" aria-hidden="true" />}
+            {label}
+          </button>
+        )
+      })}
     </div>
   )
 }
