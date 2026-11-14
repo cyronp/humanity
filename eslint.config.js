@@ -7,6 +7,7 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/release/**",
       "**/node_modules/**",
       "**/.turbo/**",
       "apps/web/src/routeTree.gen.ts",
@@ -30,7 +31,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/server/**/*.ts", "packages/**/*.ts", "**/*.config.{js,ts}"],
+    files: [
+      "apps/server/**/*.ts",
+      "apps/desktop/**/*.{ts,mjs}",
+      "packages/**/*.ts",
+      "**/*.config.{js,ts}",
+    ],
     languageOptions: { globals: globals.node },
   },
   {

@@ -15,7 +15,9 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
+    "dev:desktop": "turbo run dev dev:desktop",
     "build": "turbo run build",
+    "package:desktop": "turbo run build --filter=@humanity/desktop && npm run package --workspace @humanity/desktop",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

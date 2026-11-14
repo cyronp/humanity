@@ -15,12 +15,15 @@ Run everything from the repository root:
 - `npm run typecheck` — TypeScript across the workspace
 - `npm run test` — Vitest across the workspace
 - `npm run build` — production build
+- `npm run dev:desktop` — daemon and web app, in the desktop app's window
+- `npm run package:desktop` — build the desktop installer for this machine
 
 Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 
 ## Repository map
 
 - `apps/server` — Effect 4 daemon (RPC, Agent SDK bridge, Git, GitHub, SQLite)
+- `apps/desktop` — Electron shell: starts the daemon as a child process and shows the web app; no logic of its own
 - `apps/web` — Vite + React 19 + TanStack Router + shadcn/ui
 - `packages/contracts` — shared RpcGroups and Schemas
 - `packages/diff` — pure hunk logic on top of jsdiff (no I/O)

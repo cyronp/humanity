@@ -1,0 +1,31 @@
+{
+  "name": "@humanity/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Humanity as a desktop app: a window around the daemon and the web app.",
+  "author": "Humanity contributors",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev:desktop": "node scripts/dev.mjs",
+    "start": "electron .",
+    "package": "electron-builder --config electron-builder.yml",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "4.1.2",
+    "@effect/vitest": "4.1.2",
+    "@humanity/contracts": "0.1.0",
+    "@humanity/server": "0.1.0",
+    "@humanity/web": "0.1.0",
+    "@types/node": "24.19.2",
+    "effect": "4.1.2",
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "vitest": "5.1.0"
+  }
+}

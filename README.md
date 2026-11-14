@@ -72,14 +72,25 @@ npm run build
 npm start          # serves the web app and the API on http://127.0.0.1:7420
 ```
 
-| Variable            | Default       | Purpose                                               |
-| ------------------- | ------------- | ----------------------------------------------------- |
-| `ANTHROPIC_API_KEY` | (none)        | Optional. Overrides your Claude login                 |
-| `HUMANITY_HOME`     | `~/.humanity` | Data directory                                        |
-| `HUMANITY_PORT`     | `7420`        | Daemon port. It always binds to `127.0.0.1`           |
-| `GITHUB_TOKEN`      | (none)        | Used when no token is saved and `gh` is not logged in |
-| `GITLAB_TOKEN`      | (none)        | The same for GitLab and `glab`                        |
-| `GITLAB_HOST`       | `gitlab.com`  | The GitLab instance `GITLAB_TOKEN` is for             |
+| Variable                | Default       | Purpose                                               |
+| ----------------------- | ------------- | ----------------------------------------------------- |
+| `ANTHROPIC_API_KEY`     | (none)        | Optional. Overrides your Claude login                 |
+| `HUMANITY_HOME`         | `~/.humanity` | Data directory                                        |
+| `HUMANITY_PORT`         | `7420`        | Daemon port. It always binds to `127.0.0.1`           |
+| `HUMANITY_DESKTOP_PORT` | `7421`        | Port of the desktop app's daemon                      |
+| `GITHUB_TOKEN`          | (none)        | Used when no token is saved and `gh` is not logged in |
+| `GITLAB_TOKEN`          | (none)        | The same for GitLab and `glab`                        |
+| `GITLAB_HOST`           | `gitlab.com`  | The GitLab instance `GITLAB_TOKEN` is for             |
+
+### Desktop app
+
+The same daemon and web app also run as a desktop app (Electron), with nothing duplicated: the app starts the daemon as a child process and shows the web app it serves in a window.
+
+```sh
+npm run package:desktop   # builds apps/desktop/release/Humanity Setup <version>.exe
+```
+
+The installer is built for the machine it is built on (Windows for now) and is not code-signed, so Windows SmartScreen warns before it runs. The app's daemon listens on `127.0.0.1:7421` (`HUMANITY_DESKTOP_PORT`), apart from the `7420` of `npm start`, and shares the data directory below. Closing the app stops its daemon.
 
 Everything Humanity writes lives in the data directory:
 
@@ -90,6 +101,7 @@ Everything Humanity writes lives in the data directory:
 ├─ github-token                      a GitHub token saved from the UI, only while one is saved
 ├─ gitlab-token, gitlab-host         the same for GitLab, with the instance the token is for
 ├─ worktrees/<project>/<session>/    one git worktree per session
+├─ desktop/                          the desktop app's browser profile
 └─ repos/<owner>/<repo>/             clones made from GitHub
    repos/<host>/<group>/<repo>/      clones made from GitLab
 ```
@@ -102,6 +114,7 @@ API keys and tokens are never stored in the database. The GitHub or GitLab token
 
 ```sh
 npm run dev         # daemon (tsx watch) + Vite dev server
+npm run dev:desktop # the same, in the desktop app's window
 npm run lint        # ESLint
 npm run typecheck   # TypeScript
 npm run test        # Vitest; never calls the Anthropic or GitHub APIs
@@ -112,6 +125,7 @@ npm run format      # Prettier
 | Path                 | What it is                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------- |
 | `apps/server`        | The Effect 4 daemon: RPC over WebSocket, the Agent SDK bridge, approvals, git, GitHub, SQLite |
+| `apps/desktop`       | The Electron shell: starts the daemon, opens the web app in a window, builds the installer    |
 | `apps/web`           | Vite + React 19 + TanStack Router + shadcn/ui, data through Effect Atom (`AtomRpc`)           |
 | `packages/contracts` | Schemas and RPC groups shared by both                                                         |
 | `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, parsing, tool simulation                         |

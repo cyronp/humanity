@@ -28,3 +28,6 @@ export const RPC_PATH = "/rpc"
 export const TOKEN_PARAM = "token"
 
 export const DEFAULT_DAEMON_PORT = 7420
+
+/** The port of the daemon the desktop app starts: its own, so it never collides with `npm run dev` or `npm start`. */
+export const DEFAULT_DESKTOP_PORT = 7421
