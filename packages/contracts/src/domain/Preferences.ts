@@ -38,3 +38,12 @@ export const togglePin = <Key extends keyof PinnedDefaults>(
   key: Key,
   value: NonNullable<PinnedDefaults[Key]>,
 ): PinnedDefaults => ({ ...pinned, [key]: pinned[key] === value ? null : value })
+
+/** What Humanity brings in from the agent CLIs the human already uses. */
+export const HistoryPreferences = Schema.Struct({
+  /** Conversations held in the Claude Code CLI become threads of their project, and keep following it. */
+  importFromCli: Schema.Boolean,
+})
+export type HistoryPreferences = typeof HistoryPreferences.Type
+
+export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = { importFromCli: true }

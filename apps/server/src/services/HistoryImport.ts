@@ -12,6 +12,7 @@ import { ClaudeHistory, type ClaudeConversation } from "../claude/ClaudeHistory.
 import { importTranscript } from "../claude/transcript.ts"
 import { type ImportIndex, SessionRepo } from "../db/SessionRepo.ts"
 import { ApprovalService } from "./ApprovalService.ts"
+import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
@@ -28,7 +29,8 @@ const iso = (ms: number) => new Date(ms).toISOString()
  * in the project's checkout becomes an ended thread that can be read, and
  * continued from where the CLI left it. A thread is imported once per Claude
  * Code session, and refreshed while its transcript keeps changing, until the
- * human continues it in Humanity.
+ * human continues it in Humanity. Nothing is imported while the human has the
+ * import turned off; the threads already imported stay.
  */
 export class HistoryImport extends Context.Service<
   HistoryImport,
@@ -39,6 +41,8 @@ export class HistoryImport extends Context.Service<
     readonly syncAll: Effect.Effect<void>
     /** Starts `syncProject` without waiting for it, as when a project was just added. */
     readonly syncInBackground: (projectId: string) => Effect.Effect<void>
+    /** Starts `syncAll` without waiting for it, as when the import was just turned on. */
+    readonly syncAllInBackground: Effect.Effect<void>
   }
 >()("humanity/HistoryImport") {
   static readonly layer = Layer.effect(
@@ -49,6 +53,7 @@ export class HistoryImport extends Context.Service<
       const projects = yield* ProjectService
       const events = yield* SessionEvents
       const approvals = yield* ApprovalService
+      const preferences = yield* PreferencesService
       const scope = yield* Effect.scope
       // Two syncs of one project at once would import the same conversation twice.
       const lock = yield* Semaphore.make(1)
@@ -122,6 +127,7 @@ export class HistoryImport extends Context.Service<
       const syncProject = (projectId: string) =>
         lock.withPermits(1)(
           Effect.gen(function* () {
+            if (!(yield* preferences.history).importFromCli) return 0
             const project = yield* projects.get(projectId)
             const conversations = yield* history.list(project.localPath)
             const index = yield* repo.importIndex
@@ -162,7 +168,9 @@ export class HistoryImport extends Context.Service<
       const syncInBackground = (projectId: string) =>
         syncProject(projectId).pipe(Effect.ignore, Effect.forkIn(scope), Effect.asVoid)
 
-      return HistoryImport.of({ syncProject, syncAll, syncInBackground })
+      const syncAllInBackground = syncAll.pipe(Effect.forkIn(scope), Effect.asVoid)
+
+      return HistoryImport.of({ syncProject, syncAll, syncInBackground, syncAllInBackground })
     }),
   )
 

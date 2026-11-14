@@ -3,6 +3,7 @@ import { Effect, Ref } from "effect"
 import { FakeAgentLog } from "../src/agent/AgentRunnerFake.ts"
 import type { TestConversation } from "../src/claude/ClaudeHistory.ts"
 import { HistoryImport } from "../src/services/HistoryImport.ts"
+import { PreferencesService } from "../src/services/PreferencesService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { addProject, contents, services, setup, tags, waitForStatus } from "./sessionHelpers.ts"
 
@@ -172,6 +173,35 @@ describe("HistoryImport", () => {
         const refused = yield* Effect.flip(sessions.sendMessage(own.id, "again"))
         assert.strictEqual(refused._tag, "SessionEnded")
       }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("imports nothing while the human has the import turned off", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const history = { [repo]: [conversation("cli-1", 1000, ["one"])] }
+
+      yield* Effect.gen(function* () {
+        const imports = yield* HistoryImport
+        const preferences = yield* PreferencesService
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+
+        yield* preferences.setHistory({ importFromCli: false })
+        assert.strictEqual(yield* imports.syncProject(project.id), 0)
+        assert.strictEqual((yield* sessions.list(project.id)).length, 0)
+
+        yield* preferences.setHistory({ importFromCli: true })
+        assert.strictEqual(yield* imports.syncProject(project.id), 1)
+      }).pipe(
+        Effect.provide(
+          services(
+            home,
+            () => [],
+            () => history,
+          ),
+        ),
+      )
     }),
   )
 })
