@@ -67,3 +67,27 @@ export const cloneAtom = HumanityClient.runtime.fn((target: CloneTarget) =>
     Stream.scan((): CloneProgress => ({ target, lines: [], project: undefined }), reduceClone),
   ),
 )
+
+/**
+ * Clones one repository without its progress, for adding several in a row.
+ * Resolves to the new project. Kept alive, so a clone goes on when the page
+ * that started it is left.
+ */
+export const cloneProjectAtom = HumanityClient.runtime
+  .fn((target: CloneTarget) =>
+    HumanityClient.use((client) =>
+      Stream.runCollect(
+        asOne(
+          target.provider === "github"
+            ? client("Projects.cloneFromGitHub", { fullName: target.fullName })
+            : client("Projects.cloneFromGitLab", { fullPath: target.fullPath }),
+        ),
+      ).pipe(
+        Effect.map((events) => {
+          for (const event of events) if (event._tag === "Cloned") return event.project
+          return undefined
+        }),
+      ),
+    ),
+  )
+  .pipe(Atom.keepAlive)

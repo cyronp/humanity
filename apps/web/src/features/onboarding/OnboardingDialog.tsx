@@ -1,89 +1,75 @@
-import { useNavigate } from "@tanstack/react-router"
-import { ArrowLeft, ArrowRight, FolderPlus } from "lucide-react"
-import type { ComponentType } from "react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
+import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
-import { openAddRepository } from "@/features/projects/addRepository"
+import { Confetti, prefersReducedMotion } from "./Confetti.tsx"
 import { ConnectStep } from "./ConnectStep.tsx"
-import {
-  closeOnboarding,
-  neighbourStep,
-  type OnboardingStep,
-  openOnboarding,
-  useOnboarding,
-} from "./onboarding.ts"
+import { closeOnboarding, neighbourStep, openOnboarding, useOnboarding } from "./onboarding.ts"
 import { OnboardingStepper } from "./OnboardingStepper.tsx"
 import { ReadyStep } from "./ReadyStep.tsx"
 import { RepositoriesStep } from "./RepositoriesStep.tsx"
 import { WelcomeStep } from "./WelcomeStep.tsx"
 
-const STEP_VIEWS: Record<OnboardingStep, ComponentType> = {
-  welcome: WelcomeStep,
-  connect: ConnectStep,
-  repositories: RepositoriesStep,
-  ready: ReadyStep,
-}
-
 /** The setup guide, floating over the app. Closing it any way counts as having seen it. */
 export function OnboardingDialog() {
   const { open, step } = useOnboarding()
-  const navigate = useNavigate()
+  const [celebrating, setCelebrating] = useState(false)
+  const stopCelebrating = useCallback(() => setCelebrating(false), [])
   const previous = neighbourStep(step, -1)
   const next = neighbourStep(step, 1)
-  const StepView = STEP_VIEWS[step]
+  // The first and last steps carry their own button, in the middle of the page.
+  const middle = previous !== undefined && next !== undefined
 
   const finish = () => {
+    if (!prefersReducedMotion()) setCelebrating(true)
     closeOnboarding()
-    void navigate({ to: "/" })
-    openAddRepository()
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) closeOnboarding()
-      }}
-    >
-      <DialogContent className="flex h-[90svh] flex-col gap-0 p-0 sm:max-w-none md:h-[70svh] md:w-[70vw]">
-        <DialogTitle className="sr-only">Welcome to Humanity</DialogTitle>
-        <DialogDescription className="sr-only">
-          A short guide to how Humanity works and how to connect an account and your repositories.
-        </DialogDescription>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) closeOnboarding()
+        }}
+      >
+        <DialogContent className="flex h-[44rem] max-h-[90svh] flex-col gap-0 p-0 sm:max-w-4xl">
+          <DialogTitle className="sr-only">Welcome to Humanity</DialogTitle>
+          <DialogDescription className="sr-only">
+            Connect your agent and your repositories, then start building.
+          </DialogDescription>
 
-        {/* Right padding leaves room for the close button. */}
-        <div className="shrink-0 border-b py-4 pr-14 pl-4 sm:pl-6">
-          <OnboardingStepper current={step} onSelect={openOnboarding} />
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-          <div className="mx-auto w-full max-w-4xl">
-            <StepView />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-10 pb-4">
+            <div className="m-auto flex w-full max-w-2xl justify-center">
+              {step === "welcome" && <WelcomeStep onStart={() => openOnboarding("connect")} />}
+              {step === "connect" && <ConnectStep />}
+              {step === "repositories" && <RepositoriesStep />}
+              {step === "ready" && <ReadyStep onStart={finish} />}
+            </div>
           </div>
-        </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-3 border-t px-4 py-3 sm:px-6">
-          {previous === undefined ? (
-            <span />
-          ) : (
-            <Button variant="ghost" onClick={() => openOnboarding(previous)}>
-              <ArrowLeft />
-              Back
-            </Button>
-          )}
-          {next === undefined ? (
-            <Button onClick={finish}>
-              <FolderPlus />
-              Add your first repository
-            </Button>
-          ) : (
-            <Button onClick={() => openOnboarding(next)}>
-              {step === "welcome" ? "Get started" : "Continue"}
-              <ArrowRight />
-            </Button>
-          )}
-        </footer>
-      </DialogContent>
-    </Dialog>
+          <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center px-4 py-1">
+            <div>
+              {previous !== undefined && (
+                <Button variant="ghost" onClick={() => openOnboarding(previous)}>
+                  <ArrowLeft />
+                  Back
+                </Button>
+              )}
+            </div>
+            <OnboardingStepper current={step} onSelect={openOnboarding} />
+            <div className="flex justify-end">
+              {middle && (
+                <Button onClick={() => openOnboarding(next)}>
+                  Continue
+                  <ArrowRight />
+                </Button>
+              )}
+            </div>
+          </footer>
+        </DialogContent>
+      </Dialog>
+      {celebrating && <Confetti onDone={stopCelebrating} />}
+    </>
   )
 }

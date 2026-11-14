@@ -1,5 +1,7 @@
 import {
+  DEFAULT_HISTORY_PREFERENCES,
   DEFAULT_UPDATE_PREFERENCES,
+  HistoryPreferences,
   NO_PINS,
   PinnedDefaults,
   UpdatePreferences,
@@ -9,11 +11,13 @@ import { SqlClient, SqlSchema } from "effect/sql"
 
 const PINNED_DEFAULTS_KEY = "pinned_defaults"
 const UPDATES_KEY = "updates"
+const HISTORY_KEY = "history"
 
 const PreferenceRow = Schema.Struct({ value_json: Schema.String })
 
 const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
 const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
+const HistoryPreferencesJson = Schema.fromJsonString(HistoryPreferences)
 
 /** The human's own choices that belong to no project or session. */
 export class PreferencesService extends Context.Service<
@@ -25,6 +29,9 @@ export class PreferencesService extends Context.Service<
     /** How the desktop app looks for updates; `DEFAULT_UPDATE_PREFERENCES` until the human changes it. */
     readonly updates: Effect.Effect<UpdatePreferences>
     readonly setUpdates: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
+    /** What is imported from the agent CLIs; `DEFAULT_HISTORY_PREFERENCES` until the human changes it. */
+    readonly history: Effect.Effect<HistoryPreferences>
+    readonly setHistory: (preferences: HistoryPreferences) => Effect.Effect<HistoryPreferences>
   }
 >()("humanity/PreferencesService") {
   static readonly layer = Layer.effect(
@@ -91,7 +98,40 @@ export class PreferencesService extends Context.Service<
         return preferences
       })
 
-      return PreferencesService.of({ pinnedDefaults, setPinnedDefaults, updates, setUpdates })
+      const history = Effect.gen(function* () {
+        const row = yield* selectByKey(HISTORY_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_HISTORY_PREFERENCES
+        return yield* Schema.decodeEffect(HistoryPreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable history preferences", error.message),
+              DEFAULT_HISTORY_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.history"))
+
+      const setHistory = Effect.fn("PreferencesService.setHistory")(function* (
+        preferences: HistoryPreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(HistoryPreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${HISTORY_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
+      return PreferencesService.of({
+        pinnedDefaults,
+        setPinnedDefaults,
+        updates,
+        setUpdates,
+        history,
+        setHistory,
+      })
     }),
   )
 }
