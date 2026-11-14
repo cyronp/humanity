@@ -33,11 +33,11 @@ export const GitLabHost = Schema.String.check(Schema.isPattern(GITLAB_HOST_PATTE
  * `undefined` when it is not a host at all.
  */
 export const normalizeGitLabHost = (input: string): string | undefined => {
-  const host = input
-    .trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/+$/, "")
-    .toLowerCase()
+  const trimmed = input.trim().replace(/^https?:\/\//i, "")
+  // Not a regex: `/+$` retries from every slash, quadratic on a long run of them.
+  let end = trimmed.length
+  while (end > 0 && trimmed[end - 1] === "/") end--
+  const host = trimmed.slice(0, end).toLowerCase()
   return GITLAB_HOST_PATTERN.test(host) ? host : undefined
 }
 
