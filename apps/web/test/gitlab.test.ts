@@ -54,6 +54,14 @@ describe("normalizeGitLabHost", () => {
     expect(normalizeGitLabHost("gitlab.com?x=1")).toBeUndefined()
     expect(normalizeGitLabHost("git lab.com")).toBeUndefined()
   })
+
+  it("drops any number of trailing slashes, and stays fast on a wall of them", () => {
+    expect(normalizeGitLabHost("https://gitlab.com///")).toBe("gitlab.com")
+    expect(normalizeGitLabHost("///")).toBeUndefined()
+    const started = performance.now()
+    expect(normalizeGitLabHost(`${"/".repeat(200_000)}x`)).toBeUndefined()
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
 })
 
 describe("parseGitLabInput", () => {
