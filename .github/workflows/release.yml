@@ -43,7 +43,10 @@ jobs:
         run: |
           flags=()
           case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
+          # latest.yml tells installed apps which version to update to; the
+          # blockmap lets them download only what changed.
           gh release create "$GITHUB_REF_NAME" apps/desktop/release/*.exe \
+            apps/desktop/release/*.blockmap apps/desktop/release/latest.yml \
             --verify-tag \
             --title "Humanity $GITHUB_REF_NAME" \
             --generate-notes \

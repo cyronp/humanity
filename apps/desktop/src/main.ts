@@ -17,9 +17,11 @@ import { join } from "node:path"
 import brandMark from "../../web/public/favicon.svg"
 import { resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
+import { makeElectronUpdater } from "./electronUpdater.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
 import { backdropColor, splashUrl } from "./splash.ts"
 import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
+import { connectUpdates } from "./updatesClient.ts"
 
 const config = resolveDesktopConfig({
   env: process.env,
@@ -59,10 +61,18 @@ const frame = (): BrowserWindowConstructorOptions =>
 let window: BrowserWindow | undefined
 let daemonReady = false
 
+const readToken = () => readFileSync(config.authTokenPath, "utf8").trim()
+
 const loadApp = () => {
   if (window === undefined) return
-  const token = readFileSync(config.authTokenPath, "utf8").trim()
-  void window.loadURL(appUrl(config.origin, TOKEN_PARAM, token))
+  void window.loadURL(appUrl(config.origin, TOKEN_PARAM, readToken()))
+}
+
+/** Why this app cannot update itself, or `undefined` when it can. */
+const updatesUnsupported = (): string | undefined => {
+  if (!app.isPackaged) return "This is a development build. Updates install in the packaged app."
+  if (process.platform !== "win32") return "Updates are not available on this system yet."
+  return undefined
 }
 
 const createWindow = () => {
@@ -127,6 +137,30 @@ const start = () => {
   const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer))
   const stop = Effect.runSync(Deferred.make<void>())
 
+  let updatesStarted = false
+  /** Talks to the daemon about updates once it is up; reconnects by itself after a restart. */
+  const startUpdates = () => {
+    if (updatesStarted) return
+    updatesStarted = true
+    const unsupported = updatesUnsupported()
+    runtime.runFork(
+      connectUpdates({
+        origin: config.origin,
+        readToken,
+        version: app.getVersion(),
+        unsupported: unsupported ?? "",
+        updater:
+          unsupported === undefined
+            ? makeElectronUpdater({
+                cacheBase: join(config.home, "updates"),
+                // The daemon stops its agents and closes the database before the installer runs.
+                beforeInstall: stopDaemon,
+              })
+            : undefined,
+      }),
+    )
+  }
+
   /** Resolves once the daemon is gone: with what it last printed if it never came up. */
   const supervision = runtime.runPromise(
     supervise({
@@ -139,6 +173,7 @@ const start = () => {
         if (daemonReady) return
         daemonReady = true
         loadApp()
+        startUpdates()
       }),
     }).pipe(
       Effect.match({
@@ -159,12 +194,16 @@ const start = () => {
     app.quit()
   })
 
+  const stopDaemon = async () => {
+    Effect.runSync(Deferred.succeed(stop, undefined))
+    await supervision
+  }
+
   // Quitting waits for the daemon, so it can stop its agents and close the database.
   app.on("before-quit", (event) => {
     if (finished) return
     event.preventDefault()
-    Effect.runSync(Deferred.succeed(stop, undefined))
-    void supervision.then(() => app.quit())
+    void stopDaemon().then(() => app.quit())
   })
 
   app.on("web-contents-created", (_event, contents) => confine(contents))

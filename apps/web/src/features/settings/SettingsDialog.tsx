@@ -1,18 +1,22 @@
 import { cn } from "cn"
 import {
   Blocks,
-  CircleHelp,
   FolderCog,
   FolderGit2,
-  type LucideIcon,
+  Info,
   Plug,
+  RefreshCw,
   Search,
+  SlidersHorizontal,
 } from "lucide-react"
-import { type ComponentType, useState } from "react"
+import { type ComponentType, Fragment, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { openOnboarding } from "@/features/onboarding/onboarding"
-import { ExtensionsSettings } from "./ExtensionsSettings.tsx"
+import { Separator } from "@/components/ui/separator"
+import { McpIcon } from "@/features/extensions/McpIcon"
+import { AboutSettings } from "./AboutSettings.tsx"
+import { McpSettings, SkillSettings } from "./ExtensionsSettings.tsx"
+import { GeneralSettings } from "./GeneralSettings.tsx"
 import { ProjectsSettings } from "./ProjectsSettings.tsx"
 import { ProvidersSettings } from "./ProvidersSettings.tsx"
 import { RepositoriesSettings } from "./RepositoriesSettings.tsx"
@@ -20,19 +24,28 @@ import {
   closeSettings,
   matchSections,
   openSettings,
+  SECTION_GROUPS,
   SECTION_INFO,
   type SettingsSection,
   useSettings,
 } from "./settings.ts"
+import { UpdatesSettings } from "./UpdatesSettings.tsx"
 
 const SECTION_VIEWS: Record<
   SettingsSection,
-  { readonly icon: LucideIcon; readonly View: ComponentType }
+  {
+    readonly icon: ComponentType<{ readonly className?: string; readonly "aria-hidden"?: "true" }>
+    readonly View: ComponentType
+  }
 > = {
+  general: { icon: SlidersHorizontal, View: GeneralSettings },
   providers: { icon: Plug, View: ProvidersSettings },
   repositories: { icon: FolderGit2, View: RepositoriesSettings },
   projects: { icon: FolderCog, View: ProjectsSettings },
-  extensions: { icon: Blocks, View: ExtensionsSettings },
+  mcp: { icon: McpIcon, View: McpSettings },
+  skills: { icon: Blocks, View: SkillSettings },
+  updates: { icon: RefreshCw, View: UpdatesSettings },
+  about: { icon: Info, View: AboutSettings },
 }
 
 export function SettingsDialog() {
@@ -64,8 +77,9 @@ export function SettingsDialog() {
         <div className="shrink-0 border-b px-4 py-3">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Providers and their accounts, where repositories come from, each project's rules, and
-            the MCP servers and skills the agent can use.
+            The app's theme, providers and their accounts, where repositories come from, each
+            project's rules, the MCP servers and skills the agent can use, and the app's version and
+            updates.
           </DialogDescription>
         </div>
 
@@ -86,17 +100,6 @@ export function SettingsDialog() {
               />
             </div>
             <SectionList query={query} current={section} />
-            <button
-              type="button"
-              onClick={() => {
-                close()
-                openOnboarding()
-              }}
-              className="flex h-8 shrink-0 items-center gap-2 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:mt-auto"
-            >
-              <CircleHelp className="size-4 shrink-0" aria-hidden="true" />
-              How Humanity works
-            </button>
           </nav>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -115,32 +118,55 @@ function SectionList({
   readonly query: string
   readonly current: SettingsSection
 }) {
-  const sections = matchSections(query)
-  if (sections.length === 0) {
+  const matched = matchSections(query)
+  const groups = SECTION_GROUPS.map(({ label, sections }) => ({
+    label,
+    sections: sections.filter((id) => matched.includes(id)),
+  })).filter((group) => group.sections.length > 0)
+  if (groups.length === 0) {
     return <p className="min-w-0 flex-1 px-2 text-xs text-muted-foreground">No settings match.</p>
   }
   return (
     <ul className="flex min-w-0 flex-1 gap-1 overflow-x-auto md:flex-none md:flex-col md:overflow-visible">
-      {sections.map((id) => {
-        const { icon: Icon } = SECTION_VIEWS[id]
-        const active = id === current
-        return (
-          <li key={id}>
-            <button
-              type="button"
-              onClick={() => openSettings(id)}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex h-8 w-full items-center gap-3 rounded-lg px-2 text-sm font-medium whitespace-nowrap transition-colors hover:bg-muted",
-                active && "bg-muted",
-              )}
+      {groups.map(({ label, sections }, index) => (
+        <Fragment key={sections[0]}>
+          {index > 0 && (
+            // A row on narrow screens, a column from md up: the line turns with it.
+            <li role="none" className="flex shrink-0 items-center px-1 md:px-2 md:py-1">
+              <Separator className="h-5 w-px md:h-px md:w-full" />
+            </li>
+          )}
+          {label !== undefined && (
+            // The name of the group, on wide screens; a narrow row has only the line.
+            <li
+              role="none"
+              className="hidden px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground md:block"
             >
-              <Icon className="size-4 shrink-0" aria-hidden="true" />
-              {SECTION_INFO[id].label}
-            </button>
-          </li>
-        )
-      })}
+              {label}
+            </li>
+          )}
+          {sections.map((id) => {
+            const { icon: Icon } = SECTION_VIEWS[id]
+            const active = id === current
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => openSettings(id)}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex h-8 w-full items-center gap-3 rounded-lg px-2 text-sm font-medium whitespace-nowrap transition-colors hover:bg-muted",
+                    active && "bg-muted",
+                  )}
+                >
+                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  {SECTION_INFO[id].label}
+                </button>
+              </li>
+            )
+          })}
+        </Fragment>
+      ))}
     </ul>
   )
 }

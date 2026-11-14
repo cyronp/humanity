@@ -93,7 +93,10 @@ jobs:
           upgrade \`~/.humanity/humanity.db\` in a way an older stable release cannot read:
           back up that file before you try a nightly if you plan to go back.
           EOF
+          # latest.yml tells installed nightlies which version to update to; the
+          # blockmap lets them download only what changed.
           gh release create nightly apps/desktop/release/*.exe \
+            apps/desktop/release/*.blockmap apps/desktop/release/latest.yml \
             --prerelease \
             --target "$SHA" \
             --title "Humanity Nightly $DATE (${SHA::7})" \

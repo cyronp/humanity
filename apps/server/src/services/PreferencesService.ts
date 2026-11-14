@@ -1,12 +1,19 @@
-import { NO_PINS, PinnedDefaults } from "@humanity/contracts"
+import {
+  DEFAULT_UPDATE_PREFERENCES,
+  NO_PINS,
+  PinnedDefaults,
+  UpdatePreferences,
+} from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 const PINNED_DEFAULTS_KEY = "pinned_defaults"
+const UPDATES_KEY = "updates"
 
 const PreferenceRow = Schema.Struct({ value_json: Schema.String })
 
 const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
+const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
 
 /** The human's own choices that belong to no project or session. */
 export class PreferencesService extends Context.Service<
@@ -15,6 +22,9 @@ export class PreferencesService extends Context.Service<
     /** The settings pinned as the start of every new thread; nothing pinned until the human pins. */
     readonly pinnedDefaults: Effect.Effect<PinnedDefaults>
     readonly setPinnedDefaults: (pinned: PinnedDefaults) => Effect.Effect<PinnedDefaults>
+    /** How the desktop app looks for updates; `DEFAULT_UPDATE_PREFERENCES` until the human changes it. */
+    readonly updates: Effect.Effect<UpdatePreferences>
+    readonly setUpdates: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
   }
 >()("humanity/PreferencesService") {
   static readonly layer = Layer.effect(
@@ -55,7 +65,33 @@ export class PreferencesService extends Context.Service<
         return pinned
       })
 
-      return PreferencesService.of({ pinnedDefaults, setPinnedDefaults })
+      const updates = Effect.gen(function* () {
+        const row = yield* selectByKey(UPDATES_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_UPDATE_PREFERENCES
+        return yield* Schema.decodeEffect(UpdatePreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable update preferences", error.message),
+              DEFAULT_UPDATE_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.updates"))
+
+      const setUpdates = Effect.fn("PreferencesService.setUpdates")(function* (
+        preferences: UpdatePreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(UpdatePreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${UPDATES_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
+      return PreferencesService.of({ pinnedDefaults, setPinnedDefaults, updates, setUpdates })
     }),
   )
 }

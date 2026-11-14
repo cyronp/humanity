@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
@@ -8,7 +9,13 @@ const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 const daemonPort = process.env["HUMANITY_PORT"] ?? "7420"
 
+// The app's version is the desktop app's: the one releases are tagged with.
+const { version } = JSON.parse(readFileSync(fromHere("../desktop/package.json"), "utf8")) as {
+  readonly version: string
+}
+
 export default defineConfig({
+  define: { __HUMANITY_VERSION__: JSON.stringify(version) },
   plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
   resolve: {
     alias: {

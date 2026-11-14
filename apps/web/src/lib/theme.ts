@@ -47,17 +47,22 @@ const subscribe = (listener: () => void) => {
   }
 }
 
-export const useTheme = (): readonly [Theme, () => void] => {
-  const theme = useSyncExternalStore(subscribe, currentTheme)
-  const toggle = useCallback(() => {
-    const next: Theme = currentTheme() === "dark" ? "light" : "dark"
+/** A theme the human picked, or `system` to follow the operating system's. */
+export type ThemeChoice = Theme | "system"
+
+const currentChoice = (): ThemeChoice => storedTheme() ?? "system"
+
+export const useThemeChoice = (): readonly [ThemeChoice, (next: ThemeChoice) => void] => {
+  const choice = useSyncExternalStore(subscribe, currentChoice)
+  const choose = useCallback((next: ThemeChoice) => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, next)
+      if (next === "system") window.localStorage.removeItem(STORAGE_KEY)
+      else window.localStorage.setItem(STORAGE_KEY, next)
     } catch {
       // Without storage the choice lasts until reload.
     }
     applyTheme()
     listeners.forEach((listener) => listener())
   }, [])
-  return [theme, toggle]
+  return [choice, choose]
 }
