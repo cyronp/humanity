@@ -21,9 +21,9 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]
 
 export const STEP_LABELS: Record<OnboardingStep, string> = {
   welcome: "Welcome",
-  connect: "Connect",
-  repositories: "Repositories",
-  ready: "Ready",
+  connect: "Connect your agent",
+  repositories: "Source Control",
+  ready: "All set",
 }
 
 export const parseStep = (value: unknown): OnboardingStep | undefined =>

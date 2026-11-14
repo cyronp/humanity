@@ -80,10 +80,10 @@ export function AddAccount({
               Add a {providerName} account
             </DialogTitle>
             <DialogDescription>
-              For a second login, like work next to personal.
+              For a second login,
               {source === "new"
-                ? ` It gets its own ${providerName} login on this computer; you sign in to it in the next step.`
-                : ` It uses a ${providerName} folder you already signed in with, so there is nothing more to do.`}
+                ? ` it gets its own ${providerName} login on this computer; you sign in to it in the next step.`
+                : ` it uses a ${providerName} folder you already signed in with, so there is nothing more to do.`}
             </DialogDescription>
           </DialogHeader>
           <Tabs

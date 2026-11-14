@@ -1,8 +1,7 @@
 import { cn } from "cn"
-import { Check } from "lucide-react"
 import { ONBOARDING_STEPS, type OnboardingStep, STEP_LABELS, stepIndex } from "./onboarding.ts"
 
-/** Where you are in the guide. Every step stays reachable; nothing is gated. */
+/** Where you are in the guide, as short lines. Every step stays reachable; nothing is gated. */
 export function OnboardingStepper({
   current,
   onSelect,
@@ -13,34 +12,26 @@ export function OnboardingStepper({
   const currentIndex = stepIndex(current)
   return (
     <nav aria-label="Setup steps">
-      <ol className="flex items-center gap-2">
-        {ONBOARDING_STEPS.map((step, index) => {
-          const done = index < currentIndex
-          const active = index === currentIndex
-          return (
-            <li key={step} className="flex min-w-0 flex-1 flex-col gap-2">
+      <ol className="flex items-center justify-center">
+        {ONBOARDING_STEPS.map((step, index) => (
+          <li key={step}>
+            <button
+              type="button"
+              onClick={() => onSelect(step)}
+              aria-label={STEP_LABELS[step]}
+              aria-current={index === currentIndex ? "step" : undefined}
+              className="group flex h-12 w-9 items-center justify-center rounded-md outline-none sm:w-12 focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {/* The line is thin; the button around it is the 48px target a finger needs. */}
               <span
                 className={cn(
-                  "h-1 rounded-full bg-muted transition-colors",
-                  (done || active) && "bg-primary",
+                  "h-1 w-7 rounded-full bg-muted-foreground/30 sm:w-9 transition-colors group-hover:bg-muted-foreground/60",
+                  index === currentIndex && "bg-blue-500 group-hover:bg-blue-500",
                 )}
-                aria-hidden="true"
               />
-              <button
-                type="button"
-                onClick={() => onSelect(step)}
-                aria-current={active ? "step" : undefined}
-                className={cn(
-                  "flex items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground",
-                  active && "font-medium text-foreground",
-                )}
-              >
-                {done && <Check className="size-3" aria-hidden="true" />}
-                <span className="truncate">{STEP_LABELS[step]}</span>
-              </button>
-            </li>
-          )
-        })}
+            </button>
+          </li>
+        ))}
       </ol>
     </nav>
   )
