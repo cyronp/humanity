@@ -11,12 +11,14 @@ import {
   shell,
   type WebContents,
 } from "electron"
-import { mkdirSync, readFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import brandMark from "../../web/public/favicon.svg"
 import { resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
+import { backdropColor, splashUrl } from "./splash.ts"
 import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
 
 const config = resolveDesktopConfig({
@@ -32,15 +34,18 @@ const config = resolveDesktopConfig({
 mkdirSync(config.userDataDir, { recursive: true })
 app.setPath("userData", config.userDataDir)
 
-const SPLASH = `data:text/html;charset=utf-8,${encodeURIComponent(
-  `<!doctype html><meta charset="utf-8"><title>Humanity</title>
-  <style>
-    html { color-scheme: light dark; }
-    body { margin: 0; height: 100vh; display: grid; place-items: center;
-      font: 14px system-ui, sans-serif; opacity: 0.7; }
-  </style>
-  <body>Starting Humanity…</body>`,
-)}`
+/**
+ * The theme the page was last in, kept next to Chromium's profile: the window
+ * opens in it, before any page can say. The system's theme until one has.
+ */
+const themePath = join(config.userDataDir, "theme")
+let dark = nativeTheme.shouldUseDarkColors
+try {
+  const remembered = readFileSync(themePath, "utf8").trim()
+  if (remembered === "dark" || remembered === "light") dark = remembered === "dark"
+} catch {
+  // First start: nothing remembered yet.
+}
 
 /**
  * No title bar of the system's: the web app's own top bar takes its place, and
@@ -49,9 +54,7 @@ const SPLASH = `data:text/html;charset=utf-8,${encodeURIComponent(
  */
 const ownsTitleBar = process.platform !== "darwin"
 const frame = (): BrowserWindowConstructorOptions =>
-  ownsTitleBar
-    ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlay(nativeTheme.shouldUseDarkColors) }
-    : {}
+  ownsTitleBar ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlay(dark) } : {}
 
 let window: BrowserWindow | undefined
 let daemonReady = false
@@ -70,6 +73,8 @@ const createWindow = () => {
     minHeight: 560,
     title: "Humanity",
     autoHideMenuBar: true,
+    // Shown until a page paints, and between the pages of the loading sequence.
+    backgroundColor: backdropColor(dark),
     ...frame(),
     // A packaged app takes its icon from the executable.
     ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
@@ -78,14 +83,19 @@ const createWindow = () => {
   const created = window
   // The page says which theme it is in; the window buttons follow it.
   created.webContents.on("did-change-theme-color", (_event, color) => {
-    const dark = isDarkColor(color)
-    if (ownsTitleBar && dark !== undefined) created.setTitleBarOverlay(titleBarOverlay(dark))
+    const pageDark = isDarkColor(color)
+    if (pageDark === undefined) return
+    if (ownsTitleBar) created.setTitleBarOverlay(titleBarOverlay(pageDark))
+    if (pageDark === dark) return
+    dark = pageDark
+    created.setBackgroundColor(backdropColor(dark))
+    writeFileSync(themePath, dark ? "dark" : "light")
   })
   window.on("closed", () => {
     window = undefined
   })
   if (daemonReady) loadApp()
-  else void window.loadURL(SPLASH)
+  else void window.loadURL(splashUrl(brandMark, dark))
 }
 
 /** The page only ever shows Humanity; every other link opens in the human's browser. */

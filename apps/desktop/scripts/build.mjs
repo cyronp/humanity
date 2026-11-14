@@ -28,6 +28,8 @@ await build({
   outfile: join(desktop, "dist", "main.cjs"),
   format: "cjs",
   external: ["electron"],
+  // The brand mark on the loading screen is the web app's favicon, inlined.
+  loader: { ".svg": "text" },
 })
 
 if (!process.argv.includes("--main-only")) {
