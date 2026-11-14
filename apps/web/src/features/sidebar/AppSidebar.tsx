@@ -55,7 +55,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="mt-1 mb-4 flex items-center gap-2 pl-2">
+        <div className="titlebar mt-1 mb-4 flex items-center gap-2 pl-2">
           <Link to="/" onClick={close} className="flex min-w-0 flex-1 items-center gap-2">
             <BrandMark className="h-6 w-auto shrink-0" />
             <span className="font-semibold tracking-tight">Humanity</span>

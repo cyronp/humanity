@@ -31,3 +31,28 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+
+  desktop:
+    name: Desktop installer (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run package:desktop
+      # The daemon cannot start without the Agent SDK beside it.
+      - name: Check the packaged daemon
+        shell: bash
+        run: |
+          test -f apps/desktop/release/win-unpacked/resources/daemon/main.mjs
+          test -f apps/desktop/release/win-unpacked/resources/daemon/web/index.html
+          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs
+          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: humanity-desktop-windows
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error

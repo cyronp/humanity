@@ -5,3 +5,4 @@ package-lock.json
 apps/web/src/routeTree.gen.ts
 docs/spec.md
 CLAUDE.MD
+release

@@ -169,6 +169,31 @@
 }
 
 /*
+ * The desktop app has no title bar of its own: its window buttons are drawn
+ * over the top right corner of the page, and the bars along the top move the
+ * window. `--titlebar-controls` is the width those buttons cover, and zero in
+ * a browser, where none of this has any effect.
+ */
+:root {
+  --titlebar-controls: max(
+    0px,
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
+  );
+}
+.titlebar {
+  app-region: drag;
+}
+/* What can be clicked in a bar, and anything floating over one, is not a handle. */
+.titlebar :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]),
+[role="dialog"],
+[role="menu"],
+[role="listbox"],
+[data-radix-popper-content-wrapper],
+[data-slot$="-overlay"] {
+  app-region: no-drag;
+}
+
+/*
  * Shiki emits both theme colours on every token as CSS variables; the same
  * `dark` class that drives shadcn picks which one applies, in diffs and chat.
  */

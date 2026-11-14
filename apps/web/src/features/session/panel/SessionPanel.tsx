@@ -73,8 +73,11 @@ export function SessionPanel({
       onValueChange={(value) => setTab(value as PanelTab)}
       className="flex min-h-0 flex-1 flex-col gap-0"
     >
-      {/* The panel's own title bar, level with the app header beside it. */}
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3">
+      {/*
+        The panel's own title bar, level with the app header beside it. It ends
+        under the desktop app's window buttons, so it leaves them room.
+      */}
+      <div className="titlebar flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3 pr-[calc(var(--titlebar-controls)+--spacing(3))]">
         {/* The open tab is underlined on the bar's bottom edge, as in VS Code. */}
         <TabsList
           aria-label="Panel"

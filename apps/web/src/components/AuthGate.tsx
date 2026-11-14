@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react"
+import { BrandMark } from "@/components/BrandMark"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,9 +33,7 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
   }
 
   if (state === "ok") return children
-  if (state === "checking") {
-    return <CenteredNote>Connecting to the Humanity daemon…</CenteredNote>
-  }
+  if (state === "checking") return <Loading />
   return (
     <main className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-lg">
@@ -92,10 +91,18 @@ function TokenForm({ onSubmit }: { readonly onSubmit: () => void }) {
   )
 }
 
-function CenteredNote({ children }: { readonly children: ReactNode }) {
+/**
+ * The brand mark alone, centered on the sidebar's colour: the same picture as
+ * the page before the app renders and as the desktop app while it starts.
+ */
+function Loading() {
   return (
-    <main className="flex min-h-svh items-center justify-center p-6 text-sm text-muted-foreground">
-      {children}
+    <main
+      role="status"
+      aria-label="Connecting to the Humanity daemon"
+      className="titlebar fixed inset-0 grid place-items-center bg-sidebar"
+    >
+      <BrandMark className="size-24" />
     </main>
   )
 }

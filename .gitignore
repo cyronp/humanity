@@ -10,3 +10,4 @@ coverage/
 .DS_Store
 # TanStack Router generated route tree is committed; its temp files are not
 .tanstack/
+release/

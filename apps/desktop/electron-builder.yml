@@ -1,0 +1,21 @@
+appId: dev.humanity.desktop
+productName: Humanity
+directories:
+  output: release
+icon: build/icon.png
+# The main process is one bundled file: nothing from node_modules goes into the app.
+files:
+  - dist/main.cjs
+  - package.json
+# The daemon runs as a child process and starts the Claude Code executable, so it
+# needs real paths on disk: it ships next to the archive, not inside it.
+extraResources:
+  - from: dist/daemon
+    to: daemon
+  # electron-builder skips any node_modules folder it meets inside a resource,
+  # so the daemon's own is named as a resource itself.
+  - from: dist/daemon/node_modules
+    to: daemon/node_modules
+npmRebuild: false
+win:
+  target: nsis

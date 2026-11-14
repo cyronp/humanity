@@ -11,6 +11,11 @@
       "persistent": true,
       "passThroughEnv": ["ANTHROPIC_*", "CLAUDE_CONFIG_DIR", "GITHUB_TOKEN", "HUMANITY_*"]
     },
+    "dev:desktop": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["HUMANITY_*"]
+    },
     "lint": {},
     "typecheck": {
       "dependsOn": ["^typecheck"]
