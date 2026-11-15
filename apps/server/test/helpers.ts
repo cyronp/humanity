@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { HttpClient } from "effect/http"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { DatabaseLive } from "../src/db/Database.ts"
@@ -15,7 +15,7 @@ import { GitLabToken } from "../src/services/GitLabToken.ts"
 /** A temp directory removed when the scope closes. */
 export const tempDir = (prefix = "humanity-test-") =>
   Effect.acquireRelease(
-    Effect.sync(() => mkdtempSync(join(tmpdir(), prefix))),
+    Effect.sync(() => realpathSync.native(mkdtempSync(join(tmpdir(), prefix)))),
     (dir) =>
       // git marks objects read-only; retry so Windows can release its handles.
       Effect.sync(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
