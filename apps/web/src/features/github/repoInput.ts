@@ -36,11 +36,57 @@ export const parseGitLabInput = (input: string, host: string): string | undefine
   return GITLAB_FULL_PATH_PATTERN.test(match[2]) ? match[2] : undefined
 }
 
-/** An absolute folder path, as typed on Windows (`C:\code\app`, `\\server\share`) or POSIX (`/home/me/app`). */
-export const parseLocalPath = (input: string): string | undefined => {
-  const trimmed = input.trim()
-  return /^(?:[A-Za-z]:[\\/]|\\\\|\/)./.test(trimmed) ? trimmed : undefined
+/** Without the quotes Windows' "Copy as path" puts around a path. */
+const unquote = (text: string): string => /^(["'])(.*)\1$/s.exec(text)?.[2]?.trim() ?? text
+
+/** `file:///C:/code/app` → `C:/code/app`, `file:///home/me/app` → `/home/me/app`, `file://server/share` → `\\server\share`. */
+const fromFileUrl = (text: string): string | undefined => {
+  if (!/^file:\/\//i.test(text)) return undefined
+  try {
+    const url = new URL(text)
+    const path = decodeURIComponent(url.pathname)
+    if (url.hostname !== "" && url.hostname !== "localhost") {
+      return `\\\\${url.hostname}${path.replaceAll("/", "\\")}`
+    }
+    return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path
+  } catch {
+    return undefined
+  }
 }
+
+/**
+ * A folder path, as typed on Windows (`C:\code\app`, `\\server\share`), on
+ * POSIX (`/home/me/app`) or from the home folder (`~/code/app`, which the
+ * daemon expands), quoted or as a `file://` URL. A relative path is not one:
+ * it would be read against wherever the daemon happens to run.
+ */
+export const parseLocalPath = (input: string): string | undefined => {
+  const text = unquote(input.trim())
+  const path = fromFileUrl(text) ?? text
+  return /^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])./.test(path) ? path : undefined
+}
+
+/** A path being typed, split where it is completed: the folder to list, and the name begun in it. */
+export interface FolderQuery {
+  /** Everything up to the last separator, separator included: `C:\code\`, `~/`. */
+  readonly folder: string
+  /** What follows it: the start of a folder's name, or `""` for all of them. */
+  readonly prefix: string
+}
+
+/**
+ * `C:\code\ap` → `C:\code\` and `ap`; `~/` → `~/` and `""`. Only a path as
+ * typed, from a root or from `~`: a quoted or `file://` one is not completed.
+ */
+export const folderQuery = (input: string): FolderQuery | undefined => {
+  if (!/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(input)) return undefined
+  const cut = Math.max(input.lastIndexOf("/"), input.lastIndexOf("\\")) + 1
+  return { folder: input.slice(0, cut), prefix: input.slice(cut) }
+}
+
+/** The path of a folder in `query.folder`, ending with the separator the human typed, to go on into it. */
+export const folderPath = (query: FolderQuery, name: string): string =>
+  `${query.folder}${name}${query.folder.at(-1) ?? "/"}`
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
@@ -50,9 +96,13 @@ export interface GitLabChoices {
   readonly repos: ReadonlyArray<GitLabRepo>
 }
 
-/** What a search looks for in the list: a pasted URL finds the repository it names. */
+/**
+ * What a search looks for in the list: a pasted URL finds the repository it
+ * names, and a pasted path, quoted or not, the row that adds its folder.
+ */
 export const repoNeedle = (search: string, gitlabHost?: string): string =>
   (
+    parseLocalPath(search) ??
     (gitlabHost === undefined ? undefined : parseGitLabInput(search, gitlabHost)) ??
     parseRepoInput(search) ??
     search.trim()

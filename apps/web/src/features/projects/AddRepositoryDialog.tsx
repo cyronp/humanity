@@ -11,13 +11,18 @@ import { AsyncResult, Atom } from "effect/reactivity"
 import {
   ArrowLeft,
   BookMarked,
+  ChevronRight,
   Download,
+  Folder,
   FolderGit2,
   FolderOpen,
   FolderPlus,
+  HardDrive,
+  House,
   Lock,
+  type LucideIcon,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { type ReactNode, useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InlineError } from "@/components/InlineError"
 import { Button } from "@/components/ui/button"
@@ -44,6 +49,9 @@ import { isConnected } from "@/features/github/connection"
 import {
   addableGitLabRepos,
   addableRepos,
+  folderPath,
+  folderQuery,
+  parseLocalPath,
   repoNeedle,
   typedChoice,
 } from "@/features/github/repoInput"
@@ -54,13 +62,14 @@ import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { closeAddRepository, useAddRepositoryOpen } from "./addRepository.ts"
-import { addLocalProjectAtom, projectsAtom } from "./atoms.ts"
+import { addLocalProjectAtom, folderQueryAtom, foldersAtom, projectsAtom } from "./atoms.ts"
 
 /**
  * Adds a repository as a project: a searchable palette at the top of the
  * page, like the branch picker, listing the repositories of the connected
  * GitHub and GitLab accounts. Typing `owner/repo`, a GitHub or GitLab URL or a
- * folder path offers that repository too.
+ * folder path offers that repository too, and its footer always offers a
+ * folder on this computer, for a repository that is cloned already.
  */
 export function AddRepositoryDialog() {
   const open = useAddRepositoryOpen()
@@ -71,7 +80,7 @@ export function AddRepositoryDialog() {
         if (!next) closeAddRepository()
       }}
       title="Add a repository"
-      description="Search your GitHub and GitLab repositories for one to add as a project"
+      description="Search your GitHub and GitLab repositories for one to add as a project, or add a folder on this computer"
       className="top-3 sm:max-w-xl"
     >
       <AddRepository />
@@ -87,6 +96,8 @@ type Job =
 /** Lives only while the palette is open, so every opening starts from the list. */
 function AddRepository() {
   const [job, setJob] = useState<Job>()
+  // The path being typed in the folder step; `undefined` while the list shows.
+  const [folder, setFolder] = useState<string>()
   const [localError, setLocalError] = useState<string>()
   const [clone, startClone] = useAtom(cloneAtom)
   const addLocal = useAtomSet(addLocalProjectAtom, { mode: "promiseExit" })
@@ -126,8 +137,25 @@ function AddRepository() {
     else setLocalError(describeCause(exit.cause))
   }
 
+  if (job === undefined && folder !== undefined) {
+    return (
+      <FolderStep
+        value={folder}
+        onChange={setFolder}
+        onAdd={(path) => void addFolder(path)}
+        onBack={() => setFolder(undefined)}
+      />
+    )
+  }
   if (job === undefined) {
-    return <RepositoryList onClone={startCloning} onAddFolder={addFolder} onOpen={open} />
+    return (
+      <RepositoryList
+        onClone={startCloning}
+        onAddFolder={addFolder}
+        onChooseFolder={() => setFolder("")}
+        onOpen={open}
+      />
+    )
   }
 
   const cloneError =
@@ -169,11 +197,13 @@ function AddRepository() {
             onClick={() => {
               startClone(Atom.Reset)
               setLocalError(undefined)
+              // A path that failed goes back to be corrected, wherever it was typed.
+              setFolder(job.kind === "local" ? job.path : undefined)
               setJob(undefined)
             }}
           >
             <ArrowLeft />
-            Back to the list
+            {job.kind === "local" ? "Change the path" : "Back to the list"}
           </Button>
         </>
       )}
@@ -181,13 +211,156 @@ function AddRepository() {
   )
 }
 
+/**
+ * A path typed or pasted in a search field of its own. As it is typed, the
+ * daemon lists the folders that complete it: Enter on a repository adds it,
+ * on any other folder goes into it. A path that ends in a separator offers
+ * that folder itself first.
+ */
+function FolderStep({
+  value,
+  onChange,
+  onAdd,
+  onBack,
+}: {
+  readonly value: string
+  readonly onChange: (value: string) => void
+  readonly onAdd: (path: string) => void
+  readonly onBack: () => void
+}) {
+  const windows = /Windows/i.test(navigator.userAgent)
+  const example = windows ? "C:\\code\\my-app" : "~/code/my-app"
+  const path = parseLocalPath(value)
+  const query = folderQuery(value)
+  const setQuery = useAtomSet(folderQueryAtom)
+  useEffect(() => setQuery(folderQuery(value)), [setQuery, value])
+  const result = useAtomValue(foldersAtom)
+  const matches = AsyncResult.isSuccess(result) ? result.value : undefined
+
+  // The last list stays while the next one loads, narrowed to what is typed now.
+  const listed =
+    query !== undefined && matches !== undefined && matches.query.folder === query.folder
+      ? matches
+      : undefined
+  const entries =
+    listed === undefined || query === undefined
+      ? []
+      : listed.entries.filter((entry) =>
+          entry.name.toLowerCase().startsWith(query.prefix.toLowerCase()),
+        )
+  // A list that could not be had is as good as an empty one: the typed path can still be added.
+  const settled =
+    AsyncResult.isFailure(result) ||
+    (listed !== undefined && listed.query.prefix === query?.prefix && !result.waiting)
+  // The typed path itself: first when it names a folder, else only when nothing completes it.
+  const addFirst = path !== undefined && query?.prefix === ""
+  const addLast =
+    path !== undefined && !addFirst && (query === undefined || (settled && entries.length === 0))
+
+  const addRow = (target: string) => (
+    <CommandGroup heading="This folder">
+      <CommandItem value={`add:${target}`} onSelect={() => onAdd(target)}>
+        <FolderPlus className="text-muted-foreground" />
+        <span className="truncate">
+          Add the repository in <span className="font-mono text-xs">{target}</span>
+        </span>
+      </CommandItem>
+    </CommandGroup>
+  )
+
+  return (
+    <Command shouldFilter={false}>
+      <CommandInput
+        autoFocus
+        value={value}
+        onValueChange={onChange}
+        placeholder={`Search for the folder, like ${example}`}
+        className="font-mono text-xs"
+      />
+      <CommandList className="max-h-96">
+        <CommandEmpty className="px-6 text-muted-foreground">
+          {value.trim() === ""
+            ? "Start from a root or your home folder."
+            : path === undefined
+              ? `Use the full path, like ${example}.`
+              : settled
+                ? `No folder in ${query?.folder ?? "it"} starts with ${query?.prefix ?? ""}.`
+                : "Looking…"}
+        </CommandEmpty>
+        {value.trim() === "" && (
+          <CommandGroup heading="Start from">
+            {[windows ? "~\\" : "~/", ...(windows ? ["C:\\"] : ["/"])].map((start) => (
+              <CommandItem key={start} value={`start:${start}`} onSelect={() => onChange(start)}>
+                {start.startsWith("~") ? (
+                  <House className="text-muted-foreground" />
+                ) : (
+                  <HardDrive className="text-muted-foreground" />
+                )}
+                <span className="font-mono text-xs">{start}</span>
+                <span className="text-xs text-muted-foreground">
+                  {start.startsWith("~") ? "your home folder" : "the root of the disk"}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        {addFirst && addRow(path)}
+        {query !== undefined && entries.length > 0 && (
+          <>
+            {addFirst && <CommandSeparator />}
+            <CommandGroup heading={`In ${query.folder}`}>
+              {entries.map((entry) => (
+                <CommandItem
+                  key={entry.name}
+                  value={`folder:${entry.name}`}
+                  onSelect={() =>
+                    entry.isRepository
+                      ? onAdd(`${query.folder}${entry.name}`)
+                      : onChange(folderPath(query, entry.name))
+                  }
+                >
+                  {entry.isRepository ? (
+                    <FolderGit2 className="text-muted-foreground" />
+                  ) : (
+                    <Folder className="text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                  {entry.isRepository ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      git repository · Add
+                    </span>
+                  ) : (
+                    <ChevronRight className="text-muted-foreground" />
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {addLast && addRow(path)}
+      </CommandList>
+      <div className="-mx-1 mt-1 -mb-1 flex items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
+        <Button variant="outline" size="xs" onClick={onBack}>
+          <ArrowLeft />
+          Back to the list
+        </Button>
+        <span className="min-w-0 flex-1 text-right">
+          Enter on a folder opens it, on a repository adds it.
+        </span>
+      </div>
+    </Command>
+  )
+}
+
 function RepositoryList({
   onClone,
   onAddFolder,
+  onChooseFolder,
   onOpen,
 }: {
   readonly onClone: (target: CloneTarget) => void
   readonly onAddFolder: (path: string) => void
+  readonly onChooseFolder: () => void
   readonly onOpen: (project: Project) => void
 }) {
   const [search, setSearch] = useState("")
@@ -321,7 +494,23 @@ function RepositoryList({
         )}
         {accountsPending && <ListSkeleton />}
       </CommandList>
-      {unlisted !== undefined && <ConnectionFooter reason={unlisted} />}
+      <div className="-mx-1 mt-1 -mb-1 flex flex-col divide-y border-t">
+        {unlisted !== undefined && (
+          <FooterRow
+            icon={FolderGit2}
+            action="Connect an account"
+            onAction={() => {
+              closeAddRepository()
+              openSettings("repositories")
+            }}
+          >
+            {unlisted}
+          </FooterRow>
+        )}
+        <FooterRow icon={HardDrive} action="Add a folder" onAction={onChooseFolder}>
+          Cloned it already? Add its folder on this computer.
+        </FooterRow>
+      </div>
     </Command>
   )
 }
@@ -471,20 +660,24 @@ function ListSkeleton() {
   )
 }
 
-function ConnectionFooter({ reason }: { readonly reason: string }) {
+/** One line under the list: what else there is to do, and the button that does it. */
+function FooterRow({
+  icon: Icon,
+  action,
+  onAction,
+  children,
+}: {
+  readonly icon: LucideIcon
+  readonly action: string
+  readonly onAction: () => void
+  readonly children: ReactNode
+}) {
   return (
-    <div className="-mx-1 mt-1 -mb-1 flex items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
-      <FolderGit2 className="size-3.5 shrink-0" />
-      <span className="min-w-0 flex-1">{reason}</span>
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={() => {
-          closeAddRepository()
-          openSettings("repositories")
-        }}
-      >
-        Connect an account
+    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+      <Icon className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1">{children}</span>
+      <Button variant="outline" size="xs" onClick={onAction}>
+        {action}
       </Button>
     </div>
   )
