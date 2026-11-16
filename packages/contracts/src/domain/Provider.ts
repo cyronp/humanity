@@ -1,11 +1,12 @@
 import { Schema } from "effect"
 
 /**
- * The agent a thread runs on: Claude Code through the Claude Agent SDK, or
- * OpenAI's Codex through its app server. A thread keeps its provider for
- * good, because its conversation is stored by that provider.
+ * The agent a thread runs on: Claude Code through the Claude Agent SDK,
+ * OpenAI's Codex through its app server, or Kiro (Beta) through its ACP
+ * server. A thread keeps its provider for good, because its conversation is
+ * stored by that provider.
  */
-export const AgentProvider = Schema.Literals(["claude-code", "codex"])
+export const AgentProvider = Schema.Literals(["claude-code", "codex", "kiro"])
 export type AgentProvider = typeof AgentProvider.Type
 
 export const DEFAULT_PROVIDER: AgentProvider = "claude-code"

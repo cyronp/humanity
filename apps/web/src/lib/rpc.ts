@@ -28,6 +28,8 @@ export const keys = {
   claude: "claude",
   /** The Codex login threads on Codex run as. */
   codex: "codex",
+  /** The Kiro (Beta) login threads on Kiro run as. */
+  kiro: "kiro",
   /** How GitHub is reached, and so which repositories it lists. */
   github: "github",
   /** How GitLab is reached, and so which repositories it lists. */

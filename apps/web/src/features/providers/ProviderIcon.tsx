@@ -42,6 +42,29 @@ export function OpenAIIcon({ className, children, ...props }: IconProps) {
   )
 }
 
+/**
+ * Kiro's mark: a plain rounded square with a K, since Kiro's logo is not
+ * bundled here. Drawn in the text colour, so it follows the theme.
+ */
+export function KiroIcon({ className, children, ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      className={cn("size-4 shrink-0", className)}
+      {...props}
+    >
+      {children}
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M9 7v10M9 12l6-5M11.5 11.5 15 17" />
+    </svg>
+  )
+}
+
 export const PROVIDERS: Record<
   ProviderId,
   {
@@ -49,10 +72,13 @@ export const PROVIDERS: Record<
     /** Who makes its models, shown under each model's name. */
     readonly vendor: string
     readonly Icon: typeof ClaudeIcon
+    /** Works, but its agent protocol is new and not yet checked against a live account. */
+    readonly beta?: boolean
   }
 > = {
   "claude-code": { name: "Claude Code", vendor: "Claude", Icon: ClaudeIcon },
   codex: { name: "Codex", vendor: "OpenAI", Icon: OpenAIIcon },
+  kiro: { name: "Kiro", vendor: "Kiro", Icon: KiroIcon, beta: true },
 }
 
 export const sessionProvider = (session: Session): ProviderId => session.provider

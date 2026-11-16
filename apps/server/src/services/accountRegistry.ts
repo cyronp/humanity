@@ -77,7 +77,7 @@ export interface AccountRegistry<Status> {
 export interface AccountRegistryOptions<Status> {
   readonly provider: AgentProvider
   /** The table the added accounts are kept in: `id`, `name`, `config_dir`, `created_at`. */
-  readonly table: "claude_accounts" | "codex_accounts"
+  readonly table: "claude_accounts" | "codex_accounts" | "kiro_accounts"
   /** The preference that holds the id of the active account. */
   readonly activeKey: string
   /** Where Humanity makes the folder of an account that has none: `<accountsDir>/<accountId>`. */

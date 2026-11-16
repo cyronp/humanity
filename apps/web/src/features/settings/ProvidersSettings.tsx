@@ -1,5 +1,6 @@
 import { ClaudeSection } from "@/features/claude/ClaudeSection"
 import { CodexSection } from "@/features/codex/CodexSection"
+import { KiroSection } from "@/features/kiro/KiroSection"
 import { PROVIDERS, type ProviderId } from "@/features/providers/ProviderIcon"
 import { selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, type SettingsListItem, SettingsSplit } from "./SettingsLayout.tsx"
@@ -27,7 +28,13 @@ export function ProvidersSettings() {
         selected={selected}
         onSelect={(id) => selectSettingsItem("providers", id)}
       >
-        {selected === "codex" ? <CodexSection /> : <ClaudeSection />}
+        {selected === "codex" ? (
+          <CodexSection />
+        ) : selected === "kiro" ? (
+          <KiroSection />
+        ) : (
+          <ClaudeSection />
+        )}
       </SettingsSplit>
     </SettingsFrame>
   )

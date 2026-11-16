@@ -18,6 +18,8 @@ export interface ServerConfigShape {
   readonly accountsDir: string
   /** Codex folders (`CODEX_HOME`) of added accounts: `<codexAccountsDir>/<accountId>`. */
   readonly codexAccountsDir: string
+  /** Kiro folders (`KIRO_HOME`) of added accounts: `<kiroAccountsDir>/<accountId>`. */
+  readonly kiroAccountsDir: string
   readonly authTokenPath: string
   /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
   readonly githubTokenPath: string
@@ -51,6 +53,7 @@ const make = (options: {
     attachmentsDir: join(home, "attachments"),
     accountsDir: join(home, "accounts"),
     codexAccountsDir: join(home, "codex-accounts"),
+    kiroAccountsDir: join(home, "kiro-accounts"),
     authTokenPath: join(home, "auth-token"),
     githubTokenPath: join(home, "github-token"),
     gitlabTokenPath: join(home, "gitlab-token"),
@@ -77,6 +80,7 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         yield* fs.makeDirectory(config.attachmentsDir, { recursive: true })
         yield* fs.makeDirectory(config.accountsDir, { recursive: true })
         yield* fs.makeDirectory(config.codexAccountsDir, { recursive: true })
+        yield* fs.makeDirectory(config.kiroAccountsDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

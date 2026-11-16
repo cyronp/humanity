@@ -32,6 +32,8 @@ export const ConfigOption = Schema.Struct({
   id: Schema.String,
   category: nullable(Schema.String),
   currentValue: Schema.Union([Schema.String, Schema.Boolean]),
+  /** A select setting's values, as the agent lists them; read leniently by whoever needs them. */
+  options: Schema.optional(Schema.Unknown),
 })
 export type ConfigOption = typeof ConfigOption.Type
 

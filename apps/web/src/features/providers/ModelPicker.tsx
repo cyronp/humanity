@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { codexStatusAtom } from "@/features/codex/atoms"
+import { kiroStatusAtom } from "@/features/kiro/atoms"
 import {
   DEFAULT_MODEL,
   type ModelChoice,
@@ -88,6 +89,7 @@ export function ModelPicker({
 }) {
   const claude = useAtomValue(claudeStatusAtom)
   const codex = useAtomValue(codexStatusAtom)
+  const kiro = useAtomValue(kiroStatusAtom)
   const providers: ReadonlyArray<ProviderId> = locked
     ? [provider]
     : (Object.keys(PROVIDERS) as Array<ProviderId>)
@@ -97,12 +99,14 @@ export function ModelPicker({
       AsyncResult.isSuccess(claude) ? claude.value.models : [],
     ),
     codex: pickerModels("codex", AsyncResult.isSuccess(codex) ? codex.value.models : []),
+    kiro: pickerModels("kiro", AsyncResult.isSuccess(kiro) ? kiro.value.models : []),
   }
   const models = providers.flatMap((id) => reported[id])
   const selected = value ?? DEFAULT_MODEL
   const isSelected = (model: PickerModel) => model.provider === provider && model.value === selected
   const current = models.find(isSelected)
   const codexSignedOut = AsyncResult.isSuccess(codex) && codex.value.connection._tag !== "Connected"
+  const kiroSignedOut = AsyncResult.isSuccess(kiro) && kiro.value.connection._tag !== "Connected"
 
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState<Section>(provider)
@@ -184,7 +188,7 @@ export function ModelPicker({
           {providers.map((id) => (
             <RailButton
               key={id}
-              label={PROVIDERS[id].name}
+              label={PROVIDERS[id].beta ? `${PROVIDERS[id].name} (Beta)` : PROVIDERS[id].name}
               active={section === id && !searching}
               onClick={() => showSection(id)}
             >
@@ -224,6 +228,11 @@ export function ModelPicker({
             {section === "codex" && !searching && codexSignedOut && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
                 Codex is not signed in. Settings, under Providers, shows how.
+              </p>
+            )}
+            {section === "kiro" && !searching && kiroSignedOut && (
+              <p className="px-3 py-3 text-xs text-muted-foreground">
+                Kiro (Beta) is not signed in. Settings, under Providers, shows how.
               </p>
             )}
             {section === "favorites" && !searching && rows.length === 0 && (

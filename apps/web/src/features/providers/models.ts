@@ -33,6 +33,11 @@ const DEFAULT_ROW: Record<AgentProvider, ReportedModel> = {
     displayName: "Default",
     description: "The model your Codex settings pick",
   },
+  kiro: {
+    value: DEFAULT_MODEL,
+    displayName: "Default",
+    description: "The model your Kiro settings pick",
+  },
 }
 
 /**
