@@ -100,6 +100,7 @@ export class HistoryImport extends Context.Service<
           const session: Session = {
             id,
             projectId: project.id,
+            provider: "claude-code",
             sdkSessionId: conversation.sessionId,
             title: title || "Claude Code conversation",
             branch: conversation.gitBranch ?? project.defaultBranch,

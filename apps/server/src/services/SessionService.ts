@@ -1,6 +1,7 @@
 import {
   acceptsMessages,
   applyAutonomy,
+  type AgentProvider,
   AUTO_TOOLS,
   type Attachment,
   type AttachmentContent,
@@ -14,6 +15,7 @@ import {
   type ClaudeModel,
   DEFAULT_AUTONOMY,
   DEFAULT_CLAUDE_ACCOUNT,
+  DEFAULT_PROVIDER,
   type ChatMessage,
   ConfirmationId,
   type ContextUsage,
@@ -68,7 +70,9 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
+import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
+import { Codex } from "../codex/Codex.ts"
 import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
@@ -164,6 +168,7 @@ export class SessionService extends Context.Service<
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
       readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+      readonly provider?: AgentProvider | undefined
       readonly model?: string | undefined
       readonly effort?: ReasoningEffort | undefined
       readonly autonomy?: Autonomy | undefined
@@ -280,6 +285,7 @@ export class SessionService extends Context.Service<
       const accounts = yield* ClaudeAccountService
       const extensions = yield* ExtensionsService
       const claude = yield* ClaudeCode
+      const codex = yield* Codex
       const approvals = yield* ApprovalService
       const serviceScope = yield* Effect.scope
 
@@ -581,7 +587,7 @@ export class SessionService extends Context.Service<
       const refreshUsageNow = Effect.fn("SessionService.refreshUsage")(function* (
         sessionId: string,
       ) {
-        yield* get(sessionId)
+        const session = yield* get(sessionId)
         const unavailable = (reason: string) => new PlanUsageUnavailable({ reason })
         const state = active.get(sessionId)
         if (state !== undefined) {
@@ -591,10 +597,12 @@ export class SessionService extends Context.Service<
           }
           return usage
         }
-        const configDir = yield* accounts.configDirFor(yield* repo.getAccountId(sessionId))
-        const plan = yield* claude
-          .planUsage(configDir)
-          .pipe(Effect.mapError((error) => unavailable(error.reason)))
+        const plan =
+          session.provider === "codex"
+            ? yield* codex.planUsage.pipe(Effect.mapError((error) => unavailable(error.reason)))
+            : yield* claude
+                .planUsage(yield* accounts.configDirFor(yield* repo.getAccountId(sessionId)))
+                .pipe(Effect.mapError((error) => unavailable(error.reason)))
         if (plan === undefined) {
           return yield* unavailable("this login has no plan limits to report.")
         }
@@ -603,7 +611,8 @@ export class SessionService extends Context.Service<
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
-          const normalized = normalizeSdkMessage(raw)
+          const normalized =
+            session.provider === "codex" ? normalizeCodexEvent(raw) : normalizeSdkMessage(raw)
           if (normalized._tag === "Skip") return
           if (normalized._tag === "TextDelta") {
             yield* events.publish(session.id, { _tag: "TextDelta", text: normalized.text })
@@ -689,6 +698,7 @@ export class SessionService extends Context.Service<
             }
             const run = yield* runner
               .start({
+                provider: session.provider,
                 cwd: session.worktreePath,
                 configDir: yield* accounts.configDirFor(yield* repo.getAccountId(session.id)),
                 resume: session.sdkSessionId ?? undefined,
@@ -782,6 +792,22 @@ export class SessionService extends Context.Service<
             )
         })
 
+      /**
+       * Files the session's agent could not read are refused before anything is
+       * stored or sent, so the human hears it instead of the agent guessing.
+       */
+      const checkReadable = (provider: AgentProvider, files: ReadonlyArray<PreparedAttachment>) =>
+        Effect.gen(function* () {
+          if (provider !== "codex") return
+          const pdf = files.find((file) => file.kind === "pdf")
+          if (pdf !== undefined) {
+            return yield* new AttachmentRejected({
+              name: pdf.name,
+              reason: "Codex cannot read PDF files. Send it as text or an image instead.",
+            })
+          }
+        })
+
       const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
           const moved = relocated.get(session.id)
@@ -813,6 +839,7 @@ export class SessionService extends Context.Service<
         const session = yield* get(sessionId)
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         const files = yield* prepareAttachments(uploads)
+        yield* checkReadable(session.provider, files)
         if (session.origin === "claude-code") {
           // From now on the conversation goes on here; the CLI's transcript no longer replaces it.
           yield* repo.update(sessionId, { detachImport: true, updatedAt: session.updatedAt })
@@ -866,6 +893,7 @@ export class SessionService extends Context.Service<
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
         readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+        readonly provider?: AgentProvider | undefined
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
@@ -873,6 +901,8 @@ export class SessionService extends Context.Service<
         const project: Project = yield* projects.get(options.projectId)
         // Checked before anything changes, so a bad file leaves the checkout as it was.
         const files = yield* prepareAttachments(options.attachments ?? [])
+        const provider = options.provider ?? DEFAULT_PROVIDER
+        yield* checkReadable(provider, files)
         const prompt = options.prompt?.trim()
         if (files.length > 0 && !prompt) {
           return yield* new AttachmentRejected({
@@ -893,6 +923,7 @@ export class SessionService extends Context.Service<
         const session: Session = {
           id,
           projectId: project.id,
+          provider,
           sdkSessionId: null,
           title,
           branch,
@@ -908,9 +939,11 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
-        // The thread keeps this account for good: its transcript lives in that account's folder.
-        const accountId = yield* accounts.activeId
-        if (accountId !== DEFAULT_CLAUDE_ACCOUNT) yield* repo.setAccountId(id, accountId)
+        if (provider === "claude-code") {
+          // The thread keeps this account for good: its transcript lives in that account's folder.
+          const accountId = yield* accounts.activeId
+          if (accountId !== DEFAULT_CLAUDE_ACCOUNT) yield* repo.setAccountId(id, accountId)
+        }
         yield* events.publishListChanged
         if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
@@ -954,6 +987,7 @@ export class SessionService extends Context.Service<
             const model = yield* threadModel(request.model)
             const opened = yield* create({
               projectId: parent.projectId,
+              provider: parent.provider,
               title: request.title,
               prompt,
               model,

@@ -5,6 +5,7 @@ import {
   simulateEdit,
   simulateWrite,
 } from "@humanity/diff"
+import { PATCH_TOOL } from "@humanity/contracts"
 import { Predicate } from "effect"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import { isInsideDir } from "../paths.ts"
@@ -42,11 +43,37 @@ export type ReviewTarget =
 const outsideMessage = (rawPath: string, workdir: string) =>
   `DENIED: ${rawPath} is outside the folder this session works in (${workdir}). Only files inside it can be changed.`
 
+/**
+ * Why a Codex patch must not be applied, if it must not: a file it changes, or
+ * moves one to, outside the folder the session works in.
+ */
+const patchDenial = (input: Record<string, unknown>, worktree: string): string | undefined => {
+  const changes = input["changes"]
+  if (!Array.isArray(changes) || changes.length === 0) return "The patch names no files."
+  for (const change of changes as ReadonlyArray<unknown>) {
+    const file = Predicate.isObject(change) ? (change as Record<string, unknown>) : {}
+    const path = file["path"]
+    if (!Predicate.isString(path) || path.trim() === "")
+      return "The patch has a file without a path."
+    const movePath = file["movePath"]
+    for (const rawPath of Predicate.isString(movePath) ? [path, movePath] : [path]) {
+      const absolutePath = isAbsolute(rawPath) ? resolve(rawPath) : resolve(worktree, rawPath)
+      if (!isInsideDir(worktree, absolutePath)) return outsideMessage(rawPath, worktree)
+    }
+  }
+  return undefined
+}
+
 export const reviewTarget = (
   toolName: string,
   input: Record<string, unknown>,
   worktree: string,
 ): ReviewTarget => {
+  if (toolName === PATCH_TOOL) {
+    // Codex applies the patch itself; Humanity shows its diffs and allows or denies it whole.
+    const denial = patchDenial(input, worktree)
+    return denial === undefined ? { _tag: "Confirm" } : { _tag: "Deny", message: denial }
+  }
   if (SIMULATORS[toolName] === undefined) return { _tag: "Confirm" }
   const rawPath = input["file_path"]
   if (!Predicate.isString(rawPath) || rawPath.trim() === "") {

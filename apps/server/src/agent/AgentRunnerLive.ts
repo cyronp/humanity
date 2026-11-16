@@ -14,6 +14,7 @@ import {
 } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
+import { Codex } from "../codex/Codex.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
   type AgentExtensions,
@@ -22,6 +23,7 @@ import {
   AgentRunner,
   type AgentUserMessage,
 } from "./AgentRunner.ts"
+import { startCodexRun } from "./CodexRunner.ts"
 import { humanityMcpServer } from "./humanityTools.ts"
 
 /** An async iterable fed from outside: the SDK's streaming input. */
@@ -149,8 +151,10 @@ export const AgentRunnerLive = Layer.effect(
   AgentRunner,
   Effect.gen(function* () {
     const claude = yield* ClaudeCode
+    const codex = yield* Codex
+    const startCodex = startCodexRun(codex.connect)
 
-    const start = (options: AgentRunOptions) =>
+    const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {
         const context = yield* Effect.context<never>()
         const runPromise = Effect.runPromiseWith(context)
@@ -274,6 +278,9 @@ export const AgentRunnerLive = Layer.effect(
         }
       })
 
-    return AgentRunner.of({ start })
+    return AgentRunner.of({
+      start: (options) =>
+        options.provider === "codex" ? startCodex(options) : startClaude(options),
+    })
   }),
 )

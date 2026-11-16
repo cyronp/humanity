@@ -4,6 +4,7 @@ import { Effect, Layer, Stream } from "effect"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeHistory, type TestConversation } from "../src/claude/ClaudeHistory.ts"
+import { Codex } from "../src/codex/Codex.ts"
 import { Services } from "../src/Daemon.ts"
 import type { GitHubService } from "../src/services/GitHubService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
@@ -37,6 +38,7 @@ export const services = (
   Services.pipe(
     Layer.provideMerge(AgentRunnerFake(script)),
     Layer.provide(noClaude(planUsage)),
+    Layer.provide(Codex.layerTest()),
     Layer.provide(ClaudeHistory.layerTest(claudeHistory)),
     Layer.provideMerge(baseLayer(home, github)),
   )

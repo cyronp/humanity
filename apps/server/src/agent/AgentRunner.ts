@@ -1,4 +1,10 @@
-import type { ContextUsage, OpenedThread, PlanUsage, ReasoningEffort } from "@humanity/contracts"
+import type {
+  AgentProvider,
+  ContextUsage,
+  OpenedThread,
+  PlanUsage,
+  ReasoningEffort,
+} from "@humanity/contracts"
 import { Context, Data, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
@@ -55,6 +61,7 @@ export interface AgentExtensions {
 }
 
 export interface AgentRunOptions {
+  readonly provider: AgentProvider
   /** The session's worktree. The agent never runs anywhere else. */
   readonly cwd: string
   /**
@@ -105,7 +112,10 @@ export interface AgentUserMessage {
 
 /** One running agent conversation in streaming input mode. */
 export interface AgentRun {
-  /** Raw SDK messages, in order. Ends when the run is closed. */
+  /**
+   * The provider's raw messages, in order: Agent SDK messages from Claude Code,
+   * `CodexEvent`s from Codex. Ends when the run is closed.
+   */
   readonly messages: Stream.Stream<unknown, AgentRunError>
   /** Queues a user message; the agent answers when its current turn is over. */
   readonly send: (message: AgentUserMessage) => Effect.Effect<void>
@@ -134,8 +144,9 @@ export class AgentRunError extends Schema.TaggedError<AgentRunError>()("AgentRun
 }) {}
 
 /**
- * Owns the Agent SDK. The live layer wraps `query()`; the test layer replays
- * scripted turns, so no test ever reaches the Anthropic API.
+ * Owns the agents. The live layer wraps the Agent SDK's `query()` for Claude
+ * Code and a Codex app server for Codex; the test layer replays scripted
+ * turns, so no test ever reaches a model.
  */
 export class AgentRunner extends Context.Service<
   AgentRunner,

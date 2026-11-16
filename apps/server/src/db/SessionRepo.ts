@@ -1,4 +1,5 @@
 import {
+  AgentProvider,
   type Attachment,
   AttachmentKind,
   Autonomy,
@@ -22,6 +23,7 @@ import { SqlClient, SqlSchema } from "effect/sql"
 const SessionRow = Schema.Struct({
   id: SessionId,
   project_id: ProjectId,
+  provider: AgentProvider,
   sdk_session_id: Schema.NullOr(Schema.String),
   title: Schema.String,
   branch: Schema.String,
@@ -39,6 +41,7 @@ const SessionRow = Schema.Struct({
 const toSession = (row: typeof SessionRow.Type): Session => ({
   id: row.id,
   projectId: row.project_id,
+  provider: row.provider,
   sdkSessionId: row.sdk_session_id,
   title: row.title,
   branch: row.branch,
@@ -285,6 +288,7 @@ export class SessionRepo extends Context.Service<
           INSERT INTO sessions ${sql.insert({
             id: session.id,
             project_id: session.projectId,
+            provider: session.provider,
             sdk_session_id: session.sdkSessionId,
             title: session.title,
             branch: session.branch,
@@ -556,6 +560,7 @@ export class SessionRepo extends Context.Service<
             INSERT INTO sessions ${sql.insert({
               id: session.id,
               project_id: session.projectId,
+              provider: session.provider,
               sdk_session_id: session.sdkSessionId,
               title: session.title,
               branch: session.branch,
