@@ -1,11 +1,9 @@
 import { ClaudeSection } from "@/features/claude/ClaudeSection"
 import { CodexSection } from "@/features/codex/CodexSection"
 import { KiroSection } from "@/features/kiro/KiroSection"
-import { PROVIDERS, type ProviderId } from "@/features/providers/ProviderIcon"
+import { PROVIDER_IDS, PROVIDERS } from "@/features/providers/ProviderIcon"
 import { selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, type SettingsListItem, SettingsSplit } from "./SettingsLayout.tsx"
-
-const PROVIDER_IDS = Object.keys(PROVIDERS) as ReadonlyArray<ProviderId>
 
 const ITEMS: ReadonlyArray<SettingsListItem> = PROVIDER_IDS.map((id) => {
   const { name, Icon } = PROVIDERS[id]
