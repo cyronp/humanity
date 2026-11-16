@@ -26,7 +26,7 @@ import {
 import { startCodexRun } from "./CodexRunner.ts"
 import { humanityMcpServer } from "./humanityTools.ts"
 import { startAcpRun } from "./AcpRunner.ts"
-import { Kiro, kiroProfile } from "../kiro/Kiro.ts"
+import { Kiro } from "../kiro/Kiro.ts"
 
 /** An async iterable fed from outside: the SDK's streaming input. */
 class Inbox<T> implements AsyncIterable<T> {
@@ -156,7 +156,7 @@ export const AgentRunnerLive = Layer.effect(
     const codex = yield* Codex
     const startCodex = startCodexRun(codex.connect)
     const kiro = yield* Kiro
-    const startKiro = startAcpRun(kiro.connect, kiroProfile)
+    const startKiro = startAcpRun(kiro.connect, kiro.profile)
 
     const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {

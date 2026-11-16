@@ -1,6 +1,7 @@
 import { PATCH_TOOL, SHELL_TOOL } from "@humanity/contracts"
 import { computeHunks, hunkHeader } from "@humanity/diff"
 import { Option, Schema } from "effect"
+import { fileURLToPath } from "node:url"
 import { decode, type ToolCallFields } from "../acp/protocol.ts"
 import type { Normalized } from "./normalize.ts"
 import type { PatchFile } from "./normalizeCodex.ts"
@@ -57,19 +58,45 @@ const hunksText = (before: string, after: string): string =>
     .map((hunk) => [hunkHeader(hunk), ...hunk.lines].join("\n"))
     .join("\n")
 
+/**
+ * A file as the agent names it, as a path. The protocol asks for absolute
+ * paths; some agents (Kiro) write a `file://` URI where a diff's path goes.
+ */
+export const acpPath = (path: string): string => {
+  if (!path.startsWith("file://")) return path
+  try {
+    return fileURLToPath(path)
+  } catch {
+    // Not a URI of this platform (no drive letter, say): what follows the scheme is the path.
+    const bare = path.slice("file://".length)
+    try {
+      return decodeURIComponent(bare)
+    } catch {
+      return bare
+    }
+  }
+}
+
+/** One file going from one text to another; no text before means a new file. */
+export const acpPatchFile = (
+  path: string,
+  before: string | null | undefined,
+  after: string,
+  deleted = false,
+): PatchFile =>
+  before === null || before === undefined
+    ? { path, kind: "add", diff: after }
+    : deleted && after === ""
+      ? { path, kind: "delete", diff: before }
+      : { path, kind: "update", diff: hunksText(before, after) }
+
 /** The files a tool call changes, from the diffs it shows; empty when it shows none. */
 export const acpPatchFiles = (call: ToolCallFields): Array<PatchFile> => {
   const files: Array<PatchFile> = []
   for (const part of call.content ?? []) {
     if (part.type !== "diff" || typeof part.path !== "string" || part.path === "") continue
-    const after = part.newText ?? ""
-    const before = part.oldText
     files.push(
-      before === null || before === undefined
-        ? { path: part.path, kind: "add", diff: after }
-        : call.kind === "delete" && after === ""
-          ? { path: part.path, kind: "delete", diff: before }
-          : { path: part.path, kind: "update", diff: hunksText(before, after) },
+      acpPatchFile(acpPath(part.path), part.oldText, part.newText ?? "", call.kind === "delete"),
     )
   }
   return files
@@ -153,15 +180,19 @@ const Event = Schema.Struct({
 })
 const Ready = Schema.Struct({ sessionId: Schema.String, model: Schema.String })
 const Text = Schema.Struct({ text: Schema.String })
+/** The call of the sub-agent a tool call belongs to; none for the agent's own. */
+const parent = Schema.optional(Schema.NullOr(Schema.String))
 const ToolStarted = Schema.Struct({
   toolCallId: Schema.String,
   toolName: Schema.String,
   input: Schema.Record(Schema.String, Schema.Unknown),
+  parent,
 })
 const ToolCompleted = Schema.Struct({
   toolCallId: Schema.String,
   content: Schema.String,
   isError: Schema.Boolean,
+  parent,
 })
 const TurnCompleted = Schema.Struct({
   /** Why the agent stopped: `end_turn`, `cancelled`, `max_tokens`, `refusal`, … */
@@ -239,7 +270,7 @@ export const normalizeAcpEvent = (raw: unknown): Normalized => {
         content: {
           _tag: "assistant",
           blocks: [{ _tag: "tool_use", toolUseId: toolCallId, toolName, input }],
-          parentToolUseId: null,
+          parentToolUseId: started.value.parent ?? null,
         },
       }
     }
@@ -252,7 +283,7 @@ export const normalizeAcpEvent = (raw: unknown): Normalized => {
         content: {
           _tag: "tool_results",
           results: [{ toolUseId: toolCallId, content, isError }],
-          parentToolUseId: null,
+          parentToolUseId: completed.value.parent ?? null,
         },
       }
     }

@@ -1,4 +1,5 @@
 import { parseUnifiedDiff } from "@humanity/diff"
+import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 import type { ToolCallFields } from "../src/acp/protocol.ts"
 import {
@@ -11,6 +12,7 @@ import {
   ACP_TURN_COMPLETED,
   acpEvent,
   acpPatchFiles,
+  acpPath,
   acpToolCall,
   acpToolOutput,
   normalizeAcpEvent,
@@ -19,6 +21,39 @@ import {
 const call = (fields: Partial<ToolCallFields>): ToolCallFields => ({ toolCallId: "t1", ...fields })
 
 describe("acpToolCall", () => {
+  it("reads a diff's file from the URI an agent writes in place of its path", () => {
+    const file = process.platform === "win32" ? "C:\\work\\my repo\\a.ts" : "/work/my repo/a.ts"
+    const [change] = acpPatchFiles(
+      call({
+        kind: "edit",
+        content: [{ type: "diff", path: pathToFileURL(file).href, oldText: "a\n", newText: "b\n" }],
+      }),
+    )
+    expect(change?.path).toBe(file)
+    expect(acpPath("src/a.ts")).toBe("src/a.ts")
+  })
+
+  it("shows a sub-agent's call under the call that started it", () => {
+    const started = normalizeAcpEvent(
+      acpEvent(ACP_TOOL_STARTED, {
+        toolCallId: "inner",
+        toolName: "Bash",
+        input: { command: "ls" },
+        parent: "task",
+      }),
+    )
+    expect(started).toMatchObject({ content: { parentToolUseId: "task" } })
+    const completed = normalizeAcpEvent(
+      acpEvent(ACP_TOOL_COMPLETED, {
+        toolCallId: "inner",
+        content: "",
+        isError: false,
+        parent: "task",
+      }),
+    )
+    expect(completed).toMatchObject({ content: { parentToolUseId: "task" } })
+  })
+
   it("names a command Bash, with the command the agent gave", () => {
     expect(
       acpToolCall(

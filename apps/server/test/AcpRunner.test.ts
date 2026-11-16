@@ -72,6 +72,8 @@ const fakeAgent = (agent: InitializeResponse = {}) =>
 
     return {
       connect,
+      /** What the agent answers to each request; a test may change it. */
+      answers,
       calls,
       notified,
       called: (method: string) => calls.filter((call) => call.method === method),
@@ -108,7 +110,7 @@ const fakeAgent = (agent: InitializeResponse = {}) =>
     }
   })
 
-const profile: AcpProfile = { product: "Test agent" }
+const profile = (): AcpProfile => ({ product: "Test agent" })
 
 const runOptions = (
   canUseTool: (request: ToolPermissionRequest) => PermissionDecision,
@@ -371,13 +373,15 @@ describe("an ACP run", () => {
     Effect.gen(function* () {
       const agent = yield* fakeAgent()
       const steered: Array<string> = []
-      const run = yield* startAcpRun(agent.connect, {
+      const run = yield* startAcpRun(agent.connect, () => ({
         product: "Test agent",
         steer: (_connection, sessionId, message) =>
           Effect.sync(() => void steered.push(`${sessionId}: ${message}`)),
         toolCall: (call) =>
-          call.title === "figma" ? { toolName: "mcp__figma__get", input: {} } : undefined,
-      })(
+          Effect.succeed(
+            call.title === "figma" ? { toolName: "mcp__figma__get", input: {} } : undefined,
+          ),
+      }))(
         runOptions((request) => ({
           behavior: "deny",
           message: `No ${request.toolName}.`,
@@ -484,6 +488,287 @@ describe("an ACP run", () => {
       yield* agent.stop("Test agent stopped unexpectedly.")
       const failure = yield* Effect.flip(Stream.runDrain(run.messages))
       assert.strictEqual(failure.message, "Test agent stopped unexpectedly.")
+    }),
+  )
+
+  it.live("writes the model to an agent that lists it late, then the effort it lists with it", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      // Like Kiro: a new session lists neither its model nor its effort.
+      agent.answers["session/new"] = () => ({ sessionId: SESSION, configOptions: [] })
+      const run = yield* startAcpRun(agent.connect, () => ({
+        product: "Test agent",
+        lateModelOption: "model",
+      }))(runOptions(allow, { model: "opus", effort: "high" }))
+      yield* run.send({ text: "Go", attachments: [] })
+
+      yield* waitFor(agent)("session/set_config_option")
+      // The options of the model arrive a moment after its write was answered.
+      yield* agent.update("config_option_update", {
+        configOptions: [
+          { id: "model", category: "model", type: "select", currentValue: "opus" },
+          {
+            id: "effortLevel",
+            category: "thought_level",
+            type: "select",
+            currentValue: "medium",
+            options: [{ value: "medium" }, { value: "high" }],
+          },
+        ],
+      })
+      yield* waitFor(agent)("session/prompt")
+      assert.deepStrictEqual(
+        agent.called("session/set_config_option").map((call) => call.params),
+        [
+          { sessionId: SESSION, configId: "model", value: "opus" },
+          { sessionId: SESSION, configId: "effortLevel", value: "high" },
+        ],
+      )
+    }),
+  )
+
+  it.live("leaves the effort alone when the model offers no such level", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => ({
+        sessionId: SESSION,
+        configOptions: [
+          {
+            id: "effortLevel",
+            category: "thought_level",
+            type: "select",
+            currentValue: "low",
+            options: [{ value: "low" }, { value: "high" }],
+          },
+        ],
+      })
+      const run = yield* startAcpRun(agent.connect, profile)(runOptions(allow, { effort: "max" }))
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      assert.strictEqual(agent.called("session/set_config_option").length, 0)
+    }),
+  )
+
+  const SUPERVISED: AcpProfile = {
+    product: "Test agent",
+    settings: [{ id: "autopilot", value: "off" }],
+  }
+  const autopilot = (currentValue: string) => ({
+    sessionId: SESSION,
+    configOptions: [{ id: "autopilot", type: "select", currentValue }],
+  })
+
+  it.live("sets the session to ask before it says the thread is ready", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => autopilot("on")
+      agent.answers["session/set_config_option"] = () => autopilot("off")
+      const run = yield* startAcpRun(agent.connect, () => SUPERVISED)(runOptions(allow))
+      const [ready] = yield* take(run, 1)
+      assert.strictEqual(ready?.method, ACP_READY)
+      assert.deepStrictEqual(
+        agent.called("session/set_config_option").map((call) => call.params),
+        [{ sessionId: SESSION, configId: "autopilot", value: "off" }],
+      )
+    }),
+  )
+
+  it.live("does not run an agent that will not be set to ask", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => autopilot("on")
+      // The write is answered, and the setting is as it was.
+      agent.answers["session/set_config_option"] = () => autopilot("on")
+      const run = yield* startAcpRun(agent.connect, () => SUPERVISED)(runOptions(allow))
+      const failure = yield* Effect.flip(Stream.runDrain(run.messages))
+      assert.include(failure.message, "ask before it acts")
+      assert.strictEqual(agent.called("session/prompt").length, 0)
+    }),
+  )
+
+  const reviewOf = (...ids: ReadonlyArray<string>) => ({
+    toolCall: { toolCallId: "review-1", title: "Review changes", status: "pending" },
+    options: [
+      { optionId: "accept", name: "Accept changes", kind: "allow_once" },
+      { optionId: "reject", name: "Reject changes", kind: "reject_once" },
+    ],
+    covers: ids,
+  })
+  const reviewing = (): AcpProfile => ({
+    product: "Test agent",
+    review: (request) => (request as { readonly covers?: ReadonlyArray<string> }).covers,
+  })
+
+  it.live("accepts a review of changes it allowed one by one, without asking again", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const asked: Array<string> = []
+      const run = yield* startAcpRun(
+        agent.connect,
+        reviewing,
+      )(
+        runOptions((request) => {
+          asked.push(request.toolName)
+          return { behavior: "allow" }
+        }),
+      )
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      yield* agent.ask("session/request_permission", {
+        toolCall: { toolCallId: "t1", title: "npm test", kind: "execute" },
+        options: ONCE,
+      })
+
+      const answer = yield* agent.ask("session/request_permission", reviewOf("t1"))
+      assert.deepStrictEqual(answer, { outcome: { outcome: "selected", optionId: "accept" } })
+      assert.deepStrictEqual(asked, ["Bash"])
+    }),
+  )
+
+  it.live("asks about a review that covers a change it was never asked about", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const asked: Array<string> = []
+      const run = yield* startAcpRun(
+        agent.connect,
+        reviewing,
+      )(
+        runOptions((request) => {
+          asked.push(request.toolName)
+          return { behavior: "deny", message: "Not that file." }
+        }),
+      )
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+
+      const answer = yield* agent.ask("session/request_permission", reviewOf("t9"))
+      assert.deepStrictEqual(answer, { outcome: { outcome: "selected", optionId: "reject" } })
+      assert.deepStrictEqual(asked, ["Review changes"])
+      // The agent says nothing more about a review, so its answer closes it.
+      const events = yield* take(run, 3)
+      assert.deepStrictEqual(
+        events.map((event) => event.method),
+        [ACP_READY, ACP_TOOL_STARTED, ACP_TOOL_COMPLETED],
+      )
+      assert.strictEqual((events[2]?.params as Record<string, unknown>)["content"], "Rejected.")
+    }),
+  )
+
+  it.live("shows a sub-agent's calls under the call that started it, and not what it says", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const run = yield* startAcpRun(agent.connect, () => ({
+        product: "Test agent",
+        subtask: (update) =>
+          typeof update["sub"] === "string"
+            ? { id: update["sub"], owner: update["owner"] === true }
+            : undefined,
+      }))(runOptions(allow))
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+
+      yield* agent.update("tool_call", {
+        toolCallId: "task",
+        title: "Sub-agent: explore",
+        kind: "other",
+        status: "in_progress",
+        sub: "s1",
+        owner: true,
+      })
+      yield* agent.update("agent_message_chunk", {
+        content: { type: "text", text: "I am the sub-agent." },
+        sub: "s1",
+      })
+      yield* agent.update("tool_call", {
+        toolCallId: "inner",
+        title: "ls",
+        kind: "execute",
+        status: "in_progress",
+        rawInput: { command: "ls" },
+        sub: "s1",
+      })
+      yield* agent.update("tool_call_update", {
+        toolCallId: "inner",
+        status: "completed",
+        sub: "s1",
+      })
+      yield* agent.update("tool_call_update", {
+        toolCallId: "task",
+        status: "completed",
+        rawOutput: "Done",
+        sub: "s1",
+        owner: true,
+      })
+      yield* agent.endTurn()
+
+      const events = yield* take(run, 6)
+      assert.deepStrictEqual(
+        events.map((event) => [
+          event.method,
+          (event.params as Record<string, unknown>)["toolCallId"],
+          (event.params as Record<string, unknown>)["parent"],
+        ]),
+        [
+          [ACP_READY, undefined, undefined],
+          [ACP_TOOL_STARTED, "task", null],
+          [ACP_TOOL_STARTED, "inner", "task"],
+          [ACP_TOOL_COMPLETED, "inner", "task"],
+          [ACP_TOOL_COMPLETED, "task", null],
+          [ACP_TURN_COMPLETED, undefined, undefined],
+        ],
+      )
+    }),
+  )
+
+  it.live("holds a cancel until the agent shows its turn has begun", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const run = yield* startAcpRun(agent.connect, () => ({
+        product: "Test agent",
+        cancelHold: {
+          started: (update) => update.sessionUpdate === "agent_message_chunk",
+          atMost: "30 seconds",
+        },
+      }))(runOptions(allow))
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+
+      yield* run.interrupt
+      yield* Effect.sleep("50 millis")
+      assert.deepStrictEqual(agent.notified, [])
+
+      yield* agent.update("agent_message_chunk", { content: { type: "text", text: "On it." } })
+      yield* eventually(
+        "the cancel",
+        Effect.sync(() => agent.notified[0]),
+      )
+      assert.deepStrictEqual(agent.notified, [
+        { method: "session/cancel", params: { sessionId: SESSION } },
+      ])
+    }),
+  )
+
+  it.live("leaves out what the agent's profile says is not the conversation", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const run = yield* startAcpRun(agent.connect, () => ({
+        product: "Test agent",
+        update: (update) => (update["title"] === "Housekeeping" ? undefined : update),
+      }))(runOptions(allow))
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      yield* agent.update("tool_call", {
+        toolCallId: "h1",
+        title: "Housekeeping",
+        kind: "other",
+        status: "in_progress",
+      })
+      yield* agent.endTurn()
+      const events = yield* take(run, 2)
+      assert.deepStrictEqual(
+        events.map((event) => event.method),
+        [ACP_READY, ACP_TURN_COMPLETED],
+      )
     }),
   )
 })

@@ -7,7 +7,7 @@ import { Schema } from "effect"
  * else `~/.kiro`).
  */
 export const KiroConnection = Schema.TaggedUnion({
-  /** Kiro started and opened a session, so it is signed in. */
+  /** The Kiro CLI says someone is signed in. */
   Connected: {
     /** One line for the human, e.g. "Kiro CLI 2.32.0". */
     label: Schema.String,
@@ -20,7 +20,7 @@ export const KiroConnection = Schema.TaggedUnion({
 export type KiroConnection = typeof KiroConnection.Type
 
 export const KiroModel = Schema.Struct({
-  /** What to pass as the session's model, e.g. `claude-sonnet`. */
+  /** What to pass as the session's model, e.g. `claude-sonnet-5.5`. */
   value: Schema.String,
   displayName: Schema.String,
   description: Schema.String,

@@ -1,5 +1,16 @@
 import type { ContextUsage, ReasoningEffort } from "@humanity/contracts"
-import { type Cause, Clock, Deferred, Effect, Exit, Option, Queue, Scope, Stream } from "effect"
+import {
+  type Cause,
+  Clock,
+  Deferred,
+  type Duration,
+  Effect,
+  Exit,
+  Option,
+  Queue,
+  Scope,
+  Stream,
+} from "effect"
 import { type AcpConnection, AcpFailed, type AgentMessage } from "../acp/Connection.ts"
 import {
   ChunkUpdate,
@@ -45,15 +56,21 @@ export type AcpConnect = (options: {
   readonly onNotification: (notification: AgentMessage) => Effect.Effect<void>
 }) => Effect.Effect<AcpConnection, AcpFailed, Scope.Scope>
 
-/** What one agent does its own way, on top of the protocol every ACP agent speaks. */
+/** One `session/update` as the agent wrote it: its kind, and whatever else it carries. */
+export type AcpUpdate = Readonly<Record<string, unknown>> & { readonly sessionUpdate: string }
+
+/**
+ * What one agent does its own way, on top of the protocol every ACP agent
+ * speaks. Made anew for each run, so it can remember what the run has seen.
+ */
 export interface AcpProfile {
   /** The agent as the human knows it, e.g. `Kiro`. */
   readonly product: string
   /**
-   * Names a tool call the agent's own way (an MCP tool, say), before the
-   * protocol's kinds are tried.
+   * Names a tool call the agent's own way (an MCP tool, a file change it
+   * describes without a diff), before the protocol's kinds are tried.
    */
-  readonly toolCall?: (call: ToolCallFields) => NamedTool | undefined
+  readonly toolCall?: (call: ToolCallFields) => Effect.Effect<NamedTool | undefined>
   /**
    * Says something to the agent while its turn runs. The protocol's answer to
    * a declined call carries no message; an agent without this hears the
@@ -64,13 +81,53 @@ export interface AcpProfile {
     sessionId: string,
     message: string,
   ) => Effect.Effect<void, AcpFailed>
+  /**
+   * Settings a session must hold before it is prompted: the agent's own that
+   * make it ask before it acts. A session that lists one and cannot be set to
+   * it does not run.
+   */
+  readonly settings?: ReadonlyArray<{ readonly id: string; readonly value: string }>
+  /**
+   * The id of the model setting, for an agent that lists it (and the reasoning
+   * effort with it) only once a model has been written to the session.
+   */
+  readonly lateModelOption?: string
+  /** Reads an update before the run does: changed, or `undefined` for one that is not shown. */
+  readonly update?: (update: AcpUpdate) => AcpUpdate | undefined
+  /**
+   * The sub-agent an update belongs to, for an agent that runs sub-agents
+   * inside the session: `owner` on the call that started it.
+   */
+  readonly subtask?: (
+    update: AcpUpdate,
+  ) => { readonly id: string; readonly owner: boolean } | undefined
+  /**
+   * For an agent that drops a `session/cancel` sent before its turn has
+   * begun: what shows that it has, and how long to wait for that at most.
+   */
+  readonly cancelHold?: {
+    readonly started: (update: AcpUpdate) => boolean
+    readonly atMost: Duration.Input
+  }
+  /**
+   * The calls a permission request is about, when it asks again about calls
+   * that already ran (a review of a turn's changes). Humanity answers it
+   * itself when it allowed every one of them; `undefined` for any other request.
+   */
+  readonly review?: (request: unknown) => ReadonlyArray<string> | undefined
 }
 
-const MODEL_OPTION = { category: "model", ids: ["model"] }
-const EFFORT_OPTION = {
+interface OptionKind {
+  readonly category: string
+  readonly ids: ReadonlyArray<string>
+}
+const MODEL_OPTION: OptionKind = { category: "model", ids: ["model"] }
+const EFFORT_OPTION: OptionKind = {
   category: "thought_level",
   ids: ["thought_level", "effortLevel", "effort", "reasoning_effort"],
 }
+/** How long an agent gets to list the options that come with a model just written. */
+const LATE_OPTIONS_WAIT = "2 seconds"
 
 const decodeSession = decode(SessionResponse)
 const decodeUpdate = decode(SessionUpdate)
@@ -83,6 +140,9 @@ const decodePrompt = decode(PromptResponse)
 
 const CANCELLED = { outcome: { outcome: "cancelled" } }
 const selected = (optionId: string) => ({ outcome: { outcome: "selected", optionId } })
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const nameValues = (record: Readonly<Record<string, string>>) =>
   Object.entries(record).map(([name, value]) => ({ name, value }))
@@ -153,12 +213,40 @@ export const acpPrompt = (
   return [...images, { type: "text", text }]
 }
 
+/**
+ * The values a select setting offers, flat or in groups; `undefined` when the
+ * agent lists them in no way Humanity reads.
+ */
+export const acpOptionValues = (option: ConfigOption): ReadonlyArray<string> | undefined => {
+  if (!Array.isArray(option.options)) return undefined
+  const values: Array<string> = []
+  for (const entry of option.options as ReadonlyArray<unknown>) {
+    if (!isRecord(entry)) continue
+    if (typeof entry["value"] === "string") values.push(entry["value"])
+    else if (Array.isArray(entry["options"])) {
+      for (const choice of entry["options"] as ReadonlyArray<unknown>) {
+        if (isRecord(choice) && typeof choice["value"] === "string") values.push(choice["value"])
+      }
+    }
+  }
+  return values
+}
+
+/** What an update adds to `_meta` joins what was there: agents send it piece by piece. */
+const mergeMeta = (known: unknown, update: unknown): unknown => {
+  if (!isRecord(known) || !isRecord(update)) return update
+  const merged: Record<string, unknown> = { ...known }
+  for (const [key, value] of Object.entries(update)) merged[key] = mergeMeta(known[key], value)
+  return merged
+}
+
 /** Later fields replace earlier ones; a field an update leaves out keeps its value. */
 const merge = (known: ToolCallFields | undefined, update: ToolCallFields): ToolCallFields => {
   if (known === undefined) return update
   const merged: Record<string, unknown> = { ...known }
   for (const [key, value] of Object.entries(update)) {
-    if (value !== undefined && value !== null) merged[key] = value
+    if (value === undefined || value === null) continue
+    merged[key] = key === "_meta" ? mergeMeta(merged[key], value) : value
   }
   return merged as unknown as ToolCallFields
 }
@@ -167,18 +255,29 @@ interface TrackedTool {
   fields: ToolCallFields
   /** Whether Humanity was told the call began. */
   started: boolean
+  /** The call of the sub-agent this one belongs to. */
+  parent: string | null
+}
+
+interface Turn {
+  readonly cancelled: Deferred.Deferred<void>
+  /** The agent has shown that the turn began, so a cancel now reaches it. */
+  readonly begun: Deferred.Deferred<void>
+  /** `session/prompt` went out: from here on a cancel has something to stop. */
+  prompted: boolean
 }
 
 /**
  * One conversation with an ACP agent on its own process. Messages queue like
  * they do for the other agents: each starts a turn when the one before it is
  * over. Humanity decides only what the agent asks about, so an agent's own
- * settings must make it ask; that is the business of whoever starts it.
+ * settings must make it ask; that is the business of its profile.
  */
 export const startAcpRun =
-  (connect: AcpConnect, profile: AcpProfile) =>
+  (connect: AcpConnect, makeProfile: (run: { readonly cwd: string }) => AcpProfile) =>
   (options: AgentRunOptions): Effect.Effect<AgentRun, never, Scope.Scope> =>
     Effect.gen(function* () {
+      const profile = makeProfile({ cwd: options.cwd })
       const { product } = profile
       const outer = yield* Effect.scope
       // Closed early when the agent cannot start, so no process lingers behind a failed run.
@@ -190,6 +289,10 @@ export const startAcpRun =
         Queue.offer(outbox, acpEvent(method, params)).pipe(Effect.asVoid)
 
       const tools = new Map<string, TrackedTool>()
+      /** The call that started each running sub-agent, by the sub-agent's id. */
+      const subtasks = new Map<string, string>()
+      /** The calls of this turn Humanity allowed. */
+      const allowed = new Set<string>()
       /** What a declined call's answer could not tell the agent, for its next prompt. */
       const notes: Array<string> = []
       let model = options.model
@@ -199,10 +302,22 @@ export const startAcpRun =
       /** The agent is replaying a reopened session's history, which Humanity already has. */
       let replaying = false
       let configOptions: ReadonlyArray<ConfigOption> = []
+      /** Whoever waits for the agent to list its options again. */
+      let configWaiters: Array<Deferred.Deferred<void>> = []
       let context: ContextUsage | undefined
-      let turn: { readonly cancelled: Deferred.Deferred<void> } | undefined
+      let turn: Turn | undefined
       let text = ""
       let thought = ""
+
+      const setConfigOptions = (now: ReadonlyArray<ConfigOption>) =>
+        Effect.suspend(() => {
+          configOptions = now
+          const waiting = configWaiters
+          configWaiters = []
+          return Effect.forEach(waiting, (waiter) => Deferred.succeed(waiter, undefined), {
+            discard: true,
+          })
+        })
 
       const flushThought = Effect.suspend(() => {
         const said = thought
@@ -216,41 +331,60 @@ export const startAcpRun =
       })
       const flush = Effect.andThen(flushThought, flushText)
 
-      const named = (call: ToolCallFields): NamedTool =>
-        profile.toolCall?.(call) ?? acpToolCall(call)
+      const named = (call: ToolCallFields): Effect.Effect<NamedTool> =>
+        profile.toolCall === undefined
+          ? Effect.sync(() => acpToolCall(call))
+          : Effect.map(profile.toolCall(call), (own) => own ?? acpToolCall(call))
+
+      const track = (update: ToolCallFields, parent: string | null = null): TrackedTool => {
+        const known = tools.get(update.toolCallId)
+        const tool = known ?? { fields: update, started: false, parent }
+        tool.fields = merge(known?.fields, update)
+        tools.set(update.toolCallId, tool)
+        return tool
+      }
 
       const startTool = (tool: TrackedTool) =>
-        Effect.suspend(() => {
-          if (tool.started) return Effect.void
+        Effect.gen(function* () {
+          if (tool.started) return
           tool.started = true
           const { toolCallId } = tool.fields
-          return Effect.andThen(
-            flush,
-            emit(ACP_TOOL_STARTED, { toolCallId, ...named(tool.fields), call: tool.fields }),
-          )
+          const call = yield* named(tool.fields)
+          yield* flush
+          yield* emit(ACP_TOOL_STARTED, {
+            toolCallId,
+            ...call,
+            parent: tool.parent,
+            call: tool.fields,
+          })
+        })
+
+      const finishTool = (tool: TrackedTool, content: string, isError: boolean) =>
+        Effect.suspend(() => {
+          const { toolCallId } = tool.fields
+          tools.delete(toolCallId)
+          for (const [id, owner] of subtasks) if (owner === toolCallId) subtasks.delete(id)
+          return emit(ACP_TOOL_COMPLETED, {
+            toolCallId,
+            content,
+            isError,
+            parent: tool.parent,
+            call: tool.fields,
+          })
         })
 
       /**
        * A call is shown once it runs, is asked about or is over, not when it is
        * first announced: by then the agent has said what it is.
        */
-      const onToolCall = (update: ToolCallFields) =>
+      const onToolCall = (update: ToolCallFields, parent: string | null) =>
         Effect.gen(function* () {
-          const known = tools.get(update.toolCallId)
-          const tool = known ?? { fields: update, started: false }
-          tool.fields = merge(known?.fields, update)
-          tools.set(update.toolCallId, tool)
-          const { status, toolCallId } = tool.fields
+          const tool = track(update, parent)
+          const { status } = tool.fields
           if (status !== "in_progress" && status !== "completed" && status !== "failed") return
           yield* startTool(tool)
           if (status === "in_progress") return
-          tools.delete(toolCallId)
-          yield* emit(ACP_TOOL_COMPLETED, {
-            toolCallId,
-            content: acpToolOutput(tool.fields),
-            isError: status === "failed",
-            call: tool.fields,
-          })
+          yield* finishTool(tool, acpToolOutput(tool.fields), status === "failed")
         })
 
       /** Tells the agent why a call was declined: its own answer carries no message. */
@@ -270,35 +404,53 @@ export const startAcpRun =
           const asked = decodePermission(params)
           if (Option.isNone(asked) || asked.value.sessionId !== sessionId) return CANCELLED
           const { toolCall, options: offered } = asked.value
-          const known = tools.get(toolCall.toolCallId)
-          const tool = known ?? { fields: toolCall, started: false }
-          tool.fields = merge(known?.fields, toolCall)
-          tools.set(toolCall.toolCallId, tool)
+          const option = (kind: string) => offered.find((entry) => entry.kind === kind)?.optionId
+
+          // A second question about calls Humanity already allowed has its answer.
+          const reviewed = profile.review?.(params)
+          const allowOnce = option("allow_once")
+          if (
+            reviewed !== undefined &&
+            reviewed.length > 0 &&
+            reviewed.every((id) => allowed.has(id)) &&
+            allowOnce !== undefined
+          ) {
+            return selected(allowOnce)
+          }
+
+          const tool = track(toolCall)
           yield* startTool(tool)
 
           const decision = yield* Effect.raceFirst(
-            options.canUseTool({ ...named(tool.fields), toolUseId: toolCall.toolCallId }),
+            Effect.flatMap(named(tool.fields), (call) =>
+              options.canUseTool({ ...call, toolUseId: toolCall.toolCallId }),
+            ),
             // An interrupted turn takes its questions with it.
             turn === undefined
               ? Effect.never
               : Effect.as(Deferred.await(turn.cancelled), undefined),
           )
           if (decision === undefined) return CANCELLED
-          const option = (kind: string) => offered.find((entry) => entry.kind === kind)?.optionId
+          // The agent reports nothing more about a review: its answer is how it ended.
+          const settle = (outcome: string) =>
+            reviewed === undefined ? Effect.void : finishTool(tool, outcome, false)
           if (decision.behavior === "deny") {
             yield* explain(decision.message)
+            yield* settle("Rejected.")
             const reject = option("reject_once")
             return reject === undefined ? CANCELLED : selected(reject)
           }
           // Only ever once: an agent's "always" is a rule of its own that outlives the thread.
-          const allow = option("allow_once")
-          if (allow === undefined) {
+          if (allowOnce === undefined) {
             yield* explain(
               `NOT RUN: ${product} offered no way to allow this call once, and Humanity does not save permissions with ${product}.`,
             )
+            yield* settle("Not answered.")
             return CANCELLED
           }
-          return selected(allow)
+          allowed.add(toolCall.toolCallId)
+          yield* settle("Accepted.")
+          return selected(allowOnce)
         })
 
       const onRequest = (request: AgentMessage): Effect.Effect<unknown, AcpFailed> =>
@@ -313,22 +465,36 @@ export const startAcpRun =
 
       const onNotification = ({ method, params }: AgentMessage) =>
         Effect.gen(function* () {
-          if (method !== "session/update" || replaying) return
+          if (method !== "session/update") return
           const notified = decodeUpdate(params)
           // A session the agent runs on the side has an id of its own; only this one is the conversation.
           if (Option.isNone(notified) || notified.value.sessionId !== sessionId) return
-          const update = (params as { readonly update: unknown }).update
-          switch (notified.value.update.sessionUpdate) {
+          const raw = (params as { readonly update: AcpUpdate }).update
+          if (raw.sessionUpdate === "config_option_update") {
+            const changed = decodeConfigUpdate(raw)
+            if (Option.isSome(changed)) yield* setConfigOptions(changed.value.configOptions)
+            return
+          }
+          if (replaying) return
+          if (turn !== undefined && profile.cancelHold?.started(raw) === true) {
+            yield* Deferred.succeed(turn.begun, undefined)
+          }
+          const update = profile.update === undefined ? raw : profile.update(raw)
+          if (update === undefined) return
+          const subtask = profile.subtask?.(update)
+          // What a sub-agent does is shown under the call that started it; what it says is that call's result.
+          const inSubtask = subtask !== undefined && !subtask.owner
+          switch (update.sessionUpdate) {
             case "agent_message_chunk": {
               const chunk = Option.getOrUndefined(decodeChunk(update))?.content.text ?? ""
-              if (chunk === "") return
+              if (chunk === "" || inSubtask) return
               yield* flushThought
               text += chunk
               return yield* emit(ACP_TEXT_DELTA, { text: chunk })
             }
             case "agent_thought_chunk": {
               const chunk = Option.getOrUndefined(decodeChunk(update))?.content.text ?? ""
-              if (chunk === "") return
+              if (chunk === "" || inSubtask) return
               yield* flushText
               thought += chunk
               return
@@ -336,8 +502,12 @@ export const startAcpRun =
             case "tool_call":
             case "tool_call_update": {
               const call = decodeToolCall(update)
-              if (Option.isSome(call)) yield* onToolCall(call.value)
-              return
+              if (Option.isNone(call)) return
+              if (subtask?.owner === true) subtasks.set(subtask.id, call.value.toolCallId)
+              return yield* onToolCall(
+                call.value,
+                inSubtask ? (subtasks.get(subtask.id) ?? null) : null,
+              )
             }
             case "usage_update": {
               const usage = decodeUsage(update)
@@ -346,60 +516,131 @@ export const startAcpRun =
               }
               return
             }
-            case "config_option_update": {
-              const changed = decodeConfigUpdate(update)
-              if (Option.isSome(changed)) configOptions = changed.value.configOptions
-              return
-            }
           }
         })
 
-      const optionFor = (kind: {
-        readonly category: string
-        readonly ids: ReadonlyArray<string>
-      }) =>
+      const optionFor = (kind: OptionKind) =>
         configOptions.find((option) => option.category === kind.category) ??
         configOptions.find((option) => kind.ids.includes(option.id))
 
-      /** Sets an option the agent offers to the thread's choice, when it is not there already. */
-      const choose = (
-        connected: AcpConnection,
-        session: string,
-        kind: { readonly category: string; readonly ids: ReadonlyArray<string> },
-        value: string | undefined,
-      ) =>
+      const setOption = (connected: AcpConnection, session: string, id: string, value: string) =>
         Effect.gen(function* () {
-          const option = optionFor(kind)
-          if (value === undefined || option === undefined || option.currentValue === value) return
           const response = yield* connected.request("session/set_config_option", {
             sessionId: session,
-            configId: option.id,
+            configId: id,
             value,
           })
           const now = Option.getOrUndefined(decodeSession(response))?.configOptions
-          if (now !== null && now !== undefined) configOptions = now
+          if (now !== null && now !== undefined) yield* setConfigOptions(now)
         })
 
+      /** Waits, but not for long, until the agent lists an option of this kind. */
+      const awaitOption = (kind: OptionKind) =>
+        Effect.gen(function* () {
+          while (optionFor(kind) === undefined) {
+            const changed = yield* Deferred.make<void>()
+            configWaiters.push(changed)
+            yield* Deferred.await(changed)
+          }
+        }).pipe(Effect.timeoutOption(LATE_OPTIONS_WAIT), Effect.asVoid)
+
+      /**
+       * Sets the session to the thread's model, when it is not there already.
+       * Says whether a model was written, which is when an agent may list new options.
+       */
+      const chooseModel = (connected: AcpConnection, session: string) =>
+        Effect.gen(function* () {
+          if (model === undefined) return false
+          const option = optionFor(MODEL_OPTION)
+          const id = option?.id ?? profile.lateModelOption
+          if (id === undefined || option?.currentValue === model) return false
+          yield* setOption(connected, session, id, model)
+          return true
+        })
+
+      /** Sets the reasoning effort, to a level the agent offers for the model it runs. */
+      const chooseEffort = (connected: AcpConnection, session: string, modelWritten: boolean) =>
+        Effect.gen(function* () {
+          if (effort === undefined) return
+          if (modelWritten && profile.lateModelOption !== undefined) {
+            yield* awaitOption(EFFORT_OPTION)
+          }
+          const option = optionFor(EFFORT_OPTION)
+          if (option === undefined || option.currentValue === effort) return
+          const offered = acpOptionValues(option)
+          if (offered !== undefined && offered.length > 0 && !offered.includes(effort)) return
+          yield* setOption(connected, session, option.id, effort)
+        })
+
+      /**
+       * Holds the session to the settings that make the agent ask. One the
+       * session lists must take; one it does not list is tried all the same.
+       */
+      const holdSettings = (connected: AcpConnection, session: string) =>
+        Effect.forEach(
+          profile.settings ?? [],
+          (setting) =>
+            Effect.gen(function* () {
+              const listed = configOptions.find((option) => option.id === setting.id)
+              if (listed?.currentValue === setting.value) return
+              const set = setOption(connected, session, setting.id, setting.value)
+              if (listed === undefined) return yield* Effect.ignore(set)
+              yield* set.pipe(
+                Effect.mapError(
+                  (error) =>
+                    new AcpFailed({
+                      reason: `${product} could not be set to ask before it acts (${setting.id}): ${error.reason}`,
+                    }),
+                ),
+              )
+              const now = configOptions.find((option) => option.id === setting.id)
+              if (now !== undefined && now.currentValue !== setting.value) {
+                return yield* new AcpFailed({
+                  reason: `${product} did not keep the setting that makes it ask before it acts (${setting.id}).`,
+                })
+              }
+            }),
+          { discard: true },
+        )
+
       const interruptTurn = Effect.suspend(() => {
-        if (turn === undefined) return Effect.void
-        const stop = Deferred.succeed(turn.cancelled, undefined)
-        return connection === undefined || sessionId === undefined
-          ? stop
-          : Effect.andThen(stop, connection.notify("session/cancel", { sessionId }))
+        const current = turn
+        if (current === undefined) return Effect.void
+        const stop = Deferred.succeed(current.cancelled, undefined)
+        const connected = connection
+        // A turn not yet prompted sees that it was cancelled and never is.
+        if (!current.prompted || connected === undefined || sessionId === undefined) return stop
+        const cancel = connected.notify("session/cancel", { sessionId })
+        const hold = profile.cancelHold
+        if (hold === undefined) return Effect.andThen(stop, cancel)
+        return Effect.andThen(
+          stop,
+          Deferred.await(current.begun).pipe(
+            Effect.timeoutOption(hold.atMost),
+            Effect.andThen(Effect.suspend(() => (turn === current ? cancel : Effect.void))),
+            Effect.forkIn(own),
+          ),
+        )
       })
 
       const runTurn = (connected: AcpConnection, session: string, message: AgentUserMessage) =>
         Effect.gen(function* () {
-          const current = { cancelled: yield* Deferred.make<void>() }
+          const current: Turn = {
+            cancelled: yield* Deferred.make<void>(),
+            begun: yield* Deferred.make<void>(),
+            prompted: false,
+          }
           turn = current
           const startedAt = yield* Clock.currentTimeMillis
           const told = notes.splice(0)
           const answered = yield* Effect.result(
             Effect.gen(function* () {
-              yield* choose(connected, session, MODEL_OPTION, model)
+              yield* holdSettings(connected, session)
+              const modelWritten = yield* chooseModel(connected, session)
               // An agent that names its levels otherwise keeps its own.
-              yield* Effect.ignore(choose(connected, session, EFFORT_OPTION, effort))
+              yield* Effect.ignore(chooseEffort(connected, session, modelWritten))
               if (yield* Deferred.isDone(current.cancelled)) return { stopReason: "cancelled" }
+              current.prompted = true
               return yield* connected.request("session/prompt", {
                 sessionId: session,
                 prompt: acpPrompt(message, {
@@ -412,7 +653,11 @@ export const startAcpRun =
           yield* flush
           // What never ran is not shown; what ran and was never said to end stays as it is.
           tools.clear()
+          subtasks.clear()
+          allowed.clear()
           turn = undefined
+          // A turn that never reached the agent did not tell it what was declined.
+          if (!current.prompted) notes.unshift(...told)
           const prompted =
             answered._tag === "Success"
               ? Option.getOrUndefined(decodePrompt(answered.success))
@@ -481,7 +726,11 @@ export const startAcpRun =
           return yield* new AcpFailed({ reason: `${product} did not say which session it opened.` })
         }
         sessionId = session
-        configOptions = opened?.configOptions ?? []
+        // A reopened session may have listed its options while it replayed, and not again after.
+        const listed = opened?.configOptions
+        if (listed !== null && listed !== undefined) yield* setConfigOptions(listed)
+        // Before the thread is shown as ready: an agent that cannot be made to ask does not run.
+        yield* holdSettings(connected, session)
         const running = optionFor(MODEL_OPTION)?.currentValue
         yield* emit(ACP_READY, {
           sessionId: session,

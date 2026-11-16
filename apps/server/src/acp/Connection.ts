@@ -106,6 +106,16 @@ export const connectAcp = (
 
     const answer = (id: unknown, request: AgentMessage) =>
       options.onRequest(request).pipe(
+        // The agent waits for an answer; one that could not be worked out is still an answer.
+        Effect.catchDefect((defect) =>
+          Effect.logWarning("acp request not answered", defect).pipe(
+            Effect.andThen(
+              Effect.fail(
+                new AcpFailed({ reason: `Humanity could not answer ${request.method}.` }),
+              ),
+            ),
+          ),
+        ),
         Effect.matchEffect({
           onSuccess: (result) => send({ id, result }),
           onFailure: (error) =>
@@ -178,7 +188,12 @@ export const connectAcp = (
     yield* handle.stdout.pipe(
       Stream.decodeText(),
       Stream.splitLines,
-      Stream.runForEach(dispatch),
+      // One message that cannot be handled must not end the reading of all that follow.
+      Stream.runForEach((line) =>
+        dispatch(line).pipe(
+          Effect.catchDefect((defect) => Effect.logWarning("acp message not handled", defect)),
+        ),
+      ),
       Effect.ignore,
       Effect.andThen(stop),
       Effect.forkIn(scope),
@@ -213,8 +228,17 @@ export const connectAcp = (
       }),
     )
 
+    const agent = Option.getOrElse(decodeInitialize(initialized), (): InitializeResponse => ({}))
+    const speaks = agent.protocolVersion
+    if (typeof speaks === "number" && speaks !== PROTOCOL_VERSION) {
+      // Agents in the wild name a later version and still answer in this one's shapes.
+      yield* Effect.logWarning(
+        `${product} speaks ACP version ${speaks}; Humanity asked for ${PROTOCOL_VERSION}.`,
+      )
+    }
+
     return {
-      agent: Option.getOrElse(decodeInitialize(initialized), (): InitializeResponse => ({})),
+      agent,
       request,
       notify: (method: string, params?: unknown) =>
         send(params === undefined ? { method } : { method, params }),

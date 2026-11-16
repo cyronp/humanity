@@ -12,6 +12,8 @@ export const PROTOCOL_VERSION = 1
 const nullable = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema))
 
 export const InitializeResponse = Schema.Struct({
+  /** The version the agent chose to speak: the one it was asked for, or its own latest. */
+  protocolVersion: nullable(Schema.Number),
   agentCapabilities: nullable(
     Schema.Struct({
       loadSession: nullable(Schema.Boolean),
@@ -103,6 +105,7 @@ export const PermissionRequest = Schema.Struct({
   sessionId: Schema.String,
   toolCall: ToolCallFields,
   options: Schema.Array(PermissionOption),
+  _meta: Schema.optional(Schema.Unknown),
 })
 
 /** The answer to `session/prompt`: the turn is over. */
