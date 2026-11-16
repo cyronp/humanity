@@ -33,7 +33,7 @@ export function OnboardingDialog() {
           if (!nextOpen) closeOnboarding()
         }}
       >
-        <DialogContent className="flex h-[44rem] max-h-[90svh] flex-col gap-0 p-0 sm:max-w-4xl">
+        <DialogContent className="flex h-[44rem] max-h-[min(90svh,var(--dialog-max-height))] flex-col gap-0 p-0 sm:max-w-4xl">
           <DialogTitle className="sr-only">Welcome to Humanity</DialogTitle>
           <DialogDescription className="sr-only">
             Connect your agent and your repositories, then start building.

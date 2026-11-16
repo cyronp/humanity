@@ -66,7 +66,7 @@ export function SettingsDialog() {
       }}
     >
       <DialogContent
-        className="flex h-[min(50rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(80rem,calc(100%-2rem))]"
+        className="flex h-[min(50rem,var(--dialog-max-height))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(80rem,calc(100%-2rem))]"
         onEscapeKeyDown={(event) => {
           // The first Escape clears a search; the next one closes the settings.
           if (query === "") return

@@ -75,6 +75,9 @@ export const PROVIDERS: Record<
   kiro: { name: "Kiro", vendor: "Kiro", Icon: KiroIcon, beta: true },
 }
 
+/** Every provider, in the order they are listed everywhere. */
+export const PROVIDER_IDS = Object.keys(PROVIDERS) as ReadonlyArray<ProviderId>
+
 export const sessionProvider = (session: Session): ProviderId => session.provider
 
 /** A provider's icon, labelled with its name for screen readers and on hover. */
