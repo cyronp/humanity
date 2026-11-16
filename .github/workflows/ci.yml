@@ -13,27 +13,75 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Pushes to main run everything. A pull request runs only what its files can break.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+    steps:
+      - name: Sort the changed files
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A renamed file counts under its old path and its new one.
+          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+          printf '%s\n' "$files"
+          # Code is anything but the docs and GitHub's own files of the repository.
+          code=$(printf '%s\n' "$files" | grep -viE '^(docs/|[^/]+\.md$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|workflows/(codeql|nightly|release)\.yml$))' || true)
+          # The Linux job already builds the web app and bundles the daemon; what only
+          # the installer can break is the shell, the dependencies and this workflow.
+          desktop=$(printf '%s\n' "$files" | grep -E '^(apps/desktop/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' || true)
+          echo "code=$([ -n "$code" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "desktop=$([ -n "$desktop" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   check:
     name: Node ${{ matrix.node }}
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         node: [22, 24]
+    # A required check, so the job always runs and reports: a skipped matrix job
+    # never reports "Node 22" or "Node 24", and the pull request would wait forever.
+    # When no code changed, its steps are skipped instead.
     steps:
+      - if: needs.changes.outputs.code != 'true'
+        run: echo "No code changed."
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code == 'true'
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test
-      - run: npm run build
+      - if: needs.changes.outputs.code == 'true'
+        run: npm ci
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run lint
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run typecheck
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run test
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run build
 
   desktop:
     name: Desktop installer (Windows)
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
