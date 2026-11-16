@@ -1,9 +1,15 @@
-import { OPEN_THREAD_TOOL } from "@humanity/contracts"
+import { type AgentProvider, OPEN_THREAD_TOOL, PROVIDER_NAMES } from "@humanity/contracts"
 import { MessageSquarePlus } from "lucide-react"
 import { Markdown } from "@/features/chat/Markdown"
 import { stringField } from "../inputs.ts"
 import type { ToolRenderer } from "../registry.ts"
 import { Field, OutputText } from "./common.tsx"
+
+/** A provider the agent named, as the human knows it; one Humanity does not know, as written. */
+const providerName = (provider: string | undefined): string | undefined =>
+  provider !== undefined && Object.hasOwn(PROVIDER_NAMES, provider)
+    ? PROVIDER_NAMES[provider as AgentProvider]
+    : provider
 
 /**
  * Humanity's own tool: the agent opening a new thread at the human's request.
@@ -25,7 +31,11 @@ export const threadRenderer: ToolRenderer = {
   ),
   Detail: ({ input, call }) => {
     const prompt = stringField(input, "prompt")
-    const runsOn = [stringField(input, "model"), stringField(input, "effort")]
+    const runsOn = [
+      providerName(stringField(input, "provider")),
+      stringField(input, "model"),
+      stringField(input, "effort"),
+    ]
       .filter((part) => part !== undefined)
       .join(" · ")
     return (

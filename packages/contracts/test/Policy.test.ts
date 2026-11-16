@@ -78,6 +78,7 @@ describe("open_thread", () => {
     sessionId: SessionId.make("s1"),
     projectId: ProjectId.make("p1"),
     title: "Fix [login]",
+    provider: "claude-code" as const,
     model: "opus",
     effort: "high" as const,
   }
@@ -85,14 +86,14 @@ describe("open_thread", () => {
   it("tells the agent what runs and gives it the link to put in its reply", () => {
     expect(formatOpenedThread(thread)).toBe(
       [
-        'Opened the thread "Fix [login]" on opus, high effort. It is working now.',
+        'Opened the thread "Fix [login]" on Claude Code, opus, high effort. It is working now.',
         "When you tell the human about it, link to it inline in your sentence, with exactly this markdown: [Fix \\[login\\]](/projects/p1/sessions/s1)",
         "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
       ].join("\n"),
     )
-    expect(formatOpenedThread({ ...thread, model: null, effort: null })).toContain(
-      "on the default model. It",
-    )
+    expect(
+      formatOpenedThread({ ...thread, provider: "kiro", model: null, effort: null }),
+    ).toContain("on Kiro, the default model. It")
   })
 
   it("recognises a link to a thread, and no other link", () => {

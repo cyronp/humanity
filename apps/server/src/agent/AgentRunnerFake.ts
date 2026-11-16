@@ -1,6 +1,7 @@
 import {
-  formatOpenedThread,
+  HUMANITY_MCP_SERVER,
   OPEN_THREAD_TOOL,
+  OPEN_THREAD_TOOL_NAME,
   type ReasoningEffort,
   toolMode,
 } from "@humanity/contracts"
@@ -8,15 +9,21 @@ import { simulateEdit, simulateWrite } from "@humanity/diff"
 import { Context, Effect, Fiber, Layer, Option, Queue, Ref, Stream } from "effect"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
+import { answerMcp, HumanityMcp } from "../mcp/HumanityMcp.ts"
 import {
   type AgentRunOptions,
   AgentRunner,
   type AgentExtensions,
   type AgentUserMessage,
-  type OpenThreadRequest,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
+
+/** An MCP tool's result, as the agent reads it. */
+interface ToolResult {
+  readonly content: ReadonlyArray<{ readonly text: string }>
+  readonly isError?: boolean
+}
 
 export type FakeStep =
   | { readonly text: string }
@@ -82,14 +89,38 @@ const executeTool = (cwd: string, step: Extract<FakeStep, { tool: string }>) => 
  * A scripted stand-in for the Agent SDK. It emits SDK-shaped messages, asks
  * `canUseTool` exactly where the real SDK would (anything not in
  * `allowedTools`, after the permission guard), and honors interrupts by aborting
- * the pending permission request.
+ * the pending permission request. It calls Humanity's own tools on the
+ * daemon's MCP server, so it needs `HumanityMcp`.
  */
 export const AgentRunnerFake = (script: FakeScript) =>
   Layer.effect(
     AgentRunner,
     Effect.gen(function* () {
       const log = yield* FakeAgentLog
+      const mcp = yield* HumanityMcp
       let runCounter = 0
+
+      /**
+       * Calls `open_thread` on Humanity's MCP server as the run was given it,
+       * with the run's own token, the way a real agent's MCP client would.
+       */
+      const callHumanity = (options: AgentRunOptions, input: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const server = options.extensions.mcpServers[HUMANITY_MCP_SERVER]
+          const tools = mcp.toolsFor(server?.type === "http" ? server.headers["Authorization"] : "")
+          if (tools === undefined) return { content: "Unauthorized.", isError: true }
+          const reply = yield* answerMcp(tools, {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: OPEN_THREAD_TOOL_NAME, arguments: input },
+          })
+          const called = (reply.body as { readonly result?: ToolResult } | undefined)?.result
+          return {
+            content: called?.content.map((part) => part.text).join("\n") ?? "",
+            isError: called?.isError === true,
+          }
+        })
 
       const start = (options: AgentRunOptions) =>
         Effect.gen(function* () {
@@ -184,15 +215,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
                     ? { content: decision.message, isError: true }
                     : step.tool === OPEN_THREAD_TOOL
                       ? // Humanity's own tool really runs, like Edit and Write.
-                        yield* options.openThread(step.input as unknown as OpenThreadRequest).pipe(
-                          Effect.match({
-                            onSuccess: (thread) => ({
-                              content: formatOpenedThread(thread),
-                              isError: false,
-                            }),
-                            onFailure: (error) => ({ content: error.reason, isError: true }),
-                          }),
-                        )
+                        yield* callHumanity(options, step.input)
                       : executeTool(options.cwd, step)
                 yield* emit({
                   type: "user",

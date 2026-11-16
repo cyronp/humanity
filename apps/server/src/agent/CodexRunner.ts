@@ -1,6 +1,10 @@
 import {
+  AUTO_TOOLS,
   type ContextUsage,
+  HUMANITY_MCP_SERVER,
   MCP_REQUEST_TOOL,
+  OPEN_THREAD_TOOL_NAME,
+  parseMcpToolName,
   PATCH_TOOL,
   QUESTION_TOOL,
   type ReasoningEffort,
@@ -46,7 +50,8 @@ export type CodexConnect = (options: {
 
 const INSTRUCTIONS = `You are running inside Humanity, an app where a human runs coding agents in threads.
 The human chooses how much each thread does on its own. Depending on that, a file change, shell command or MCP tool may wait for them to allow or deny it.
-When a command or file change is declined, the message that follows is the human's decision and feedback. Follow it instead of retrying the same call.`
+When a command or file change is declined, the message that follows is the human's decision and feedback. Follow it instead of retrying the same call.
+When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOOL_NAME} tool of the ${HUMANITY_MCP_SERVER} MCP server. Do not use it on your own initiative.`
 
 /**
  * How every thread runs, whatever the human's own Codex settings say. Codex
@@ -96,6 +101,20 @@ export const codexUserInput = (message: AgentUserMessage): ReadonlyArray<unknown
   return [...images, textInput(text)]
 }
 
+/**
+ * The tools of Humanity's own server that no thread asks about, approved in
+ * Codex's terms. Codex asks about an MCP call by its server alone, so a tool
+ * Humanity never asks about is not left to that question.
+ */
+const humanityAutoTools: Record<string, unknown> = Object.fromEntries(
+  AUTO_TOOLS.flatMap((toolName) => {
+    const parsed = parseMcpToolName(toolName)
+    return parsed?.server === HUMANITY_MCP_SERVER
+      ? [[parsed.tool, { approval_mode: "approve" }] as const]
+      : []
+  }),
+)
+
 /** Humanity's MCP servers in Codex's configuration format, each asking before its tools run. */
 const mcpServerConfig = (
   extensions: AgentExtensions,
@@ -105,19 +124,13 @@ const mcpServerConfig = (
   // The human's own servers keep their settings; only how their tools are approved is set.
   for (const name of configured) servers[name] = { default_tools_approval_mode: "prompt" }
   for (const [name, server] of Object.entries(extensions.mcpServers)) {
-    servers[name] =
-      server.type === "stdio"
-        ? {
-            command: server.command,
-            args: [...server.args],
-            env: { ...server.env },
-            default_tools_approval_mode: "prompt",
-          }
-        : {
-            url: server.url,
-            http_headers: { ...server.headers },
-            default_tools_approval_mode: "prompt",
-          }
+    servers[name] = {
+      ...(server.type === "stdio"
+        ? { command: server.command, args: [...server.args], env: { ...server.env } }
+        : { url: server.url, http_headers: { ...server.headers } }),
+      default_tools_approval_mode: "prompt",
+      ...(name === HUMANITY_MCP_SERVER ? { tools: humanityAutoTools } : {}),
+    }
   }
   return servers
 }

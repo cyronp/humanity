@@ -126,7 +126,6 @@ const runOptions = (
   extensions: { mcpServers: {}, plugins: [] },
   allowedTools: [],
   canUseTool: (request) => Effect.sync(() => canUseTool(request)),
-  openThread: () => Effect.die("not used"),
   ...overrides,
 })
 

@@ -12,6 +12,7 @@ import { Kiro } from "./kiro/Kiro.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
+import { HumanityMcp } from "./mcp/HumanityMcp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { CodexHandlers } from "./rpc/CodexHandlers.ts"
@@ -47,7 +48,8 @@ import { UpdateService } from "./services/UpdateService.ts"
 
 /**
  * Domain services, built on whatever config, database, platform, agent runner,
- * Claude Code, Codex and Kiro runtimes and Claude Code history they are given. Tests swap in the fake runner here.
+ * Humanity's MCP server, Claude Code, Codex and Kiro runtimes and Claude Code
+ * history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
   Layer.mergeAll(HistoryImport.layer, PullRequestService.layer, UpdateService.layer).pipe(
@@ -155,6 +157,8 @@ export const Daemon = HttpRouter.serve(
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
+  // One for the routes and the sessions both: a thread's token is served where it was made.
+  Layer.provide(HumanityMcp.layer),
   // After the runner: both it and the account checks run on this Claude Code and this Codex.
   Layer.provide(ClaudeCode.layer),
   Layer.provide(Codex.layer),

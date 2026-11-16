@@ -4,9 +4,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { AcpFailed, connectAcp } from "../acp/Connection.ts"
-import { decode } from "../acp/protocol.ts"
+import { decode, type ToolCallFields } from "../acp/protocol.ts"
 import type { AcpConnect, AcpProfile, AcpUpdate } from "../agent/AcpRunner.ts"
-import { acpPatchFile, acpPath } from "../agent/normalizeAcp.ts"
+import { acpPatchFile, acpPath, type NamedTool } from "../agent/normalizeAcp.ts"
 import { isInsideDir } from "../paths.ts"
 
 /**
@@ -194,6 +194,25 @@ const TURN_ACTIVITY: ReadonlyArray<string> = [
   "plan",
 ]
 
+/** Kiro titles an MCP call `@<server>/<tool>`. */
+const MCP_TITLE = /^@([^/\s]+)\/(\S+)$/
+
+/**
+ * An MCP call under the name every agent's MCP calls go by in Humanity,
+ * `mcp__<server>__<tool>`, with the tool's arguments as its input. Kiro titles
+ * it `@<server>/<tool>` and names the server under `_meta.kiro`; a call that
+ * does not say both is left to its own name.
+ */
+export const kiroMcpTool = (call: ToolCallFields): NamedTool | undefined => {
+  const titled = MCP_TITLE.exec(call.title ?? "")
+  const server = stringOf(kiroMeta(call), "serverName")
+  if (titled === null || server === undefined || titled[1] !== server) return undefined
+  return {
+    toolName: `mcp__${server}__${titled[2] ?? ""}`,
+    input: isRecord(call.rawInput) ? call.rawInput : {},
+  }
+}
+
 /**
  * What Kiro does its own way. `readFile` reads a file of the session's folder
  * as it is now (`undefined` when there is none), to show a change against it.
@@ -227,6 +246,8 @@ export const kiroProfile =
        */
       toolCall: (call) =>
         Effect.gen(function* () {
+          const mcp = kiroMcpTool(call)
+          if (mcp !== undefined) return mcp
           if (call.kind !== "edit") return undefined
           if ((call.content ?? []).some((part) => part.type === "diff")) return undefined
           const previewed = kiroMeta(call)["preview"]

@@ -1,12 +1,14 @@
 import { Schema } from "effect"
 import { ProjectId } from "./Project.ts"
+import { AgentProvider, PROVIDER_NAMES } from "./Provider.ts"
 import { ReasoningEffort, SessionId } from "./Session.ts"
 
 export const OpenedThread = Schema.Struct({
   sessionId: SessionId,
   projectId: ProjectId,
   title: Schema.String,
-  /** The model the thread runs on, or `null` for Claude Code's default. */
+  provider: AgentProvider,
+  /** The model the thread runs on, or `null` for its provider's default. */
   model: Schema.NullOr(Schema.String),
   /** How hard the model reasons, or `null` for the model's default. */
   effort: Schema.NullOr(ReasoningEffort),
@@ -54,7 +56,7 @@ export const formatOpenedThread = (thread: OpenedThread): string => {
     ...(thread.effort === null ? [] : [`${thread.effort} effort`]),
   ].join(", ")
   return [
-    `Opened the thread "${thread.title}" on ${runsOn}. It is working now.`,
+    `Opened the thread "${thread.title}" on ${PROVIDER_NAMES[thread.provider]}, ${runsOn}. It is working now.`,
     `When you tell the human about it, link to it inline in your sentence, with exactly this markdown: ${threadMarkdownLink(thread)}`,
     "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
   ].join("\n")
