@@ -253,15 +253,9 @@ describe("ClaudeAccountService", () => {
   it.effect("refuses a nameless account and never removes the default login", () =>
     Effect.gen(function* () {
       const { service } = yield* setup(SUBSCRIPTION)
-      assert.strictEqual((yield* Effect.flip(service.add("   ")))._tag, "ClaudeAccountNameInvalid")
-      assert.strictEqual(
-        (yield* Effect.flip(service.remove("default")))._tag,
-        "ClaudeAccountNotFound",
-      )
-      assert.strictEqual(
-        (yield* Effect.flip(service.setActive("nope")))._tag,
-        "ClaudeAccountNotFound",
-      )
+      assert.strictEqual((yield* Effect.flip(service.add("   ")))._tag, "AccountNameInvalid")
+      assert.strictEqual((yield* Effect.flip(service.remove("default")))._tag, "AccountNotFound")
+      assert.strictEqual((yield* Effect.flip(service.setActive("nope")))._tag, "AccountNotFound")
     }),
   )
 })

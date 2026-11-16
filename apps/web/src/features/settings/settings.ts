@@ -43,7 +43,17 @@ export const SECTION_INFO: Record<
   },
   providers: {
     label: "Providers",
-    keywords: ["accounts", "claude code", "login", "sign in", "subscription", "plan", "api key"],
+    keywords: [
+      "accounts",
+      "claude code",
+      "codex",
+      "chatgpt",
+      "login",
+      "sign in",
+      "subscription",
+      "plan",
+      "api key",
+    ],
   },
   repositories: {
     label: "Repositories",

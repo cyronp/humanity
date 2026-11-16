@@ -13,6 +13,7 @@ import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/
 import { AddMenu } from "@/features/chat/AddMenu"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { claudeStatusAtom } from "@/features/claude/atoms"
+import { codexStatusAtom } from "@/features/codex/atoms"
 import { branchesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
@@ -22,6 +23,7 @@ import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
+import type { ModelChoice } from "@/features/providers/models"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import { allSessionsAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
@@ -43,7 +45,8 @@ export function NewChat({
 }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
-  const status = useAtomValue(claudeStatusAtom)
+  const claude = useAtomValue(claudeStatusAtom)
+  const codex = useAtomValue(codexStatusAtom)
   const list = AsyncResult.isSuccess(projects) ? projects.value : []
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)
@@ -55,7 +58,10 @@ export function NewChat({
     list[0]
   const defaults = threadDefaults(
     recent,
-    AsyncResult.isSuccess(status) ? status.value.models : undefined,
+    {
+      ...(AsyncResult.isSuccess(claude) ? { "claude-code": claude.value.models } : {}),
+      ...(AsyncResult.isSuccess(codex) ? { codex: codex.value.models } : {}),
+    },
     pinned,
     project,
   )
@@ -119,11 +125,11 @@ function NewChatForm({
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
-  // `undefined` is "not picked yet"; `null` is a picked "Default".
-  const [chosenModel, setModel] = useState<string | null>()
+  // `undefined` is "not picked yet"; a `null` model is a picked "Default".
+  const [chosenModel, setModel] = useState<ModelChoice>()
   const [chosenEffort, setEffort] = useState<ReasoningEffort | null>()
   const [chosenAutonomy, setAutonomy] = useState<Autonomy>()
-  const model = chosenModel === undefined ? defaults.model : chosenModel
+  const { provider, model } = chosenModel ?? defaults
   const effort = chosenEffort === undefined ? defaults.effort : chosenEffort
   const autonomy = chosenAutonomy ?? defaults.autonomy
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
@@ -154,6 +160,7 @@ function NewChatForm({
         prompt,
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
         autonomy,
+        provider,
         ...(model === null ? {} : { model }),
         ...(effort === null ? {} : { effort }),
       },
@@ -215,7 +222,7 @@ function NewChatForm({
           <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={setEffort} disabled={pending} />
-            <ModelPicker value={model} onChange={setModel} />
+            <ModelPicker provider={provider} value={model} onChange={setModel} />
             <SendButton
               ready={text.trim() !== "" && !pending && !files.reading}
               disabled={pending || files.reading || text.trim() === ""}

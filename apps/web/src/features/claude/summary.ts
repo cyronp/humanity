@@ -1,9 +1,7 @@
 import type { ClaudeStatus } from "@humanity/contracts"
-
-export type ClaudeTone = "ok" | "warning" | "error"
+import { callExecutable, isWindowsPath, quotePosix, quotePowerShell } from "@/lib/shell"
 
 export interface ClaudeSummary {
-  readonly tone: ClaudeTone
   /** Two or three words for the header badge. */
   readonly short: string
   /** One sentence for headings. */
@@ -16,16 +14,14 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
     case "Connected":
       if (connection.subscriptionShadowed) {
         return {
-          tone: "warning",
           short: "API key in use",
           title: "Claude is using an API key instead of your subscription",
         }
       }
       if (connection.method === "subscription") {
-        return { tone: "ok", short: connection.label, title: "Connected to your Claude account" }
+        return { short: connection.label, title: "Connected to your Claude account" }
       }
       return {
-        tone: "ok",
         short: connection.method === "apiKey" ? "API key" : connection.label,
         title:
           connection.method === "apiKey"
@@ -33,10 +29,9 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
             : `Connected through ${connection.label}`,
       }
     case "SignedOut":
-      return { tone: "warning", short: "Sign in to Claude", title: "Claude Code is not signed in" }
+      return { short: "Sign in to Claude", title: "Claude Code is not signed in" }
     case "Unavailable":
       return {
-        tone: "error",
         short: "Claude unavailable",
         title: "Claude Code could not be started",
       }
@@ -45,8 +40,6 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
 
 /** True when agent sessions can start: Claude Code has a credential to use. */
 export const isReady = (status: ClaudeStatus): boolean => status.connection._tag === "Connected"
-
-const quotePosix = (value: string): string => `"${value.replaceAll('"', '\\"')}"`
 
 /**
  * The command that signs an account in. `configDir` is the config folder of an
@@ -60,15 +53,11 @@ export const signInCommand = (options: {
   readonly executable: string | null
 }): string => {
   const { configDir, executable } = options
-  const windows = /\\|\.exe$/i.test(executable ?? configDir ?? "")
-  if (windows) {
-    const login = executable === null ? "claude auth login" : `& "${executable}" auth login`
-    return configDir === null
-      ? login
-      : `$env:CLAUDE_CONFIG_DIR = "${configDir}"; ${login}; Remove-Item Env:CLAUDE_CONFIG_DIR`
-  }
-  const login = `${executable === null ? "claude" : quotePosix(executable)} auth login`
-  return configDir === null ? login : `CLAUDE_CONFIG_DIR=${quotePosix(configDir)} ${login}`
+  const login = `${executable === null ? "claude" : callExecutable(executable)} auth login`
+  if (configDir === null) return login
+  return isWindowsPath(executable ?? configDir)
+    ? `$env:CLAUDE_CONFIG_DIR = ${quotePowerShell(configDir)}; ${login}; Remove-Item Env:CLAUDE_CONFIG_DIR`
+    : `CLAUDE_CONFIG_DIR=${quotePosix(configDir)} ${login}`
 }
 
 export interface ClaudeFact {

@@ -1,5 +1,4 @@
 import { useAtomValue } from "@effect/atom-react"
-import type { ClaudeModel } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronLeft, ChevronRight, Star } from "lucide-react"
@@ -17,25 +16,16 @@ import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { claudeStatusAtom } from "@/features/claude/atoms"
+import { codexStatusAtom } from "@/features/codex/atoms"
+import {
+  DEFAULT_MODEL,
+  type ModelChoice,
+  modelKey,
+  type PickerModel,
+  pickerModels,
+  shortModelName,
+} from "./models.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
-
-/** Claude Code's own choice. Picking it sends no model, so the session follows Claude Code. */
-const DEFAULT = "default"
-
-const FALLBACK_DEFAULT: ClaudeModel = {
-  value: DEFAULT,
-  displayName: "Default (recommended)",
-  description: "The model Claude Code picks for your account",
-}
-
-/**
- * Claude Code lists its current models by alias (`opus`, `sonnet`, ...) and
- * older ones by their full, pinned id (`claude-sonnet-5`, ...).
- */
-const isLegacy = (model: ClaudeModel) => model.value.startsWith("claude-")
-
-/** The short name for tight spaces: "Default (recommended)" reads "Default". */
-const shortName = (model: ClaudeModel) => model.displayName.replace(/\s*\(recommended\)$/i, "")
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
 /**
@@ -76,52 +66,74 @@ const useFavoriteModels = () => {
 type Section = "favorites" | ProviderId
 
 /**
- * The model a thread runs on, chosen before it starts or changed while it is
- * open. A popover with a rail of providers (and
- * the starred models), a search over every model, and older models behind
- * "Legacy models". `null` means Claude Code's default.
+ * The model a thread runs on, and with it the provider, chosen before the
+ * thread starts; in an open thread (`locked`) only the model changes, among
+ * those of the thread's provider. A popover with a rail of providers (and the
+ * starred models), a search over every model, and older models behind
+ * "Legacy models". A `null` model means the provider's default.
  */
 export function ModelPicker({
+  provider,
   value,
   onChange,
+  locked = false,
   disabled = false,
 }: {
+  readonly provider: ProviderId
   readonly value: string | null
-  readonly onChange: (model: string | null) => void
+  readonly onChange: (choice: ModelChoice) => void
+  /** The thread already runs on `provider`: models of other providers are not offered. */
+  readonly locked?: boolean
   readonly disabled?: boolean
 }) {
-  const status = useAtomValue(claudeStatusAtom)
-  const reported = AsyncResult.isSuccess(status) ? status.value.models : []
-  const models = reported.some((model) => model.value === DEFAULT)
-    ? reported
-    : [FALLBACK_DEFAULT, ...reported]
-  const selected = value ?? DEFAULT
-  const current = models.find((model) => model.value === selected)
+  const claude = useAtomValue(claudeStatusAtom)
+  const codex = useAtomValue(codexStatusAtom)
+  const providers: ReadonlyArray<ProviderId> = locked
+    ? [provider]
+    : (Object.keys(PROVIDERS) as Array<ProviderId>)
+  const reported: Record<ProviderId, ReadonlyArray<PickerModel>> = {
+    "claude-code": pickerModels(
+      "claude-code",
+      AsyncResult.isSuccess(claude) ? claude.value.models : [],
+    ),
+    codex: pickerModels("codex", AsyncResult.isSuccess(codex) ? codex.value.models : []),
+  }
+  const models = providers.flatMap((id) => reported[id])
+  const selected = value ?? DEFAULT_MODEL
+  const isSelected = (model: PickerModel) => model.provider === provider && model.value === selected
+  const current = models.find(isSelected)
+  const codexSignedOut = AsyncResult.isSuccess(codex) && codex.value.connection._tag !== "Connected"
 
   const [open, setOpen] = useState(false)
-  const [section, setSection] = useState<Section>("claude-code")
+  const [section, setSection] = useState<Section>(provider)
   const [legacyOpen, setLegacyOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [favorites, toggleFavorite] = useFavoriteModels()
 
   const searching = search.trim() !== ""
-  const legacy = models.filter(isLegacy)
+  const inSection = section === "favorites" ? [] : reported[section]
+  const legacy = inSection.filter((model) => model.legacy)
   const rows = searching
     ? models
     : section === "favorites"
-      ? models.filter((model) => favorites.includes(model.value))
+      ? models.filter((model) => favorites.includes(modelKey(model)))
       : legacyOpen
         ? legacy
-        : models.filter((model) => !isLegacy(model))
+        : inSection.filter((model) => !model.legacy)
 
-  const choose = (model: ClaudeModel) => {
-    onChange(model.value === DEFAULT ? null : model.value)
+  const choose = (model: PickerModel) => {
+    onChange({
+      provider: model.provider,
+      model: model.value === DEFAULT_MODEL ? null : model.value,
+    })
     setOpen(false)
   }
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
-    if (!next) {
+    if (next) {
+      setSection(provider)
+    } else {
       setSearch("")
       setLegacyOpen(false)
     }
@@ -151,8 +163,10 @@ export function ModelPicker({
           className="max-w-48"
           aria-label={`Model: ${current === undefined ? selected : current.displayName}`}
         >
-          <ProviderIcon provider="claude-code" className="size-4" />
-          <span className="truncate">{current === undefined ? selected : shortName(current)}</span>
+          <ProviderIcon provider={provider} className="size-4" />
+          <span className="truncate">
+            {current === undefined ? selected : shortModelName(current)}
+          </span>
         </InputGroupButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[26rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0">
@@ -167,14 +181,14 @@ export function ModelPicker({
           >
             <Star className="size-4" />
           </RailButton>
-          {(Object.keys(PROVIDERS) as Array<ProviderId>).map((provider) => (
+          {providers.map((id) => (
             <RailButton
-              key={provider}
-              label={PROVIDERS[provider].name}
-              active={section === provider && !searching}
-              onClick={() => showSection(provider)}
+              key={id}
+              label={PROVIDERS[id].name}
+              active={section === id && !searching}
+              onClick={() => showSection(id)}
             >
-              <ProviderIcon provider={provider} className="size-4" />
+              <ProviderIcon provider={id} className="size-4" />
             </RailButton>
           ))}
         </nav>
@@ -198,15 +212,20 @@ export function ModelPicker({
             )}
             {rows.map((model, index) => (
               <ModelRow
-                key={model.value}
+                key={modelKey(model)}
                 model={model}
-                selected={model.value === selected}
-                favorite={favorites.includes(model.value)}
+                selected={isSelected(model)}
+                favorite={favorites.includes(modelKey(model))}
                 shortcut={searching || index >= 9 ? undefined : `${SHORTCUT_PREFIX}${index + 1}`}
                 onSelect={() => choose(model)}
-                onToggleFavorite={() => toggleFavorite(model.value)}
+                onToggleFavorite={() => toggleFavorite(modelKey(model))}
               />
             ))}
+            {section === "codex" && !searching && codexSignedOut && (
+              <p className="px-3 py-3 text-xs text-muted-foreground">
+                Codex is not signed in. Settings, under Providers, shows how.
+              </p>
+            )}
             {section === "favorites" && !searching && rows.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                 Star a model to keep it here.
@@ -273,17 +292,17 @@ function ModelRow({
   onSelect,
   onToggleFavorite,
 }: {
-  readonly model: ClaudeModel
+  readonly model: PickerModel
   readonly selected: boolean
   readonly favorite: boolean
   readonly shortcut: string | undefined
   readonly onSelect: () => void
   readonly onToggleFavorite: () => void
 }) {
-  const provider = PROVIDERS["claude-code"]
+  const provider = PROVIDERS[model.provider]
   return (
     <CommandItem
-      value={model.value}
+      value={modelKey(model)}
       keywords={[model.displayName, model.description, provider.vendor]}
       onSelect={onSelect}
       title={model.description}
@@ -292,7 +311,7 @@ function ModelRow({
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate font-medium">{model.displayName}</span>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <ProviderIcon provider="claude-code" className="size-3" />
+          <ProviderIcon provider={model.provider} className="size-3" />
           {provider.vendor}
         </span>
       </span>

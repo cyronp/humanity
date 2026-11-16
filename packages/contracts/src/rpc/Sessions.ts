@@ -3,6 +3,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
+import { AgentProvider } from "../domain/Provider.ts"
 import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
 import { BranchCommits, WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
@@ -60,7 +61,9 @@ export const SessionsRpcs = RpcGroup.make(
       prompt: Schema.optional(Schema.String),
       /** Files sent with `prompt`. */
       attachments: Schema.optional(Schema.Array(AttachmentUpload)),
-      /** A model value from `Claude.status`. Claude Code's default when absent. */
+      /** The agent the thread runs on, for good. Claude Code when absent. */
+      provider: Schema.optional(AgentProvider),
+      /** A model value from the provider's status (`Claude.status`, `Codex.status`). The provider's default when absent. */
       model: Schema.optional(Schema.String),
       /** The model's own default effort when absent. */
       effort: Schema.optional(ReasoningEffort),

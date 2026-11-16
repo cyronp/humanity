@@ -27,6 +27,13 @@ describe("toolMode", () => {
     expect(toolMode("NotebookEdit")).toBe("review")
   })
 
+  it("treats a Codex patch as a file change and a Codex command as any shell command", () => {
+    expect(toolMode("ApplyPatch")).toBe("review")
+    expect(applyAutonomy("accept_edits", toolMode("ApplyPatch"))).toBe("auto")
+    expect(toolMode("Bash")).toBe("confirm")
+    expect(toolMode("McpRequest")).toBe("confirm")
+  })
+
   it("treats everything else as a call to allow or deny", () => {
     expect(toolMode("Bash")).toBe("confirm")
     expect(toolMode("PowerShell")).toBe("confirm")

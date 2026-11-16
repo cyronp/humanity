@@ -7,11 +7,13 @@ import { AgentRunnerLive } from "./agent/AgentRunnerLive.ts"
 import { AuthToken } from "./AuthToken.ts"
 import { ClaudeCode } from "./claude/ClaudeCode.ts"
 import { ClaudeHistory } from "./claude/ClaudeHistory.ts"
+import { Codex } from "./codex/Codex.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
+import { CodexHandlers } from "./rpc/CodexHandlers.ts"
 import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
@@ -24,6 +26,7 @@ import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
+import { CodexAccountService } from "./services/CodexAccountService.ts"
 import { ExtensionsService } from "./services/ExtensionsService.ts"
 import { ForgeSync } from "./services/ForgeSync.ts"
 import { GitHubService } from "./services/GitHubService.ts"
@@ -41,7 +44,7 @@ import { UpdateService } from "./services/UpdateService.ts"
 
 /**
  * Domain services, built on whatever config, database, platform, agent runner,
- * Claude Code runtime and Claude Code history they are given. Tests swap in the fake runner here.
+ * Claude Code and Codex runtimes and Claude Code history they are given. Tests swap in the fake runner here.
  */
 export const Services = Layer.mergeAll(
   Layer.mergeAll(HistoryImport.layer, PullRequestService.layer, UpdateService.layer).pipe(
@@ -54,6 +57,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
     Layer.provideMerge(ClaudeAccountService.layer),
+    Layer.provideMerge(CodexAccountService.layer),
     Layer.provideMerge(ExtensionsService.layer),
   ),
 )
@@ -66,6 +70,7 @@ export const RpcHandlers = Layer.mergeAll(
   SessionsHandlers,
   ApprovalsHandlers,
   ClaudeHandlers,
+  CodexHandlers,
   PreferencesHandlers,
   ExtensionsHandlers,
   PullRequestsHandlers,
@@ -74,7 +79,7 @@ export const RpcHandlers = Layer.mergeAll(
 
 /**
  * Routes, handlers and services. Still needs config, auth token, database,
- * platform, agent runner, the Claude Code runtime, GitHub, GitLab and an HTTP server.
+ * platform, agent runner, the Claude Code and Codex runtimes, GitHub, GitLab and an HTTP server.
  */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
 
@@ -145,8 +150,9 @@ export const Daemon = HttpRouter.serve(
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
-  // After the runner: both it and the account check run on this Claude Code.
+  // After the runner: both it and the account checks run on this Claude Code and this Codex.
   Layer.provide(ClaudeCode.layer),
+  Layer.provide(Codex.layer),
   Layer.provide(ClaudeHistory.layer),
   Layer.provide(GitHubLive),
   Layer.provide(GitLabLive),

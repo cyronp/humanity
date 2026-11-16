@@ -22,7 +22,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 
 ## Repository map
 
-- `apps/server` — Effect 4 daemon (RPC, Agent SDK bridge, Git, GitHub, SQLite)
+- `apps/server` — Effect 4 daemon (RPC, Agent SDK bridge, Codex app-server bridge, Git, GitHub, SQLite)
 - `apps/desktop` — Electron shell: starts the daemon as a child process and shows the web app; no logic of its own
 - `apps/web` — Vite + React 19 + TanStack Router + shadcn/ui
 - `packages/contracts` — shared RpcGroups and Schemas
@@ -34,7 +34,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 - Pin every `effect` and `@effect/*` package to the **same exact version**. Use the import paths the installed version actually exports; don't copy beta-era `effect/unstable/*` paths from examples without checking.
 - Never substitute a library from the spec's stack without asking.
 - Call the git CLI with argument arrays only, never shell-interpolated strings.
-- Never use the SDK's `bypassPermissions` mode: every call that is not a read reaches Humanity's own permission check, where the thread's autonomy decides. A tool Humanity does not know is never pre-approved; it asks in a thread that asks.
+- Never use the SDK's `bypassPermissions` mode: every call that is not a read reaches Humanity's own permission check, where the thread's autonomy decides. A tool Humanity does not know is never pre-approved; it asks in a thread that asks. The same holds on Codex: never the approval policy `never`, always `untrusted` with Humanity as the reviewer.
 - Never write outside `~/.humanity/` or the folder a session works in (its worktree, or the project's checkout until it has one).
 - Never store API keys or tokens in the database.
 

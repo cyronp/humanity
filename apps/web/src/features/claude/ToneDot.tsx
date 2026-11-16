@@ -1,24 +1,18 @@
 import { cn } from "cn"
-import type { ClaudeTone } from "./summary.ts"
 
-const TONE_CLASS: Record<ClaudeTone | "pending", string> = {
+type Tone = "ok" | "warning" | "error"
+
+const TONE_CLASS: Record<Tone, string> = {
   ok: "bg-success",
   warning: "bg-warning",
   error: "bg-destructive",
-  pending: "animate-pulse bg-muted-foreground/50",
 }
 
 /**
  * A small status light. Colour is never the only signal: it sits next to
  * text, or on a control whose label says the same.
  */
-export function ToneDot({
-  tone,
-  className,
-}: {
-  readonly tone: ClaudeTone | "pending"
-  readonly className?: string
-}) {
+export function ToneDot({ tone, className }: { readonly tone: Tone; readonly className?: string }) {
   return (
     <span
       aria-hidden="true"

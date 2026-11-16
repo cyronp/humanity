@@ -1,5 +1,6 @@
 import { ApprovalsRpcs } from "./rpc/Approvals.ts"
 import { ClaudeRpcs } from "./rpc/Claude.ts"
+import { CodexRpcs } from "./rpc/Codex.ts"
 import { ExtensionsRpcs } from "./rpc/Extensions.ts"
 import { GitRpcs } from "./rpc/Git.ts"
 import { GitHubRpcs } from "./rpc/GitHub.ts"
@@ -18,6 +19,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   SessionsRpcs,
   ApprovalsRpcs,
   ClaudeRpcs,
+  CodexRpcs,
   PreferencesRpcs,
   ExtensionsRpcs,
   PullRequestsRpcs,

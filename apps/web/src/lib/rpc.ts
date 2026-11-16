@@ -26,6 +26,8 @@ export const keys = {
   projects: "projects",
   /** The Claude account sessions run as. */
   claude: "claude",
+  /** The Codex login threads on Codex run as. */
+  codex: "codex",
   /** How GitHub is reached, and so which repositories it lists. */
   github: "github",
   /** How GitLab is reached, and so which repositories it lists. */

@@ -166,6 +166,7 @@ export function Workspace({
                     sessionId={session.id}
                     projectId={session.projectId}
                     autonomy={session.autonomy}
+                    provider={session.provider}
                     model={session.model}
                     effort={session.effort}
                     disabled={!acceptsMessages(session)}

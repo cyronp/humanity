@@ -71,6 +71,26 @@ if (!process.argv.includes("--main-only")) {
     cpSync(join(scope, name), join(staged, name), { recursive: true, dereference: true })
   }
 
+  // Codex likewise: the daemon finds its executable in the platform package
+  // installed next to the CLI's own, so both stay on disk beside the bundle.
+  const codexDir = dirname(require.resolve("@openai/codex/package.json"))
+  const codexScope = dirname(codexDir)
+  const codexManifest = JSON.parse(readFileSync(join(codexDir, "package.json"), "utf8"))
+  const codexPackages = Object.keys(codexManifest.optionalDependencies ?? {})
+    .map((name) => name.slice(name.indexOf("/") + 1))
+    .filter((name) => existsSync(join(codexScope, name)))
+  if (codexPackages.length === 0) {
+    throw new Error(`No Codex executable is installed next to ${codexDir}.`)
+  }
+  for (const name of ["codex", ...codexPackages]) {
+    cpSync(join(codexScope, name), join(daemonDir, "node_modules", "@openai", name), {
+      recursive: true,
+      dereference: true,
+    })
+  }
+
   cpSync(webDist, join(daemonDir, "web"), { recursive: true })
-  console.log(`Staged the daemon in ${daemonDir} (${platformPackages.join(", ")})`)
+  console.log(
+    `Staged the daemon in ${daemonDir} (${[...platformPackages, ...codexPackages].join(", ")})`,
+  )
 }

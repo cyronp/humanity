@@ -16,13 +16,20 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
+/** What a provider calls the folder its login lives in, and what a second one could be named. */
+const FOLDERS: Record<ProviderId, { readonly variable: string; readonly example: string }> = {
+  "claude-code": { variable: "CLAUDE_CONFIG_DIR", example: "~/.claude-personal" },
+  codex: { variable: "CODEX_HOME", example: "~/.codex-work" },
+}
+
 /** Where the new account's login lives: a folder made for it, or one the human already has. */
 type Source = "new" | "folder"
 
 /**
  * Adds another account to a provider. Either it starts signed out, with a
  * login of its own that its row then shows how to sign in, or it runs on a
- * config folder the human already signed in with (like `~/.claude-personal`).
+ * config folder the human already signed in with (like `~/.claude-personal`
+ * or `~/.codex-work`).
  */
 export function AddAccount({
   provider,
@@ -33,6 +40,7 @@ export function AddAccount({
   readonly onAdd: (name: string, configDir?: string) => Promise<string | undefined>
 }) {
   const { name: providerName, Icon } = PROVIDERS[provider]
+  const { variable, example } = FOLDERS[provider]
   const nameId = useId()
   const folderId = useId()
   const [open, setOpen] = useState(false)
@@ -118,14 +126,14 @@ export function AddAccount({
                 id={folderId}
                 value={folder}
                 onChange={(event) => setFolder(event.target.value)}
-                placeholder="~/.claude-personal"
+                placeholder={example}
                 autoComplete="off"
                 spellCheck={false}
                 className="font-mono"
               />
               <FieldDescription>
-                The folder you point <code>CLAUDE_CONFIG_DIR</code> at for this login. Threads run
-                Claude Code with it, and removing the account leaves the folder alone.
+                The folder you point <code>{variable}</code> at for this login. Threads run{" "}
+                {providerName} with it, and removing the account leaves the folder alone.
               </FieldDescription>
             </Field>
           )}

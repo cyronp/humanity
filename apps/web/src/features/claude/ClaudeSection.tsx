@@ -6,18 +6,18 @@ import { useCallback, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { ClaudeAccountRow } from "@/features/claude/ClaudeAccountRow"
-import { useClaudeAccounts } from "@/features/claude/useClaudeAccounts"
+import { AddAccount } from "@/features/providers/AddAccount"
+import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { describeCause } from "@/lib/errors"
 import { usePollWhile } from "@/lib/usePollWhile"
-import { AddAccount } from "./AddAccount.tsx"
-import { PROVIDERS } from "./ProviderIcon.tsx"
+import { ClaudeAccountRow } from "./ClaudeAccountRow.tsx"
+import { useClaudeAccounts } from "./useClaudeAccounts.ts"
 
 /**
- * Every provider Humanity can run sessions on, with its accounts: which one
- * new threads use, who each is signed in as, and how to add another.
+ * Claude Code among the providers, with its accounts: which one new threads
+ * use, who each is signed in as, and how to add another.
  */
-export function ProvidersOverview() {
+export function ClaudeSection() {
   const { result, refresh, refreshing, add, remove, setActive } = useClaudeAccounts()
   const [refreshError, setRefreshError] = useState<string>()
   const accounts = AsyncResult.isSuccess(result) ? result.value : undefined
@@ -37,9 +37,7 @@ export function ProvidersOverview() {
           <h3 id="provider-claude-code" className="text-sm font-medium">
             {name}
           </h3>
-          <span className="text-xs text-muted-foreground">
-            {version === null ? "bundled with Humanity" : `v${version}, bundled with Humanity`}
-          </span>
+          {version !== null && <span className="text-xs text-muted-foreground">v{version}</span>}
           <Button
             variant="outline"
             size="sm"
@@ -84,9 +82,8 @@ export function ProvidersOverview() {
       </section>
 
       <p className="text-xs text-muted-foreground">
-        New threads run as the account marked “Used for new threads”. A thread keeps the account it
-        started with, because its conversation is stored with that login. Other providers will
-        appear here next to {name}.
+        A new {name} thread runs as the account marked “Used for new threads”. A thread keeps the
+        account it started with, because its conversation is stored with that login.
       </p>
     </div>
   )
