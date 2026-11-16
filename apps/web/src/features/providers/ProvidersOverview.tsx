@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ClaudeAccountRow } from "@/features/claude/ClaudeAccountRow"
 import { useClaudeAccounts } from "@/features/claude/useClaudeAccounts"
+import { CodexSection } from "@/features/codex/CodexSection"
 import { describeCause } from "@/lib/errors"
 import { usePollWhile } from "@/lib/usePollWhile"
 import { AddAccount } from "./AddAccount.tsx"
@@ -30,7 +31,7 @@ export function ProvidersOverview() {
   const version = accounts?.[0]?.status.cliVersion ?? null
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
       <section aria-labelledby="provider-claude-code" className="flex flex-col">
         <div className="flex items-center gap-2 border-b pb-3">
           <Icon className="size-4" aria-hidden="true" />
@@ -83,10 +84,12 @@ export function ProvidersOverview() {
         )}
       </section>
 
+      <CodexSection />
+
       <p className="text-xs text-muted-foreground">
-        New threads run as the account marked “Used for new threads”. A thread keeps the account it
-        started with, because its conversation is stored with that login. Other providers will
-        appear here next to {name}.
+        The model you pick for a new thread decides which provider it runs on, for good: its
+        conversation is stored by that provider. A {name} thread runs as the account marked “Used
+        for new threads”, and keeps that account too.
       </p>
     </div>
   )

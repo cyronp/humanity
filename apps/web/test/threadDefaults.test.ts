@@ -1,10 +1,11 @@
-import { type ClaudeModel, ProjectId, type Session, SessionId } from "@humanity/contracts"
+import { ProjectId, type Session, SessionId } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { threadDefaults } from "@/features/home/threadDefaults"
+import { type OfferedModels, threadDefaults } from "@/features/home/threadDefaults"
 
 const session = (id: string, overrides: Partial<Session> = {}): Session => ({
   id: SessionId.make(id),
   projectId: ProjectId.make("p1"),
+  provider: "claude-code",
   sdkSessionId: null,
   title: id,
   branch: "main",
@@ -20,14 +21,19 @@ const session = (id: string, overrides: Partial<Session> = {}): Session => ({
   ...overrides,
 })
 
-const models: ReadonlyArray<ClaudeModel> = [
-  { value: "default", displayName: "Default (recommended)", description: "" },
-  { value: "opus", displayName: "Opus", description: "" },
-]
+const models: OfferedModels = {
+  "claude-code": [{ value: "default" }, { value: "opus" }],
+  codex: [{ value: "gpt-codex" }],
+}
 
 describe("threadDefaults", () => {
   it("starts on Claude Code's defaults and Auto mode when there is no thread yet", () => {
-    expect(threadDefaults([], models)).toEqual({ model: null, effort: null, autonomy: "auto" })
+    expect(threadDefaults([], models)).toEqual({
+      provider: "claude-code",
+      model: null,
+      effort: null,
+      autonomy: "auto",
+    })
   })
 
   it("follows the most recent thread's model and effort, never its autonomy", () => {
@@ -36,6 +42,7 @@ describe("threadDefaults", () => {
       session("older", { model: "sonnet", effort: "low", autonomy: "accept_edits" }),
     ]
     expect(threadDefaults(sessions, models)).toEqual({
+      provider: "claude-code",
       model: "opus",
       effort: "high",
       autonomy: "auto",
@@ -53,20 +60,30 @@ describe("threadDefaults", () => {
   it("drops a model Claude Code no longer offers, keeping the rest", () => {
     const sessions = [session("latest", { model: "retired", effort: "max", autonomy: "auto" })]
     expect(threadDefaults(sessions, models)).toEqual({
+      provider: "claude-code",
       model: null,
       effort: "max",
       autonomy: "auto",
     })
   })
 
+  it("follows the last thread's provider, with a model that provider still offers", () => {
+    const onCodex = [session("latest", { provider: "codex", model: "gpt-codex" })]
+    expect(threadDefaults(onCodex, models)).toMatchObject({ provider: "codex", model: "gpt-codex" })
+    // `opus` is Claude Code's, not something Codex offers.
+    const stale = [session("latest", { provider: "codex", model: "opus" })]
+    expect(threadDefaults(stale, models)).toMatchObject({ provider: "codex", model: null })
+  })
+
   it("keeps the model while the offered models are still loading", () => {
     const sessions = [session("latest", { model: "opus" })]
-    expect(threadDefaults(sessions, undefined).model).toBe("opus")
+    expect(threadDefaults(sessions, {}).model).toBe("opus")
   })
 
   it("starts on the pinned effort and autonomy instead of the last thread's", () => {
     const sessions = [session("latest", { model: "opus", effort: "high", autonomy: "auto" })]
     expect(threadDefaults(sessions, models, { autonomy: "ask", effort: "low" })).toEqual({
+      provider: "claude-code",
       model: "opus",
       effort: "low",
       autonomy: "ask",
@@ -76,6 +93,7 @@ describe("threadDefaults", () => {
   it("treats a pinned model default as a pin, not as no pin", () => {
     const sessions = [session("latest", { effort: "high", autonomy: "auto" })]
     expect(threadDefaults(sessions, models, { autonomy: null, effort: "default" })).toEqual({
+      provider: "claude-code",
       model: null,
       effort: null,
       autonomy: "auto",
@@ -84,6 +102,7 @@ describe("threadDefaults", () => {
 
   it("uses the pins when there is no thread yet", () => {
     expect(threadDefaults([], models, { autonomy: "accept_edits", effort: "max" })).toEqual({
+      provider: "claude-code",
       model: null,
       effort: "max",
       autonomy: "accept_edits",

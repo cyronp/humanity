@@ -24,6 +24,7 @@ const sessionId = SessionId.make("s1")
 const session: Session = {
   id: sessionId,
   projectId: ProjectId.make("p1"),
+  provider: "claude-code",
   sdkSessionId: null,
   title: "Test",
   branch: "humanity/s1-test",

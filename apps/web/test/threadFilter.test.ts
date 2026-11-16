@@ -38,6 +38,7 @@ const thread = (
   const session: Session = {
     id: SessionId.make(id),
     projectId: owner.id,
+    provider: "claude-code",
     sdkSessionId: null,
     title,
     branch: `humanity/${id}-${title.toLowerCase().replaceAll(" ", "-")}`,

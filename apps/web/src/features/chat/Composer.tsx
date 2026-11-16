@@ -1,5 +1,11 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { Autonomy, ProjectId, ReasoningEffort, SessionId } from "@humanity/contracts"
+import type {
+  AgentProvider,
+  Autonomy,
+  ProjectId,
+  ReasoningEffort,
+  SessionId,
+} from "@humanity/contracts"
 import { Exit } from "effect"
 import { type FormEvent, type KeyboardEvent, type Ref, useImperativeHandle, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -35,6 +41,7 @@ export function Composer({
   sessionId,
   projectId,
   autonomy,
+  provider,
   model,
   effort,
   disabled,
@@ -47,7 +54,9 @@ export function Composer({
   readonly projectId: ProjectId
   /** The session's current autonomy; it changes from the next tool call on. */
   readonly autonomy: Autonomy
-  /** The session's model; `null` is Claude Code's default. */
+  /** The agent the session runs on; it never changes. */
+  readonly provider: AgentProvider
+  /** The session's model; `null` is its provider's default. */
   readonly model: string | null
   /** The session's reasoning effort; `null` is the model's default. */
   readonly effort: ReasoningEffort | null
@@ -183,7 +192,13 @@ export function Composer({
           )}
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
-            <ModelPicker value={model} onChange={changeModel} disabled={disabled} />
+            <ModelPicker
+              provider={provider}
+              value={model}
+              onChange={(choice) => void changeModel(choice.model)}
+              locked
+              disabled={disabled}
+            />
             {canStop ? (
               <StopButton onStop={() => void stop()} stopping={stopping} />
             ) : (
