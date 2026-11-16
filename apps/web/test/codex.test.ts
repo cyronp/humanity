@@ -30,7 +30,7 @@ describe("summarizeCodex", () => {
       status({ _tag: "Connected", method: "apiKey", label: "OpenAI API key", email: null }),
     )
     expect(key.title).toBe("Connected with an OpenAI API key")
-    expect(key.detail).toContain("billed")
+    expect(key.detail).toMatch(/billed/i)
   })
 
   it("says when nobody is signed in and when Codex did not start", () => {

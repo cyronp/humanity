@@ -9,9 +9,10 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react"
-import { type ComponentType, Fragment, useState } from "react"
+import { type ComponentType, Fragment, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { McpIcon } from "@/features/extensions/McpIcon"
 import { AboutSettings } from "./AboutSettings.tsx"
@@ -52,6 +53,7 @@ export function SettingsDialog() {
   const { open, section } = useSettings()
   const [query, setQuery] = useState("")
   const { View } = SECTION_VIEWS[section]
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const close = () => {
     closeSettings()
@@ -66,6 +68,7 @@ export function SettingsDialog() {
       }}
     >
       <DialogContent
+        showCloseButton={false}
         className="flex h-[min(50rem,var(--dialog-max-height))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(80rem,calc(100%-2rem))]"
         onEscapeKeyDown={(event) => {
           // The first Escape clears a search; the next one closes the settings.
@@ -73,33 +76,38 @@ export function SettingsDialog() {
           event.preventDefault()
           setQuery("")
         }}
+        onKeyDown={(event) => {
+          // "/" jumps to the search, unless it is being typed somewhere.
+          if (event.key !== "/" || isTyping(event.target)) return
+          event.preventDefault()
+          searchRef.current?.focus()
+        }}
       >
-        <div className="shrink-0 border-b px-4 py-3">
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription className="sr-only">
-            The app's theme, providers and their accounts, where repositories come from, each
-            project's rules, the MCP servers and skills the agent can use, and the app's version and
-            updates.
-          </DialogDescription>
-        </div>
+        <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogDescription className="sr-only">Humanity's settings.</DialogDescription>
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <nav
             aria-label="Settings sections"
-            className="flex shrink-0 items-center gap-3 border-b p-3 md:w-56 md:flex-col md:items-stretch md:border-r md:border-b-0 md:p-4"
+            className="flex shrink-0 items-center gap-3 border-b p-3 md:w-60 md:flex-col md:items-stretch md:gap-2 md:overflow-y-auto md:border-r md:border-b-0"
           >
-            {/* The icon and text sit where they did before this was an InputGroup: 10px and 33px in. */}
-            <InputGroup className="hidden md:flex has-[>[data-align=inline-start]]:[&>input]:pl-[7px]">
-              <InputGroupAddon className="pl-[9px]">
+            <InputGroup className="hidden md:flex">
+              <InputGroupAddon>
                 <Search />
               </InputGroupAddon>
               <InputGroupInput
+                ref={searchRef}
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
                 aria-label="Search settings"
               />
+              {query === "" && (
+                <InputGroupAddon align="inline-end">
+                  <Kbd>/</Kbd>
+                </InputGroupAddon>
+              )}
             </InputGroup>
             <SectionList query={query} current={section} />
           </nav>
@@ -133,16 +141,16 @@ function SectionList({
       {groups.map(({ label, sections }, index) => (
         <Fragment key={sections[0]}>
           {index > 0 && (
-            // A row on narrow screens, a column from md up: the line turns with it.
-            <li role="none" className="flex shrink-0 items-center px-1 md:px-2 md:py-1">
-              <Separator className="h-5 w-px md:h-px md:w-full" />
+            // A line between groups in the narrow row; from md up, space and the group's name.
+            <li role="none" className="flex shrink-0 items-center px-1 md:hidden">
+              <Separator orientation="vertical" className="h-5" />
             </li>
           )}
+          {index > 0 && label === undefined && <li role="none" className="hidden h-3 md:block" />}
           {label !== undefined && (
-            // The name of the group, on wide screens; a narrow row has only the line.
             <li
               role="none"
-              className="hidden px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground md:block"
+              className="hidden px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground md:block"
             >
               {label}
             </li>
@@ -157,8 +165,8 @@ function SectionList({
                   onClick={() => openSettings(id)}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-8 w-full items-center gap-3 rounded-lg px-2 text-sm font-medium whitespace-nowrap transition-colors hover:bg-muted",
-                    active && "bg-muted",
+                    "flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    active && "bg-muted font-medium text-foreground",
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -172,3 +180,8 @@ function SectionList({
     </ul>
   )
 }
+
+/** Whether a key press lands in a field, where "/" is just a character. */
+const isTyping = (target: EventTarget): boolean =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))

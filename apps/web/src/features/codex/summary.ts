@@ -5,7 +5,7 @@ export interface CodexSummary {
   /** One sentence for headings. */
   readonly title: string
   /** What it means for the threads that run on Codex. */
-  readonly detail: string
+  readonly detail: string | null
 }
 
 export const summarizeCodex = (status: CodexStatus): CodexSummary => {
@@ -15,24 +15,24 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
       return connection.method === "chatgpt"
         ? {
             title: "Connected to your ChatGPT account",
-            detail: "Threads run on this plan, exactly like Codex in a terminal.",
+            detail: null,
           }
         : {
             title:
               connection.method === "apiKey"
                 ? "Connected with an OpenAI API key"
                 : `Connected through ${connection.label}`,
-            detail: "Threads run on this credential. Usage is billed to it, not to a ChatGPT plan.",
+            detail: "Billed to this credential, not to a ChatGPT plan.",
           }
     case "SignedOut":
       return {
         title: "Codex is not signed in",
-        detail: "Sign in once with Codex. Humanity picks the login up automatically.",
+        detail: null,
       }
     case "Unavailable":
       return {
         title: "Codex could not be started",
-        detail: "Humanity runs the Codex CLI that ships with it, and it did not start.",
+        detail: null,
       }
   }
 }

@@ -12,7 +12,7 @@ describe("describeUpdate", () => {
 
   it("says when it last checked", () => {
     expect(describeUpdate({ _tag: "UpToDate", checkedAt: "T" }, at)).toBe(
-      "Humanity is up to date. Checked at at:T.",
+      "Up to date. Checked at at:T.",
     )
   })
 

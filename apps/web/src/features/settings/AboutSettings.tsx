@@ -13,20 +13,13 @@ export function AboutSettings() {
   }
 
   return (
-    <SettingsFrame
-      id="settings-about"
-      title="About"
-      description="Humanity runs coding agents in threads, on their own or asking you first."
-    >
+    <SettingsFrame id="settings-about" title="About">
       <SettingsPane>
         <SettingsRows>
-          <SettingsRow label="Version" detail="The version of Humanity running on this device.">
+          <SettingsRow label="Version">
             <span className="font-mono text-sm">{APP_VERSION ?? "unknown"}</span>
           </SettingsRow>
-          <SettingsRow
-            label="How Humanity works"
-            detail="The introduction shown on the first start."
-          >
+          <SettingsRow label="Introduction">
             <Button variant="outline" size="sm" onClick={showOnboarding}>
               <CircleHelp />
               Show

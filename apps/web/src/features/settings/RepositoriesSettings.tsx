@@ -25,7 +25,7 @@ export function RepositoriesSettings() {
     <SettingsFrame
       id="settings-repositories"
       title="Repositories"
-      description="Where projects come from. Once GitHub or GitLab is connected, Humanity lists your repositories there and clones the one you pick, private ones included. Both can be connected at once."
+      description="Connect GitHub or GitLab to list and clone your repositories."
     >
       <SettingsSplit
         label="Repository services"

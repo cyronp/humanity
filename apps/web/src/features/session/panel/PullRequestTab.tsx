@@ -61,8 +61,7 @@ export function PullRequestTab({
       {(value) =>
         value.forge === null ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            This project&apos;s origin is not on GitHub or on a connected GitLab instance, so
-            Humanity can&apos;t follow its pull requests.
+            Pull requests need an origin on GitHub or a connected GitLab.
           </p>
         ) : (
           <Followed

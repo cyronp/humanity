@@ -1,22 +1,11 @@
-import type { ClaudeAccount } from "@humanity/contracts"
-import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { RefreshCw } from "lucide-react"
 import { useCallback, useState } from "react"
-import { ErrorNote } from "@/components/ErrorNote"
-import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
-import { AddAccount } from "@/features/providers/AddAccount"
-import { PROVIDERS } from "@/features/providers/ProviderIcon"
-import { describeCause } from "@/lib/errors"
+import { ProviderAccountList } from "@/features/providers/ProviderAccountList"
 import { usePollWhile } from "@/lib/usePollWhile"
 import { ClaudeAccountRow } from "./ClaudeAccountRow.tsx"
 import { useClaudeAccounts } from "./useClaudeAccounts.ts"
 
-/**
- * Claude Code among the providers, with its accounts: which one new threads
- * use, who each is signed in as, and how to add another.
- */
+/** Claude Code among the providers: its accounts, in one box with its CLI's version. */
 export function ClaudeSection() {
   const { result, refresh, refreshing, add, remove, setActive } = useClaudeAccounts()
   const [refreshError, setRefreshError] = useState<string>()
@@ -26,85 +15,18 @@ export function ClaudeSection() {
   const poll = useCallback(() => void refresh(false), [refresh])
   usePollWhile(signedOut === true, poll, refreshing)
 
-  const { name, Icon } = PROVIDERS["claude-code"]
-  const version = accounts?.[0]?.status.cliVersion ?? null
-
   return (
-    <div className="flex flex-col gap-4">
-      <section aria-labelledby="provider-claude-code" className="flex flex-col">
-        <div className="flex items-center gap-2 border-b pb-3">
-          <Icon className="size-4" aria-hidden="true" />
-          <h3 id="provider-claude-code" className="text-sm font-medium">
-            {name}
-          </h3>
-          {version !== null && <span className="text-xs text-muted-foreground">v{version}</span>}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={() => void refresh(true).then(setRefreshError)}
-            disabled={refreshing || accounts === undefined}
-          >
-            <RefreshCw className={cn(refreshing && "animate-spin")} />
-            {refreshing ? "Checking…" : "Check again"}
-          </Button>
-        </div>
-
-        {AsyncResult.match(result, {
-          onInitial: () => (
-            <p className="flex items-center gap-2 border-b py-4 text-sm text-muted-foreground">
-              <Spinner />
-              Starting Claude Code to read which logins it has. No prompt is sent.
-            </p>
-          ),
-          onFailure: (failure) => (
-            <div className="py-4">
-              <ErrorNote
-                title="Could not ask the daemon about the accounts"
-                message={describeCause(failure.cause)}
-              />
-            </div>
-          ),
-          onSuccess: ({ value }) => (
-            <AccountList accounts={value} onSetActive={setActive} onRemove={remove} />
-          ),
-        })}
-        {refreshError !== undefined && (
-          <div className="pt-4">
-            <ErrorNote title="Could not check again" message={refreshError} />
-          </div>
-        )}
-        {accounts !== undefined && (
-          <div className="pt-4">
-            <AddAccount provider="claude-code" onAdd={add} />
-          </div>
-        )}
-      </section>
-
-      <p className="text-xs text-muted-foreground">
-        A new {name} thread runs as the account marked “Used for new threads”. A thread keeps the
-        account it started with, because its conversation is stored with that login.
-      </p>
-    </div>
-  )
-}
-
-function AccountList({
-  accounts,
-  onSetActive,
-  onRemove,
-}: {
-  readonly accounts: ReadonlyArray<ClaudeAccount>
-  readonly onSetActive: (accountId: string) => Promise<string | undefined>
-  readonly onRemove: (accountId: string) => Promise<string | undefined>
-}) {
-  return (
-    <ul className="divide-y border-b">
-      {accounts.map((account) => (
-        <li key={account.id}>
-          <ClaudeAccountRow account={account} onSetActive={onSetActive} onRemove={onRemove} />
-        </li>
-      ))}
-    </ul>
+    <ProviderAccountList
+      provider="claude-code"
+      result={result}
+      version={accounts?.[0]?.status.cliVersion ?? null}
+      refreshing={refreshing}
+      refreshError={refreshError}
+      onRefresh={() => void refresh(true).then(setRefreshError)}
+      onAdd={add}
+      renderAccount={(account) => (
+        <ClaudeAccountRow account={account} onSetActive={setActive} onRemove={remove} />
+      )}
+    />
   )
 }

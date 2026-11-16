@@ -6,19 +6,19 @@ export const describeUpdate = (state: UpdateState, formatTime: (iso: string) => 
     case "Unsupported":
       return state.reason
     case "Idle":
-      return "Not checked since the app started."
+      return "Not checked yet."
     case "Checking":
       return "Looking for a new version…"
     case "UpToDate":
-      return `Humanity is up to date. Checked at ${formatTime(state.checkedAt)}.`
+      return `Up to date. Checked at ${formatTime(state.checkedAt)}.`
     case "Available":
-      return `Version ${state.version} is ready to install. Humanity restarts to finish.`
+      return `Version ${state.version} is ready. Installing restarts Humanity.`
     case "Downloading":
       return `Downloading version ${state.version}: ${Math.floor(state.percent)}%.`
     case "Installing":
       return `Restarting into version ${state.version}…`
     case "Failed":
-      return `The last attempt failed: ${state.message}`
+      return `Update failed: ${state.message}`
   }
 }
 

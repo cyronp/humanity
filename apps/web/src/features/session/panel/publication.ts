@@ -126,8 +126,8 @@ export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | nu
       title: `Paused until ${clock(feed.pausedUntil)}`,
       message:
         feed.fetchedAt === null
-          ? `${site}'s rate limit was reached. Humanity asks again once it resets.`
-          : `${site}'s rate limit was reached. This is what it said at ${clock(feed.fetchedAt)}; Humanity asks again once the limit resets.`,
+          ? `${site}'s rate limit was reached.`
+          : `${site}'s rate limit was reached. Showing what it said at ${clock(feed.fetchedAt)}.`,
     }
   }
   if (feed.problem !== null) {
@@ -137,7 +137,7 @@ export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | nu
     return {
       tone: "note",
       title: `No ${site} token connected`,
-      message: `Without one ${site} allows very few requests, so Humanity asks it only when you press Refresh. Connect a token in Settings → Repositories to keep this up to date.`,
+      message: `Updated only when you press Refresh. Connect a token in Settings → Repositories to keep it current.`,
     }
   }
   return null

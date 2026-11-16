@@ -162,7 +162,7 @@ describe("feedNotice", () => {
     )
     expect(notice?.tone).toBe("note")
     expect(notice?.title).toMatch(/^Paused until /)
-    expect(notice?.message).toContain("GitHub's rate limit was reached. This is what it said at")
+    expect(notice?.message).toContain("GitHub's rate limit was reached. Showing what it said at")
   })
 
   it("reports a forge that failed, and asks for a token when there is none", () => {

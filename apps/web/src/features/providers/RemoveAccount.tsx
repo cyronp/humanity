@@ -33,7 +33,7 @@ export function RemoveAccount({
   /** Resolves to an error message, or `undefined` when the account was removed. */
   readonly onRemove: (accountId: string) => Promise<string | undefined>
 }) {
-  const { name: providerName, vendor } = PROVIDERS[provider]
+  const { name: providerName } = PROVIDERS[provider]
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
   const [removing, setRemoving] = useState(false)
@@ -70,19 +70,19 @@ export function RemoveAccount({
           <AlertDialogDescription>
             {account.linkedFolder ? (
               <>
-                Humanity stops using it. Its folder
+                Its folder
                 {folder !== null && (
                   <>
                     {" "}
                     <code className="break-all">{folder}</code>
                   </>
                 )}{" "}
-                stays as it is, with its login and conversations.
+                is kept, with its login and conversations.
               </>
             ) : (
               `Its login and the conversations ${providerName} kept for it are deleted from this computer.`
             )}{" "}
-            Ended threads that ran as it stay readable. The {vendor} account itself is not touched.
+            Ended threads stay readable.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error !== undefined && <ErrorNote title="Could not remove the account" message={error} />}

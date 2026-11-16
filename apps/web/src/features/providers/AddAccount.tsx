@@ -102,10 +102,9 @@ export function AddAccountForm({
           Add a {providerName} account
         </DialogTitle>
         <DialogDescription>
-          For a second login,
           {source === "new"
-            ? ` it gets its own ${providerName} login on this computer; you sign in to it in the next step.`
-            : ` it uses a ${providerName} folder you already signed in with, so there is nothing more to do.`}
+            ? "You sign in to it in the next step."
+            : `Use a ${providerName} folder that is already signed in.`}
         </DialogDescription>
       </DialogHeader>
       {picker}
@@ -132,7 +131,6 @@ export function AddAccountForm({
           autoComplete="off"
           autoFocus
         />
-        <FieldDescription>Shown in the list of accounts.</FieldDescription>
       </Field>
       {source === "folder" && (
         <Field className="gap-2">
@@ -147,8 +145,7 @@ export function AddAccountForm({
             className="font-mono"
           />
           <FieldDescription>
-            The folder you point <code>{variable}</code> at for this login. Threads run{" "}
-            {providerName} with it, and removing the account leaves the folder alone.
+            What you would set <code>{variable}</code> to.
           </FieldDescription>
         </Field>
       )}

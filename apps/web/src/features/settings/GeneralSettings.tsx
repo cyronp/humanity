@@ -4,6 +4,7 @@ import { type ThemeChoice, useThemeChoice } from "@/lib/theme"
 import {
   SettingsChoice,
   SettingsFrame,
+  SettingsGroup,
   SettingsPane,
   SettingsRow,
   SettingsRows,
@@ -22,15 +23,13 @@ const THEMES = [
 /** Settings of the app itself, not of a provider or a project. */
 export function GeneralSettings() {
   return (
-    <SettingsFrame
-      id="settings-general"
-      title="General"
-      description="How Humanity looks on this device."
-    >
+    <SettingsFrame id="settings-general" title="General">
       <SettingsPane>
-        <SettingsRows>
-          <ThemeSetting />
-        </SettingsRows>
+        <SettingsGroup title="Appearance">
+          <SettingsRows>
+            <ThemeSetting />
+          </SettingsRows>
+        </SettingsGroup>
       </SettingsPane>
     </SettingsFrame>
   )
@@ -41,11 +40,7 @@ function ThemeSetting() {
   const labelId = useId()
 
   return (
-    <SettingsRow
-      label="Theme"
-      labelId={labelId}
-      detail="System follows your operating system's light or dark mode."
-    >
+    <SettingsRow label="Theme" labelId={labelId}>
       <SettingsChoice labelledBy={labelId} options={THEMES} value={choice} onChange={choose} />
     </SettingsRow>
   )

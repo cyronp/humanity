@@ -204,10 +204,7 @@ function AccountChoices<E>({
           </p>
         ),
         onFailure: (failure) => (
-          <ErrorNote
-            title="Could not ask the daemon about the accounts"
-            message={describeCause(failure.cause)}
-          />
+          <ErrorNote title="Could not load accounts" message={describeCause(failure.cause)} />
         ),
         onSuccess: ({ value }) => (
           <div

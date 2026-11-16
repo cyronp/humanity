@@ -119,10 +119,7 @@ export function Workspace({
               approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
               worktreePath={session.worktreePath}
               empty={
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  Ask the agent about this repository. How much it does without asking is this
-                  thread's permissions, next to the message box.
-                </p>
+                <p className="py-12 text-center text-sm text-muted-foreground">No messages yet.</p>
               }
               footer={
                 view.error !== null ? (

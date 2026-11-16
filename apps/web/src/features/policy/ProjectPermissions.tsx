@@ -53,9 +53,7 @@ export function ProjectPermissions({ project }: { readonly project: Project }) {
             Permissions for new threads
           </h3>
           <p className="max-w-prose text-sm text-muted-foreground">
-            How much the agent does without asking when a thread starts in this project. Your own
-            default is the mode you pinned in the message box, or Auto mode. Threads that already
-            exist keep theirs.
+            Existing threads keep their own.
           </p>
         </div>
         <Select

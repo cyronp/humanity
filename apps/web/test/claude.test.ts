@@ -85,7 +85,7 @@ describe("connectionFacts", () => {
   it("lists the plan and who is signed in, leaving out what is unknown", () => {
     expect(connectionFacts(connected({ organization: "Acme" }))).toEqual([
       { label: "Plan", value: "Claude Max" },
-      { label: "Signed in as", value: "dev@example.com" },
+      { label: "Authenticated as", value: "dev@example.com" },
       { label: "Organization", value: "Acme" },
     ])
     expect(connectionFacts(connected({ email: null }))).toEqual([

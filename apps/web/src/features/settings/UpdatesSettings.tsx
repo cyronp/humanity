@@ -38,11 +38,7 @@ export function UpdatesSettings() {
   const status = useAtomValue(updateStatusAtom)
 
   return (
-    <SettingsFrame
-      id="settings-updates"
-      title="Updates"
-      description="New versions come from Humanity's releases on GitHub. Nothing is installed until you choose to."
-    >
+    <SettingsFrame id="settings-updates" title="Updates">
       <SettingsPane>
         <AsyncView result={status} errorTitle="Could not load the update status">
           {(value) => <UpdatesView status={value} />}
@@ -84,7 +80,7 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
         <SettingsRow
           label="Check automatically"
           labelId={autoCheckId}
-          detail="Look for a new version each time Humanity opens. After that, only Check now looks again. Installing always waits for you."
+          detail="Check for a new version when Humanity starts."
         >
           <Switch
             aria-labelledby={autoCheckId}
@@ -97,8 +93,8 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
           labelId={trackId}
           detail={
             preferences.track === "nightly"
-              ? "Nightly: an untested build of main, every night. It may upgrade ~/.humanity/humanity.db in a way stable releases cannot read, so back it up first."
-              : "Stable: tested releases only."
+              ? "Untested builds of main. They may upgrade ~/.humanity/humanity.db past what stable can read, so back it up first."
+              : "Tested releases only."
           }
         >
           <SettingsChoice

@@ -131,9 +131,7 @@ function FileDiffBody({
   return (
     <>
       {file.binary ? (
-        <p className="p-3 text-xs text-muted-foreground">
-          Binary or very large file. Its content is not shown.
-        </p>
+        <p className="p-3 text-xs text-muted-foreground">Binary or too large to show.</p>
       ) : first === undefined ? (
         <p className="p-3 text-xs text-muted-foreground">
           No line changes (mode change or empty file).

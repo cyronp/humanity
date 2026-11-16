@@ -251,7 +251,7 @@ export function QuestionPanel({
                       size="sm"
                       onClick={() => void send({ decision: "deny" })}
                       disabled={pending}
-                      title="Send no answer and discuss it with the agent in the chat instead"
+                      title="Skip and discuss it in the chat"
                     >
                       Talk about it
                     </Button>

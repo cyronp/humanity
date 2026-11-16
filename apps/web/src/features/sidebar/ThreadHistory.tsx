@@ -79,7 +79,7 @@ export function ThreadHistory({
             <p className="px-2 py-1 text-xs text-muted-foreground">
               {threads.some((thread) => thread.session.status === "ended")
                 ? "No ended threads match."
-                : "No ended threads yet. A thread moves here when you end it, and your Claude Code conversations in a project's folder show up here too."}
+                : "No ended threads yet."}
             </p>
           ) : (
             <SidebarMenu className="gap-0.5">

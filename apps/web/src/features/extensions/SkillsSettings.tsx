@@ -44,10 +44,7 @@ export function SkillsSettings({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Instructions the agent loads when a task calls for them, or when you start a message with
-          the skill's command. Skills added here reach every project.
-        </p>
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">Available in every project.</p>
         <Button size="sm" onClick={() => setEditing({ kind: "new" })}>
           <Plus />
           Add skill
@@ -60,9 +57,7 @@ export function SkillsSettings({
 
       {own.length === 0 && editing === undefined ? (
         <Empty className={EMPTY_BOX}>
-          <EmptyDescription className="text-sm">
-            No skills yet. Write one for a task the agent should always do your way.
-          </EmptyDescription>
+          <EmptyDescription className="text-sm">No skills yet.</EmptyDescription>
         </Empty>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border empty:hidden">
@@ -138,7 +133,7 @@ function SkillRow({
             <ConfirmRemove
               label={`Remove ${skill.name}`}
               title={`Remove “${skill.name}”?`}
-              description="Its folder in Humanity's data folder is deleted. The agent no longer finds it, from its next message on."
+              description="Its files are deleted."
               onConfirm={async () => {
                 const exit = await remove({ payload: { name: skill.name }, reactivityKeys })
                 return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
@@ -212,7 +207,7 @@ function SkillEditor({
       <Field
         label="Description"
         htmlFor={`${ids}-description`}
-        hint="What it does and when to use it. The agent reads this to decide when to load the skill."
+        hint="What it does and when to use it."
       >
         <Input
           id={`${ids}-description`}
@@ -222,11 +217,7 @@ function SkillEditor({
           autoComplete="off"
         />
       </Field>
-      <Field
-        label="Instructions"
-        htmlFor={`${ids}-instructions`}
-        hint="Markdown. Loaded only when the skill is used."
-      >
+      <Field label="Instructions" htmlFor={`${ids}-instructions`} hint="Markdown.">
         <Textarea
           id={`${ids}-instructions`}
           value={instructions}
