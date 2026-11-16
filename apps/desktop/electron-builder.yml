@@ -7,8 +7,8 @@ icon: build/icon.png
 files:
   - dist/main.cjs
   - package.json
-# The daemon runs as a child process and starts the Claude Code executable, so it
-# needs real paths on disk: it ships next to the archive, not inside it.
+# The daemon runs as a child process and starts the Claude Code and Codex
+# executables, so it needs real paths on disk: it ships next to the archive, not inside it.
 extraResources:
   - from: dist/daemon
     to: daemon
