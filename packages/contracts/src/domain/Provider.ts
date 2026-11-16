@@ -11,6 +11,13 @@ export type AgentProvider = typeof AgentProvider.Type
 
 export const DEFAULT_PROVIDER: AgentProvider = "claude-code"
 
+/** Each provider as the human knows it. */
+export const PROVIDER_NAMES: Readonly<Record<AgentProvider, string>> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  kiro: "Kiro",
+}
+
 /**
  * The id of the login a provider's CLI uses by itself, in its own folder.
  * Every provider has it, it cannot be removed, and it is the account of new

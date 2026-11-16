@@ -1,11 +1,5 @@
-import type {
-  AgentProvider,
-  ContextUsage,
-  OpenedThread,
-  PlanUsage,
-  ReasoningEffort,
-} from "@humanity/contracts"
-import { Context, Data, type Effect, Schema, type Scope, type Stream } from "effect"
+import type { AgentProvider, ContextUsage, PlanUsage, ReasoningEffort } from "@humanity/contracts"
+import { Context, type Effect, Schema, type Scope, type Stream } from "effect"
 
 /** What Humanity answers when the agent asks to run a tool. */
 export type PermissionDecision =
@@ -21,20 +15,6 @@ export interface ToolPermissionRequest {
   readonly input: Record<string, unknown>
   readonly toolUseId: string
 }
-
-/** What the agent passes to Humanity's `open_thread` tool. */
-export interface OpenThreadRequest {
-  readonly prompt: string
-  readonly title?: string | undefined
-  /** A model as Claude Code names it; left out, the thread runs on Claude Code's default. */
-  readonly model?: string | undefined
-  readonly effort?: ReasoningEffort | undefined
-}
-
-/** Why a thread was not opened, in words the agent can act on. */
-export class OpenThreadFailed extends Data.TaggedError("OpenThreadFailed")<{
-  readonly reason: string
-}> {}
 
 /** An MCP server as the agent is given it, in the SDK's configuration format. */
 export type AgentMcpServer =
@@ -52,7 +32,8 @@ export type AgentMcpServer =
 
 /**
  * What Humanity adds to the agent on top of the repository's own settings:
- * its enabled MCP servers and the plugin folders its skills live in.
+ * its enabled MCP servers and the plugin folders its skills live in. The MCP
+ * servers include Humanity's own (`humanity`), whose tools act for the thread.
  */
 export interface AgentExtensions {
   readonly mcpServers: Readonly<Record<string, AgentMcpServer>>
@@ -86,11 +67,6 @@ export interface AgentRunOptions {
    * anything waiting for a human must clean up in a finalizer.
    */
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
-  /**
-   * Humanity's `open_thread` tool: starts a new thread in the session's
-   * project on the given prompt.
-   */
-  readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
 }
 
 export type AgentImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp"

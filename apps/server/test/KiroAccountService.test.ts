@@ -165,6 +165,31 @@ describe("Kiro's own way with the protocol", () => {
     }),
   )
 
+  it.effect("names an MCP call the way every agent's go by, from Kiro's title and server", () =>
+    Effect.gen(function* () {
+      const { profile } = profileWith()
+      // As Kiro 2 announces a call of an HTTP MCP server it was given.
+      const call: ToolCallFields = {
+        toolCallId: "tooluse_l4S16",
+        title: "@humanity/open_thread",
+        kind: "other",
+        status: "pending",
+        rawInput: { prompt: "say hi", provider: "codex" },
+        _meta: { kiro: { serverName: "humanity", toolOrigin: "default" } },
+      }
+      assert.deepStrictEqual(yield* nameOf(profile, call), {
+        toolName: "mcp__humanity__open_thread",
+        input: { prompt: "say hi", provider: "codex" },
+      })
+      // A title alone, or one that names another server, is not taken at its word.
+      assert.isUndefined(yield* nameOf(profile, { ...call, _meta: undefined }))
+      assert.isUndefined(
+        yield* nameOf(profile, { ...call, _meta: { kiro: { serverName: "docs" } } }),
+      )
+      assert.isUndefined(yield* nameOf(profile, { ...call, title: "Tool Load" }))
+    }),
+  )
+
   it("knows the review of a turn's changes, and which calls it is about", () => {
     const { profile } = profileWith()
     const review = {

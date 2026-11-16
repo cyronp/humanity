@@ -1,8 +1,8 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { assert, describe, it } from "@effect/vitest"
 import { HumanityRpcs, RPC_PATH, TOKEN_PARAM } from "@humanity/contracts"
-import { Effect, Layer, Stream } from "effect"
-import { HttpClient, HttpRouter, HttpServer } from "effect/http"
+import { Effect, Exit, Layer, Scope, Stream } from "effect"
+import { HttpBody, HttpClient, HttpRouter, HttpServer } from "effect/http"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 import { Socket } from "effect/socket"
 import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
@@ -11,6 +11,7 @@ import { ClaudeCode } from "../src/claude/ClaudeCode.ts"
 import { ClaudeHistory } from "../src/claude/ClaudeHistory.ts"
 import { Codex } from "../src/codex/Codex.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
+import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { App } from "../src/Daemon.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
@@ -32,6 +33,7 @@ const daemon = (home: string, script: FakeScript = () => []) =>
     Layer.provide(ClaudeHistory.layerTest()),
     Layer.provideMerge(AuthToken.layer),
     Layer.provide(AgentRunnerFake(script)),
+    Layer.provideMerge(HumanityMcp.layer),
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(baseLayer(home)),
   )
@@ -273,6 +275,59 @@ describe("daemon", () => {
 
         const wrong = yield* http.get("/api/auth", { headers: { authorization: "Bearer nope" } })
         assert.strictEqual(wrong.status, 401)
+      }).pipe(Effect.provide(daemon(home)))
+    }),
+  )
+
+  it.live("serves Humanity's MCP server to the agent of a running thread, and to no one else", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+
+      yield* Effect.gen(function* () {
+        const http = yield* HttpClient.HttpClient
+        const token = yield* AuthToken
+        const mcp = yield* HumanityMcp
+        const post = (authorization: string | undefined, body: string) =>
+          http.post("/mcp", {
+            headers: {
+              ...(authorization === undefined ? {} : { authorization }),
+              accept: "application/json, text/event-stream",
+            },
+            body: HttpBody.text(body, "application/json"),
+          })
+        const list = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })
+
+        // Neither nothing nor the daemon's own token: only a thread's.
+        assert.strictEqual((yield* post(undefined, list)).status, 401)
+        assert.strictEqual((yield* post(`Bearer ${token.value}`, list)).status, 401)
+
+        const scope = yield* Scope.make()
+        const server = yield* mcp
+          .serve({ openThread: () => Effect.die("not called") })
+          .pipe(Scope.provide(scope))
+        const authorization = server.type === "http" ? server.headers["Authorization"] : undefined
+
+        const listed = yield* post(authorization, list)
+        assert.strictEqual(listed.status, 200)
+        assert.include(listed.headers["content-type"], "application/json")
+        const body = (yield* listed.json) as { result: { tools: ReadonlyArray<{ name: string }> } }
+        assert.deepStrictEqual(
+          body.result.tools.map((tool) => tool.name),
+          ["open_thread"],
+        )
+        const notified = yield* post(
+          authorization,
+          JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+        )
+        assert.strictEqual(notified.status, 202)
+        assert.strictEqual((yield* post(authorization, "{not json")).status, 400)
+        // No stream for the server to speak first on.
+        const stream = yield* http.get("/mcp", { headers: { authorization: authorization ?? "" } })
+        assert.strictEqual(stream.status, 405)
+
+        // Once the thread's agent has stopped, its token opens nothing.
+        yield* Scope.close(scope, Exit.void)
+        assert.strictEqual((yield* post(authorization, list)).status, 401)
       }).pipe(Effect.provide(daemon(home)))
     }),
   )

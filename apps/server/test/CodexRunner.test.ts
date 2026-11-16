@@ -77,7 +77,6 @@ const runOptions = (
   extensions: { mcpServers: {}, plugins: [] },
   allowedTools: [],
   canUseTool: (request) => Effect.sync(() => canUseTool(request)),
-  openThread: () => Effect.die("not used"),
   ...overrides,
 })
 
@@ -105,6 +104,11 @@ describe("a Codex run", () => {
           extensions: {
             mcpServers: {
               docs: { type: "stdio", command: "docs-mcp", args: ["--stdio"], env: { A: "1" } },
+              humanity: {
+                type: "http",
+                url: "http://127.0.0.1:7420/mcp",
+                headers: { Authorization: "Bearer thread-token" },
+              },
             },
             plugins: [],
           },
@@ -126,6 +130,13 @@ describe("a Codex run", () => {
             args: ["--stdio"],
             env: { A: "1" },
             default_tools_approval_mode: "prompt",
+          },
+          // Humanity's own server: the tool no thread asks about is approved, the rest ask.
+          humanity: {
+            url: "http://127.0.0.1:7420/mcp",
+            http_headers: { Authorization: "Bearer thread-token" },
+            default_tools_approval_mode: "prompt",
+            tools: { open_thread: { approval_mode: "approve" } },
           },
         },
       })

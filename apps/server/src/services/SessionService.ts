@@ -12,7 +12,6 @@ import {
   type BranchCommits,
   BranchNotCheckedOut,
   ChangeId,
-  type ClaudeModel,
   DEFAULT_AUTONOMY,
   DEFAULT_ACCOUNT,
   DEFAULT_PROVIDER,
@@ -22,6 +21,7 @@ import {
   type GitBranchExists,
   type GitInvalidBranchName,
   type GitRefNotFound,
+  HUMANITY_MCP_SERVER,
   type MessageContent,
   type OpenedThread,
   type PendingConfirmation,
@@ -30,6 +30,7 @@ import {
   type Project,
   type ProjectNotFound,
   type ProposedChange,
+  PROVIDER_NAMES,
   QUESTION_TOOL,
   type ReasoningEffort,
   type Session,
@@ -62,13 +63,14 @@ import {
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
 import {
+  type AgentExtensions,
+  type AgentMcpServer,
   type AgentRun,
   AgentRunner,
-  OpenThreadFailed,
-  type OpenThreadRequest,
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
+import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
@@ -102,7 +104,16 @@ interface ActiveRun {
   readonly usageLock: Semaphore.Semaphore
   /** The change of Humanity's MCP servers and skills the agent last got. */
   extensionsVersion: number
+  /** Humanity's own MCP server, as this run's agent reaches it. */
+  readonly humanity: AgentMcpServer
 }
+
+/** The MCP servers and skills the human added, with Humanity's own server on top. */
+const withHumanity = (added: AgentExtensions, humanity: AgentMcpServer): AgentExtensions => ({
+  // Last, so no server the human added can take its name.
+  mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
+  plugins: added.plugins,
+})
 
 /** `Fix the login bug!` → `fix-the-login-bug` */
 export const slugify = (title: string): string =>
@@ -129,14 +140,20 @@ const modelKey = (name: string): string =>
     .replace(/^-+|-+$/g, "")
     .replace(/^claude-/, "")
 
+/** A model as every provider lists the ones it offers an account. */
+interface OfferedModel {
+  readonly value: string
+  readonly displayName: string
+}
+
 /**
- * The model an agent asked for, as one of the values Claude Code offers the
+ * The model an agent asked for, as one of the values the provider offers the
  * account: by that value, or else by its name and version however they are
  * written (`Haiku 5.5` and `claude-haiku-5-5` are both the `haiku` alias when
  * that is how Claude Code lists Haiku 5.5). `undefined` when nothing matches.
  */
 export const matchModel = (
-  models: ReadonlyArray<ClaudeModel>,
+  models: ReadonlyArray<OfferedModel>,
   requested: string,
 ): string | undefined => {
   const wanted = requested.trim().toLowerCase()
@@ -289,6 +306,7 @@ export class SessionService extends Context.Service<
       const codexAccounts = yield* CodexAccountService
       const kiroAccounts = yield* KiroAccountService
       const extensions = yield* ExtensionsService
+      const mcp = yield* HumanityMcp
       const claude = yield* ClaudeCode
       const codex = yield* Codex
       const approvals = yield* ApprovalService
@@ -711,6 +729,10 @@ export class SessionService extends Context.Service<
 
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
+            // Its tools act for this thread while its agent runs, whatever the provider.
+            const humanity = yield* mcp
+              .serve({ openThread: openThread(session) })
+              .pipe(Scope.provide(scope))
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
               scope,
@@ -719,6 +741,7 @@ export class SessionService extends Context.Service<
               denied: new Set(),
               usageLock: yield* Semaphore.make(1),
               extensionsVersion: added.version,
+              humanity,
             }
             const run = yield* runner
               .start({
@@ -728,10 +751,9 @@ export class SessionService extends Context.Service<
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
-                extensions: { mcpServers: added.mcpServers, plugins: added.plugins },
+                extensions: withHumanity(added, humanity),
                 allowedTools: AUTO_TOOLS,
                 canUseTool: decide(session, state),
-                openThread: openThread(session),
               })
               .pipe(Scope.provide(scope))
             const ready: ActiveRun = Object.assign(state, { run })
@@ -804,7 +826,7 @@ export class SessionService extends Context.Service<
           if (latest.version === state.extensionsVersion) return
           state.extensionsVersion = latest.version
           yield* state.run
-            .applyExtensions(latest)
+            .applyExtensions(withHumanity(latest, state.humanity))
             .pipe(
               Effect.catch((error) =>
                 Effect.logWarning(
@@ -973,19 +995,26 @@ export class SessionService extends Context.Service<
 
       /**
        * The model of an `open_thread` call as the session stores it. Checked
-       * against what Claude Code offers the account, when that is known, so a
-       * name the agent made up comes back to it instead of failing the new thread.
+       * against what the provider offers its active account, when that is
+       * known, so a name the agent made up comes back to it instead of failing
+       * the new thread. A provider nobody is signed in to opens no thread.
        */
-      const threadModel = (requested: string | undefined) =>
+      const threadModel = (provider: AgentProvider, requested: string | undefined | null) =>
         Effect.gen(function* () {
+          const product = PROVIDER_NAMES[provider]
+          const { connection, models } = yield* accountsOf(provider).status({ refresh: false })
+          if (connection._tag === "SignedOut") {
+            return yield* new OpenThreadFailed({
+              reason: `No thread was opened: nobody is signed in to ${product} in Humanity. The human can sign in under Settings, or you can open the thread on another provider.`,
+            })
+          }
           const wanted = requested?.trim().toLowerCase()
           if (!wanted || wanted === "default") return undefined
-          const { models } = yield* accounts.status({ refresh: false })
           if (models.length === 0) return requested?.trim()
           const known = matchModel(models, wanted)
           if (known !== undefined) return known === "default" ? undefined : known
           return yield* new OpenThreadFailed({
-            reason: `No thread was opened: "${requested}" is not a model this account offers. Pass one of these values as \`model\`: ${models
+            reason: `No thread was opened: "${requested}" is not a model ${product} offers this account. Pass one of these values as \`model\`: ${models
               .map((model) => `${model.value} (${model.displayName})`)
               .join(", ")}.`,
           })
@@ -993,8 +1022,9 @@ export class SessionService extends Context.Service<
 
       /**
        * Humanity's `open_thread` tool for the agent of `parent`: a new thread
-       * in the same project, started on the prompt. Its autonomy is the
-       * default for new threads there, not that of the thread that opened it.
+       * in the same project, started on the prompt, on the provider asked for
+       * or else the parent's. Its autonomy is the default for new threads
+       * there, not that of the thread that opened it.
        */
       const openThread =
         (parent: Session) =>
@@ -1006,14 +1036,15 @@ export class SessionService extends Context.Service<
                 reason: "No thread was opened: the prompt is empty.",
               })
             }
-            const model = yield* threadModel(request.model)
+            const provider = request.provider ?? parent.provider
+            const model = yield* threadModel(provider, request.model)
             const opened = yield* create({
               projectId: parent.projectId,
-              provider: parent.provider,
-              title: request.title,
+              provider,
+              title: request.title ?? undefined,
               prompt,
               model,
-              effort: request.effort,
+              effort: request.effort ?? undefined,
             }).pipe(
               Effect.mapError(
                 (error) =>
@@ -1026,6 +1057,7 @@ export class SessionService extends Context.Service<
               sessionId: opened.id,
               projectId: opened.projectId,
               title: opened.title,
+              provider: opened.provider,
               model: opened.model,
               effort: opened.effort,
             }

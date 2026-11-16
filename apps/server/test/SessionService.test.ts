@@ -12,6 +12,7 @@ import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
+import { Kiro } from "../src/kiro/Kiro.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
@@ -411,10 +412,17 @@ describe("SessionService", () => {
           const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
           yield* waitForStatus(session.id, "idle")
           const [run] = yield* Ref.get(log.runs)
-          assert.deepStrictEqual(run?.extensions, {
-            mcpServers: { docs: { type: "http", url: "https://docs.dev/mcp", headers: {} } },
-            plugins: [join(home, "plugin")],
+          // Humanity's own server comes on top, with a token for this thread alone.
+          const { humanity, ...added } = run?.extensions.mcpServers ?? {}
+          assert.deepStrictEqual(added, {
+            docs: { type: "http", url: "https://docs.dev/mcp", headers: {} },
           })
+          assert.deepStrictEqual(run?.extensions.plugins, [join(home, "plugin")])
+          assert.strictEqual(humanity?.type, "http")
+          assert.match(
+            humanity?.type === "http" ? (humanity.headers["Authorization"] ?? "") : "",
+            /^Bearer [\w-]{43}$/,
+          )
 
           // Nothing changed: the next turn leaves the agent's servers alone.
           yield* sessions.sendMessage(session.id, "again")
@@ -431,7 +439,8 @@ describe("SessionService", () => {
           yield* waitForStatus(session.id, "idle")
           const changes = yield* Ref.get(log.extensionChanges)
           assert.lengthOf(changes, 1)
-          assert.deepStrictEqual(changes[0]?.mcpServers, {})
+          // The human's server is gone; Humanity's own stays, on the same token.
+          assert.deepStrictEqual(changes[0]?.mcpServers, { ...(humanity && { humanity }) })
           assert.lengthOf(yield* Ref.get(log.runs), 1)
         }).pipe(Effect.provide(services(home, () => [])))
       }),
@@ -958,6 +967,92 @@ describe("SessionService", () => {
           ])
         }).pipe(Effect.provide(services(home, script)))
       }),
+  )
+
+  it.live("opens a thread on another provider, on a model that provider offers", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const kiro = Kiro.layerTest({
+        probe: () =>
+          Effect.succeed({
+            cliVersion: "2.32.0",
+            kiroHome: "/home/me/.kiro",
+            signedIn: true,
+            models: [
+              { value: "auto", displayName: "Auto", description: "" },
+              { value: "claude-sonnet-5.5", displayName: "Claude Sonnet 5.5", description: "" },
+            ],
+          }),
+      })
+      const script: FakeScript = (prompt) =>
+        prompt === "delegate"
+          ? [
+              {
+                tool: OPEN_THREAD_TOOL,
+                input: { prompt: "Port it", provider: "kiro", model: "Sonnet 5.5", effort: "max" },
+              },
+              {
+                tool: OPEN_THREAD_TOOL,
+                input: { prompt: "Again", provider: "kiro", model: "gpt-9" },
+              },
+            ]
+          : []
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+        yield* waitForStatus(parent.id, "idle")
+
+        const [opened, refused] = (yield* contents(parent.id)).toolCalls
+        assert.strictEqual(opened?.status, "succeeded")
+        assert.include(opened?.output?.content, "on Kiro, claude-sonnet-5.5, max effort")
+        // A model Kiro does not offer comes back to the agent with those it does.
+        assert.strictEqual(refused?.status, "failed")
+        assert.include(refused?.output?.content, '"gpt-9" is not a model Kiro offers')
+        assert.include(refused?.output?.content, "claude-sonnet-5.5 (Claude Sonnet 5.5)")
+
+        const child = (yield* sessions.list(project.id)).find((session) => session.id !== parent.id)
+        assert.strictEqual(child?.provider, "kiro")
+        assert.strictEqual(child?.model, "claude-sonnet-5.5")
+        assert.strictEqual(child?.effort, "max")
+        assert.lengthOf(yield* sessions.list(project.id), 2)
+        const childRun = (yield* Ref.get(log.runs)).find((run) => run.provider === "kiro")
+        assert.strictEqual(childRun?.model, "claude-sonnet-5.5")
+      }).pipe(Effect.provide(services(home, script, undefined, undefined, undefined, kiro)))
+    }),
+  )
+
+  it.live("opens no thread on a provider nobody is signed in to", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const kiro = Kiro.layerTest({
+        probe: () =>
+          Effect.succeed({
+            cliVersion: null,
+            kiroHome: "/home/me/.kiro",
+            signedIn: false,
+            models: [],
+          }),
+      })
+      const script: FakeScript = (prompt) =>
+        prompt === "delegate"
+          ? [{ tool: OPEN_THREAD_TOOL, input: { prompt: "Port it", provider: "kiro" } }]
+          : []
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+        yield* waitForStatus(parent.id, "idle")
+
+        const [call] = (yield* contents(parent.id)).toolCalls
+        assert.strictEqual(call?.status, "failed")
+        assert.include(call?.output?.content, "nobody is signed in to Kiro")
+        assert.lengthOf(yield* sessions.list(project.id), 1)
+      }).pipe(Effect.provide(services(home, script, undefined, undefined, undefined, kiro)))
+    }),
   )
 
   it.live("tells the agent why no thread was opened", () =>

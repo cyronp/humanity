@@ -22,7 +22,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 
 ## Repository map
 
-- `apps/server` — Effect 4 daemon (RPC, Agent SDK bridge, Codex app-server bridge, Git, GitHub, SQLite)
+- `apps/server` — Effect 4 daemon (RPC, Humanity's MCP server, Agent SDK bridge, Codex app-server bridge, Git, GitHub, SQLite)
 - `apps/desktop` — Electron shell: starts the daemon as a child process and shows the web app; no logic of its own
 - `apps/web` — Vite + React 19 + TanStack Router + shadcn/ui
 - `packages/contracts` — shared RpcGroups and Schemas
