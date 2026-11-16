@@ -31,6 +31,7 @@ export function ClaudeAccountRow({
   const { status } = account
   const summary = summarizeClaude(status)
   const connection = status.connection
+  const subtitle = subtitleFor(account, connection)
   const [error, setError] = useState<string>()
   const [switching, setSwitching] = useState(false)
 
@@ -47,10 +48,10 @@ export function ClaudeAccountRow({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="truncate font-medium">{account.name}</h4>
-            {account.active && <Badge>Used for new threads</Badge>}
+            {account.active && <Badge>Default</Badge>}
           </div>
           <p className="text-sm">{summary.title}</p>
-          <p className="text-sm text-muted-foreground">{subtitleFor(account, connection)}</p>
+          {subtitle !== null && <p className="text-sm text-muted-foreground">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-1">
           {!account.active && (
@@ -60,7 +61,7 @@ export function ClaudeAccountRow({
               onClick={() => void makeActive()}
               disabled={switching}
             >
-              Use for new threads
+              Set as default
             </Button>
           )}
           {!account.isDefault && (
@@ -83,21 +84,17 @@ export function ClaudeAccountRow({
   )
 }
 
-const subtitleFor = (account: ClaudeAccount, connection: ClaudeConnection): string => {
+const subtitleFor = (account: ClaudeAccount, connection: ClaudeConnection): string | null => {
   switch (connection._tag) {
     case "Connected":
       return connection.method === "subscription"
-        ? "Sessions run on this plan, exactly like Claude Code in a terminal."
-        : "Sessions run on this credential. Usage is billed to it, not to a Claude plan."
+        ? null
+        : "Billed to this credential, not to a Claude plan."
     case "SignedOut":
-      if (account.isDefault) {
-        return "Sign in once with Claude Code. Humanity picks the login up automatically."
-      }
-      return account.linkedFolder
-        ? "This folder has no login yet. Sign in to it with the command below."
-        : "Sign in to this account with the command below. It gets a login of its own, next to your default one."
+      if (account.isDefault) return null
+      return account.linkedFolder ? "This folder has no login yet." : null
     case "Unavailable":
-      return "Humanity runs Claude Code through the Agent SDK, and it did not start."
+      return null
   }
 }
 
@@ -129,11 +126,10 @@ function ShadowedNote() {
   return (
     <Alert>
       <KeyRound />
-      <AlertTitle>The subscription is signed in, but not used</AlertTitle>
+      <AlertTitle>An API key overrides your subscription</AlertTitle>
       <AlertDescription>
-        Claude Code prefers an API key over a subscription login, so this key is billed per token.
-        To run on the plan, remove <code>ANTHROPIC_API_KEY</code> from the environment you start
-        Humanity from, restart the daemon and check again.
+        Usage is billed per token. To use your plan, unset <code>ANTHROPIC_API_KEY</code> and
+        restart the daemon.
       </AlertDescription>
     </Alert>
   )
@@ -145,24 +141,17 @@ function SignInSteps({ account }: { readonly account: ClaudeAccount }) {
   return (
     <div className="flex flex-col gap-4">
       <ol className="flex flex-col gap-4">
-        <NumberedStep n={1} title="Open a terminal on this computer">
-          {account.isDefault
-            ? "Any shell works. Humanity and Claude Code share the same login."
-            : "The command points Claude Code at this account's own folder, so your default login is left alone."}
-        </NumberedStep>
-        <NumberedStep n={2} title="Sign in with the Claude account">
+        <NumberedStep n={1} title="Run this in a terminal">
           <CopyCommand command={signInCommand({ configDir, executable: null })} className="mt-1" />
           <span className="mt-1 block">
-            A browser window opens. Choose the Claude Pro, Max, Team or Enterprise account
-            {account.isDefault
-              ? "."
-              : " you want here; sign out of claude.ai first if it picks the wrong one."}
+            Choose your Claude Pro, Max, Team or Enterprise account in the browser.{" "}
+            {!account.isDefault && "If it picks the wrong one, sign out of claude.ai first."}
           </span>
         </NumberedStep>
-        <NumberedStep n={3} title="Come back here">
+        <NumberedStep n={2} title="Come back here">
           <span className="inline-flex items-center gap-1.5">
             <Spinner className="size-3.5" />
-            This page checks again every few seconds and updates once you are signed in.
+            Waiting for you to sign in…
           </span>
         </NumberedStep>
       </ol>
@@ -175,7 +164,7 @@ function SignInSteps({ account }: { readonly account: ClaudeAccount }) {
             <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-2 pt-2 text-muted-foreground">
-            <p>Humanity ships its own copy of Claude Code. Sign in with it instead:</p>
+            <p>Use the copy that ships with Humanity:</p>
             <CopyCommand
               command={signInCommand({ configDir, executable: status.bundledExecutable })}
             />
@@ -205,8 +194,7 @@ function UnavailableNote({ reason }: { readonly reason: string }) {
       <AlertDescription>
         <pre className="font-mono text-xs whitespace-pre-wrap">{reason}</pre>
         <p className="mt-2">
-          Reinstall dependencies with <code>npm install</code> from the repository root, then
-          restart the daemon. The daemon log has the full error.
+          Run <code>npm install</code> from the repository root, then restart the daemon.
         </p>
       </AlertDescription>
     </Alert>

@@ -51,8 +51,7 @@ export function PublishSection({
           <BranchCard session={session} publication={value} />
           {value.forge === null ? (
             <p className="text-xs text-muted-foreground">
-              This project&apos;s origin is not on GitHub or on a connected GitLab instance, so pull
-              requests can&apos;t be opened from here.
+              Pull requests need an origin on GitHub or a connected GitLab.
             </p>
           ) : (
             <NextStep
@@ -180,8 +179,8 @@ function PullRequestStep({
   if (branch === publication.defaultBranch) {
     return (
       <p className="text-xs text-muted-foreground">
-        You are on <code>{branch}</code>, the project&apos;s default branch. Set up a worktree to
-        give this thread a branch of its own, then open a {forgeTerms(forge).noun} from it.
+        You are on <code>{branch}</code>, the default branch. Set up a worktree to open a{" "}
+        {forgeTerms(forge).noun}.
       </p>
     )
   }

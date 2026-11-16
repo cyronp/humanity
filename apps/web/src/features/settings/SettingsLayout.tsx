@@ -1,13 +1,19 @@
 import { cn } from "cn"
-import type { ComponentType, ReactNode } from "react"
+import { XIcon } from "lucide-react"
+import { type ComponentType, createContext, type ReactNode, useContext } from "react"
 import { Button } from "@/components/ui/button"
+import { DialogClose } from "@/components/ui/dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 /**
- * The building blocks of a settings section: a fixed header, then either one
- * scrolling pane or a list of items on the left with the chosen one's
- * settings on the right.
+ * The building blocks of a settings section: a bar with where you are and the
+ * way out, then either one scrolling pane or a list of items on the left with
+ * the chosen one's settings on the right. Settings sit in a centered column,
+ * in groups of rows.
  */
+
+/** The section's description, shown at the top of its pane. */
+const DescriptionContext = createContext<ReactNode>(undefined)
 
 export function SettingsFrame({
   id,
@@ -18,29 +24,64 @@ export function SettingsFrame({
 }: {
   readonly id: string
   readonly title: string
-  readonly description: ReactNode
-  /** A button beside the title, like "Add repository". */
+  readonly description?: ReactNode
+  /** A button beside the close button, like "Add repository". */
   readonly action?: ReactNode
   readonly children: ReactNode
 }) {
   return (
     <section aria-labelledby={id} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-wrap items-start gap-3 border-b px-4 py-3 md:px-5">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 id={id} className="text-base font-medium">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b pr-2 pl-4 md:pl-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Settings</span>
+          <span className="text-muted-foreground" aria-hidden="true">
+            /
+          </span>
+          <h2 id={id} className="truncate font-medium">
             {title}
           </h2>
-          <p className="max-w-prose text-sm text-muted-foreground">{description}</p>
         </div>
         {action}
+        <DialogClose asChild>
+          <Button variant="ghost" size="icon-sm">
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </Button>
+        </DialogClose>
       </div>
-      {children}
+      <DescriptionContext.Provider value={description}>{children}</DescriptionContext.Provider>
     </section>
   )
 }
 
 export function SettingsPane({ children }: { readonly children: ReactNode }) {
-  return <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:px-5">{children}</div>
+  const description = useContext(DescriptionContext)
+  return (
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-6 md:px-8 md:py-8">
+        {description !== undefined && (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        )}
+        <div className="flex min-w-0 flex-col">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+/** A titled group of settings, like "Appearance". */
+export function SettingsGroup({
+  title,
+  children,
+}: {
+  readonly title?: string
+  readonly children: ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-3 not-first:mt-8">
+      {title !== undefined && <h3 className="text-base font-semibold">{title}</h3>}
+      {children}
+    </section>
+  )
 }
 
 export interface SettingsListItem {
@@ -120,7 +161,7 @@ export function SettingsRow({
   readonly label: string
   /** Lets the control name itself by the label, with `aria-labelledby`. */
   readonly labelId?: string
-  readonly detail: ReactNode
+  readonly detail?: ReactNode
   readonly children: ReactNode
 }) {
   return (
@@ -129,7 +170,7 @@ export function SettingsRow({
         <span id={labelId} className="text-sm font-medium">
           {label}
         </span>
-        <span className="text-sm text-muted-foreground">{detail}</span>
+        {detail !== undefined && <span className="text-xs text-muted-foreground">{detail}</span>}
       </div>
       {children}
     </div>

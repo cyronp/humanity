@@ -84,15 +84,12 @@ export function ServiceConnect<C extends ServiceConnection, E>({
         onInitial: () => (
           <p className="flex items-center gap-2 border-b py-4 text-sm text-muted-foreground">
             <Spinner />
-            Looking for a {name} login on this computer.
+            Checking for a {name} login…
           </p>
         ),
         onFailure: (failure) => (
           <div className="py-4">
-            <ErrorNote
-              title={`Could not ask the daemon about ${name}`}
-              message={describeCause(failure.cause)}
-            />
+            <ErrorNote title={`Could not check ${name}`} message={describeCause(failure.cause)} />
           </div>
         ),
         onSuccess: ({ value }) => (
@@ -189,7 +186,7 @@ export function CliSteps({
         {waiting ? (
           <span className="inline-flex items-center gap-1.5">
             <Spinner className="size-3.5" />
-            This page checks again every few seconds and updates once you are signed in.
+            Waiting for you to sign in…
           </span>
         ) : (
           "Press Check again once you are signed in."

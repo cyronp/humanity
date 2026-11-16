@@ -43,8 +43,8 @@ export function SetupWorktreeButton({ session }: { readonly session: Session }) 
   const hint =
     error ??
     (busy
-      ? "Available once the agent finishes its turn."
-      : `The agent works in your checkout on ${session.branch}. Give it its own branch and worktree from here; uncommitted changes stay in your checkout.`)
+      ? "Available when the agent finishes."
+      : `Move this thread off ${session.branch} into its own branch and worktree. Uncommitted changes stay in your checkout.`)
 
   return (
     <Tooltip>

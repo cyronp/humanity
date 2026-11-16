@@ -73,10 +73,6 @@ export function NewChat({
       </AppHeader>
       <div className="flex flex-col items-center gap-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">What should we work on?</h1>
-        <p className="max-w-md text-sm text-muted-foreground">
-          The agent works in your checkout; set up a worktree from the session to give it its own
-          branch. It runs on its own unless you choose to be asked first.
-        </p>
       </div>
       {AsyncResult.match(projects, {
         onInitial: () => <Skeleton className="h-32 w-full max-w-2xl rounded-2xl" />,
@@ -103,10 +99,7 @@ const lastPrompted = (sessions: ReadonlyArray<Session>): ProjectId | undefined =
 function NoProjects() {
   return (
     <div className="flex w-full max-w-2xl flex-col items-center gap-3 rounded-2xl border border-dashed p-8 text-center">
-      <p className="text-sm text-muted-foreground">
-        Add a repository first. Humanity works on one cloned from GitHub or a git repository already
-        on this machine.
-      </p>
+      <p className="text-sm text-muted-foreground">Add a repository to get started.</p>
       <Button onClick={openAddRepository}>
         <FolderPlus />
         Add repository
@@ -199,7 +192,7 @@ function NewChatForm({
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
           onPaste={pending ? undefined : files.onPaste}
-          placeholder={`Ask the agent to work on ${project.name}…`}
+          placeholder="Ask anything."
           disabled={pending}
           rows={3}
           autoFocus

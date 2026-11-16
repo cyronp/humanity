@@ -40,7 +40,7 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
         <CardHeader>
           <CardTitle>Connect to Humanity</CardTitle>
           <CardDescription>
-            The daemon prints a link with a token when it starts. Open that link, or paste it here.
+            Open the link the daemon printed when it started, or paste it here.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

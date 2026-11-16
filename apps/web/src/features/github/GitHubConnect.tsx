@@ -49,7 +49,7 @@ function CliOption({
   return (
     <ConnectOption
       title="GitHub CLI"
-      description="Sign in once in a terminal. Humanity asks the GitHub CLI for its login when it needs it and never stores it."
+      description="Uses the login of gh. Humanity never stores it."
       inUse={connection.source === "cli"}
     >
       {connection.source === "cli" ? null : connection.source !== null ? (
@@ -111,14 +111,12 @@ function TokenOption({
   return (
     <ConnectOption
       title="Access token"
-      description="Paste a personal access token instead. A saved token is used before the GitHub CLI."
+      description="Takes priority over the GitHub CLI."
       inUse={saved}
     >
       {saved ? (
         <div className="flex flex-wrap items-center gap-3">
-          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            A token is saved in a file in Humanity's data folder on this computer.
-          </p>
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">A token is saved.</p>
           <Button variant="outline" size="sm" onClick={() => void remove()} disabled={busy}>
             Remove token
           </Button>

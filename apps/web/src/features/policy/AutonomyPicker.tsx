@@ -25,14 +25,14 @@ interface AutonomyOption {
 const ASK: AutonomyOption = {
   value: "ask",
   label: "Ask me",
-  description: "File changes and commands wait for you to allow or deny them.",
+  description: "Asks before file changes and commands.",
   icon: Hand,
 }
 
 const AUTO: AutonomyOption = {
   value: "auto",
   label: "Auto mode",
-  description: "Edits, commands, web and MCP tools run without asking.",
+  description: "Runs everything without asking.",
   icon: Zap,
 }
 
@@ -42,8 +42,7 @@ export const AUTONOMY_OPTIONS: ReadonlyArray<AutonomyOption> = [
   {
     value: "accept_edits",
     label: "Accept edits",
-    description:
-      "File changes in the thread's folder are applied without asking. Commands still ask.",
+    description: "Applies file changes without asking. Commands still ask.",
     icon: FilePen,
   },
   AUTO,
@@ -97,7 +96,7 @@ export function AutonomyPicker({
           }}
         >
           <DropdownMenuGroup>
-            <DropdownMenuLabel>What the agent may do without asking</DropdownMenuLabel>
+            <DropdownMenuLabel>Permissions</DropdownMenuLabel>
             {AUTONOMY_OPTIONS.map((option) => (
               <DropdownMenuRadioItem
                 key={option.value}

@@ -24,8 +24,8 @@ export function McpSettings() {
       errorTitle="Could not load MCP servers"
       description={
         <>
-          Servers that give the agent tools. Use them from the message box with its + button. A
-          repository's own <code className="font-mono text-xs">.mcp.json</code> is picked up too.
+          Tools for the agent. A repository's own{" "}
+          <code className="font-mono text-xs">.mcp.json</code> is loaded too.
         </>
       }
     >
@@ -44,9 +44,8 @@ export function SkillSettings() {
       errorTitle="Could not load skills"
       description={
         <>
-          Know-how the agent loads when a task calls for it. Use them from the message box with its
-          + button. A repository's own <code className="font-mono text-xs">.claude/skills</code> are
-          picked up too.
+          Instructions the agent loads when a task needs them. A repository's own{" "}
+          <code className="font-mono text-xs">.claude/skills</code> are loaded too.
         </>
       }
     >

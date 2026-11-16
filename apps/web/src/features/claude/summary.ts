@@ -74,7 +74,7 @@ export const connectionFacts = (status: ClaudeStatus): ReadonlyArray<ClaudeFact>
       label: connection.method === "subscription" ? "Plan" : "Credential",
       value: connection.label,
     },
-    ...(connection.email === null ? [] : [{ label: "Signed in as", value: connection.email }]),
+    ...(connection.email === null ? [] : [{ label: "Authenticated as", value: connection.email }]),
     ...(connection.organization === null
       ? []
       : [{ label: "Organization", value: connection.organization }]),

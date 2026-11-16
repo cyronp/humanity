@@ -43,7 +43,6 @@ export function ProjectsSettings() {
     <SettingsFrame
       id="settings-projects"
       title="Projects"
-      description="The repositories Humanity works on, each with its own rules for what the agent may do without asking."
       action={
         <Button variant="outline" size="sm" onClick={addRepository}>
           <Plus />
@@ -56,11 +55,7 @@ export function ProjectsSettings() {
       ) : (
         <SettingsPane>
           <AsyncView result={projects} errorTitle="Could not load projects">
-            {() => (
-              <p className="border-y py-4 text-sm text-muted-foreground">
-                No projects yet. Add a repository to start working on it.
-              </p>
-            )}
+            {() => <p className="border-y py-4 text-sm text-muted-foreground">No projects yet.</p>}
           </AsyncView>
         </SettingsPane>
       )}
@@ -143,7 +138,7 @@ function ProjectDetail({ project }: { readonly project: Project }) {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-sm font-medium">Remove this project</span>
           <span className="text-sm text-muted-foreground">
-            Its threads go with it. The repository in its folder is not touched.
+            Deletes its threads. The repository is not touched.
           </span>
         </div>
         <RemoveProject project={project} />
@@ -206,8 +201,8 @@ function RemoveProject({ project }: { readonly project: Project }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Remove “{project.name}”?</AlertDialogTitle>
           <AlertDialogDescription>
-            Its threads, their history and the worktrees Humanity created for them are deleted. The
-            repository at <code className="break-all">{project.localPath}</code> is not touched.
+            Its threads and the worktrees Humanity made for them are deleted. The repository at{" "}
+            <code className="break-all">{project.localPath}</code> is not touched.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error !== undefined && <ErrorNote title="Could not remove the project" message={error} />}

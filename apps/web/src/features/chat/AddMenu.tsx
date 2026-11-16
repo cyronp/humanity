@@ -136,9 +136,7 @@ export function AddMenu({
                   <Paperclip className="text-muted-foreground" />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="font-medium">Attach files…</span>
-                    <span className="text-xs text-muted-foreground">
-                      Images, PDFs or text. You can also paste or drop them.
-                    </span>
+                    <span className="text-xs text-muted-foreground">Images, PDFs or text.</span>
                   </span>
                 </CommandItem>
               </CommandGroup>
@@ -172,7 +170,7 @@ export function AddMenu({
             className="flex h-10 shrink-0 items-center gap-2 border-t px-4 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground"
           >
             <Settings2 className="size-4 shrink-0" aria-hidden="true" />
-            Add or manage MCP servers and skills…
+            Manage MCP servers and skills…
           </button>
         </PopoverContent>
       </Popover>
@@ -192,8 +190,7 @@ function Entries({
   if (skills.length === 0 && servers.length === 0) {
     return (
       <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-        No skills or MCP servers yet. Add one in the settings, or put a skill in the repository's{" "}
-        <code className="font-mono text-xs">.claude/skills</code>.
+        No skills or MCP servers yet.
       </p>
     )
   }
@@ -235,7 +232,7 @@ function Entries({
               value={`mcp ${server.source} ${server.name}`}
               keywords={[server.name, describeTransport(server.transport)]}
               onSelect={() => onPick({ kind: "mcp", server: server.name })}
-              title={`Puts ${mcpMention(server.name)} in the message: the prefix of this server's tools`}
+              title={`Mention ${mcpMention(server.name)}`}
               className="items-start gap-3 py-2"
             >
               <Server className="mt-0.5 text-muted-foreground" />

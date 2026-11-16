@@ -70,10 +70,7 @@ export function McpServersSettings({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Servers added here reach every project. A thread that asks first asks about each of their
-          tool calls; a thread in Auto mode runs them.
-        </p>
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">Available in every project.</p>
         <Button variant="outline" size="sm" onClick={() => setEditing({ kind: "import" })}>
           <ClipboardPaste />
           Paste JSON
@@ -91,9 +88,7 @@ export function McpServersSettings({
 
       {own.length === 0 && editing === undefined ? (
         <Empty className={EMPTY_BOX}>
-          <EmptyDescription className="text-sm">
-            No MCP servers yet. Add one, or paste the JSON configuration from a server's docs.
-          </EmptyDescription>
+          <EmptyDescription className="text-sm">No MCP servers yet.</EmptyDescription>
         </Empty>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border empty:hidden">
@@ -198,7 +193,7 @@ function ServerRow({
             <ConfirmRemove
               label={`Remove ${server.name}`}
               title={`Remove “${server.name}”?`}
-              description="The agent no longer gets this server, from its next message on. Its saved variables and headers are deleted."
+              description="Its saved variables and headers are deleted too."
               onConfirm={async () => {
                 const exit = await remove({ payload: { name: server.name }, reactivityKeys })
                 return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
@@ -258,7 +253,7 @@ function ServerEditor({
       aria-label={server === undefined ? "New MCP server" : `Edit ${server.name}`}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" htmlFor={`${ids}-name`} hint="Its tools are named mcp__<name>__<tool>.">
+        <Field label="Name" htmlFor={`${ids}-name`}>
           <Input
             id={`${ids}-name`}
             value={draft.name}
@@ -339,9 +334,8 @@ function ServerEditor({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Saved in Humanity's data folder (<code className="font-mono">mcp.json</code>), never in its
-        database. Values like <code className="font-mono">{"${GITHUB_TOKEN}"}</code> are read from
-        the daemon's environment when the agent starts.
+        Values like <code className="font-mono">{"${GITHUB_TOKEN}"}</code> are read from the
+        daemon's environment.
       </p>
       {error !== undefined && <ErrorNote title="The server was not saved" message={error} />}
       <div className="flex justify-end gap-2">

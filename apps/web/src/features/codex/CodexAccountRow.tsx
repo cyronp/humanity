@@ -47,10 +47,12 @@ export function CodexAccountRow({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="truncate font-medium">{account.name}</h4>
-            {account.active && <Badge>Used for new threads</Badge>}
+            {account.active && <Badge>Default</Badge>}
           </div>
           <p className="text-sm">{summary.title}</p>
-          <p className="text-sm text-muted-foreground">{summary.detail}</p>
+          {summary.detail !== null && (
+            <p className="text-sm text-muted-foreground">{summary.detail}</p>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {!account.active && (
@@ -60,7 +62,7 @@ export function CodexAccountRow({
               onClick={() => void makeActive()}
               disabled={switching}
             >
-              Use for new threads
+              Set as default
             </Button>
           )}
           {!account.isDefault && (
@@ -83,7 +85,7 @@ export function CodexAccountRow({
           <dd className="min-w-0 truncate font-medium">{connection.label}</dd>
           {connection.email !== null && (
             <>
-              <dt className="text-muted-foreground">Signed in as</dt>
+              <dt className="text-muted-foreground">Authenticated as</dt>
               <dd className="min-w-0 truncate font-medium">{connection.email}</dd>
             </>
           )}
@@ -105,8 +107,7 @@ export function CodexAccountRow({
           <AlertDescription>
             <pre className="font-mono text-xs whitespace-pre-wrap">{connection.reason}</pre>
             <p className="mt-2">
-              Reinstall dependencies with <code>npm install</code> from the repository root, then
-              restart the daemon. The daemon log has the full error.
+              Run <code>npm install</code> from the repository root, then restart the daemon.
             </p>
           </AlertDescription>
         </Alert>
@@ -123,24 +124,22 @@ function SignInSteps({ account }: { readonly account: CodexAccount }) {
   }
   return (
     <ol className="flex flex-col gap-4">
-      <NumberedStep n={1} title="Open a terminal on this computer">
-        {codexSignInUsesPowerShell(command) ? "Use PowerShell." : "Any shell works."} The command
-        runs the Codex that ships with Humanity
-        {account.isDefault
-          ? ", so the login lands where its threads read it."
-          : ", pointed at this account's own folder, so your default login is left alone."}
-      </NumberedStep>
-      <NumberedStep n={2} title="Sign in with the ChatGPT account">
+      <NumberedStep
+        n={1}
+        title={
+          codexSignInUsesPowerShell(command) ? "Run this in PowerShell" : "Run this in a terminal"
+        }
+      >
         <CopyCommand command={codexSignInCommand(command)} className="mt-1" />
         <span className="mt-1 block">
-          A browser window opens. Sign in with the ChatGPT account whose plan includes Codex
-          {account.isDefault ? "." : "; sign out of chatgpt.com first if it picks the wrong one."}
+          Sign in with a ChatGPT account whose plan includes Codex.{" "}
+          {!account.isDefault && "If it picks the wrong one, sign out of chatgpt.com first."}
         </span>
       </NumberedStep>
-      <NumberedStep n={3} title="Come back here">
+      <NumberedStep n={2} title="Come back here">
         <span className="inline-flex items-center gap-1.5">
           <Spinner className="size-3.5" />
-          This page checks again every few seconds and updates once you are signed in.
+          Waiting for you to sign in…
         </span>
       </NumberedStep>
     </ol>

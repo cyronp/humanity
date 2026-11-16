@@ -15,11 +15,7 @@ export function ProvidersSettings() {
   const selected = PROVIDER_IDS.find((id) => id === items.providers) ?? "claude-code"
 
   return (
-    <SettingsFrame
-      id="settings-providers"
-      title="Providers"
-      description="The agents Humanity runs sessions on and the accounts they sign in with. Humanity never reads or stores a login: each provider keeps its own."
-    >
+    <SettingsFrame id="settings-providers" title="Providers">
       <SettingsSplit
         label="Providers"
         items={ITEMS}

@@ -165,13 +165,7 @@ export function Composer({
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
           onPaste={disabled ? undefined : files.onPaste}
-          placeholder={
-            disabled
-              ? "This session has ended."
-              : busy
-                ? "The agent is working. A message sent now is read when it finishes."
-                : "Ask the agent something about the repository…"
-          }
+          placeholder={disabled ? "This session has ended." : "Ask anything."}
           disabled={disabled}
           rows={3}
           className="max-h-60 min-h-16 px-4 pt-3.5"

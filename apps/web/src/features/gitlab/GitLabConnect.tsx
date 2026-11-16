@@ -63,7 +63,7 @@ function CliOption({
   return (
     <ConnectOption
       title="GitLab CLI"
-      description="Sign in once in a terminal. Humanity asks the GitLab CLI for the login of its default instance when it needs it and never stores it."
+      description="Uses the login of glab's default instance. Humanity never stores it."
       inUse={connection.source === "cli"}
     >
       {connection.source === "cli" ? null : connection.source !== null ? (
@@ -128,14 +128,13 @@ function TokenOption({
   return (
     <ConnectOption
       title="Access token"
-      description="Paste a personal access token instead, for gitlab.com or a GitLab instance of your own. A saved token is used before the GitLab CLI."
+      description="For gitlab.com or your own instance. Takes priority over the GitLab CLI."
       inUse={saved}
     >
       {saved ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            A token for <span className="font-mono text-xs">{connection.host}</span> is saved in a
-            file in Humanity's data folder on this computer.
+            A token for <span className="font-mono text-xs">{connection.host}</span> is saved.
           </p>
           <Button variant="outline" size="sm" onClick={() => void remove()} disabled={busy}>
             Remove token
@@ -158,7 +157,7 @@ function TokenOption({
             <FieldDescription>
               {instance === undefined
                 ? "Enter the instance's host name, like gitlab.example.com."
-                : "Leave gitlab.com, or enter the host of your own instance. It is reached over https."}
+                : "gitlab.com or the host of your own instance."}
             </FieldDescription>
           </Field>
           <Field className="gap-2">
