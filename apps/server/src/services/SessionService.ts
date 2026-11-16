@@ -14,7 +14,7 @@ import {
   ChangeId,
   type ClaudeModel,
   DEFAULT_AUTONOMY,
-  DEFAULT_CLAUDE_ACCOUNT,
+  DEFAULT_ACCOUNT,
   DEFAULT_PROVIDER,
   type ChatMessage,
   ConfirmationId,
@@ -81,6 +81,7 @@ import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
+import { CodexAccountService } from "./CodexAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
@@ -283,6 +284,7 @@ export class SessionService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const preferences = yield* PreferencesService
       const accounts = yield* ClaudeAccountService
+      const codexAccounts = yield* CodexAccountService
       const extensions = yield* ExtensionsService
       const claude = yield* ClaudeCode
       const codex = yield* Codex
@@ -290,6 +292,15 @@ export class SessionService extends Context.Service<
       const serviceScope = yield* Effect.scope
 
       const active = new Map<string, ActiveRun>()
+
+      /** Each provider keeps its own accounts, and a thread runs as one of its provider's. */
+      const accountsOf = (provider: AgentProvider) =>
+        provider === "codex" ? codexAccounts : accounts
+      /** The config folder of the account a thread runs as; `undefined` is its provider's default login. */
+      const accountDir = (session: Session) =>
+        Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
+          accountsOf(session.provider).configDirFor(accountId),
+        )
       /**
        * Sessions that moved into a worktree since the agent last heard from
        * Humanity: the next message tells it where it works now.
@@ -599,9 +610,11 @@ export class SessionService extends Context.Service<
         }
         const plan =
           session.provider === "codex"
-            ? yield* codex.planUsage.pipe(Effect.mapError((error) => unavailable(error.reason)))
+            ? yield* codex
+                .planUsage(yield* accountDir(session))
+                .pipe(Effect.mapError((error) => unavailable(error.reason)))
             : yield* claude
-                .planUsage(yield* accounts.configDirFor(yield* repo.getAccountId(sessionId)))
+                .planUsage(yield* accountDir(session))
                 .pipe(Effect.mapError((error) => unavailable(error.reason)))
         if (plan === undefined) {
           return yield* unavailable("this login has no plan limits to report.")
@@ -700,7 +713,7 @@ export class SessionService extends Context.Service<
               .start({
                 provider: session.provider,
                 cwd: session.worktreePath,
-                configDir: yield* accounts.configDirFor(yield* repo.getAccountId(session.id)),
+                configDir: yield* accountDir(session),
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
@@ -939,11 +952,9 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
-        if (provider === "claude-code") {
-          // The thread keeps this account for good: its transcript lives in that account's folder.
-          const accountId = yield* accounts.activeId
-          if (accountId !== DEFAULT_CLAUDE_ACCOUNT) yield* repo.setAccountId(id, accountId)
-        }
+        // The thread keeps this account for good: its conversation lives in that account's folder.
+        const accountId = yield* accountsOf(provider).activeId
+        if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
         if (prompt) yield* deliver(session, prompt, files)
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))

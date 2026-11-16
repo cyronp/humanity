@@ -38,6 +38,8 @@ import { CODEX_READY, codexEvent, type CodexTurnUsage, patchInput } from "./norm
 
 /** Starts a Codex app server in a folder; the real one, or a scripted one in tests. */
 export type CodexConnect = (options: {
+  /** The folder of the account the thread runs as; without it, Codex's default login. */
+  readonly codexHome?: string | undefined
   readonly cwd: string
   readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
 }) => Effect.Effect<AppServer, CodexFailed, Scope.Scope>
@@ -376,7 +378,11 @@ export const startCodexRun =
         })
 
       const main = Effect.gen(function* () {
-        const connected = yield* connect({ cwd: options.cwd, onRequest })
+        const connected = yield* connect({
+          cwd: options.cwd,
+          codexHome: options.configDir,
+          onRequest,
+        })
         server = connected
         const configured = yield* connected.request("config/read", { includeLayers: false }).pipe(
           Effect.map((response) =>

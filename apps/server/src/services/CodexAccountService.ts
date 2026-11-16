@@ -1,10 +1,8 @@
 import type { CodexConnection, CodexStatus } from "@humanity/contracts"
-import { Context, DateTime, Duration, Effect, Exit, Layer, Result } from "effect"
+import { Context, DateTime, Effect, Layer, Result } from "effect"
 import { Codex, type CodexProbe } from "../codex/Codex.ts"
-
-/** A working login rarely changes; anything else is re-checked soon, so a fresh login shows up. */
-const CONNECTED_TTL = Duration.minutes(5)
-const OTHER_TTL = Duration.seconds(10)
+import { ServerConfig } from "../ServerConfig.ts"
+import { type AccountRegistry, makeAccountRegistry } from "./accountRegistry.ts"
 
 /** `plus` → `ChatGPT Plus` */
 const planLabel = (plan: string | null | undefined): string => {
@@ -33,52 +31,54 @@ export const classifyCodexAccount = (account: CodexProbe["account"]): CodexConne
   }
 }
 
-/** Which login Codex threads run as, and what it offers. Humanity holds no credential of its own. */
+/**
+ * The Codex accounts: the default Codex login and every Codex folder
+ * (`CODEX_HOME`) added next to it. Humanity holds no credential of its own.
+ */
 export class CodexAccountService extends Context.Service<
   CodexAccountService,
-  {
-    /** Codex's status. Concurrent callers share one check. */
-    readonly status: (options: { readonly refresh: boolean }) => Effect.Effect<CodexStatus>
-  }
+  AccountRegistry<CodexStatus>
 >()("humanity/CodexAccountService") {
   static readonly layer = Layer.effect(
     CodexAccountService,
     Effect.gen(function* () {
       const codex = yield* Codex
+      const config = yield* ServerConfig
 
-      const check = Effect.gen(function* () {
-        const result = yield* Effect.result(codex.probe)
-        const checkedAt = DateTime.formatIso(yield* DateTime.now)
-        if (Result.isFailure(result)) {
-          yield* Effect.logWarning("Codex check failed", result.failure.reason)
+      const check = (codexHome: string | undefined) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.result(codex.probe(codexHome))
+          const checkedAt = DateTime.formatIso(yield* DateTime.now)
+          const base = { executable: codex.executable, checkedAt }
+          if (Result.isFailure(result)) {
+            yield* Effect.logWarning("Codex check failed", result.failure.reason)
+            return {
+              ...base,
+              connection: { _tag: "Unavailable", reason: result.failure.reason },
+              models: [],
+              cliVersion: null,
+              codexHome: codexHome ?? codex.home,
+            } satisfies CodexStatus
+          }
           return {
-            connection: { _tag: "Unavailable", reason: result.failure.reason },
-            models: [],
-            cliVersion: null,
-            codexHome: null,
-            executable: codex.executable,
-            checkedAt,
+            ...base,
+            connection: classifyCodexAccount(result.success.account),
+            models: result.success.models,
+            cliVersion: result.success.cliVersion ?? null,
+            codexHome: codexHome ?? result.success.codexHome ?? codex.home,
           } satisfies CodexStatus
-        }
-        return {
-          connection: classifyCodexAccount(result.success.account),
-          models: result.success.models,
-          cliVersion: result.success.cliVersion ?? null,
-          codexHome: result.success.codexHome ?? null,
-          executable: codex.executable,
-          checkedAt,
-        } satisfies CodexStatus
-      }).pipe(Effect.withSpan("CodexAccountService.check"))
+        }).pipe(Effect.withSpan("CodexAccountService.check"))
 
-      const [cached, invalidate] = yield* Effect.cachedInvalidateWithTTL(check, (exit) =>
-        Exit.isSuccess(exit) && exit.value.connection._tag === "Connected"
-          ? CONNECTED_TTL
-          : OTHER_TTL,
-      )
-
-      return {
-        status: ({ refresh }) => (refresh ? Effect.andThen(invalidate, cached) : cached),
-      }
+      return yield* makeAccountRegistry<CodexStatus>({
+        provider: "codex",
+        table: "codex_accounts",
+        activeKey: "active_codex_account",
+        accountsDir: config.codexAccountsDir,
+        defaultDir: codex.home,
+        product: "Codex",
+        folderExample: ".codex-work",
+        check,
+      })
     }),
   )
 }

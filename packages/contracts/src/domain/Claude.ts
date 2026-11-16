@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { DEFAULT_ACCOUNT } from "./Provider.ts"
 
 /**
  * How Claude Code authenticates the agent sessions Humanity starts. Humanity
@@ -63,7 +64,7 @@ export const ClaudeStatus = Schema.Struct({
 export type ClaudeStatus = typeof ClaudeStatus.Type
 
 /** The id of the login Claude Code uses by itself: `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
-export const DEFAULT_CLAUDE_ACCOUNT = "default"
+export const DEFAULT_CLAUDE_ACCOUNT = DEFAULT_ACCOUNT
 
 /**
  * One Claude Code login Humanity can run sessions as. The default account is

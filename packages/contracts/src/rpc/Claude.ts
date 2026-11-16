@@ -2,10 +2,10 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { ClaudeAccount, ClaudeStatus } from "../domain/Claude.ts"
 import {
-  ClaudeAccountFolderInvalid,
-  ClaudeAccountInUse,
-  ClaudeAccountNameInvalid,
-  ClaudeAccountNotFound,
+  AccountFolderInvalid,
+  AccountInUse,
+  AccountNameInvalid,
+  AccountNotFound,
 } from "../Errors.ts"
 
 export const ClaudeRpcs = RpcGroup.make(
@@ -32,16 +32,16 @@ export const ClaudeRpcs = RpcGroup.make(
   Rpc.make("Claude.addAccount", {
     payload: { name: Schema.String, configDir: Schema.optional(Schema.String) },
     success: ClaudeAccount,
-    error: Schema.Union([ClaudeAccountNameInvalid, ClaudeAccountFolderInvalid]),
+    error: Schema.Union([AccountNameInvalid, AccountFolderInvalid]),
   }),
   /** Removes an added account and its login. Refused while an open thread runs as it. */
   Rpc.make("Claude.removeAccount", {
     payload: { accountId: Schema.String },
-    error: Schema.Union([ClaudeAccountNotFound, ClaudeAccountInUse]),
+    error: Schema.Union([AccountNotFound, AccountInUse]),
   }),
   /** Makes new threads run as this account. Existing threads keep the account they started with. */
   Rpc.make("Claude.setActiveAccount", {
     payload: { accountId: Schema.String },
-    error: ClaudeAccountNotFound,
+    error: AccountNotFound,
   }),
 )

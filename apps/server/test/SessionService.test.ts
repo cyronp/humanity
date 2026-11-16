@@ -327,10 +327,7 @@ describe("SessionService", () => {
           [undefined, workDir],
         )
         // An open thread still needs the account's login.
-        assert.strictEqual(
-          (yield* Effect.flip(accounts.remove(work.id)))._tag,
-          "ClaudeAccountInUse",
-        )
+        assert.strictEqual((yield* Effect.flip(accounts.remove(work.id)))._tag, "AccountInUse")
         // Switching back changes new threads only.
         yield* accounts.setActive("default")
         return { onWork: onWork.id, workDir }

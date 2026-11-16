@@ -65,8 +65,9 @@ export interface AgentRunOptions {
   /** The session's worktree. The agent never runs anywhere else. */
   readonly cwd: string
   /**
-   * The Claude Code config folder of the account the session runs as, or
-   * `undefined` for Claude Code's default login.
+   * The config folder of the account the session runs as, in its provider's
+   * terms (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), or `undefined` for the
+   * provider's default login.
    */
   readonly configDir: string | undefined
   readonly resume: string | undefined

@@ -389,18 +389,18 @@ export class SessionRepo extends Context.Service<
 
       const findAccountId = SqlSchema.findOneOption({
         Request: Schema.String,
-        Result: Schema.Struct({ claude_account_id: Schema.NullOr(Schema.String) }),
-        execute: (id) => sql`SELECT claude_account_id FROM sessions WHERE id = ${id}`,
+        Result: Schema.Struct({ account_id: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT account_id FROM sessions WHERE id = ${id}`,
       })
 
       const getAccountId = (sessionId: string) =>
         findAccountId(sessionId).pipe(
-          Effect.map((row) => (Option.isSome(row) ? row.value.claude_account_id : null)),
+          Effect.map((row) => (Option.isSome(row) ? row.value.account_id : null)),
           Effect.orDie,
         )
 
       const setAccountId = (sessionId: string, accountId: string | null) =>
-        sql`UPDATE sessions SET claude_account_id = ${accountId} WHERE id = ${sessionId}`.pipe(
+        sql`UPDATE sessions SET account_id = ${accountId} WHERE id = ${sessionId}`.pipe(
           Effect.asVoid,
           Effect.orDie,
         )

@@ -1,6 +1,8 @@
 import type { CodexModel, PlanUsage } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, type Scope } from "effect"
 import { ChildProcessSpawner } from "effect/process"
+import { homedir } from "node:os"
+import { join } from "node:path"
 import { ServerConfig } from "../ServerConfig.ts"
 import {
   type AppServer,
@@ -107,18 +109,25 @@ export class Codex extends Context.Service<
   {
     /** The executable Humanity runs: the bundled one, else `codex` from the PATH. */
     readonly executable: string
-    /** Starts a Codex app server in `cwd` that lives until the scope closes. */
+    /** Where the default login lives: `CODEX_HOME`, else `~/.codex`. */
+    readonly home: string
+    /**
+     * Starts a Codex app server in `cwd` that lives until the scope closes.
+     * `codexHome` is the folder of the account it runs as; without it, the
+     * default login.
+     */
     readonly connect: (options: {
       readonly cwd: string
+      readonly codexHome?: string | undefined
       readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
     }) => Effect.Effect<AppServer, CodexFailed, Scope.Scope>
-    /** Starts Codex just long enough to read its account and models. Sends nothing to a model. */
-    readonly probe: Effect.Effect<CodexProbe, CodexFailed>
+    /** Starts Codex just long enough to read an account and its models. Sends nothing to a model. */
+    readonly probe: (codexHome?: string) => Effect.Effect<CodexProbe, CodexFailed>
     /**
      * Starts Codex just long enough to read the account's rate-limit windows;
      * `undefined` when the login has none (an API key).
      */
-    readonly planUsage: Effect.Effect<PlanUsage | undefined, CodexFailed>
+    readonly planUsage: (codexHome?: string) => Effect.Effect<PlanUsage | undefined, CodexFailed>
   }
 >()("humanity/Codex") {
   static readonly layer = Layer.effect(
@@ -129,17 +138,27 @@ export class Codex extends Context.Service<
       const executable = bundledCodexExecutable() ?? "codex"
       const env = codexEnvironment(process.env)
 
+      const home = env["CODEX_HOME"] ?? join(homedir(), ".codex")
+
       const connect = (options: {
         readonly cwd: string
+        readonly codexHome?: string | undefined
         readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
       }) =>
-        connectAppServer({ executable, env, ...options }).pipe(
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-        )
+        connectAppServer({
+          executable,
+          // An added account is a Codex folder of its own; the default login is whatever Codex finds.
+          env: options.codexHome === undefined ? env : { ...env, CODEX_HOME: options.codexHome },
+          cwd: options.cwd,
+          onRequest: options.onRequest,
+        }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
       /** A Codex in Humanity's own data directory, never the user's repository, to ask one thing. */
-      const idle = <A>(ask: (server: AppServer) => Effect.Effect<A, CodexFailed>) =>
-        connect({ cwd: config.home, onRequest: refuse }).pipe(
+      const idle = <A>(
+        codexHome: string | undefined,
+        ask: (server: AppServer) => Effect.Effect<A, CodexFailed>,
+      ) =>
+        connect({ cwd: config.home, codexHome, onRequest: refuse }).pipe(
           Effect.flatMap(ask),
           Effect.scoped,
           withTimeout,
@@ -169,37 +188,45 @@ export class Codex extends Context.Service<
           return found
         })
 
-      const probe = idle((server) =>
-        Effect.gen(function* () {
-          const account = decodeAccount(
-            yield* server.request("account/read", { refreshToken: false }),
-          )
-          return {
-            cliVersion: server.cliVersion,
-            codexHome: server.codexHome,
-            account: Option.isSome(account) ? account.value.account : null,
-            // A signed-out Codex has no models to offer; asking would only fail.
-            models: yield* models(server).pipe(Effect.orElseSucceed(() => [])),
-          } satisfies CodexProbe
-        }),
-      )
+      const probe = (codexHome?: string) =>
+        idle(codexHome, (server) =>
+          Effect.gen(function* () {
+            const account = decodeAccount(
+              yield* server.request("account/read", { refreshToken: false }),
+            )
+            return {
+              cliVersion: server.cliVersion,
+              codexHome: server.codexHome,
+              account: Option.isSome(account) ? account.value.account : null,
+              // A signed-out Codex has no models to offer; asking would only fail.
+              models: yield* models(server).pipe(Effect.orElseSucceed(() => [])),
+            } satisfies CodexProbe
+          }),
+        )
 
-      return { executable, connect, probe, planUsage: idle(readCodexPlanUsage) }
+      return {
+        executable,
+        home,
+        connect,
+        probe,
+        planUsage: (codexHome) => idle(codexHome, readCodexPlanUsage),
+      }
     }),
   )
 
   static readonly layerTest = (
     options: {
-      readonly probe?: Effect.Effect<CodexProbe, CodexFailed>
-      readonly planUsage?: Effect.Effect<PlanUsage | undefined, CodexFailed>
+      readonly probe?: (codexHome?: string) => Effect.Effect<CodexProbe, CodexFailed>
+      readonly planUsage?: (codexHome?: string) => Effect.Effect<PlanUsage | undefined, CodexFailed>
     } = {},
   ) => {
     const unused = new CodexFailed({ reason: "Codex is not used by this test." })
     return Layer.succeed(Codex, {
       executable: "codex",
+      home: "/home/me/.codex",
       connect: () => Effect.fail(unused),
-      probe: options.probe ?? Effect.fail(unused),
-      planUsage: options.planUsage ?? Effect.succeed(undefined),
+      probe: options.probe ?? (() => Effect.fail(unused)),
+      planUsage: options.planUsage ?? (() => Effect.succeed(undefined)),
     })
   }
 }

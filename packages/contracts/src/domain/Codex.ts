@@ -57,3 +57,26 @@ export const CodexStatus = Schema.Struct({
   checkedAt: Schema.String,
 })
 export type CodexStatus = typeof CodexStatus.Type
+
+/**
+ * One Codex login Humanity can run threads as. The default account is the
+ * human's own Codex login; every other one is a separate Codex folder
+ * (`CODEX_HOME`), either one Humanity made under its data directory or one
+ * the human already had (like `~/.codex-work`), signed in on its own.
+ * Humanity stores only the name and the folder: the credential stays in it.
+ */
+export const CodexAccount = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  /** The human's own Codex login. It cannot be removed. */
+  isDefault: Schema.Boolean,
+  /**
+   * The account runs on a folder the human picked, not one Humanity made.
+   * Removing the account leaves that folder and its login alone.
+   */
+  linkedFolder: Schema.Boolean,
+  /** New Codex threads run as this account. Exactly one account is active. */
+  active: Schema.Boolean,
+  status: CodexStatus,
+})
+export type CodexAccount = typeof CodexAccount.Type

@@ -250,8 +250,8 @@ export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavai
   }
 }
 
-export class ClaudeAccountNotFound extends Schema.TaggedError<ClaudeAccountNotFound>()(
-  "ClaudeAccountNotFound",
+export class AccountNotFound extends Schema.TaggedError<AccountNotFound>()(
+  "AccountNotFound",
   { accountId: Schema.String },
 ) {
   override get message() {
@@ -259,8 +259,8 @@ export class ClaudeAccountNotFound extends Schema.TaggedError<ClaudeAccountNotFo
   }
 }
 
-export class ClaudeAccountInUse extends Schema.TaggedError<ClaudeAccountInUse>()(
-  "ClaudeAccountInUse",
+export class AccountInUse extends Schema.TaggedError<AccountInUse>()(
+  "AccountInUse",
   { accountId: Schema.String, sessions: Schema.Number },
 ) {
   override get message() {
@@ -270,8 +270,8 @@ export class ClaudeAccountInUse extends Schema.TaggedError<ClaudeAccountInUse>()
   }
 }
 
-export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNameInvalid>()(
-  "ClaudeAccountNameInvalid",
+export class AccountNameInvalid extends Schema.TaggedError<AccountNameInvalid>()(
+  "AccountNameInvalid",
   { reason: Schema.String },
 ) {
   override get message() {
@@ -279,9 +279,9 @@ export class ClaudeAccountNameInvalid extends Schema.TaggedError<ClaudeAccountNa
   }
 }
 
-/** The Claude Code config folder given for a new account cannot be used. */
-export class ClaudeAccountFolderInvalid extends Schema.TaggedError<ClaudeAccountFolderInvalid>()(
-  "ClaudeAccountFolderInvalid",
+/** The config folder given for a new account cannot be used. */
+export class AccountFolderInvalid extends Schema.TaggedError<AccountFolderInvalid>()(
+  "AccountFolderInvalid",
   { folder: Schema.String, reason: Schema.String },
 ) {
   override get message() {
