@@ -38,6 +38,8 @@ const itemVariants = cva(
         default: "border-transparent",
         outline: "border-border",
         muted: "border-transparent bg-muted/50",
+        // Waiting on the human: it must stand out from everything around it.
+        attention: "border-2 border-warning bg-warning/5",
       },
       size: {
         default: "gap-2.5 px-3 py-2.5",

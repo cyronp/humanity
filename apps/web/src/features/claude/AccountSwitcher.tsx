@@ -2,12 +2,13 @@ import { useAtomValue } from "@effect/atom-react"
 import type { ClaudeAccount } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { LoaderCircle, Settings } from "lucide-react"
+import { Settings } from "lucide-react"
 import { useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Spinner } from "@/components/ui/spinner"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
 import { claudeStatusAtom } from "./atoms.ts"
@@ -80,7 +81,7 @@ function AccountPanel({ onManage }: { readonly onManage: () => void }) {
       {AsyncResult.match(result, {
         onInitial: () => (
           <p className="flex items-center gap-2 p-3 text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
+            <Spinner />
             Reading the accounts…
           </p>
         ),

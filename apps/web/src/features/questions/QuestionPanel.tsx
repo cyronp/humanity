@@ -10,6 +10,7 @@ import {
   toggleOption,
   typeOwnAnswer,
 } from "@humanity/contracts"
+import { Questionnaire as QuestionnairePrimitive } from "@shadcn/react/questionnaire"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { ArrowDown, ArrowUp, Check } from "lucide-react"
@@ -18,6 +19,15 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
+import {
+  Questionnaire,
+  QuestionnaireChoices,
+  QuestionnaireItem,
+  QuestionnaireNext,
+  QuestionnairePrevious,
+  QuestionnaireProgress,
+  QuestionnaireSubmit,
+} from "@/components/ui/questionnaire"
 import { decideConfirmationAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 
@@ -45,10 +55,22 @@ function RowMark({
 }
 
 /**
+ * A row of the list. The active one is highlighted: the row the pointer last
+ * moved over or the keyboard is on, the first one to begin with.
+ */
+const ROW =
+  "flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left text-sm data-[active=true]:bg-accent"
+
+/** The footer's buttons: small, and as tall on a phone as anywhere else. */
+const ACTION = "min-h-0"
+
+const itemName = (index: number) => `question-${index}`
+
+/**
  * The agent's questions, in place of the message box until they are answered:
  * one question at a time, its options as numbered rows, and a last row to
- * type an answer of one's own. Arrows move, a number or Space picks, Enter
- * goes on. "Talk about it" sends no answer and gives the message box back.
+ * type an answer of one's own. Arrows move, a number picks, Enter goes on.
+ * "Talk about it" sends no answer and gives the message box back.
  */
 export function QuestionPanel({
   confirmation,
@@ -62,30 +84,18 @@ export function QuestionPanel({
   const [drafts, setDrafts] = useState<ReadonlyArray<QuestionDraft>>(() =>
     questions.map(() => EMPTY_QUESTION_DRAFT),
   )
+  // Which row of the current question is highlighted; the own-answer row is the one after the options.
   const [active, setActive] = useState(0)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const panel = useRef<HTMLDivElement>(null)
-  const ownInput = useRef<HTMLInputElement>(null)
+  const form = useRef<HTMLFormElement>(null)
 
-  const question = questions[step] ?? questions[0]
-  const draft = drafts[step] ?? EMPTY_QUESTION_DRAFT
-  const ownRow = question?.options.length ?? 0
-  const last = step === questions.length - 1
-
-  // The keyboard belongs to the panel: the own-answer field on its row, the panel otherwise.
+  // The keyboard belongs to the questions from the start: numbers and arrows work at once.
   useEffect(() => {
-    if (active === ownRow) ownInput.current?.focus()
-    else panel.current?.focus()
-  }, [active, ownRow, step])
+    form.current?.querySelector<HTMLElement>("fieldset[data-active]")?.focus()
+  }, [])
 
-  if (question === undefined) return null
-  const multi = question.multiSelect === true
-  const answered = answerFor(question, draft) !== ""
   const answers = collectAnswers(questions, drafts)
-
-  const withDraft = (next: QuestionDraft) =>
-    drafts.map((existing, index) => (index === step ? next : existing))
 
   const send = async (
     payload:
@@ -100,167 +110,175 @@ export function QuestionPanel({
     if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
-  const goTo = (next: number) => {
-    setStep(next)
-    setActive(0)
-  }
+  const setDraft = (index: number, next: QuestionDraft) =>
+    setDrafts((current) => current.map((existing, at) => (at === index ? next : existing)))
 
-  /** On to the next question, or off to the agent once the last one is answered. */
-  const advance = (current: ReadonlyArray<QuestionDraft>) => {
-    if (answerFor(question, current[step] ?? EMPTY_QUESTION_DRAFT) === "") return
-    if (!last) return goTo(step + 1)
-    const complete = collectAnswers(questions, current)
-    if (complete === undefined) return
-    void send({ decision: "allow", answers: complete })
-  }
-
-  const pick = (index: number) => {
-    const option = question.options[index]
-    if (option === undefined) return drafts
-    const next = withDraft(toggleOption(question, draft, option.label))
-    setDrafts(next)
-    setActive(index)
-    return next
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return
+  /** The number after the last option goes to the field for an answer of one's own. */
+  const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return
     const target = event.target as HTMLElement
-    const typing = target === ownInput.current
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault()
-      const rows = ownRow + 1
-      setActive((active + (event.key === "ArrowDown" ? 1 : rows - 1)) % rows)
-      return
-    }
-    // The footer's buttons keep their own Enter and Space.
-    if (target.closest("[data-question-action]") !== null) return
-    if (event.key === "Enter") {
-      event.preventDefault()
-      // Enter on a single-select row picks it and moves on in one go.
-      advance(!typing && !multi && active < ownRow ? pick(active) : drafts)
-      return
-    }
-    if (typing) return
-    if (event.key === " ") {
-      event.preventDefault()
-      if (active < ownRow) pick(active)
-      return
-    }
-    const digit = Number(event.key)
-    if (Number.isInteger(digit) && digit >= 1 && digit <= ownRow + 1) {
-      event.preventDefault()
-      if (digit === ownRow + 1) setActive(ownRow)
-      else pick(digit - 1)
-    }
+    if (target instanceof HTMLInputElement && target.type === "text") return
+    const options = questions[step]?.options.length ?? 0
+    if (event.key !== String(options + 1)) return
+    event.preventDefault()
+    event.currentTarget
+      .querySelector<HTMLInputElement>("fieldset[data-active] input[type=text]")
+      ?.focus()
   }
 
   return (
     <div className="flex flex-col gap-2">
       {error !== undefined && <ErrorNote title="The answer was not sent" message={error} />}
-      <div
-        ref={panel}
-        tabIndex={-1}
-        role="group"
-        aria-label={`The agent asks: ${question.question}`}
+      <Questionnaire
+        ref={form}
+        item={itemName(step)}
+        onItemChange={(name) => {
+          setStep(Number(name.slice("question-".length)))
+          setActive(0)
+        }}
+        shortcuts="numbers"
         onKeyDown={onKeyDown}
-        className="rounded-2xl border border-border/60 bg-muted shadow-xs outline-none"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (answers !== undefined) void send({ decision: "allow", answers })
+        }}
+        className="gap-0 rounded-2xl border border-border/60 bg-muted shadow-xs outline-none"
       >
-        <div className="flex items-start gap-2 px-4 py-2.5 text-sm">
-          {question.header !== undefined && question.header !== "" && (
-            <Badge variant="secondary" className="mt-px shrink-0">
-              {question.header}
-            </Badge>
-          )}
-          <p className="min-w-0 flex-1 font-medium">{question.question}</p>
-          {questions.length > 1 && (
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {step + 1} of {questions.length}
-            </span>
-          )}
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-card p-2">
-          {multi && <p className="px-2 pb-1 text-xs text-muted-foreground">Pick all that apply.</p>}
-          <ul className="flex flex-col">
-            {question.options.map((option, index) => {
-              const chosen = draft.selected.includes(option.label)
-              return (
-                <li key={option.label}>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    aria-pressed={chosen}
-                    data-active={active === index}
-                    onClick={() => pick(index)}
-                    onMouseMove={() => setActive(index)}
-                    className="flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left text-sm outline-none data-[active=true]:bg-accent"
-                  >
-                    <RowMark index={index} chosen={chosen} multi={multi} />
-                    <span className="min-w-0">
-                      <span className="mr-2 font-medium">{option.label}</span>
-                      {option.description !== undefined && (
-                        <span className="text-muted-foreground">{option.description}</span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-            <li
-              data-active={active === ownRow}
-              onMouseMove={() => setActive(ownRow)}
-              className="flex items-center gap-3 rounded-lg px-2 py-1.5 data-[active=true]:bg-accent"
+        {questions.map((question, index) => {
+          const draft = drafts[index] ?? EMPTY_QUESTION_DRAFT
+          const multi = question.multiSelect === true
+          const answered = answerFor(question, draft) !== ""
+          const last = index === questions.length - 1
+          const isActive = (row: number) => index === step && active === row
+          return (
+            <QuestionnaireItem
+              key={itemName(index)}
+              name={itemName(index)}
+              multiple={multi}
+              required
+              aria-label={`The agent asks: ${question.question}`}
+              className="gap-0"
             >
-              <RowMark index={ownRow} chosen={draft.own.trim() !== ""} multi={multi} />
-              <input
-                ref={ownInput}
-                value={draft.own}
-                onChange={(event) =>
-                  setDrafts(withDraft(typeOwnAnswer(question, draft, event.target.value)))
-                }
-                onFocus={() => setActive(ownRow)}
-                placeholder="Type your own"
-                aria-label="Your own answer"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </li>
-          </ul>
-          <div className="flex flex-wrap items-center gap-2 px-2 pt-2">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Kbd>
-                <ArrowUp />
-              </Kbd>
-              <Kbd>
-                <ArrowDown />
-              </Kbd>
-              <span className="ml-1">to navigate</span>
-            </span>
-            <div className="ml-auto flex items-center gap-1" data-question-action>
-              {step > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => goTo(step - 1)} disabled={pending}>
-                  Back
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void send({ decision: "deny" })}
-                disabled={pending}
-                title="Send no answer and discuss it with the agent in the chat instead"
-              >
-                Talk about it
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => advance(drafts)}
-                disabled={pending || (last ? answers === undefined : !answered)}
-              >
-                {last ? "Submit" : "Next"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+              <QuestionnairePrimitive.Title className="flex w-full items-start gap-2 px-4 py-2.5 text-sm">
+                {question.header !== undefined && question.header !== "" && (
+                  <Badge variant="secondary" className="mt-px shrink-0">
+                    {question.header}
+                  </Badge>
+                )}
+                <span className="min-w-0 flex-1 font-medium">{question.question}</span>
+                {questions.length > 1 && (
+                  <QuestionnaireProgress className="min-h-0 min-w-0 shrink-0 font-normal">
+                    {index + 1} of {questions.length}
+                  </QuestionnaireProgress>
+                )}
+              </QuestionnairePrimitive.Title>
+              <div className="rounded-2xl border border-border/60 bg-card p-2">
+                {multi && (
+                  <p className="px-2 pb-1 text-xs text-muted-foreground">Pick all that apply.</p>
+                )}
+                <QuestionnaireChoices className="flex flex-col gap-0">
+                  {question.options.map((option, at) => {
+                    const chosen = draft.selected.includes(option.label)
+                    return (
+                      <QuestionnairePrimitive.Choice
+                        key={option.label}
+                        value={option.label}
+                        checked={chosen}
+                        onChange={() =>
+                          setDraft(index, toggleOption(question, draft, option.label))
+                        }
+                        data-active={isActive(at)}
+                        onMouseMove={() => setActive(at)}
+                        className={cn(ROW, "relative")}
+                      >
+                        <QuestionnairePrimitive.ChoiceInput
+                          onFocus={() => setActive(at)}
+                          className="absolute inset-0 z-10 size-full cursor-pointer opacity-0"
+                        />
+                        <RowMark index={at} chosen={chosen} multi={multi} />
+                        <QuestionnairePrimitive.ChoiceLabel className="min-w-0">
+                          <span className="mr-2 font-medium">{option.label}</span>
+                          {option.description !== undefined && (
+                            <span className="text-muted-foreground">{option.description}</span>
+                          )}
+                        </QuestionnairePrimitive.ChoiceLabel>
+                      </QuestionnairePrimitive.Choice>
+                    )
+                  })}
+                  <div
+                    data-active={isActive(question.options.length)}
+                    onMouseMove={() => setActive(question.options.length)}
+                    className={cn(ROW, "items-center")}
+                  >
+                    <RowMark
+                      index={question.options.length}
+                      chosen={draft.own.trim() !== ""}
+                      multi={multi}
+                    />
+                    <QuestionnairePrimitive.Input
+                      value={draft.own}
+                      onChange={(event) =>
+                        setDraft(index, typeOwnAnswer(question, draft, event.target.value))
+                      }
+                      onFocus={() => setActive(question.options.length)}
+                      placeholder="Type your own"
+                      aria-label="Your own answer"
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                </QuestionnaireChoices>
+                <div className="flex flex-wrap items-center gap-2 px-2 pt-2">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Kbd>
+                      <ArrowUp />
+                    </Kbd>
+                    <Kbd>
+                      <ArrowDown />
+                    </Kbd>
+                    <span className="ml-1">to navigate</span>
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <QuestionnairePrevious
+                      variant="ghost"
+                      size="sm"
+                      className={ACTION}
+                      disabled={pending}
+                    >
+                      Back
+                    </QuestionnairePrevious>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void send({ decision: "deny" })}
+                      disabled={pending}
+                      title="Send no answer and discuss it with the agent in the chat instead"
+                    >
+                      Talk about it
+                    </Button>
+                    {last ? (
+                      <QuestionnaireSubmit
+                        size="sm"
+                        className={ACTION}
+                        disabled={pending || answers === undefined}
+                      >
+                        Submit
+                      </QuestionnaireSubmit>
+                    ) : (
+                      <QuestionnaireNext
+                        size="sm"
+                        className={ACTION}
+                        disabled={pending || !answered}
+                      >
+                        Next
+                      </QuestionnaireNext>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </QuestionnaireItem>
+          )
+        })}
+      </Questionnaire>
     </div>
   )
 }

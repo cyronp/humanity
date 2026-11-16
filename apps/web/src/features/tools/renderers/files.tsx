@@ -61,8 +61,8 @@ const useHunks = (props: ToolCallProps) =>
   }, [props])
 
 const VERDICT_STYLE = {
-  approved: "border-emerald-500/60",
-  rejected: "border-red-500/60",
+  approved: "border-success/60",
+  rejected: "border-destructive/60",
   pending: "",
 } as const
 

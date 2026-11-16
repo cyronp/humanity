@@ -2,6 +2,7 @@ import { Plus } from "lucide-react"
 import { type FormEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
@@ -98,8 +98,8 @@ export function AddAccount({
               <TabsTrigger value="folder">Existing folder</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={nameId}>Name</Label>
+          <Field className="gap-2">
+            <FieldLabel htmlFor={nameId}>Name</FieldLabel>
             <Input
               id={nameId}
               value={name}
@@ -109,11 +109,11 @@ export function AddAccount({
               autoComplete="off"
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">Shown in the list of accounts.</p>
-          </div>
+            <FieldDescription>Shown in the list of accounts.</FieldDescription>
+          </Field>
           {source === "folder" && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={folderId}>{providerName} folder</Label>
+            <Field className="gap-2">
+              <FieldLabel htmlFor={folderId}>{providerName} folder</FieldLabel>
               <Input
                 id={folderId}
                 value={folder}
@@ -123,11 +123,11 @@ export function AddAccount({
                 spellCheck={false}
                 className="font-mono"
               />
-              <p className="text-xs text-muted-foreground">
+              <FieldDescription>
                 The folder you point <code>CLAUDE_CONFIG_DIR</code> at for this login. Threads run
                 Claude Code with it, and removing the account leaves the folder alone.
-              </p>
-            </div>
+              </FieldDescription>
+            </Field>
           )}
           {error !== undefined && <ErrorNote title="Could not add the account" message={error} />}
           <DialogFooter>

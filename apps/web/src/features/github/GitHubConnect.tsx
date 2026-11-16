@@ -1,23 +1,15 @@
 import type { GitHubConnection } from "@humanity/contracts"
-import { cn } from "cn"
-import { AsyncResult } from "effect/reactivity"
-import { LoaderCircle, RefreshCw } from "lucide-react"
-import { type FormEvent, useCallback, useId, useState } from "react"
+import { type FormEvent, useId, useState } from "react"
 import { ConnectOption } from "@/components/ConnectOption"
-import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
-import { NumberedStep } from "@/components/NumberedStep"
+import { CliSteps, ServiceConnect } from "@/components/ServiceConnect"
 import { Button } from "@/components/ui/button"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ToneDot } from "@/features/claude/ToneDot"
-import { describeCause } from "@/lib/errors"
-import { usePollWhile } from "@/lib/usePollWhile"
 import { installCliCommand, summarizeGitHub } from "./connection.ts"
 import { GitHubIcon } from "./GitHubIcon.tsx"
 import { useGitHubConnection } from "./useGitHubConnection.ts"
 
-const CLI_URL = "https://cli.github.com"
 const NEW_TOKEN_URL = "https://github.com/settings/personal-access-tokens/new"
 
 /**
@@ -26,80 +18,24 @@ const NEW_TOKEN_URL = "https://github.com/settings/personal-access-tokens/new"
  */
 export function GitHubConnect() {
   const { result, refresh, refreshing, saveToken, removeToken } = useGitHubConnection()
-  const [refreshError, setRefreshError] = useState<string>()
-  const connection = AsyncResult.isSuccess(result) ? result.value : undefined
-  // Only while there is no token at all: then a check is one local lookup, no request to GitHub.
-  const waiting = connection !== undefined && connection.source === null
-  const poll = useCallback(() => void refresh(), [refresh])
-  usePollWhile(waiting, poll, refreshing)
-
   return (
-    <section aria-labelledby="repositories-github" className="flex flex-col">
-      <div className="flex items-center gap-2 border-b pb-3">
-        <GitHubIcon />
-        <h3 id="repositories-github" className="text-sm font-medium">
-          GitHub
-        </h3>
-        {connection !== undefined && <ConnectionLine connection={connection} />}
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => void refresh().then(setRefreshError)}
-          disabled={refreshing || connection === undefined}
-        >
-          <RefreshCw className={cn(refreshing && "animate-spin")} />
-          {refreshing ? "Checking…" : "Check again"}
-        </Button>
-      </div>
-
-      {AsyncResult.match(result, {
-        onInitial: () => (
-          <p className="flex items-center gap-2 border-b py-4 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Looking for a GitHub login on this computer.
-          </p>
-        ),
-        onFailure: (failure) => (
-          <div className="py-4">
-            <ErrorNote
-              title="Could not ask the daemon about GitHub"
-              message={describeCause(failure.cause)}
-            />
-          </div>
-        ),
-        onSuccess: ({ value }) => (
-          <div className="divide-y border-b">
-            {value.problem !== null && (
-              <div className="py-4">
-                <ErrorNote title="GitHub did not accept the login" message={value.problem} />
-              </div>
-            )}
-            <CliOption connection={value} waiting={waiting} />
-            <TokenOption connection={value} onSave={saveToken} onRemove={removeToken} />
-          </div>
-        ),
-      })}
-      {refreshError !== undefined && (
-        <div className="pt-4">
-          <ErrorNote title="Could not check again" message={refreshError} />
-        </div>
+    <ServiceConnect
+      name="GitHub"
+      icon={<GitHubIcon />}
+      result={result}
+      refresh={refresh}
+      refreshing={refreshing}
+      summary={summarizeGitHub}
+      avatarUrl={(connection) => connection.user?.avatarUrl ?? null}
+      problemTitle={() => "GitHub did not accept the login"}
+    >
+      {(connection, waiting) => (
+        <>
+          <CliOption connection={connection} waiting={waiting} />
+          <TokenOption connection={connection} onSave={saveToken} onRemove={removeToken} />
+        </>
       )}
-    </section>
-  )
-}
-
-function ConnectionLine({ connection }: { readonly connection: GitHubConnection }) {
-  const summary = summarizeGitHub(connection)
-  return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {connection.user === null ? (
-        <ToneDot tone={summary.tone} />
-      ) : (
-        <img src={connection.user.avatarUrl} alt="" className="size-4 rounded-full" />
-      )}
-      <span className="truncate">{summary.title}</span>
-    </span>
+    </ServiceConnect>
   )
 }
 
@@ -110,8 +46,6 @@ function CliOption({
   readonly connection: GitHubConnection
   readonly waiting: boolean
 }) {
-  const install = installCliCommand(navigator.userAgent)
-  const first = connection.cliInstalled ? 1 : 2
   return (
     <ConnectOption
       title="GitHub CLI"
@@ -124,36 +58,18 @@ function CliOption({
           use.
         </p>
       ) : (
-        <ol className="flex flex-col gap-4">
-          {!connection.cliInstalled && (
-            <NumberedStep n={1} title="Install the GitHub CLI">
-              {install !== null && <CopyCommand command={install} className="mt-1" />}
-              <span className="mt-1 block">
-                {install === null ? "Follow the instructions at " : "Or download it from "}
-                <a href={CLI_URL} target="_blank" rel="noreferrer" className="underline">
-                  cli.github.com
-                </a>
-                .
-              </span>
-            </NumberedStep>
-          )}
-          <NumberedStep n={first} title="Sign in to GitHub">
-            <CopyCommand command="gh auth login" className="mt-1" />
-            <span className="mt-1 block">
-              Choose GitHub.com, then follow the browser window it opens.
-            </span>
-          </NumberedStep>
-          <NumberedStep n={first + 1} title="Come back here">
-            {waiting ? (
-              <span className="inline-flex items-center gap-1.5">
-                <LoaderCircle className="size-3.5 animate-spin" />
-                This page checks again every few seconds and updates once you are signed in.
-              </span>
-            ) : (
-              "Press Check again once you are signed in."
-            )}
-          </NumberedStep>
-        </ol>
+        <CliSteps
+          cliName="GitHub CLI"
+          installed={connection.cliInstalled}
+          install={installCliCommand(navigator.userAgent)}
+          installUrl="https://cli.github.com"
+          installUrlLabel="cli.github.com"
+          installFallback="Or download it from "
+          service="GitHub"
+          loginCommand="gh auth login"
+          loginHint="Choose GitHub.com, then follow the browser window it opens."
+          waiting={waiting}
+        />
       )}
     </ConnectOption>
   )
@@ -208,31 +124,33 @@ function TokenOption({
           </Button>
         </div>
       ) : (
-        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-2">
-          <Label htmlFor={inputId}>Personal access token</Label>
-          <div className="flex gap-2">
-            <Input
-              id={inputId}
-              type="password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="github_pat_…"
-              autoComplete="off"
-              spellCheck={false}
-              className="font-mono"
-            />
-            <Button type="submit" disabled={busy || token.trim() === ""}>
-              {busy ? "Checking…" : "Save token"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="underline">
-              Create a fine-grained token
-            </a>{" "}
-            with read access to the contents and metadata of the repositories you want. Humanity
-            checks it with GitHub, then keeps it in a file in its data folder, never in its
-            database.
-          </p>
+        <form onSubmit={(event) => void submit(event)}>
+          <Field className="gap-2">
+            <FieldLabel htmlFor={inputId}>Personal access token</FieldLabel>
+            <div className="flex gap-2">
+              <Input
+                id={inputId}
+                type="password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder="github_pat_…"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+              <Button type="submit" disabled={busy || token.trim() === ""}>
+                {busy ? "Checking…" : "Save token"}
+              </Button>
+            </div>
+            <FieldDescription>
+              <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="underline">
+                Create a fine-grained token
+              </a>{" "}
+              with read access to the contents and metadata of the repositories you want. Humanity
+              checks it with GitHub, then keeps it in a file in its data folder, never in its
+              database.
+            </FieldDescription>
+          </Field>
         </form>
       )}
       {error !== undefined && (

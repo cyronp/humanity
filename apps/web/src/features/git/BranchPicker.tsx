@@ -3,6 +3,7 @@ import type { Branch, Project } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { Cloud, GitBranch } from "lucide-react"
 import { useState } from "react"
+import { InlineError } from "@/components/InlineError"
 import {
   Command,
   CommandDialog,
@@ -67,8 +68,9 @@ export function BranchPicker({
   return (
     <>
       <InputGroupButton
+        variant="muted"
         size="sm"
-        className="max-w-52 text-muted-foreground hover:text-foreground"
+        className="max-w-52"
         aria-label={`Work on branch ${value}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -98,9 +100,9 @@ export function BranchPicker({
                 )}
               </>
             ) : AsyncResult.isFailure(branches) ? (
-              <p className="px-3 py-6 text-center text-sm text-destructive">
+              <InlineError className="px-3 py-6 text-center text-sm">
                 {describeCause(branches.cause)}
-              </p>
+              </InlineError>
             ) : (
               <div className="flex flex-col gap-2 p-2" aria-label="Loading branches">
                 {[0, 1, 2].map((key) => (

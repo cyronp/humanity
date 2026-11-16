@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon"
+import { STATUS_TONE, TONE_TEXT } from "@/features/session/statusTone"
 import { formatElapsed, useNow } from "@/lib/elapsed"
 
 /**
@@ -77,33 +78,19 @@ const STATE: Record<
   SessionStatus,
   {
     readonly label: string
-    readonly text: string
     readonly dot?: string
     readonly badge?: { readonly word: string; readonly icon: LucideIcon; readonly spin?: true }
   }
 > = {
-  running: {
-    label: "Working",
-    text: "text-blue-600 dark:text-blue-400 font-medium",
-    badge: { word: "Working", icon: LoaderCircle, spin: true },
-  },
+  running: { label: "Working", badge: { word: "Working", icon: LoaderCircle, spin: true } },
   waiting_for_human: {
     label: "Needs input",
-    text: "text-sky-500 dark:text-sky-300 font-medium",
     badge: { word: "Input", icon: MessageCircleQuestionMark },
   },
-  idle: {
-    label: "Done",
-    text: "text-emerald-600 dark:text-emerald-400 font-medium",
-    badge: { word: "Done", icon: CircleCheck },
-  },
-  interrupted: { label: "Interrupted", text: "", dot: "bg-muted-foreground/50" },
-  error: {
-    label: "Stopped with an error",
-    text: "text-red-600 dark:text-red-400",
-    dot: "bg-red-500",
-  },
-  ended: { label: "Ended", text: "" },
+  idle: { label: "Done", badge: { word: "Done", icon: CircleCheck } },
+  interrupted: { label: "Interrupted", dot: "bg-muted-foreground/50" },
+  error: { label: "Stopped with an error", dot: "bg-destructive" },
+  ended: { label: "Ended" },
 }
 
 /**
@@ -118,13 +105,16 @@ function ThreadTime({ session }: { readonly session: Session }) {
   const state = STATE[session.status]
   const elapsed = formatElapsed(now - Date.parse(session.updatedAt))
   const badge = state.badge
+  const tone = STATUS_TONE[session.status]
   return (
     <span
       className={cn(
         "flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums",
         session.status !== "ended" &&
           "transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0 pointer-coarse:opacity-0",
-        state.text,
+        tone !== undefined && TONE_TEXT[tone],
+        // A state shown as a word is a live one: it reads a little heavier.
+        badge !== undefined && "font-medium",
       )}
       title={`${state.label} · ${elapsed}`}
     >

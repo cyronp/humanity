@@ -8,6 +8,7 @@ import { type FormEvent, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { ChangeCount } from "@/features/diff/FileDiffView"
 import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
@@ -17,6 +18,9 @@ import { commitAtom, sessionDiffAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 import { commitPaths } from "./publication.ts"
 import { PublishSection } from "./PublishSection.tsx"
+
+/** The list's checkboxes are as small as its text. */
+const SMALL_CHECKBOX = "size-3.5 [&_svg]:size-3"
 
 /**
  * Commits the changes where the session works, the files the human picks;
@@ -101,14 +105,10 @@ function CommitForm({
     <form onSubmit={submit} className="flex flex-col gap-3">
       <div className="overflow-hidden rounded-md border bg-card">
         <label className="flex items-center gap-2 border-b bg-muted/50 px-3 py-1.5 text-xs font-medium">
-          <input
-            type="checkbox"
-            className="size-3.5 accent-primary"
-            checked={everything}
-            ref={(box) => {
-              if (box !== null) box.indeterminate = !everything && picked.length > 0
-            }}
-            onChange={() =>
+          <Checkbox
+            className={SMALL_CHECKBOX}
+            checked={everything ? true : picked.length > 0 ? "indeterminate" : false}
+            onCheckedChange={() =>
               setLeft(everything ? new Set(files.map((file) => file.filePath)) : new Set())
             }
           />
@@ -121,11 +121,10 @@ function CommitForm({
           {files.map((file) => (
             <li key={`${file.kind}:${file.filePath}`}>
               <label className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/40">
-                <input
-                  type="checkbox"
-                  className="size-3.5 shrink-0 accent-primary"
+                <Checkbox
+                  className={SMALL_CHECKBOX}
                   checked={!left.has(file.filePath)}
-                  onChange={() => toggle(file.filePath)}
+                  onCheckedChange={() => toggle(file.filePath)}
                 />
                 <code
                   className={cn("min-w-0 flex-1 truncate font-mono", fileNameClass(file.kind))}

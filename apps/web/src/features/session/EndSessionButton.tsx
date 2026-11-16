@@ -1,21 +1,21 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
-import { cn } from "cn"
 import { Exit } from "effect"
 import { CircleStop } from "lucide-react"
 import { useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { describeCause } from "@/lib/errors"
@@ -46,26 +46,26 @@ export function EndSessionButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <DialogTrigger asChild>
+          <AlertDialogTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon-xs"
-              className={cn("text-muted-foreground hover:text-foreground", className)}
+              className={className}
               aria-label={`End session “${session.title}”`}
             >
               <CircleStop />
             </Button>
-          </DialogTrigger>
+          </AlertDialogTrigger>
         </TooltipTrigger>
         <TooltipContent side="right">End session</TooltipContent>
       </Tooltip>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>End “{session.title}”?</DialogTitle>
-          <DialogDescription>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>End “{session.title}”?</AlertDialogTitle>
+          <AlertDialogDescription>
             The agent stops and the session becomes read-only.{" "}
             {session.inWorktree ? (
               <>
@@ -74,16 +74,16 @@ export function EndSessionButton({
             ) : (
               "Your checkout is left as it is."
             )}
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         {session.inWorktree && (
           <div className="flex items-center gap-2">
-            <input
+            {/* As small as the box it replaced, so the label stays where it was. */}
+            <Checkbox
+              className="size-3.5 [&_svg]:size-3"
               id={`remove-worktree-${session.id}`}
-              type="checkbox"
               checked={removeWorktree}
-              onChange={(event) => setRemoveWorktree(event.target.checked)}
-              className="size-4"
+              onCheckedChange={(checked) => setRemoveWorktree(checked === true)}
             />
             <Label htmlFor={`remove-worktree-${session.id}`}>
               Also delete the worktree (uncommitted changes in it are lost)
@@ -91,15 +91,13 @@ export function EndSessionButton({
           </div>
         )}
         {error !== undefined && <ErrorNote title="Could not end the session" message={error} />}
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={confirm}>
             End session
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

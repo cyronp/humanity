@@ -7,9 +7,9 @@ import { type FormEvent, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -117,8 +117,8 @@ function NewSessionForm({ project }: { readonly project: Project }) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="session-title">Title</Label>
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor="session-title">Title</FieldLabel>
           <Input
             id="session-title"
             value={title}
@@ -126,9 +126,10 @@ function NewSessionForm({ project }: { readonly project: Project }) {
             placeholder="Optional. Taken from the first message otherwise."
             autoComplete="off"
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="session-base">Start from</Label>
+        </Field>
+        {/* The branch list keeps its own width. */}
+        <Field className="gap-1.5 *:w-auto">
+          <FieldLabel htmlFor="session-base">Start from</FieldLabel>
           <Select value={baseBranch} onValueChange={setBaseBranch}>
             <SelectTrigger id="session-base" className="w-56 font-mono">
               <SelectValue />
@@ -141,10 +142,10 @@ function NewSessionForm({ project }: { readonly project: Project }) {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Field>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="session-prompt">First message</Label>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor="session-prompt">First message</FieldLabel>
         <Textarea
           id="session-prompt"
           value={prompt}
@@ -152,7 +153,7 @@ function NewSessionForm({ project }: { readonly project: Project }) {
           placeholder="What should the agent look at?"
           rows={3}
         />
-      </div>
+      </Field>
       <div className="flex justify-end">
         <Button type="submit" disabled={pending}>
           <MessageSquarePlus />

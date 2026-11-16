@@ -6,8 +6,8 @@ import { type FormEvent, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -244,12 +244,12 @@ function PullRequestForm({
         <GitPullRequest className="size-4" />
         Open a {terms.noun}
       </p>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pr-title">Title</Label>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor="pr-title">Title</FieldLabel>
         <Input id="pr-title" value={title} onChange={(event) => setTitle(event.target.value)} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pr-body">Description</Label>
+      </Field>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor="pr-body">Description</FieldLabel>
         <Textarea
           id="pr-body"
           value={body}
@@ -257,10 +257,10 @@ function PullRequestForm({
           rows={5}
           placeholder="What changes, and why. Markdown works."
         />
-      </div>
+      </Field>
       <div className="flex flex-wrap items-end gap-4">
-        <div className="flex min-w-40 flex-1 flex-col gap-1.5">
-          <Label>Merge into</Label>
+        <Field className="w-auto min-w-40 flex-1 gap-1.5">
+          <FieldLabel>Merge into</FieldLabel>
           <Select value={base} onValueChange={setBase}>
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -273,11 +273,11 @@ function PullRequestForm({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex items-center gap-2 pb-2">
+        </Field>
+        <Field orientation="horizontal" className="w-auto pb-2">
           <Switch id="pr-draft" checked={draft} onCheckedChange={setDraft} />
-          <Label htmlFor="pr-draft">Draft</Label>
-        </div>
+          <FieldLabel htmlFor="pr-draft">Draft</FieldLabel>
+        </Field>
       </div>
       <div className="flex items-center justify-end gap-2">
         <span className="mr-auto text-xs text-muted-foreground">

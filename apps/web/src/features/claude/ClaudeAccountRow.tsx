@@ -1,24 +1,25 @@
 import type { ClaudeAccount, ClaudeConnection, ClaudeStatus } from "@humanity/contracts"
-import { ChevronDown, CircleAlert, KeyRound, LoaderCircle, Trash2 } from "lucide-react"
+import { ChevronDown, CircleAlert, KeyRound, Trash2 } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
 import { NumberedStep } from "@/components/NumberedStep"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Spinner } from "@/components/ui/spinner"
 import { ClaudeMark } from "./ClaudeMark.tsx"
 import { connectionFacts, signInCommand, summarizeClaude } from "./summary.ts"
 import { ToneDot } from "./ToneDot.tsx"
@@ -169,7 +170,7 @@ function SignInSteps({ account }: { readonly account: ClaudeAccount }) {
         </NumberedStep>
         <NumberedStep n={3} title="Come back here">
           <span className="inline-flex items-center gap-1.5">
-            <LoaderCircle className="size-3.5 animate-spin" />
+            <Spinner className="size-3.5" />
             This page checks again every few seconds and updates once you are signed in.
           </span>
         </NumberedStep>
@@ -242,7 +243,7 @@ function RemoveAccount({
   }
 
   return (
-    <Dialog
+    <AlertDialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
@@ -251,23 +252,18 @@ function RemoveAccount({
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              aria-label={`Remove account “${account.name}”`}
-            >
+          <AlertDialogTrigger asChild>
+            <Button variant="muted" size="icon-sm" aria-label={`Remove account “${account.name}”`}>
               <Trash2 />
             </Button>
-          </DialogTrigger>
+          </AlertDialogTrigger>
         </TooltipTrigger>
         <TooltipContent>Remove account</TooltipContent>
       </Tooltip>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove “{account.name}”?</DialogTitle>
-          <DialogDescription>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove “{account.name}”?</AlertDialogTitle>
+          <AlertDialogDescription>
             {account.linkedFolder ? (
               <>
                 Humanity stops using it. Its folder{" "}
@@ -278,18 +274,16 @@ function RemoveAccount({
               "Its login and the conversations Claude Code kept for it are deleted from this computer."
             )}{" "}
             Ended threads that ran as it stay readable. The Claude account itself is not touched.
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         {error !== undefined && <ErrorNote title="Could not remove the account" message={error} />}
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
             Remove account
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

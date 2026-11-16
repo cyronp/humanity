@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroupButton } from "@/components/ui/input-group"
+import { InlineError } from "@/components/InlineError"
 import { PinDefaultButton } from "@/components/PinDefaultButton"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 
@@ -52,11 +53,11 @@ const findOption = (value: string): AutonomyOption | undefined =>
   AUTONOMY_OPTIONS.find((option) => option.value === value)
 
 /**
- * How much the agent does without the human, for one session. Auto mode is the
- * usual one and reads plain; a thread that asks is coloured (sky for "Ask me",
- * amber for accepted edits), so it is never mistaken for one that runs on its
- * own. A new thread starts in its project's mode, else the pinned one, else
- * Auto mode.
+ * How much the agent does without the human, for one session. Each mode has
+ * its own colour (sky for "Ask me", amber for accepted edits, purple for Auto
+ * mode), so a thread that asks is never mistaken for one that runs on its own.
+ * A new thread starts in its project's mode, else the pinned one, else Auto
+ * mode.
  */
 export function AutonomyPicker({
   value,
@@ -74,9 +75,9 @@ export function AutonomyPicker({
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
         <InputGroupButton
+          variant="muted"
           size="sm"
           className={cn(
-            "text-muted-foreground hover:text-foreground",
             value === "ask" && "text-sky-600 hover:text-sky-700 dark:text-sky-400",
             value === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
             value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
@@ -119,9 +120,9 @@ export function AutonomyPicker({
           </DropdownMenuGroup>
         </DropdownMenuRadioGroup>
         {pins.error !== undefined && (
-          <p role="alert" className="px-1.5 py-1 text-xs text-destructive">
+          <InlineError className="px-1.5 py-1">
             The default was not changed: {pins.error}
-          </p>
+          </InlineError>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

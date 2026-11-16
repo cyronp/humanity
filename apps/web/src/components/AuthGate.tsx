@@ -2,9 +2,9 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { type AuthStatus, checkAuth, readToken, storeToken, tokenFromInput } from "@/lib/token"
 
 type GateState = AuthStatus | "checking"
@@ -74,19 +74,21 @@ function TokenForm({ onSubmit }: { readonly onSubmit: () => void }) {
     onSubmit()
   }
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
-      <Label htmlFor="token">Token or link</Label>
-      <div className="flex gap-2">
-        <Input
-          id="token"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="http://127.0.0.1:7420/?token=…"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <Button type="submit">Connect</Button>
-      </div>
+    <form onSubmit={submit}>
+      <Field className="gap-2">
+        <FieldLabel htmlFor="token">Token or link</FieldLabel>
+        <div className="flex gap-2">
+          <Input
+            id="token"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="http://127.0.0.1:7420/?token=…"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Button type="submit">Connect</Button>
+        </div>
+      </Field>
     </form>
   )
 }

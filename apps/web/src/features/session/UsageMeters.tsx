@@ -13,6 +13,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Progress } from "@/components/ui/progress"
 import { describeCause } from "@/lib/errors"
 import { refreshUsageAtom } from "./atoms.ts"
 import {
@@ -214,19 +215,12 @@ function PlanRowMeter({ row }: { readonly row: PlanRow }) {
         <span className="font-medium">{row.label}</span>
         <span className={cn("tabular-nums", LEVEL_CLASS[level])}>{used}% used</span>
       </div>
-      <div
-        className="h-1.5 overflow-hidden rounded-full bg-muted"
-        role="progressbar"
+      <Progress
+        value={Math.min(100, Math.max(0, row.utilization))}
         aria-label={row.label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={used}
-      >
-        <div
-          className={cn("h-full rounded-full", BAR_CLASS[level])}
-          style={{ width: `${Math.min(100, Math.max(0, row.utilization))}%` }}
-        />
-      </div>
+        className="h-1.5"
+        indicatorClassName={cn("rounded-full", BAR_CLASS[level])}
+      />
       {row.resetsAt !== null && (
         <span className="text-xs text-muted-foreground">Resets {formatReset(row.resetsAt)}</span>
       )}

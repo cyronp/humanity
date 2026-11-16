@@ -2,8 +2,8 @@ import { cn } from "cn"
 import type { ClaudeTone } from "./summary.ts"
 
 const TONE_CLASS: Record<ClaudeTone | "pending", string> = {
-  ok: "bg-emerald-500",
-  warning: "bg-amber-500",
+  ok: "bg-success",
+  warning: "bg-warning",
   error: "bg-destructive",
   pending: "animate-pulse bg-muted-foreground/50",
 }

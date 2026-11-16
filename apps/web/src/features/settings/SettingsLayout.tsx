@@ -1,6 +1,7 @@
 import { cn } from "cn"
 import type { ComponentType, ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 /**
  * The building blocks of a settings section: a fixed header, then either one
@@ -160,32 +161,23 @@ export function SettingsChoice<Value extends string>({
   readonly disabled?: boolean
 }) {
   return (
-    <div
-      role="radiogroup"
+    <ToggleGroup
+      type="single"
       aria-labelledby={labelledBy}
-      aria-disabled={disabled || undefined}
-      className="flex shrink-0 gap-1 rounded-lg border p-0.5"
+      value={value}
+      disabled={disabled}
+      onValueChange={(next) => {
+        // Pressing the picked option again would clear it; one stays picked.
+        const option = options.find((candidate) => candidate.value === next)
+        if (option !== undefined) onChange(option.value)
+      }}
     >
-      {options.map(({ value: option, label, icon: Icon }) => {
-        const checked = option === value
-        return (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            disabled={disabled}
-            onClick={() => onChange(option)}
-            className={cn(
-              "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50",
-              checked && "bg-muted font-medium text-foreground",
-            )}
-          >
-            {Icon !== undefined && <Icon className="size-4" aria-hidden="true" />}
-            {label}
-          </button>
-        )
-      })}
-    </div>
+      {options.map(({ value: option, label, icon: Icon }) => (
+        <ToggleGroupItem key={option} value={option}>
+          {Icon !== undefined && <Icon className="size-4" aria-hidden="true" />}
+          {label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   )
 }

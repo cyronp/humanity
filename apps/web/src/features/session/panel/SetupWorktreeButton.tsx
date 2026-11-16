@@ -1,10 +1,11 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
 import { Exit } from "effect"
-import { GitBranchPlus, LoaderCircle } from "lucide-react"
+import { GitBranchPlus } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Spinner } from "@/components/ui/spinner"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { setupWorktreeAtom } from "../atoms.ts"
@@ -54,9 +55,9 @@ export function SetupWorktreeButton({ session }: { readonly session: Session }) 
             size="sm"
             onClick={onClick}
             disabled={busy || pending}
-            className={error === undefined ? undefined : "text-red-600 dark:text-red-400"}
+            className={error === undefined ? undefined : "text-destructive"}
           >
-            {pending ? <LoaderCircle className="animate-spin" /> : <GitBranchPlus />}
+            {pending ? <Spinner className="size-3.5" /> : <GitBranchPlus />}
             {pending ? "Setting up…" : "Set up worktree"}
           </Button>
         </span>

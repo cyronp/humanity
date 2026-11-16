@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { type ComponentType, Fragment, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Separator } from "@/components/ui/separator"
 import { McpIcon } from "@/features/extensions/McpIcon"
 import { AboutSettings } from "./AboutSettings.tsx"
@@ -88,17 +88,19 @@ export function SettingsDialog() {
             aria-label="Settings sections"
             className="flex shrink-0 items-center gap-3 border-b p-3 md:w-56 md:flex-col md:items-stretch md:border-r md:border-b-0 md:p-4"
           >
-            <div className="relative hidden md:block">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+            {/* The icon and text sit where they did before this was an InputGroup: 10px and 33px in. */}
+            <InputGroup className="hidden md:flex has-[>[data-align=inline-start]]:[&>input]:pl-[7px]">
+              <InputGroupAddon className="pl-[9px]">
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
                 aria-label="Search settings"
-                className="pl-8"
               />
-            </div>
+            </InputGroup>
             <SectionList query={query} current={section} />
           </nav>
 

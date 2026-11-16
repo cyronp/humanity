@@ -33,10 +33,10 @@ const CHECK_ICON: Record<
   CheckStatus,
   { readonly Icon: typeof CircleCheck; readonly className: string }
 > = {
-  success: { Icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400" },
-  failure: { Icon: CircleX, className: "text-red-600 dark:text-red-400" },
-  running: { Icon: LoaderCircle, className: "animate-spin text-amber-600 dark:text-amber-400" },
-  queued: { Icon: CircleDashed, className: "text-amber-600 dark:text-amber-400" },
+  success: { Icon: CircleCheck, className: "text-success" },
+  failure: { Icon: CircleX, className: "text-destructive" },
+  running: { Icon: LoaderCircle, className: "animate-spin text-warning" },
+  queued: { Icon: CircleDashed, className: "text-warning" },
   cancelled: { Icon: CircleSlash, className: "text-muted-foreground" },
   skipped: { Icon: CircleMinus, className: "text-muted-foreground" },
   neutral: { Icon: CircleMinus, className: "text-muted-foreground" },

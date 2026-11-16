@@ -1,6 +1,8 @@
 import { AsyncResult } from "effect/reactivity"
 import { useCallback, useId } from "react"
-import { Label } from "@/components/ui/label"
+import { InlineError } from "@/components/InlineError"
+import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { accountLine, isReady } from "@/features/claude/summary"
@@ -10,7 +12,7 @@ import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { openSettings } from "@/features/settings/settings"
 import { usePollWhile } from "@/lib/usePollWhile"
 import { useHistoryImport } from "./historyImport.ts"
-import { ServiceRow, TextButton } from "./ServiceRow.tsx"
+import { ServiceRow } from "./ServiceRow.tsx"
 
 /** The agent CLIs Humanity runs threads on: every account, and whether it is signed in. */
 export function ConnectStep() {
@@ -48,9 +50,14 @@ export function ConnectStep() {
                 detail={accountLine(account.status)}
               >
                 {!connected && (
-                  <TextButton onClick={() => openSettings("providers")}>
+                  <Button
+                    variant="brand-link"
+                    size="xs"
+                    className="h-auto self-start p-0"
+                    onClick={() => openSettings("providers")}
+                  >
                     Open Settings to sign in
-                  </TextButton>
+                  </Button>
                 )}
               </ServiceRow>
             )
@@ -62,22 +69,18 @@ export function ConnectStep() {
         <span className="text-sm">Have another account?</span>
         <AddAccount provider="claude-code" onAdd={add} />
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={switchId} className="font-normal">
+      <Field orientation="horizontal" className="gap-3">
+        <FieldLabel htmlFor={switchId} className="font-normal">
           Import your existing Claude Code threads
-        </Label>
+        </FieldLabel>
         <Switch
           id={switchId}
           checked={history.enabled}
           disabled={!history.ready}
           onCheckedChange={(checked) => void history.setEnabled(checked)}
         />
-      </div>
-      {history.error !== undefined && (
-        <p role="alert" className="text-xs whitespace-pre-wrap text-destructive">
-          {history.error}
-        </p>
-      )}
+      </Field>
+      {history.error !== undefined && <InlineError>{history.error}</InlineError>}
     </div>
   )
 }

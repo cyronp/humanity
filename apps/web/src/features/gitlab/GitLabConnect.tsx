@@ -3,20 +3,13 @@ import {
   type GitLabConnection,
   normalizeGitLabHost,
 } from "@humanity/contracts"
-import { cn } from "cn"
-import { AsyncResult } from "effect/reactivity"
-import { LoaderCircle, RefreshCw } from "lucide-react"
-import { type FormEvent, useCallback, useId, useState } from "react"
+import { type FormEvent, useId, useState } from "react"
 import { ConnectOption } from "@/components/ConnectOption"
-import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
-import { NumberedStep } from "@/components/NumberedStep"
+import { CliSteps, ServiceConnect } from "@/components/ServiceConnect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ToneDot } from "@/features/claude/ToneDot"
-import { describeCause } from "@/lib/errors"
-import { usePollWhile } from "@/lib/usePollWhile"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   gitlabSourcePhrase,
   installGlabCommand,
@@ -26,8 +19,6 @@ import {
 import { GitLabIcon } from "./GitLabIcon.tsx"
 import { useGitLabConnection } from "./useGitLabConnection.ts"
 
-const CLI_URL = "https://gitlab.com/gitlab-org/cli#installation"
-
 /**
  * GitLab as a place repositories come from, on gitlab.com or an instance of
  * the human's own, and the two ways to connect it: the GitLab CLI's login, or
@@ -35,90 +26,30 @@ const CLI_URL = "https://gitlab.com/gitlab-org/cli#installation"
  */
 export function GitLabConnect() {
   const { result, refresh, refreshing, saveToken, removeToken } = useGitLabConnection()
-  const [refreshError, setRefreshError] = useState<string>()
-  const connection = AsyncResult.isSuccess(result) ? result.value : undefined
-  // Only while there is no token at all: then a check is a local lookup, no request to GitLab.
-  const waiting = connection !== undefined && connection.source === null
-  const poll = useCallback(() => void refresh(), [refresh])
-  usePollWhile(waiting, poll, refreshing)
-
   return (
-    <section aria-labelledby="repositories-gitlab" className="flex flex-col">
-      <div className="flex items-center gap-2 border-b pb-3">
-        <GitLabIcon />
-        <h3 id="repositories-gitlab" className="text-sm font-medium">
-          GitLab
-        </h3>
-        {connection !== undefined && <ConnectionLine connection={connection} />}
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => void refresh().then(setRefreshError)}
-          disabled={refreshing || connection === undefined}
-        >
-          <RefreshCw className={cn(refreshing && "animate-spin")} />
-          {refreshing ? "Checking…" : "Check again"}
-        </Button>
-      </div>
-
-      {AsyncResult.match(result, {
-        onInitial: () => (
-          <p className="flex items-center gap-2 border-b py-4 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Looking for a GitLab login on this computer.
-          </p>
-        ),
-        onFailure: (failure) => (
-          <div className="py-4">
-            <ErrorNote
-              title="Could not ask the daemon about GitLab"
-              message={describeCause(failure.cause)}
-            />
-          </div>
-        ),
-        onSuccess: ({ value }) => (
-          <div className="divide-y border-b">
-            {value.problem !== null && (
-              <div className="py-4">
-                <ErrorNote
-                  title={`${value.host} did not accept the login`}
-                  message={value.problem}
-                />
-              </div>
-            )}
-            <CliOption connection={value} waiting={waiting} />
-            {/* Keyed by what is saved, so the form starts over from the instance in use. */}
-            <TokenOption
-              key={`${value.source}:${value.host}`}
-              connection={value}
-              onSave={saveToken}
-              onRemove={removeToken}
-            />
-          </div>
-        ),
-      })}
-      {refreshError !== undefined && (
-        <div className="pt-4">
-          <ErrorNote title="Could not check again" message={refreshError} />
-        </div>
+    <ServiceConnect
+      name="GitLab"
+      icon={<GitLabIcon />}
+      result={result}
+      refresh={refresh}
+      refreshing={refreshing}
+      summary={summarizeGitLab}
+      avatarUrl={(connection) => connection.user?.avatarUrl ?? null}
+      problemTitle={(connection) => `${connection.host} did not accept the login`}
+    >
+      {(connection, waiting) => (
+        <>
+          <CliOption connection={connection} waiting={waiting} />
+          {/* Keyed by what is saved, so the form starts over from the instance in use. */}
+          <TokenOption
+            key={`${connection.source}:${connection.host}`}
+            connection={connection}
+            onSave={saveToken}
+            onRemove={removeToken}
+          />
+        </>
       )}
-    </section>
-  )
-}
-
-function ConnectionLine({ connection }: { readonly connection: GitLabConnection }) {
-  const summary = summarizeGitLab(connection)
-  const avatar = connection.user?.avatarUrl ?? null
-  return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {avatar === null ? (
-        <ToneDot tone={summary.tone} />
-      ) : (
-        <img src={avatar} alt="" className="size-4 rounded-full" />
-      )}
-      <span className="truncate">{summary.title}</span>
-    </span>
+    </ServiceConnect>
   )
 }
 
@@ -129,8 +60,6 @@ function CliOption({
   readonly connection: GitLabConnection
   readonly waiting: boolean
 }) {
-  const install = installGlabCommand(navigator.userAgent)
-  const first = connection.cliInstalled ? 1 : 2
   return (
     <ConnectOption
       title="GitLab CLI"
@@ -142,36 +71,18 @@ function CliOption({
           Not needed while {gitlabSourcePhrase(connection.source)} is in use.
         </p>
       ) : (
-        <ol className="flex flex-col gap-4">
-          {!connection.cliInstalled && (
-            <NumberedStep n={1} title="Install the GitLab CLI">
-              {install !== null && <CopyCommand command={install} className="mt-1" />}
-              <span className="mt-1 block">
-                {install === null ? "Follow the instructions at " : "Or see the other ways at "}
-                <a href={CLI_URL} target="_blank" rel="noreferrer" className="underline">
-                  gitlab.com/gitlab-org/cli
-                </a>
-                .
-              </span>
-            </NumberedStep>
-          )}
-          <NumberedStep n={first} title="Sign in to GitLab">
-            <CopyCommand command="glab auth login" className="mt-1" />
-            <span className="mt-1 block">
-              Choose GitLab.com or your own instance, then follow what it asks.
-            </span>
-          </NumberedStep>
-          <NumberedStep n={first + 1} title="Come back here">
-            {waiting ? (
-              <span className="inline-flex items-center gap-1.5">
-                <LoaderCircle className="size-3.5 animate-spin" />
-                This page checks again every few seconds and updates once you are signed in.
-              </span>
-            ) : (
-              "Press Check again once you are signed in."
-            )}
-          </NumberedStep>
-        </ol>
+        <CliSteps
+          cliName="GitLab CLI"
+          installed={connection.cliInstalled}
+          install={installGlabCommand(navigator.userAgent)}
+          installUrl="https://gitlab.com/gitlab-org/cli#installation"
+          installUrlLabel="gitlab.com/gitlab-org/cli"
+          installFallback="Or see the other ways at "
+          service="GitLab"
+          loginCommand="glab auth login"
+          loginHint="Choose GitLab.com or your own instance, then follow what it asks."
+          waiting={waiting}
+        />
       )}
     </ConnectOption>
   )
@@ -232,8 +143,8 @@ function TokenOption({
         </div>
       ) : (
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={hostId}>Instance</Label>
+          <Field className="gap-2">
+            <FieldLabel htmlFor={hostId}>Instance</FieldLabel>
             <Input
               id={hostId}
               value={host}
@@ -244,14 +155,14 @@ function TokenOption({
               aria-invalid={instance === undefined}
               className="max-w-xs font-mono"
             />
-            <p className="text-xs text-muted-foreground">
+            <FieldDescription>
               {instance === undefined
                 ? "Enter the instance's host name, like gitlab.example.com."
                 : "Leave gitlab.com, or enter the host of your own instance. It is reached over https."}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={tokenId}>Personal access token</Label>
+            </FieldDescription>
+          </Field>
+          <Field className="gap-2">
+            <FieldLabel htmlFor={tokenId}>Personal access token</FieldLabel>
             <div className="flex gap-2">
               <Input
                 id={tokenId}
@@ -270,7 +181,7 @@ function TokenOption({
                 {busy ? "Checking…" : "Save token"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <FieldDescription>
               {instance === undefined ? (
                 "Create a token"
               ) : (
@@ -286,8 +197,8 @@ function TokenOption({
               with the <code>read_api</code> and <code>read_repository</code> scopes. Humanity
               checks it with that instance and only ever sends it there, then keeps it in a file in
               its data folder, never in its database.
-            </p>
-          </div>
+            </FieldDescription>
+          </Field>
         </form>
       )}
       {error !== undefined && (

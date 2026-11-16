@@ -9,6 +9,7 @@ import {
   formatBytes,
   type SessionId,
 } from "@humanity/contracts"
+import { cn } from "cn"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { FileText, ImageOff, X } from "lucide-react"
@@ -20,7 +21,18 @@ import {
   useRef,
   useState,
 } from "react"
-import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
+import { InlineError } from "@/components/InlineError"
+import {
+  AttachmentAction,
+  AttachmentActions,
+  Attachment as AttachmentCard,
+  AttachmentContent as AttachmentCardContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "@/components/ui/attachment"
+import { InputGroupAddon } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { attachmentAtom, fetchAttachmentAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
@@ -171,39 +183,42 @@ export type AttachmentDraft = ReturnType<typeof useAttachmentDraft>
 export const dropTargetClass =
   "data-[dragging]:border-primary data-[dragging]:ring-2 data-[dragging]:ring-primary/30"
 
+/** A file as a card: 48px tall, its preview 40px square, on the page's colour. */
+const CARD =
+  "h-12 max-w-56 min-w-0 flex-nowrap gap-2 bg-background has-data-[slot=attachment-content]:px-1"
+const CARD_MEDIA = "group-data-[size=xs]/attachment:w-10"
+/** Name over size at the line height of small text, with no gap between them. */
+const CARD_TEXT = "text-xs"
+
 export function AttachmentTray({ draft }: { readonly draft: AttachmentDraft }) {
   if (draft.items.length === 0 && !draft.reading) return null
   return (
     <InputGroupAddon align="block-start" className="flex-wrap justify-start gap-2 px-3 pt-3">
       {draft.items.map((item) => (
-        <span
-          key={item.id}
-          className="flex h-12 max-w-56 items-center gap-2 rounded-lg border bg-background py-1 pr-1 pl-1 text-xs"
-        >
+        <AttachmentCard key={item.id} size="xs" className={CARD}>
           {item.previewUrl === undefined ? (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+            <AttachmentMedia className={CARD_MEDIA}>
               <FileText className="size-4 text-muted-foreground" />
-            </span>
+            </AttachmentMedia>
           ) : (
-            <img
-              src={item.previewUrl}
-              alt=""
-              className="size-10 shrink-0 rounded-md object-cover"
-            />
+            <AttachmentMedia variant="image" className={CARD_MEDIA}>
+              <img src={item.previewUrl} alt="" />
+            </AttachmentMedia>
           )}
-          <span className="flex min-w-0 flex-col text-left">
-            <span className="truncate font-medium text-foreground">{item.name}</span>
-            <span className="text-muted-foreground">{formatBytes(item.size)}</span>
-          </span>
-          <InputGroupButton
-            size="icon-xs"
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label={`Remove ${item.name}`}
-            onClick={() => draft.remove(item.id)}
-          >
-            <X />
-          </InputGroupButton>
-        </span>
+          <AttachmentCardContent className={CARD_TEXT}>
+            <AttachmentTitle>{item.name}</AttachmentTitle>
+            <AttachmentDescription className="mt-0">{formatBytes(item.size)}</AttachmentDescription>
+          </AttachmentCardContent>
+          <AttachmentActions>
+            <AttachmentAction
+              variant="muted"
+              aria-label={`Remove ${item.name}`}
+              onClick={() => draft.remove(item.id)}
+            >
+              <X className="size-4" />
+            </AttachmentAction>
+          </AttachmentActions>
+        </AttachmentCard>
       ))}
       {draft.reading && <Skeleton className="h-12 w-32 rounded-lg" aria-label="Reading files" />}
     </InputGroupAddon>
@@ -265,27 +280,33 @@ export function MessageAttachments({
               onOpen={() => void open(attachment)}
             />
           ) : (
-            <button
+            <AttachmentCard
               key={attachment.id}
-              type="button"
-              onClick={() => void open(attachment)}
-              className="flex h-12 max-w-56 items-center gap-2 rounded-lg border bg-background py-1 pr-3 pl-1 text-left text-xs transition-colors hover:bg-muted"
-              title={`Open ${attachment.name}`}
+              size="xs"
+              className={cn(
+                CARD,
+                "has-data-[slot=attachment-content]:pr-3 has-[>a,>button]:hover:bg-muted",
+              )}
             >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+              <AttachmentTrigger
+                onClick={() => void open(attachment)}
+                aria-label={`Open ${attachment.name}`}
+                title={`Open ${attachment.name}`}
+              />
+              <AttachmentMedia className={CARD_MEDIA}>
                 <FileText className="size-4 text-muted-foreground" />
-              </span>
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-medium">{attachment.name}</span>
-                <span className="text-muted-foreground">
+              </AttachmentMedia>
+              <AttachmentCardContent className={CARD_TEXT}>
+                <AttachmentTitle>{attachment.name}</AttachmentTitle>
+                <AttachmentDescription className="mt-0">
                   {attachment.kind === "pdf" ? "PDF" : "Text"} · {formatBytes(attachment.size)}
-                </span>
-              </span>
-            </button>
+                </AttachmentDescription>
+              </AttachmentCardContent>
+            </AttachmentCard>
           ),
         )}
       </div>
-      {error !== undefined && <p className="text-xs text-destructive">{error}</p>}
+      {error !== undefined && <InlineError>{error}</InlineError>}
     </div>
   )
 }
@@ -319,13 +340,14 @@ function ImageThumbnail({
   }
   if (AsyncResult.isFailure(result)) {
     return (
-      <span
-        className="flex h-12 items-center gap-2 rounded-lg border bg-background px-3 text-xs text-muted-foreground"
+      <AttachmentCard
+        size="xs"
+        className="h-12 min-w-0 flex-nowrap gap-2 bg-background px-3 text-muted-foreground"
         title="This image is no longer stored."
       >
-        <ImageOff className="size-4" />
-        {attachment.name}
-      </span>
+        <ImageOff className="size-4 shrink-0" />
+        <AttachmentTitle className="font-normal">{attachment.name}</AttachmentTitle>
+      </AttachmentCard>
     )
   }
   return <Skeleton className="size-24 rounded-lg" aria-label={`Loading ${attachment.name}`} />

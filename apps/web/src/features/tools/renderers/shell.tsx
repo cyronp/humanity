@@ -43,21 +43,19 @@ export const shellRenderer: ToolRenderer = {
             )}
             {structured.stderr !== "" && (
               <Field label="Errors">
-                <TerminalOutput text={structured.stderr} className="border-red-500/40" />
+                <TerminalOutput text={structured.stderr} className="border-destructive/40" />
               </Field>
             )}
             {structured.stdout === "" && structured.stderr === "" && (
               <p className="text-muted-foreground">No output.</p>
             )}
-            {structured.interrupted && (
-              <p className="text-amber-600">The command was interrupted.</p>
-            )}
+            {structured.interrupted && <p className="text-warning">The command was interrupted.</p>}
           </>
         ) : output != null ? (
           <Field label={output.isError ? "Error" : "Output"}>
             <TerminalOutput
               text={output.content}
-              {...(output.isError ? { className: "border-red-500/40" } : {})}
+              {...(output.isError ? { className: "border-destructive/40" } : {})}
             />
           </Field>
         ) : null}

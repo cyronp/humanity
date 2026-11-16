@@ -37,7 +37,7 @@ export function OutputText({
     <ScrollArea
       className={cn(
         "rounded-md border",
-        error ? "border-red-500/40 bg-red-500/5 text-red-700 dark:text-red-300" : "bg-muted/40",
+        error ? "border-destructive/40 bg-destructive/5 text-destructive" : "bg-muted/40",
       )}
       viewportClassName="max-h-80"
     >

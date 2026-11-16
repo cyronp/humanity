@@ -26,7 +26,7 @@ export function OnboardingStepper({
               <span
                 className={cn(
                   "h-1 w-7 rounded-full bg-muted-foreground/30 sm:w-9 transition-colors group-hover:bg-muted-foreground/60",
-                  index === currentIndex && "bg-blue-500 group-hover:bg-blue-500",
+                  index === currentIndex && "bg-brand group-hover:bg-brand",
                 )}
               />
             </button>
