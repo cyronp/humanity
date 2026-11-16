@@ -20,7 +20,6 @@ describe("summarizeCodex", () => {
     const plan = summarizeCodex(
       status({ _tag: "Connected", method: "chatgpt", label: "ChatGPT Plus", email: "a@b.c" }),
     )
-    expect(plan.tone).toBe("ok")
     expect(plan.title).toBe("Connected to your ChatGPT account")
     const key = summarizeCodex(
       status({ _tag: "Connected", method: "apiKey", label: "OpenAI API key", email: null }),
@@ -29,9 +28,11 @@ describe("summarizeCodex", () => {
     expect(key.detail).toContain("billed")
   })
 
-  it("warns when nobody is signed in and fails when Codex did not start", () => {
-    expect(summarizeCodex(status({ _tag: "SignedOut" })).tone).toBe("warning")
-    expect(summarizeCodex(status({ _tag: "Unavailable", reason: "ENOENT" })).tone).toBe("error")
+  it("says when nobody is signed in and when Codex did not start", () => {
+    expect(summarizeCodex(status({ _tag: "SignedOut" })).title).toBe("Codex is not signed in")
+    expect(summarizeCodex(status({ _tag: "Unavailable", reason: "ENOENT" })).title).toBe(
+      "Codex could not be started",
+    )
   })
 })
 

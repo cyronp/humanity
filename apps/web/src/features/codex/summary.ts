@@ -1,7 +1,6 @@
 import type { CodexStatus } from "@humanity/contracts"
 
 export interface CodexSummary {
-  readonly tone: "ok" | "warning" | "error"
   /** One sentence for headings. */
   readonly title: string
   /** What it means for the threads that run on Codex. */
@@ -14,12 +13,10 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
     case "Connected":
       return connection.method === "chatgpt"
         ? {
-            tone: "ok",
             title: "Connected to your ChatGPT account",
             detail: "Threads run on this plan, exactly like Codex in a terminal.",
           }
         : {
-            tone: "ok",
             title:
               connection.method === "apiKey"
                 ? "Connected with an OpenAI API key"
@@ -28,13 +25,11 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
           }
     case "SignedOut":
       return {
-        tone: "warning",
         title: "Codex is not signed in",
         detail: "Sign in once with Codex. Humanity picks the login up automatically.",
       }
     case "Unavailable":
       return {
-        tone: "error",
         title: "Codex could not be started",
         detail: "Humanity runs the Codex CLI that ships with it, and it did not start.",
       }

@@ -11,7 +11,6 @@ import { NumberedStep } from "@/components/NumberedStep"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { ToneDot } from "@/features/claude/ToneDot"
 import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
@@ -56,9 +55,7 @@ export function CodexSection() {
         <h3 id="provider-codex" className="text-sm font-medium">
           {name}
         </h3>
-        <span className="text-xs text-muted-foreground">
-          {version === null ? "bundled with Humanity" : `v${version}, bundled with Humanity`}
-        </span>
+        {version !== null && <span className="text-xs text-muted-foreground">v{version}</span>}
         <Button
           variant="outline"
           size="sm"
@@ -104,12 +101,7 @@ function CodexLogin({ status }: { readonly status: CodexStatus }) {
   return (
     <div aria-live="polite" className="flex flex-col gap-4 border-b py-4">
       <div className="flex items-start gap-3">
-        <div className="relative flex size-9 items-center justify-center rounded-lg border bg-muted/50">
-          <Icon className="size-5" aria-hidden="true" />
-          <span className="absolute -right-1 -bottom-1 flex size-4.5 items-center justify-center rounded-full bg-popover">
-            <ToneDot tone={summary.tone} className="size-2.5" />
-          </span>
-        </div>
+        <Icon className="size-9" aria-hidden="true" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h4 className="truncate font-medium">
             {connection._tag === "Connected" ? connection.label : "Your Codex login"}

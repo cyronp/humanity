@@ -1,4 +1,5 @@
-import { ProvidersOverview } from "@/features/providers/ProvidersOverview"
+import { ClaudeSection } from "@/features/claude/ClaudeSection"
+import { CodexSection } from "@/features/codex/CodexSection"
 import { PROVIDERS, type ProviderId } from "@/features/providers/ProviderIcon"
 import { selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, type SettingsListItem, SettingsSplit } from "./SettingsLayout.tsx"
@@ -26,8 +27,7 @@ export function ProvidersSettings() {
         selected={selected}
         onSelect={(id) => selectSettingsItem("providers", id)}
       >
-        {/* Claude Code is the only provider so far; another adds its view here. */}
-        <ProvidersOverview />
+        {selected === "codex" ? <CodexSection /> : <ClaudeSection />}
       </SettingsSplit>
     </SettingsFrame>
   )
