@@ -29,7 +29,7 @@ import {
 } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 import { FeedNote } from "./FeedNote.tsx"
-import { baseBranches, forgeTerms, needsPush, remoteStatus } from "./publication.ts"
+import { baseBranches, checkoutMoved, forgeTerms, needsPush, remoteStatus } from "./publication.ts"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 
 /** With nothing left to commit: push the branch, then open its pull request or show the one it has. */
@@ -45,7 +45,9 @@ export function PublishSection({
     <AsyncView result={publication} errorTitle="Could not read the branch">
       {(value) => (
         <div className="flex flex-col gap-4">
-          <p className="text-center text-sm text-muted-foreground">Nothing left to commit.</p>
+          {!checkoutMoved(value) && (
+            <p className="text-center text-sm text-muted-foreground">Nothing left to commit.</p>
+          )}
           <BranchCard session={session} publication={value} />
           {value.forge === null ? (
             <p className="text-xs text-muted-foreground">

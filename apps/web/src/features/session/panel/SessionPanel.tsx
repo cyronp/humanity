@@ -1,18 +1,24 @@
 import { useAtomRefresh, useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
-import { FileDiff, GitCommitHorizontal, GitPullRequest, RefreshCw } from "lucide-react"
+import { FileDiff, GitCommitHorizontal, GitPullRequest, History, RefreshCw } from "lucide-react"
 import { type ReactNode, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { publicationAtom, refreshPullRequestAtom, sessionDiffAtom } from "../atoms.ts"
+import {
+  publicationAtom,
+  refreshPullRequestAtom,
+  sessionCommitsAtom,
+  sessionDiffAtom,
+} from "../atoms.ts"
+import { CommitsTab } from "./CommitsTab.tsx"
 import { CommitTab } from "./CommitTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
 import { PullRequestTab } from "./PullRequestTab.tsx"
 import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
 
-type PanelTab = "diff" | "commit" | "pull-request"
+type PanelTab = "diff" | "commits" | "commit" | "pull-request"
 
 const TABS: ReadonlyArray<{
   readonly value: PanelTab
@@ -20,14 +26,17 @@ const TABS: ReadonlyArray<{
   readonly icon: ReactNode
 }> = [
   { value: "diff", label: "Changes", icon: <FileDiff /> },
+  { value: "commits", label: "Commits", icon: <History /> },
   { value: "commit", label: "Commit and push", icon: <GitCommitHorizontal /> },
   { value: "pull-request", label: "Pull request", icon: <GitPullRequest /> },
 ]
 
 /**
- * The side panel of a session: what changed where it works, committing and
- * publishing it, and the pull request that follows, one tab each. Its title
- * bar offers a worktree of its own while the session works in the checkout.
+ * The side panel of a session: what changed where it works, the commits of its
+ * branch, committing and publishing it, and the pull request that follows, one
+ * tab each. All of it is the session's own branch, even after another thread
+ * moved the checkout they share. Its title bar offers a worktree of its own
+ * while the session works in the checkout.
  */
 export function SessionPanel({
   session,
@@ -51,17 +60,21 @@ export function SessionPanel({
       return next
     })
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
+  const refreshCommits = useAtomRefresh(sessionCommitsAtom(session.id))
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
   const refreshPullRequest = useAtomSet(refreshPullRequestAtom)
 
   // Both come from git on this machine: no forge is asked as the agent works.
+  // The branch can change as a turn ends, so a new one is read too.
   useEffect(() => {
     refreshDiff()
+    refreshCommits()
     refreshPublication()
-  }, [activity, refreshDiff, refreshPublication])
+  }, [activity, session.branch, refreshDiff, refreshCommits, refreshPublication])
 
   const refresh = () => {
     refreshDiff()
+    refreshCommits()
     refreshPublication()
     // Only this asks the forge, and only once for everyone watching the branch.
     refreshPullRequest({ payload: { sessionId: session.id } })
@@ -126,6 +139,13 @@ export function SessionPanel({
               open={openFiles}
               onOpenChange={setFileOpen}
             />
+          </div>
+        </ScrollArea>
+      </TabsContent>
+      <TabsContent value="commits" asChild>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-4 p-4">
+            <CommitsTab session={session} />
           </div>
         </ScrollArea>
       </TabsContent>

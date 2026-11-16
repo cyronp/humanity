@@ -4,11 +4,12 @@ import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
-import { WorkingTreeDiff } from "../domain/Git.ts"
+import { BranchCommits, WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent } from "../domain/SessionEvent.ts"
 import {
   AttachmentNotFound,
   AttachmentRejected,
+  BranchNotCheckedOut,
   GitBranchExists,
   GitCommandFailed,
   GitInvalidBranchName,
@@ -159,9 +160,26 @@ export const SessionsRpcs = RpcGroup.make(
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
   /**
-   * Commits where the session works, to the branch checked out there: only the
-   * files under `paths` (relative to that folder) when given, else everything.
-   * Returns the short hash.
+   * The session's branch's own commits, newest first: those its project's
+   * default branch lacks, or the latest ones on the default branch itself.
+   * Read from the branch, wherever the checkout is now.
+   */
+  Rpc.make("Sessions.commits", {
+    payload: { sessionId: SessionId },
+    success: BranchCommits,
+    error: Schema.Union([
+      SessionNotFound,
+      ProjectNotFound,
+      GitRefNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+    ]),
+  }),
+  /**
+   * Commits where the session works, to the session's branch: only the files
+   * under `paths` (relative to that folder) when given, else everything.
+   * Refused while that folder has another branch checked out. Returns the short hash.
    */
   Rpc.make("Sessions.commit", {
     payload: {
@@ -174,6 +192,7 @@ export const SessionsRpcs = RpcGroup.make(
       SessionNotFound,
       SessionBusy,
       NothingToCommit,
+      BranchNotCheckedOut,
       GitNotARepository,
       GitNotInstalled,
       GitCommandFailed,

@@ -11,6 +11,7 @@ import {
   commitPaths,
   feedNotice,
   forgeTerms,
+  checkoutMoved,
   needsPush,
   remoteStatus,
   summarizeChecks,
@@ -40,6 +41,7 @@ const branch = (name: string, isRemote = false): Branch => ({
 const publication = (extra: Partial<BranchPublication> = {}): BranchPublication => ({
   forge: "github",
   branch: "feat/x",
+  checkedOut: "feat/x",
   defaultBranch: "main",
   upstream: "origin/feat/x",
   ahead: 0,
@@ -116,6 +118,13 @@ describe("where the branch stands", () => {
       "1 commit to push, 2 commits behind (origin/feat/x).",
     )
     expect(remoteStatus(publication())).toBe("Up to date with origin/feat/x.")
+  })
+
+  it("tells when the shared checkout moved to another branch", () => {
+    expect(checkoutMoved(publication())).toBe(false)
+    expect(checkoutMoved(publication({ checkedOut: "main" }))).toBe(true)
+    expect(checkoutMoved(publication({ checkedOut: null }))).toBe(true)
+    expect(checkoutMoved(publication({ branch: null, checkedOut: "main" }))).toBe(false)
   })
 })
 

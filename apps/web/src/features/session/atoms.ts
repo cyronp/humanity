@@ -74,6 +74,15 @@ export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
+/** The commits of a session's branch, read from git wherever the checkout is now. */
+export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
+  HumanityClient.query(
+    "Sessions.commits",
+    { sessionId },
+    { reactivityKeys: [keys.sessionCommits(sessionId)] },
+  ),
+)
+
 export const commitAtom = HumanityClient.mutation("Sessions.commit")
 
 /** The session's branch against its remote. Read from git, so refreshing it asks no forge. */

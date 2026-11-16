@@ -319,6 +319,52 @@ describe("GitService commits and pushes", () => {
     }),
   )
 
+  it.live("lists a branch's own commits, newest first, whatever is checked out", () =>
+    Effect.gen(function* () {
+      const repo = yield* tempRepo()
+      git(repo, "checkout", "--quiet", "-b", "feat/log")
+      for (const name of ["a", "b", "c"]) {
+        writeFileSync(join(repo, `${name}.txt`), `${name}\n`)
+        git(repo, "add", "--all")
+        git(repo, "commit", "--quiet", "--message", `add ${name}`)
+      }
+      git(repo, "checkout", "--quiet", "main")
+
+      yield* withGit((service) =>
+        Effect.gen(function* () {
+          const own = yield* service.log(repo, "refs/heads/feat/log", {
+            exclude: "main",
+            limit: 2,
+          })
+          assert.deepStrictEqual(
+            own.commits.map((commit) => commit.subject),
+            ["add c", "add b"],
+          )
+          assert.isTrue(own.more)
+          assert.match(own.commits[0]?.hash ?? "", /^[0-9a-f]{40}$/)
+          assert.isTrue((own.commits[0]?.hash ?? "").startsWith(own.commits[0]?.shortHash ?? "-"))
+          assert.isFalse(Number.isNaN(Date.parse(own.commits[0]?.committedAt ?? "")))
+
+          const latest = yield* service.log(repo, "main", { limit: 10 })
+          assert.deepStrictEqual(
+            latest.commits.map((commit) => commit.subject),
+            ["initial"],
+          )
+          assert.isFalse(latest.more)
+
+          assert.isTrue(yield* service.hasCommit(repo, "feat/log"))
+          assert.isFalse(yield* service.hasCommit(repo, "origin/main"))
+          const missing = yield* Effect.flip(service.log(repo, "nope", { limit: 1 }))
+          assert.strictEqual(missing._tag, "GitRefNotFound")
+          const option = yield* Effect.flip(
+            service.log(repo, "main", { exclude: "--all", limit: 1 }),
+          )
+          assert.strictEqual(option._tag, "GitRefNotFound")
+        }),
+      )
+    }),
+  )
+
   it.live("pushes a branch to origin and makes it the upstream", () =>
     Effect.gen(function* () {
       const remote = yield* tempDir("humanity-remote-")

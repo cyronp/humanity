@@ -14,9 +14,10 @@ import { ChangeCount } from "@/features/diff/FileDiffView"
 import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
-import { commitAtom, sessionDiffAtom } from "../atoms.ts"
+import { commitAtom, publicationAtom, sessionDiffAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
-import { commitPaths } from "./publication.ts"
+import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
+import { checkoutMoved, commitPaths } from "./publication.ts"
 import { PublishSection } from "./PublishSection.tsx"
 
 /** The list's checkboxes are as small as its text. */
@@ -25,6 +26,8 @@ const SMALL_CHECKBOX = "size-3.5 [&_svg]:size-3"
 /**
  * Commits the changes where the session works, the files the human picks;
  * once nothing is left to commit, pushes the branch and opens its pull request.
+ * While the shared checkout is on another branch, its changes are not this
+ * thread's: only pushing the thread's branch is offered.
  */
 export function CommitTab({
   session,
@@ -34,13 +37,25 @@ export function CommitTab({
   readonly onOpenPullRequest: () => void
 }) {
   const diff = useAtomValue(sessionDiffAtom(session.id))
+  const publication = useAtomValue(publicationAtom(session.id))
   return (
-    <AsyncView result={diff} errorTitle="Could not read the worktree">
-      {(value) =>
-        value.files.length === 0 ? (
-          <PublishSection session={session} onOpenPullRequest={onOpenPullRequest} />
+    <AsyncView result={publication} errorTitle="Could not read the branch">
+      {(branch) =>
+        checkoutMoved(branch) ? (
+          <>
+            <CheckoutMovedNote session={session} publication={branch} />
+            <PublishSection session={session} onOpenPullRequest={onOpenPullRequest} />
+          </>
         ) : (
-          <CommitForm session={session} files={value.files} />
+          <AsyncView result={diff} errorTitle="Could not read the worktree">
+            {(value) =>
+              value.files.length === 0 ? (
+                <PublishSection session={session} onOpenPullRequest={onOpenPullRequest} />
+              ) : (
+                <CommitForm session={session} files={value.files} />
+              )
+            }
+          </AsyncView>
         )
       }
     </AsyncView>
@@ -88,6 +103,7 @@ function CommitForm({
       },
       reactivityKeys: [
         keys.sessionDiff(session.id),
+        keys.sessionCommits(session.id),
         keys.git(session.projectId),
         keys.publication(session.id),
       ],

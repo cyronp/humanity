@@ -2,12 +2,11 @@ import { useAtomValue } from "@effect/atom-react"
 import type { ClaudeAccount } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { Settings } from "lucide-react"
-import { useState } from "react"
+import { Check, Settings, UserPlus } from "lucide-react"
+import { type MouseEvent, type PointerEvent, useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
@@ -17,13 +16,70 @@ import { accountLine, connectionFacts, summarizeClaude } from "./summary.ts"
 import { ToneDot } from "./ToneDot.tsx"
 import { useClaudeAccounts } from "./useClaudeAccounts.ts"
 
+/** How long the pointer rests on the icon before the menu opens, and may leave before it closes. */
+const OPEN_DELAY_MS = 150
+const CLOSE_DELAY_MS = 200
+
+/**
+ * Opens on hover and closes once the pointer has left both the icon and the
+ * menu. A click keeps it open until the human clicks away; touch has only the click.
+ */
+function useHoverOpen() {
+  const [open, setOpen] = useState(false)
+  // Opened by a click (or the keyboard): hovering away leaves it open.
+  const [pinned, setPinned] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const clear = () => clearTimeout(timer.current)
+  useEffect(() => clear, [])
+
+  const close = () => {
+    clear()
+    setOpen(false)
+    setPinned(false)
+  }
+  const later = (action: () => void, ms: number) => {
+    clear()
+    timer.current = setTimeout(action, ms)
+  }
+  const onPointerEnter = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse") return
+    if (open) clear()
+    else later(() => setOpen(true), OPEN_DELAY_MS)
+  }
+  const onPointerLeave = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse") return
+    if (!open) clear()
+    else if (!pinned) later(close, CLOSE_DELAY_MS)
+  }
+
+  return {
+    open,
+    pinned,
+    /** Escape, a click outside, or a choice in the menu. */
+    onOpenChange: (next: boolean) => (next ? setOpen(true) : close()),
+    close,
+    hover: { onPointerEnter, onPointerLeave },
+    onClick: (event: MouseEvent) => {
+      // The toggle is decided here: a click on a menu opened by hover keeps it open.
+      event.preventDefault()
+      clear()
+      if (open && pinned) {
+        close()
+      } else {
+        setOpen(true)
+        setPinned(true)
+      }
+    },
+  }
+}
+
 /**
  * The account new threads run as, as one icon in the sidebar. Its light says
- * whether the account is ready; pressing it shows who that account is and the
- * other accounts to switch to.
+ * whether the account is ready; hovering or pressing it lists the accounts to
+ * pick from, or, with only one, which plan it is on.
  */
 export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => void }) {
-  const [open, setOpen] = useState(false)
+  const menu = useHoverOpen()
   const status = useAtomValue(claudeStatusAtom)
 
   const view = AsyncResult.match(status, {
@@ -39,22 +95,33 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
   })
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label={view.label}>
-              <ClaudeMark className="size-4.5" />
-              <ToneDot tone={view.tone} className="absolute right-1 bottom-1 ring-2 ring-sidebar" />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{view.label}</TooltipContent>
-      </Tooltip>
-      <PopoverContent side="top" align="start" className="w-80 gap-0 p-0">
+    <Popover open={menu.open} onOpenChange={menu.onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          aria-label={view.label}
+          onClick={menu.onClick}
+          {...menu.hover}
+        >
+          <ClaudeMark className="size-4.5" />
+          <ToneDot tone={view.tone} className="absolute right-1 bottom-1 ring-2 ring-sidebar" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-80 gap-0 p-0"
+        // Opened by hover, focus stays where it was; opened by a click, it moves into the menu.
+        onOpenAutoFocus={(event) => {
+          if (!menu.pinned) event.preventDefault()
+        }}
+        {...menu.hover}
+      >
         <AccountPanel
           onManage={() => {
-            setOpen(false)
+            menu.close()
             onNavigate?.()
             openSettings("providers")
           }}
@@ -68,13 +135,15 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
 function AccountPanel({ onManage }: { readonly onManage: () => void }) {
   const { result, setActive } = useClaudeAccounts()
   const [error, setError] = useState<string>()
-  const [switching, setSwitching] = useState(false)
+  const [switching, setSwitching] = useState<string>()
 
   const use = async (accountId: string) => {
-    setSwitching(true)
+    setSwitching(accountId)
     setError(await setActive(accountId))
-    setSwitching(false)
+    setSwitching(undefined)
   }
+
+  const single = AsyncResult.isSuccess(result) && result.value.length === 1
 
   return (
     <>
@@ -93,9 +162,12 @@ function AccountPanel({ onManage }: { readonly onManage: () => void }) {
             />
           </div>
         ),
-        onSuccess: ({ value }) => (
-          <Accounts accounts={value} disabled={switching} onUse={(id) => void use(id)} />
-        ),
+        onSuccess: ({ value }) =>
+          value.length === 1 && value[0] !== undefined ? (
+            <OnlyAccount account={value[0]} />
+          ) : (
+            <AccountList accounts={value} switching={switching} onUse={(id) => void use(id)} />
+          ),
       })}
       {error !== undefined && (
         <div className="px-3 pb-3">
@@ -104,52 +176,69 @@ function AccountPanel({ onManage }: { readonly onManage: () => void }) {
       )}
       <div className="border-t p-1.5">
         <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onManage}>
-          <Settings />
-          Manage accounts
+          {single ? <UserPlus /> : <Settings />}
+          {single ? "Add another account" : "Manage accounts"}
         </Button>
       </div>
     </>
   )
 }
 
-function Accounts({
+/** Every account, the active one checked; picking another makes new threads run as it. */
+function AccountList({
   accounts,
-  disabled,
+  switching,
   onUse,
 }: {
   readonly accounts: ReadonlyArray<ClaudeAccount>
-  readonly disabled: boolean
+  readonly switching: string | undefined
   readonly onUse: (accountId: string) => void
 }) {
-  const current = accounts.find((account) => account.active)
-  const others = accounts.filter((account) => !account.active)
   return (
-    <>
-      {current !== undefined && <CurrentAccount account={current} />}
-      {others.length > 0 && (
-        <div className="flex flex-col gap-0.5 border-t p-1.5">
-          <SectionLabel className="px-1.5 pt-1.5 pb-1">Switch to</SectionLabel>
-          {others.map((account) => (
-            <button
-              key={account.id}
-              type="button"
-              disabled={disabled}
-              onClick={() => onUse(account.id)}
-              aria-label={`Use “${account.name}” for new threads. ${accountLine(account.status)}`}
-              className="flex items-center gap-2.5 rounded-md p-1.5 text-left outline-none hover:bg-muted focus-visible:bg-muted disabled:opacity-50"
-            >
-              <AccountMark account={account} className="size-6" />
-              <AccountText account={account} />
-            </button>
-          ))}
-        </div>
-      )}
-    </>
+    <div className="flex flex-col gap-0.5 p-1.5">
+      <span className="px-1.5 pt-1 pb-1 text-xs text-muted-foreground">New threads run as</span>
+      <div role="radiogroup" aria-label="Account for new threads" className="flex flex-col gap-0.5">
+        {accounts.map((account) => (
+          <button
+            key={account.id}
+            type="button"
+            role="radio"
+            aria-checked={account.active}
+            disabled={switching !== undefined}
+            onClick={() => {
+              if (!account.active) onUse(account.id)
+            }}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md p-1.5 text-left outline-none hover:bg-muted focus-visible:bg-muted disabled:opacity-60",
+              account.active && "bg-muted/60",
+            )}
+          >
+            <AccountMark account={account} className="size-6" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-medium">{account.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {summarizeClaude(account.status).short}
+              </span>
+            </span>
+            {switching === account.id ? (
+              <Spinner className="size-4 shrink-0" />
+            ) : (
+              <Check
+                aria-hidden
+                className={cn("size-4 shrink-0", account.active ? "opacity-100" : "opacity-0")}
+              />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function CurrentAccount({ account }: { readonly account: ClaudeAccount }) {
-  const facts = connectionFacts(account.status)
+/** The one account there is, and the plan or credential it runs on. */
+function OnlyAccount({ account }: { readonly account: ClaudeAccount }) {
+  // Only the plan: who it is signed in as is left to Settings.
+  const facts = connectionFacts(account.status).slice(0, 1)
   return (
     <div className="flex flex-col gap-3 p-3">
       <div className="flex items-center gap-2.5">
@@ -177,16 +266,6 @@ function CurrentAccount({ account }: { readonly account: ClaudeAccount }) {
   )
 }
 
-function SectionLabel({
-  className,
-  children,
-}: {
-  readonly className?: string
-  readonly children: string
-}) {
-  return <span className={cn("text-xs text-muted-foreground", className)}>{children}</span>
-}
-
 function AccountMark({
   account,
   className,
@@ -201,15 +280,6 @@ function AccountMark({
         tone={summarizeClaude(account.status).tone}
         className="absolute -right-0.5 -bottom-0.5 ring-2 ring-popover"
       />
-    </span>
-  )
-}
-
-function AccountText({ account }: { readonly account: ClaudeAccount }) {
-  return (
-    <span className="flex min-w-0 flex-col">
-      <span className="truncate font-medium">{account.name}</span>
-      <span className="truncate text-xs text-muted-foreground">{accountLine(account.status)}</span>
     </span>
   )
 }

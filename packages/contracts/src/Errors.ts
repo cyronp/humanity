@@ -214,6 +214,24 @@ export class SessionBusy extends Schema.TaggedError<SessionBusy>()("SessionBusy"
   }
 }
 
+/**
+ * The project's checkout is on another branch than the session's, most likely
+ * switched by another thread: a commit there would land on the wrong branch.
+ */
+export class BranchNotCheckedOut extends Schema.TaggedError<BranchNotCheckedOut>()(
+  "BranchNotCheckedOut",
+  {
+    branch: Schema.String,
+    /** `null` on a detached HEAD. */
+    checkedOut: Schema.NullOr(Schema.String),
+  },
+) {
+  override get message() {
+    const now = this.checkedOut === null ? "a detached HEAD" : this.checkedOut
+    return `This thread works on ${this.branch}, but the checkout is on ${now} now. Check out ${this.branch} again to commit from here.`
+  }
+}
+
 export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("NothingToCommit", {
   sessionId: Schema.String,
 }) {

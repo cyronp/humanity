@@ -8,13 +8,14 @@ import {
 } from "@humanity/contracts"
 import { Effect, Fiber, Ref, Stream } from "effect"
 import { SqlClient } from "effect/sql"
-import { existsSync } from "node:fs"
+import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
+import { PullRequestService } from "../src/services/PullRequestService.ts"
 import {
   matchModel,
   SessionService,
@@ -179,6 +180,72 @@ describe("SessionService", () => {
           ),
         )
       }).pipe(Effect.provide(services(home, () => [{ text: "ok" }])))
+    }),
+  )
+
+  it.live("keeps a thread on its own branch when another thread moves the shared checkout", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      // The agent makes a branch of its own, as it would with `git checkout -b`.
+      const script: FakeScript = (prompt) => {
+        if (prompt.includes("branch off")) git(repo, "checkout", "--quiet", "-b", "feat/a")
+        return [{ text: "ok" }]
+      }
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const pullRequests = yield* PullRequestService
+        const project = yield* addProject(repo)
+        const first = yield* sessions.create({ projectId: project.id, prompt: "branch off" })
+        yield* waitForStatus(first.id, "idle")
+        assert.strictEqual((yield* sessions.get(first.id)).branch, "feat/a")
+
+        writeFileSync(join(repo, "a.txt"), "a\n")
+        yield* sessions.commit(first.id, "add a")
+
+        // Another thread starts on main, which switches the checkout under the first.
+        const second = yield* sessions.create({ projectId: project.id, baseBranch: "main" })
+        assert.strictEqual(second.branch, "main")
+        assert.strictEqual((yield* sessions.get(first.id)).branch, "feat/a")
+
+        const commits = yield* sessions.commits(first.id)
+        assert.deepInclude(commits, { branch: "feat/a", base: "main", more: false })
+        assert.deepStrictEqual(
+          commits.commits.map((commit) => commit.subject),
+          ["add a"],
+        )
+        const onMain = yield* sessions.commits(second.id)
+        assert.deepInclude(onMain, { branch: "main", base: null })
+        assert.deepStrictEqual(
+          onMain.commits.map((commit) => commit.subject),
+          ["initial"],
+        )
+
+        // What is uncommitted now belongs to main, not to the first thread.
+        writeFileSync(join(repo, "b.txt"), "b\n")
+        assert.deepInclude(yield* pullRequests.publication(first.id), {
+          branch: "feat/a",
+          checkedOut: "main",
+          uncommitted: 0,
+        })
+        assert.deepInclude(yield* pullRequests.publication(second.id), {
+          branch: "main",
+          checkedOut: "main",
+          uncommitted: 1,
+        })
+        const refused = yield* Effect.flip(sessions.commit(first.id, "add b"))
+        assert.deepInclude(refused, {
+          _tag: "BranchNotCheckedOut",
+          branch: "feat/a",
+          checkedOut: "main",
+        })
+        assert.strictEqual(git(repo, "rev-list", "--count", "feat/a").trim(), "2")
+
+        // A worktree starts from the thread's branch, not from what the checkout has now.
+        const moved = yield* sessions.setupWorktree(first.id)
+        assert.isTrue(existsSync(join(moved.worktreePath, "a.txt")))
+        assert.isFalse(existsSync(join(moved.worktreePath, "b.txt")))
+      }).pipe(Effect.provide(services(home, script)))
     }),
   )
 

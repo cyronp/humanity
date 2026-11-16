@@ -55,12 +55,20 @@ export const baseBranches = (
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
 
+/**
+ * Whether the folder the session works in has another branch checked out than
+ * the session's own: another thread, or a git command, switched the checkout.
+ */
+export const checkoutMoved = (publication: BranchPublication): boolean =>
+  publication.branch !== null && publication.checkedOut !== publication.branch
+
 /** Whether the branch has commits its remote lacks, or isn't on the remote at all. */
 export const needsPush = (publication: BranchPublication): boolean =>
   publication.branch !== null && (publication.upstream === null || publication.ahead > 0)
 
 export const remoteStatus = (publication: BranchPublication): string => {
-  if (publication.branch === null) return "No branch is checked out (detached HEAD)."
+  if (publication.branch === null)
+    return "This thread started on a detached HEAD, so it has no branch."
   if (publication.upstream === null) return `${publication.branch} is not on the remote yet.`
   const parts: Array<string> = []
   if (publication.ahead > 0) parts.push(`${commits(publication.ahead)} to push`)

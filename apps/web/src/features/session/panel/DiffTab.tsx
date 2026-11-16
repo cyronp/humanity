@@ -1,15 +1,19 @@
 import { useAtomValue } from "@effect/atom-react"
 import type { FileDiff, Session } from "@humanity/contracts"
+import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
 import { FileDiffView } from "@/features/diff/FileDiffView"
-import { sessionDiffAtom } from "../atoms.ts"
+import { publicationAtom, sessionDiffAtom } from "../atoms.ts"
+import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
+import { checkoutMoved } from "./publication.ts"
 
 /** Tells two entries of one path apart: staged as deleted, and back on disk. */
 export const fileKey = (file: FileDiff) => `${file.kind}:${file.filePath}`
 
 /**
  * Every uncommitted change where the session works, one closed bar per file
- * until the human opens it.
+ * until the human opens it. While the shared checkout is on another branch,
+ * what is uncommitted there is that branch's, so it isn't shown as this thread's.
  */
 export function DiffTab({
   session,
@@ -25,6 +29,9 @@ export function DiffTab({
   readonly onOpenChange: (key: string, open: boolean) => void
 }) {
   const diff = useAtomValue(sessionDiffAtom(session.id))
+  const publication = useAtomValue(publicationAtom(session.id))
+  const moved = AsyncResult.isSuccess(publication) && checkoutMoved(publication.value)
+  if (moved) return <CheckoutMovedNote session={session} publication={publication.value} />
   return (
     <AsyncView result={diff} errorTitle="Could not read the worktree">
       {(value) =>
