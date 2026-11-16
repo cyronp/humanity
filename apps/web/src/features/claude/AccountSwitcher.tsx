@@ -13,7 +13,6 @@ import { describeCause } from "@/lib/errors"
 import { claudeStatusAtom } from "./atoms.ts"
 import { ClaudeMark } from "./ClaudeMark.tsx"
 import { accountLine, connectionFacts, summarizeClaude } from "./summary.ts"
-import { ToneDot } from "./ToneDot.tsx"
 import { useClaudeAccounts } from "./useClaudeAccounts.ts"
 
 /** How long the pointer rests on the icon before the menu opens, and may leave before it closes. */
@@ -74,24 +73,18 @@ function useHoverOpen() {
 }
 
 /**
- * The account new threads run as, as one icon in the sidebar. Its light says
- * whether the account is ready; hovering or pressing it lists the accounts to
- * pick from, or, with only one, which plan it is on.
+ * The account new threads run as, as one icon in the sidebar. Hovering or
+ * pressing it lists the accounts to pick from, or, with only one, which plan
+ * it is on.
  */
 export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => void }) {
   const menu = useHoverOpen()
   const status = useAtomValue(claudeStatusAtom)
 
-  const view = AsyncResult.match(status, {
-    onInitial: () => ({ tone: "pending" as const, label: "Checking the account…" }),
-    onFailure: () => ({
-      tone: "error" as const,
-      label: "Could not ask the daemon about the accounts",
-    }),
-    onSuccess: ({ value }) => ({
-      tone: summarizeClaude(value).tone,
-      label: `Account: ${accountLine(value)}`,
-    }),
+  const label = AsyncResult.match(status, {
+    onInitial: () => "Checking the account…",
+    onFailure: () => "Could not ask the daemon about the accounts",
+    onSuccess: ({ value }) => `Account: ${accountLine(value)}`,
   })
 
   return (
@@ -100,13 +93,11 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
-          aria-label={view.label}
+          aria-label={label}
           onClick={menu.onClick}
           {...menu.hover}
         >
           <ClaudeMark className="size-4.5" />
-          <ToneDot tone={view.tone} className="absolute right-1 bottom-1 ring-2 ring-sidebar" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -213,7 +204,7 @@ function AccountList({
               account.active && "bg-muted/60",
             )}
           >
-            <AccountMark account={account} className="size-6" />
+            <ClaudeMark className="size-6 shrink-0" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-medium">{account.name}</span>
               <span className="truncate text-xs text-muted-foreground">
@@ -242,7 +233,7 @@ function OnlyAccount({ account }: { readonly account: ClaudeAccount }) {
   return (
     <div className="flex flex-col gap-3 p-3">
       <div className="flex items-center gap-2.5">
-        <AccountMark account={account} className="size-8" />
+        <ClaudeMark className="size-8 shrink-0" />
         <div className="flex min-w-0 flex-col">
           <span className="truncate font-medium">{account.name}</span>
           <span className="truncate text-xs text-muted-foreground">
@@ -263,23 +254,5 @@ function OnlyAccount({ account }: { readonly account: ClaudeAccount }) {
         </dl>
       )}
     </div>
-  )
-}
-
-function AccountMark({
-  account,
-  className,
-}: {
-  readonly account: ClaudeAccount
-  readonly className: string
-}) {
-  return (
-    <span className="relative shrink-0">
-      <ClaudeMark className={className} />
-      <ToneDot
-        tone={summarizeClaude(account.status).tone}
-        className="absolute -right-0.5 -bottom-0.5 ring-2 ring-popover"
-      />
-    </span>
   )
 }

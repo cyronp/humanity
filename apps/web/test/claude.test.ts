@@ -35,7 +35,6 @@ const connected = (
 describe("summarizeClaude", () => {
   it("shows the plan when the subscription is in use", () => {
     expect(summarizeClaude(connected({}))).toEqual({
-      tone: "ok",
       short: "Claude Max",
       title: "Connected to your Claude account",
     })
@@ -49,7 +48,6 @@ describe("summarizeClaude", () => {
         subscriptionShadowed: true,
       }),
     )
-    expect(summary.tone).toBe("warning")
     expect(summary.short).toBe("API key in use")
   })
 
@@ -58,14 +56,15 @@ describe("summarizeClaude", () => {
     expect(
       summarizeClaude(connected({ method: "cloudProvider", label: "Amazon Bedrock" })),
     ).toMatchObject({
-      tone: "ok",
       title: "Connected through Amazon Bedrock",
     })
   })
 
   it("asks to sign in, or reports Claude Code as unavailable", () => {
     expect(summarizeClaude(status({ _tag: "SignedOut" })).short).toBe("Sign in to Claude")
-    expect(summarizeClaude(status({ _tag: "Unavailable", reason: "ENOENT" })).tone).toBe("error")
+    expect(summarizeClaude(status({ _tag: "Unavailable", reason: "ENOENT" })).short).toBe(
+      "Claude unavailable",
+    )
   })
 
   it("is ready only when connected", () => {

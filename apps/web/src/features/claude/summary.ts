@@ -1,9 +1,6 @@
 import type { ClaudeStatus } from "@humanity/contracts"
 
-export type ClaudeTone = "ok" | "warning" | "error"
-
 export interface ClaudeSummary {
-  readonly tone: ClaudeTone
   /** Two or three words for the header badge. */
   readonly short: string
   /** One sentence for headings. */
@@ -16,16 +13,14 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
     case "Connected":
       if (connection.subscriptionShadowed) {
         return {
-          tone: "warning",
           short: "API key in use",
           title: "Claude is using an API key instead of your subscription",
         }
       }
       if (connection.method === "subscription") {
-        return { tone: "ok", short: connection.label, title: "Connected to your Claude account" }
+        return { short: connection.label, title: "Connected to your Claude account" }
       }
       return {
-        tone: "ok",
         short: connection.method === "apiKey" ? "API key" : connection.label,
         title:
           connection.method === "apiKey"
@@ -33,10 +28,9 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
             : `Connected through ${connection.label}`,
       }
     case "SignedOut":
-      return { tone: "warning", short: "Sign in to Claude", title: "Claude Code is not signed in" }
+      return { short: "Sign in to Claude", title: "Claude Code is not signed in" }
     case "Unavailable":
       return {
-        tone: "error",
         short: "Claude unavailable",
         title: "Claude Code could not be started",
       }

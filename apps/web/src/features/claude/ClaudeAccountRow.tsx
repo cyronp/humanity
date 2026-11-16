@@ -22,7 +22,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Spinner } from "@/components/ui/spinner"
 import { ClaudeMark } from "./ClaudeMark.tsx"
 import { connectionFacts, signInCommand, summarizeClaude } from "./summary.ts"
-import { ToneDot } from "./ToneDot.tsx"
 
 /**
  * One Claude account in the list of a provider's accounts: who it is signed
@@ -54,12 +53,7 @@ export function ClaudeAccountRow({
   return (
     <section aria-live="polite" aria-label={account.name} className="flex flex-col gap-4 py-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="relative">
-          <ClaudeMark className="size-9" />
-          <span className="absolute -right-1 -bottom-1 flex size-4.5 items-center justify-center rounded-full bg-popover">
-            <ToneDot tone={summary.tone} className="size-2.5" />
-          </span>
-        </div>
+        <ClaudeMark className="size-9" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="truncate font-medium">{account.name}</h4>
