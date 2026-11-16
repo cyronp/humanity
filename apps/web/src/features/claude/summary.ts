@@ -1,4 +1,5 @@
 import type { ClaudeStatus } from "@humanity/contracts"
+import { callExecutable, isWindowsPath, quotePosix, quotePowerShell } from "@/lib/shell"
 
 export interface ClaudeSummary {
   /** Two or three words for the header badge. */
@@ -40,8 +41,6 @@ export const summarizeClaude = (status: ClaudeStatus): ClaudeSummary => {
 /** True when agent sessions can start: Claude Code has a credential to use. */
 export const isReady = (status: ClaudeStatus): boolean => status.connection._tag === "Connected"
 
-const quotePosix = (value: string): string => `"${value.replaceAll('"', '\\"')}"`
-
 /**
  * The command that signs an account in. `configDir` is the config folder of an
  * added account (`null` for Claude Code's default login) and `executable` the
@@ -54,15 +53,11 @@ export const signInCommand = (options: {
   readonly executable: string | null
 }): string => {
   const { configDir, executable } = options
-  const windows = /\\|\.exe$/i.test(executable ?? configDir ?? "")
-  if (windows) {
-    const login = executable === null ? "claude auth login" : `& "${executable}" auth login`
-    return configDir === null
-      ? login
-      : `$env:CLAUDE_CONFIG_DIR = "${configDir}"; ${login}; Remove-Item Env:CLAUDE_CONFIG_DIR`
-  }
-  const login = `${executable === null ? "claude" : quotePosix(executable)} auth login`
-  return configDir === null ? login : `CLAUDE_CONFIG_DIR=${quotePosix(configDir)} ${login}`
+  const login = `${executable === null ? "claude" : callExecutable(executable)} auth login`
+  if (configDir === null) return login
+  return isWindowsPath(executable ?? configDir)
+    ? `$env:CLAUDE_CONFIG_DIR = ${quotePowerShell(configDir)}; ${login}; Remove-Item Env:CLAUDE_CONFIG_DIR`
+    : `CLAUDE_CONFIG_DIR=${quotePosix(configDir)} ${login}`
 }
 
 export interface ClaudeFact {

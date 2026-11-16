@@ -126,23 +126,34 @@ describe("signInCommand", () => {
   it("uses PowerShell's call operator for a bundled Windows CLI", () => {
     expect(
       signInCommand({ configDir: null, executable: "C:\\Program Files\\sdk\\claude.exe" }),
-    ).toBe('& "C:\\Program Files\\sdk\\claude.exe" auth login')
+    ).toBe("& 'C:\\Program Files\\sdk\\claude.exe' auth login")
   })
 
   it("quotes a bundled POSIX CLI", () => {
     expect(signInCommand({ configDir: null, executable: "/opt/my sdk/claude" })).toBe(
-      '"/opt/my sdk/claude" auth login',
+      "'/opt/my sdk/claude' auth login",
     )
   })
 
   it("points an added account's login at its own folder, only for that command", () => {
     expect(signInCommand({ configDir: "/home/me/.humanity/accounts/a1", executable: null })).toBe(
-      'CLAUDE_CONFIG_DIR="/home/me/.humanity/accounts/a1" claude auth login',
+      "CLAUDE_CONFIG_DIR=/home/me/.humanity/accounts/a1 claude auth login",
     )
     expect(
       signInCommand({ configDir: "C:\\Users\\me\\.humanity\\accounts\\a1", executable: null }),
     ).toBe(
-      '$env:CLAUDE_CONFIG_DIR = "C:\\Users\\me\\.humanity\\accounts\\a1"; claude auth login; Remove-Item Env:CLAUDE_CONFIG_DIR',
+      "$env:CLAUDE_CONFIG_DIR = 'C:\\Users\\me\\.humanity\\accounts\\a1'; claude auth login; Remove-Item Env:CLAUDE_CONFIG_DIR",
+    )
+  })
+
+  it("leaves nothing in a path for the shell to read as its own", () => {
+    expect(signInCommand({ configDir: "/home/a\"b\\$(id)/it's", executable: null })).toBe(
+      "CLAUDE_CONFIG_DIR='/home/a\"b\\$(id)/it'\\''s' claude auth login",
+    )
+    expect(
+      signInCommand({ configDir: "C:\\Users\\o'neil\\$home", executable: "C:\\sdk\\claude.exe" }),
+    ).toBe(
+      "$env:CLAUDE_CONFIG_DIR = 'C:\\Users\\o''neil\\$home'; & 'C:\\sdk\\claude.exe' auth login; Remove-Item Env:CLAUDE_CONFIG_DIR",
     )
   })
 })

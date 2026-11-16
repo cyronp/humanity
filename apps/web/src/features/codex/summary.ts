@@ -1,4 +1,5 @@
 import type { CodexStatus } from "@humanity/contracts"
+import { callExecutable } from "@/lib/shell"
 
 export interface CodexSummary {
   /** One sentence for headings. */
@@ -36,10 +37,10 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
   }
 }
 
-const quote = (value: string) => (/[\s"]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value)
-
 /**
  * The command that signs Codex in, with the executable Humanity itself runs,
- * so the login lands where its threads will read it.
+ * so the login lands where its threads will read it. A Windows path gets a
+ * PowerShell command, the default shell there.
  */
-export const codexSignInCommand = (executable: string): string => `${quote(executable)} login`
+export const codexSignInCommand = (executable: string): string =>
+  `${callExecutable(executable)} login`

@@ -39,9 +39,23 @@ describe("summarizeCodex", () => {
 describe("codexSignInCommand", () => {
   it("runs the executable Humanity runs, quoted when its path has spaces", () => {
     expect(codexSignInCommand("codex")).toBe("codex login")
+    expect(codexSignInCommand("/opt/my apps/codex")).toBe("'/opt/my apps/codex' login")
+  })
+
+  it("uses PowerShell's call operator for a Windows path, and expands nothing in it", () => {
     expect(codexSignInCommand("C:\\Program Files\\Humanity\\codex.exe")).toBe(
-      '"C:\\Program Files\\Humanity\\codex.exe" login',
+      "& 'C:\\Program Files\\Humanity\\codex.exe' login",
     )
+    expect(codexSignInCommand("C:\\Users\\o'neil\\$home\\codex.exe")).toBe(
+      "& 'C:\\Users\\o''neil\\$home\\codex.exe' login",
+    )
+  })
+
+  it("leaves nothing in the path for a shell to read as its own", () => {
+    expect(codexSignInCommand('/opt/a"b\\$(id)`id`/codex')).toBe(
+      "'/opt/a\"b\\$(id)`id`/codex' login",
+    )
+    expect(codexSignInCommand("/opt/it's/codex")).toBe("'/opt/it'\\''s/codex' login")
   })
 })
 

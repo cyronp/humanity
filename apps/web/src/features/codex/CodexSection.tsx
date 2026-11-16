@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { isWindowsPath } from "@/lib/shell"
 import { usePollWhile } from "@/lib/usePollWhile"
 import { codexStatusAtom, refreshCodexStatusAtom } from "./atoms.ts"
 import { codexSignInCommand, summarizeCodex } from "./summary.ts"
@@ -132,8 +133,8 @@ function CodexLogin({ status }: { readonly status: CodexStatus }) {
       {connection._tag === "SignedOut" && (
         <ol className="flex flex-col gap-4">
           <NumberedStep n={1} title="Open a terminal on this computer">
-            Any shell works. The command runs the Codex that ships with Humanity, so the login lands
-            where its threads read it.
+            {isWindowsPath(status.executable) ? "Use PowerShell." : "Any shell works."} The command
+            runs the Codex that ships with Humanity, so the login lands where its threads read it.
           </NumberedStep>
           <NumberedStep n={2} title="Sign in with your ChatGPT account">
             <CopyCommand command={codexSignInCommand(status.executable)} className="mt-1" />
