@@ -22,6 +22,7 @@ import {
   DEFAULT_MODEL,
   type ModelChoice,
   modelKey,
+  offeredProviders,
   type PickerModel,
   pickerModels,
   shortModelName,
@@ -90,9 +91,23 @@ export function ModelPicker({
   const claude = useAtomValue(claudeStatusAtom)
   const codex = useAtomValue(codexStatusAtom)
   const kiro = useAtomValue(kiroStatusAtom)
-  const providers: ReadonlyArray<ProviderId> = locked
-    ? [provider]
-    : (Object.keys(PROVIDERS) as Array<ProviderId>)
+  // Until a provider has answered, nobody is known to be signed in to it.
+  const connected: Record<ProviderId, boolean> = {
+    "claude-code": AsyncResult.isSuccess(claude) && claude.value.connection._tag === "Connected",
+    codex: AsyncResult.isSuccess(codex) && codex.value.connection._tag === "Connected",
+    kiro: AsyncResult.isSuccess(kiro) && kiro.value.connection._tag === "Connected",
+  }
+  const answered: Record<ProviderId, boolean> = {
+    "claude-code": AsyncResult.isSuccess(claude),
+    codex: AsyncResult.isSuccess(codex),
+    kiro: AsyncResult.isSuccess(kiro),
+  }
+  const providers = offeredProviders(
+    Object.keys(PROVIDERS) as Array<ProviderId>,
+    provider,
+    connected,
+    locked,
+  )
   const reported: Record<ProviderId, ReadonlyArray<PickerModel>> = {
     "claude-code": pickerModels(
       "claude-code",
@@ -105,8 +120,6 @@ export function ModelPicker({
   const selected = value ?? DEFAULT_MODEL
   const isSelected = (model: PickerModel) => model.provider === provider && model.value === selected
   const current = models.find(isSelected)
-  const codexSignedOut = AsyncResult.isSuccess(codex) && codex.value.connection._tag !== "Connected"
-  const kiroSignedOut = AsyncResult.isSuccess(kiro) && kiro.value.connection._tag !== "Connected"
 
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState<Section>(provider)
@@ -225,14 +238,10 @@ export function ModelPicker({
                 onToggleFavorite={() => toggleFavorite(modelKey(model))}
               />
             ))}
-            {section === "codex" && !searching && codexSignedOut && (
+            {/* Only the provider already chosen is shown while nobody is signed in to it. */}
+            {section !== "favorites" && !searching && answered[section] && !connected[section] && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
-                Codex is not signed in. Settings, under Providers, shows how.
-              </p>
-            )}
-            {section === "kiro" && !searching && kiroSignedOut && (
-              <p className="px-3 py-3 text-xs text-muted-foreground">
-                Kiro (Beta) is not signed in. Settings, under Providers, shows how.
+                {PROVIDERS[section].name} is not signed in. Settings, under Providers, shows how.
               </p>
             )}
             {section === "favorites" && !searching && rows.length === 0 && (
