@@ -22,7 +22,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { AccountSwitcher } from "@/features/claude/AccountSwitcher"
+import { AccountSwitcher } from "@/features/providers/AccountSwitcher"
 import { projectsAtom } from "@/features/projects/atoms"
 import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"

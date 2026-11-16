@@ -1,6 +1,11 @@
 import type { CodexStatus } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { codexSignInCommand, summarizeCodex } from "@/features/codex/summary"
+import {
+  codexLine,
+  codexSignInCommand,
+  codexSignInUsesPowerShell,
+  summarizeCodex,
+} from "@/features/codex/summary"
 import { modelKey, pickerModels, shortModelName } from "@/features/providers/models"
 import { patchFiles } from "@/features/tools/patch"
 import { findRenderer } from "@/features/tools/registry"
@@ -36,26 +41,64 @@ describe("summarizeCodex", () => {
   })
 })
 
+describe("codexLine", () => {
+  it("names the plan and who is signed in", () => {
+    expect(
+      codexLine(
+        status({ _tag: "Connected", method: "chatgpt", label: "ChatGPT Plus", email: "a@b.c" }),
+      ),
+    ).toBe("ChatGPT Plus · a@b.c")
+    expect(
+      codexLine(
+        status({ _tag: "Connected", method: "apiKey", label: "OpenAI API key", email: null }),
+      ),
+    ).toBe("OpenAI API key")
+  })
+
+  it("says what is wrong when nobody is signed in", () => {
+    expect(codexLine(status({ _tag: "SignedOut" }))).toBe("Codex is not signed in")
+  })
+})
+
+/** The default login's command, which names no folder. */
+const signIn = (executable: string) => codexSignInCommand({ codexHome: null, executable })
+
 describe("codexSignInCommand", () => {
+  it("points an added account's login at its own folder, only for that command", () => {
+    expect(
+      codexSignInCommand({
+        codexHome: "/home/me/.humanity/codex-accounts/a1",
+        executable: "codex",
+      }),
+    ).toBe("CODEX_HOME=/home/me/.humanity/codex-accounts/a1 codex login")
+    const windows = {
+      codexHome: "C:\\Users\\o'neil\\.codex-work",
+      executable: "C:\\Humanity\\codex.exe",
+    }
+    expect(codexSignInCommand(windows)).toBe(
+      "$env:CODEX_HOME = 'C:\\Users\\o''neil\\.codex-work'; & 'C:\\Humanity\\codex.exe' login; Remove-Item Env:CODEX_HOME",
+    )
+    expect(codexSignInUsesPowerShell(windows)).toBe(true)
+    expect(codexSignInUsesPowerShell({ codexHome: null, executable: "codex" })).toBe(false)
+  })
+
   it("runs the executable Humanity runs, quoted when its path has spaces", () => {
-    expect(codexSignInCommand("codex")).toBe("codex login")
-    expect(codexSignInCommand("/opt/my apps/codex")).toBe("'/opt/my apps/codex' login")
+    expect(signIn("codex")).toBe("codex login")
+    expect(signIn("/opt/my apps/codex")).toBe("'/opt/my apps/codex' login")
   })
 
   it("uses PowerShell's call operator for a Windows path, and expands nothing in it", () => {
-    expect(codexSignInCommand("C:\\Program Files\\Humanity\\codex.exe")).toBe(
+    expect(signIn("C:\\Program Files\\Humanity\\codex.exe")).toBe(
       "& 'C:\\Program Files\\Humanity\\codex.exe' login",
     )
-    expect(codexSignInCommand("C:\\Users\\o'neil\\$home\\codex.exe")).toBe(
+    expect(signIn("C:\\Users\\o'neil\\$home\\codex.exe")).toBe(
       "& 'C:\\Users\\o''neil\\$home\\codex.exe' login",
     )
   })
 
   it("leaves nothing in the path for a shell to read as its own", () => {
-    expect(codexSignInCommand('/opt/a"b\\$(id)`id`/codex')).toBe(
-      "'/opt/a\"b\\$(id)`id`/codex' login",
-    )
-    expect(codexSignInCommand("/opt/it's/codex")).toBe("'/opt/it'\\''s/codex' login")
+    expect(signIn('/opt/a"b\\$(id)`id`/codex')).toBe("'/opt/a\"b\\$(id)`id`/codex' login")
+    expect(signIn("/opt/it's/codex")).toBe("'/opt/it'\\''s/codex' login")
   })
 })
 

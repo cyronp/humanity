@@ -1,25 +1,15 @@
 import type { ClaudeAccount, ClaudeConnection, ClaudeStatus } from "@humanity/contracts"
-import { ChevronDown, CircleAlert, KeyRound, Trash2 } from "lucide-react"
+import { ChevronDown, CircleAlert, KeyRound } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
 import { NumberedStep } from "@/components/NumberedStep"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
+import { RemoveAccount } from "@/features/providers/RemoveAccount"
 import { ClaudeMark } from "./ClaudeMark.tsx"
 import { connectionFacts, signInCommand, summarizeClaude } from "./summary.ts"
 
@@ -73,7 +63,14 @@ export function ClaudeAccountRow({
               Use for new threads
             </Button>
           )}
-          {!account.isDefault && <RemoveAccount account={account} onRemove={onRemove} />}
+          {!account.isDefault && (
+            <RemoveAccount
+              provider="claude-code"
+              account={account}
+              folder={status.configDir}
+              onRemove={onRemove}
+            />
+          )}
         </div>
       </div>
 
@@ -213,71 +210,5 @@ function UnavailableNote({ reason }: { readonly reason: string }) {
         </p>
       </AlertDescription>
     </Alert>
-  )
-}
-
-/** Asks before removing: the account's login goes with it. */
-function RemoveAccount({
-  account,
-  onRemove,
-}: {
-  readonly account: ClaudeAccount
-  readonly onRemove: (accountId: string) => Promise<string | undefined>
-}) {
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<string>()
-  const [removing, setRemoving] = useState(false)
-
-  const confirm = async () => {
-    setRemoving(true)
-    const failure = await onRemove(account.id)
-    setRemoving(false)
-    setError(failure)
-    if (failure === undefined) setOpen(false)
-  }
-
-  return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setError(undefined)
-      }}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <AlertDialogTrigger asChild>
-            <Button variant="muted" size="icon-sm" aria-label={`Remove account “${account.name}”`}>
-              <Trash2 />
-            </Button>
-          </AlertDialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>Remove account</TooltipContent>
-      </Tooltip>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Remove “{account.name}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {account.linkedFolder ? (
-              <>
-                Humanity stops using it. Its folder{" "}
-                <code className="break-all">{account.status.configDir}</code> stays as it is, with
-                its login and conversations.
-              </>
-            ) : (
-              "Its login and the conversations Claude Code kept for it are deleted from this computer."
-            )}{" "}
-            Ended threads that ran as it stay readable. The Claude account itself is not touched.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {error !== undefined && <ErrorNote title="Could not remove the account" message={error} />}
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
-            Remove account
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   )
 }

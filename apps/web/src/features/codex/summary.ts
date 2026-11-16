@@ -1,5 +1,5 @@
 import type { CodexStatus } from "@humanity/contracts"
-import { callExecutable } from "@/lib/shell"
+import { callExecutable, isWindowsPath, quotePosix, quotePowerShell } from "@/lib/shell"
 
 export interface CodexSummary {
   /** One sentence for headings. */
@@ -37,10 +37,35 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
   }
 }
 
+/** One line about a Codex login: the plan and who is signed in, or what is wrong. */
+export const codexLine = (status: CodexStatus): string => {
+  const connection = status.connection
+  if (connection._tag !== "Connected") return summarizeCodex(status).title
+  return connection.email === null ? connection.label : `${connection.label} · ${connection.email}`
+}
+
+/** True when the sign-in command is PowerShell's: the executable or the folder is a Windows path. */
+export const codexSignInUsesPowerShell = (options: {
+  readonly codexHome: string | null
+  readonly executable: string
+}): boolean =>
+  isWindowsPath(options.executable) ||
+  (options.codexHome !== null && isWindowsPath(options.codexHome))
+
 /**
- * The command that signs Codex in, with the executable Humanity itself runs,
- * so the login lands where its threads will read it. A Windows path gets a
- * PowerShell command, the default shell there.
+ * The command that signs an account in, with the executable Humanity itself
+ * runs. `codexHome` is the folder of an added account (`null` for Codex's
+ * default login), set only for the login so the default one is left alone. A
+ * Windows path gets a PowerShell command, the default shell there.
  */
-export const codexSignInCommand = (executable: string): string =>
-  `${callExecutable(executable)} login`
+export const codexSignInCommand = (options: {
+  readonly codexHome: string | null
+  readonly executable: string
+}): string => {
+  const { codexHome, executable } = options
+  const login = `${callExecutable(executable)} login`
+  if (codexHome === null) return login
+  return isWindowsPath(codexHome)
+    ? `$env:CODEX_HOME = ${quotePowerShell(codexHome)}; ${login}; Remove-Item Env:CODEX_HOME`
+    : `CODEX_HOME=${quotePosix(codexHome)} ${login}`
+}
