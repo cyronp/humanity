@@ -90,7 +90,7 @@ export const questionRenderer: ToolRenderer = {
     const questions = parseQuestions(input) ?? []
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        <MessageCircleQuestion className="size-3.5 shrink-0 text-amber-600" />
+        <MessageCircleQuestion className="size-3.5 shrink-0 text-warning" />
         <span className="text-muted-foreground">Asked</span>
         <span className="truncate">{questions[0]?.question}</span>
         {questions.length > 1 && (

@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { RowToggle } from "@/components/RowToggle"
 import { InputGroupButton } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -145,8 +146,9 @@ export function ModelPicker({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild disabled={disabled}>
         <InputGroupButton
+          variant="muted"
           size="sm"
-          className="max-w-48 text-muted-foreground hover:text-foreground"
+          className="max-w-48"
           aria-label={`Model: ${current === undefined ? selected : current.displayName}`}
         >
           <ProviderIcon provider="claude-code" className="size-4" />
@@ -296,19 +298,15 @@ function ModelRow({
       </span>
       {selected && <Check className="text-foreground" aria-label="Selected" />}
       {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
-      <button
-        type="button"
-        aria-label={favorite ? `Unstar ${model.displayName}` : `Star ${model.displayName}`}
-        aria-pressed={favorite}
-        onClick={(event) => {
-          // Starring a model must not also pick it.
-          event.stopPropagation()
-          onToggleFavorite()
-        }}
-        className="flex size-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+      <RowToggle
+        label={favorite ? `Unstar ${model.displayName}` : `Star ${model.displayName}`}
+        pressed={favorite}
+        onToggle={onToggleFavorite}
+        // The star reads a little stronger than a pin when off.
+        className="text-muted-foreground"
       >
         <Star className={cn("size-3.5", favorite && "fill-amber-400 text-amber-400")} />
-      </button>
+      </RowToggle>
     </CommandItem>
   )
 }

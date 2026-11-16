@@ -1,12 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { type UpdatePreferences, type UpdateStatus, type UpdateTrack } from "@humanity/contracts"
 import { Exit } from "effect"
-import { Download, LoaderCircle, RefreshCw } from "lucide-react"
+import { Download, RefreshCw } from "lucide-react"
 import { useId, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Spinner } from "@/components/ui/spinner"
 import {
   checkForUpdateAtom,
   installUpdateAtom,
@@ -146,7 +147,7 @@ function UpdateButton({
     case "Installing":
       return (
         <Button size="sm" disabled>
-          <LoaderCircle className="animate-spin" />
+          <Spinner className="size-3.5" />
           {state._tag === "Downloading" ? `${Math.floor(state.percent)}%` : "Restarting"}
         </Button>
       )

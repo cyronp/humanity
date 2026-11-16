@@ -7,17 +7,17 @@ import { Plus } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 import { ProjectPermissions } from "@/features/policy/ProjectPermissions"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom, removeProjectAtom } from "@/features/projects/atoms"
@@ -190,36 +190,34 @@ function RemoveProject({ project }: { readonly project: Project }) {
   }
 
   return (
-    <Dialog
+    <AlertDialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
         if (!next) setError(undefined)
       }}
     >
-      <DialogTrigger asChild>
+      <AlertDialogTrigger asChild>
         <Button variant="destructive" size="sm">
           Remove project
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove “{project.name}”?</DialogTitle>
-          <DialogDescription>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove “{project.name}”?</AlertDialogTitle>
+          <AlertDialogDescription>
             Its threads, their history and the worktrees Humanity created for them are deleted. The
             repository at <code className="break-all">{project.localPath}</code> is not touched.
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         {error !== undefined && <ErrorNote title="Could not remove the project" message={error} />}
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
             Remove project
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

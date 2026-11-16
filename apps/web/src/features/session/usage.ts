@@ -16,6 +16,11 @@ export const contextPercentUsed = (context: ContextUsage): number =>
 /** One of the plan's windows, ready to show. */
 export interface PlanRow extends PlanWindow {
   readonly label: string
+  /**
+   * Whether running out of this window stops the agent altogether. A model's
+   * own window does not: the other models still answer.
+   */
+  readonly blocking: boolean
 }
 
 const stillOpen = (window: PlanWindow, now: Date): boolean => {
@@ -32,18 +37,30 @@ const stillOpen = (window: PlanWindow, now: Date): boolean => {
 export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanRow> => {
   if (plan === null) return []
   const rows: Array<PlanRow> = [
-    ...(plan.fiveHour === null ? [] : [{ label: "5-hour limit", ...plan.fiveHour }]),
-    ...(plan.sevenDay === null ? [] : [{ label: "7-day limit", ...plan.sevenDay }]),
-    ...plan.models.map(({ name, ...window }) => ({ label: `${name} 7-day limit`, ...window })),
+    ...(plan.fiveHour === null
+      ? []
+      : [{ label: "5-hour limit", blocking: true, ...plan.fiveHour }]),
+    ...(plan.sevenDay === null ? [] : [{ label: "7-day limit", blocking: true, ...plan.sevenDay }]),
+    ...plan.models.map(({ name, ...window }) => ({
+      label: `${name} 7-day limit`,
+      blocking: false,
+      ...window,
+    })),
   ]
   return rows.filter((row) => stillOpen(row, now))
 }
 
-/** The window worth the human's attention at a glance: the fullest one above 50%, if any. */
+/**
+ * The window worth the human's attention at a glance: the fullest one above
+ * 50%, if any, among those that stop the agent. A model's own window is only
+ * listed, never the headline.
+ */
 export const planHeadline = (rows: ReadonlyArray<PlanRow>): PlanRow | undefined =>
   rows.reduce<PlanRow | undefined>(
     (fullest, row) =>
-      row.utilization > 50 && row.utilization > (fullest?.utilization ?? 0) ? row : fullest,
+      row.blocking && row.utilization > 50 && row.utilization > (fullest?.utilization ?? 0)
+        ? row
+        : fullest,
     undefined,
   )
 

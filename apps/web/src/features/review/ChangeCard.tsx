@@ -36,17 +36,17 @@ export function ChangeCard({ change }: { readonly change: ProposedChange }) {
 
   return (
     <Item
-      variant="outline"
-      className="scroll-mt-4 items-start border-2 border-amber-500 bg-amber-500/5"
+      variant="attention"
+      className="scroll-mt-4 items-start"
       role="alertdialog"
       aria-label={`The agent wants to change ${change.filePath}`}
       data-change-id={change.id}
     >
       <ItemMedia variant="icon">
         {change.kind === "create" ? (
-          <FilePlus className="text-amber-600" />
+          <FilePlus className="text-warning" />
         ) : (
-          <FileDiffIcon className="text-amber-600" />
+          <FileDiffIcon className="text-warning" />
         )}
       </ItemMedia>
       <ItemContent className="min-w-0 gap-3">

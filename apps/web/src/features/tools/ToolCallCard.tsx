@@ -1,6 +1,6 @@
 import type { Approval, ToolCall } from "@humanity/contracts"
 import { cn } from "cn"
-import { Ban, Check, LoaderCircle, X } from "lucide-react"
+import { Ban, Check, X } from "lucide-react"
 import {
   Trace,
   TraceCollapsible,
@@ -10,16 +10,17 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import { Spinner } from "@/components/ui/spinner"
 import { findRenderer, type ToolCallProps } from "./registry.ts"
 import { toolRenderers } from "./renderers/index.ts"
 
 export { describeInput } from "./inputs.ts"
 
 const STATUS_ICON = {
-  running: <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />,
-  succeeded: <Check className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />,
-  failed: <X className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />,
-  denied: <Ban className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />,
+  running: <Spinner className="size-3.5 shrink-0 text-muted-foreground" />,
+  succeeded: <Check className="size-3.5 shrink-0 text-success" />,
+  failed: <X className="size-3.5 shrink-0 text-destructive" />,
+  denied: <Ban className="size-3.5 shrink-0 text-warning" />,
 } as const
 
 export function ToolSummary(props: ToolCallProps) {
@@ -107,10 +108,10 @@ export function ApprovalBadge({
     <span
       className={cn(
         "shrink-0",
-        status === "pending" && "animate-pulse font-medium text-amber-600",
-        (status === "applied" || status === "allowed") && "text-emerald-600 dark:text-emerald-400",
-        (status === "rejected" || status === "denied") && "text-red-600 dark:text-red-400",
-        (status === "partially_applied" || status === "expired") && "text-amber-600",
+        status === "pending" && "animate-pulse font-medium text-warning",
+        (status === "applied" || status === "allowed") && "text-success",
+        (status === "rejected" || status === "denied") && "text-destructive",
+        (status === "partially_applied" || status === "expired") && "text-warning",
       )}
     >
       {OUTCOME_LABEL[status] ?? status}

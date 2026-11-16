@@ -1,17 +1,17 @@
 import { Trash2 } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 /** A trash button that asks first; `onConfirm` resolves to an error message, or `undefined` once removed. */
@@ -40,7 +40,7 @@ export function ConfirmRemove({
   }
 
   return (
-    <Dialog
+    <AlertDialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
@@ -49,29 +49,28 @@ export function ConfirmRemove({
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <DialogTrigger asChild>
+          <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={label}>
               <Trash2 />
             </Button>
-          </DialogTrigger>
+          </AlertDialogTrigger>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
         {error !== undefined && <ErrorNote title="Could not remove it" message={error} />}
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {/* Not AlertDialogAction: that closes at once, and a failure must stay in view. */}
           <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
             Remove
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

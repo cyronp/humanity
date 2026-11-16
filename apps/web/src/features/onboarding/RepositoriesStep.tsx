@@ -1,6 +1,7 @@
 import { GITLAB_DEFAULT_HOST } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { type FormEvent, type ReactNode, useCallback, useState } from "react"
+import { InlineError } from "@/components/InlineError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -10,7 +11,7 @@ import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { useGitLabConnection } from "@/features/gitlab/useGitLabConnection"
 import { usePollWhile } from "@/lib/usePollWhile"
 import { RepositoryPicker } from "./RepositoryPicker.tsx"
-import { ServiceRow, type ServiceState, TextButton } from "./ServiceRow.tsx"
+import { ServiceRow, type ServiceState } from "./ServiceRow.tsx"
 
 type TokenSource = "token" | "cli" | "environment"
 
@@ -143,14 +144,17 @@ function Service({
                 {busy ? "Checking…" : "Connect"}
               </Button>
             </div>
-            {error !== undefined && (
-              <p role="alert" className="text-xs whitespace-pre-wrap text-destructive">
-                {error}
-              </p>
-            )}
+            {error !== undefined && <InlineError>{error}</InlineError>}
           </form>
         ) : (
-          <TextButton onClick={() => setAsking(true)}>Connect using a token?</TextButton>
+          <Button
+            variant="brand-link"
+            size="xs"
+            className="h-auto self-start p-0"
+            onClick={() => setAsking(true)}
+          >
+            Connect using a token?
+          </Button>
         ))}
     </ServiceRow>
   )

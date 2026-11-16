@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroupButton } from "@/components/ui/input-group"
+import { InlineError } from "@/components/InlineError"
 import { PinDefaultButton } from "@/components/PinDefaultButton"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 
@@ -59,9 +60,9 @@ export function ReasoningPicker({
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
         <InputGroupButton
+          variant="muted"
           size="sm"
           className={cn(
-            "text-muted-foreground hover:text-foreground",
             value === "high" && "text-blue-600 hover:text-blue-700 dark:text-blue-400",
             value === "xhigh" && "text-fuchsia-500 hover:text-fuchsia-600 dark:text-fuchsia-400",
             value === "max" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
@@ -99,9 +100,9 @@ export function ReasoningPicker({
           </DropdownMenuGroup>
         </DropdownMenuRadioGroup>
         {pins.error !== undefined && (
-          <p role="alert" className="px-1.5 py-1 text-xs text-destructive">
+          <InlineError className="px-1.5 py-1">
             The default was not changed: {pins.error}
-          </p>
+          </InlineError>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

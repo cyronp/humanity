@@ -50,9 +50,9 @@ export function ThreadFilterMenu({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted"
               size="icon"
-              className="relative shrink-0 text-muted-foreground hover:text-foreground"
+              className="relative shrink-0"
               aria-label={narrowed ? "Filter threads (filters on)" : "Filter threads"}
             >
               <ListFilter />

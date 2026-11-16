@@ -146,9 +146,9 @@ function HeaderLink({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant="muted"
           size="icon"
-          className="shrink-0 text-muted-foreground hover:text-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
+          className="shrink-0 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
           asChild
         >
           <Link to={to} onClick={onClick} activeOptions={{ exact }} aria-label={label}>

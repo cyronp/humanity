@@ -79,13 +79,13 @@ export function ConfirmationCard({ confirmation }: { readonly confirmation: Pend
 
   return (
     <Item
-      variant="outline"
-      className="items-start border-2 border-amber-500 bg-amber-500/5"
+      variant="attention"
+      className="items-start"
       role="alertdialog"
       aria-label={`The agent wants to run ${confirmation.toolName}`}
     >
       <ItemMedia variant="icon">
-        <Hand className="text-amber-600" />
+        <Hand className="text-warning" />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-3">
         <ItemTitle className="line-clamp-none flex-wrap">

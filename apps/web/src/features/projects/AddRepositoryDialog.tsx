@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
+import { InlineError } from "@/components/InlineError"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -347,7 +348,9 @@ function GitHubRepos({
 
   if (AsyncResult.isFailure(repos)) {
     return (
-      <p className="px-3 py-6 text-center text-sm text-destructive">{describeCause(repos.cause)}</p>
+      <InlineError className="px-3 py-6 text-center text-sm">
+        {describeCause(repos.cause)}
+      </InlineError>
     )
   }
   if (loaded === undefined) return <ListSkeleton />
@@ -392,7 +395,9 @@ function GitLabRepos({
 
   if (AsyncResult.isFailure(repos)) {
     return (
-      <p className="px-3 py-6 text-center text-sm text-destructive">{describeCause(repos.cause)}</p>
+      <InlineError className="px-3 py-6 text-center text-sm">
+        {describeCause(repos.cause)}
+      </InlineError>
     )
   }
   if (loaded === undefined) return <ListSkeleton />

@@ -1,10 +1,11 @@
 import type { ClaudeAccount } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { LoaderCircle, RefreshCw } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { useCallback, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { ClaudeAccountRow } from "@/features/claude/ClaudeAccountRow"
 import { useClaudeAccounts } from "@/features/claude/useClaudeAccounts"
 import { describeCause } from "@/lib/errors"
@@ -54,7 +55,7 @@ export function ProvidersOverview() {
         {AsyncResult.match(result, {
           onInitial: () => (
             <p className="flex items-center gap-2 border-b py-4 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
+              <Spinner />
               Starting Claude Code to read which logins it has. No prompt is sent.
             </p>
           ),

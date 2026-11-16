@@ -4,8 +4,18 @@ import { Exit } from "effect"
 import { ClipboardPaste, Pencil, Plus, Server, X } from "lucide-react"
 import { type FormEvent, type ReactNode, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Empty, EmptyDescription } from "@/components/ui/empty"
+import {
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  Field as FieldRoot,
+  FieldSet,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia } from "@/components/ui/item"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -35,6 +45,7 @@ import {
   type TransportKind,
 } from "./mcpForm.ts"
 import { describeTransport, mcpMention, TRANSPORT_LABELS } from "./prompt.ts"
+import { EMPTY_BOX, LIST_ROW, TAG } from "./styles.ts"
 
 const reactivityKeys = [keys.extensions]
 
@@ -79,9 +90,11 @@ export function McpServersSettings({
       )}
 
       {own.length === 0 && editing === undefined ? (
-        <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          No MCP servers yet. Add one, or paste the JSON configuration from a server's docs.
-        </p>
+        <Empty className={EMPTY_BOX}>
+          <EmptyDescription className="text-sm">
+            No MCP servers yet. Add one, or paste the JSON configuration from a server's docs.
+          </EmptyDescription>
+        </Empty>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border empty:hidden">
           {own.map((server) =>
@@ -139,15 +152,17 @@ function ServerRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 p-3">
-      <div className="flex items-center gap-3">
-        <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+    <Item asChild className={LIST_ROW}>
+      <li>
+        <ItemMedia variant="icon">
+          <Server className="text-muted-foreground" aria-hidden="true" />
+        </ItemMedia>
+        <ItemContent className="min-w-0 gap-0.5">
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{server.name}</span>
-            <span className="rounded-sm bg-muted px-1.5 text-[0.7rem] text-muted-foreground">
+            <Badge variant="secondary" className={TAG}>
               {TRANSPORT_LABELS[server.transport._tag]}
-            </span>
+            </Badge>
             {!server.enabled && (
               <span className="text-xs text-muted-foreground">Off: the agent does not get it</span>
             )}
@@ -160,9 +175,9 @@ function ServerRow({
             {secrets.length > 0 &&
               ` · ${server.transport._tag === "stdio" ? "Variables" : "Headers"}: ${secrets.join(", ")}`}
           </span>
-        </div>
+        </ItemContent>
         {onEdit !== undefined && (
-          <div className="flex shrink-0 items-center gap-1">
+          <ItemActions className="gap-1">
             <Label htmlFor={switchId} className="sr-only">
               Give {server.name} to the agent
             </Label>
@@ -189,11 +204,15 @@ function ServerRow({
                 return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
               }}
             />
-          </div>
+          </ItemActions>
         )}
-      </div>
-      {error !== undefined && <ErrorNote title="Could not change the server" message={error} />}
-    </li>
+        {error !== undefined && (
+          <ItemFooter>
+            <ErrorNote title="Could not change the server" message={error} />
+          </ItemFooter>
+        )}
+      </li>
+    </Item>
   )
 }
 
@@ -353,8 +372,10 @@ function Entries({
     onChange(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
 
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-medium">{title}</legend>
+    <FieldSet className="gap-2">
+      <FieldLegend variant="label" className="mb-2">
+        {title}
+      </FieldLegend>
       {entries.map((entry) => (
         <div key={entry.id} className="flex items-center gap-2">
           <Input
@@ -397,7 +418,7 @@ function Entries({
         <Plus />
         Add
       </Button>
-    </fieldset>
+    </FieldSet>
   )
 }
 
@@ -473,10 +494,10 @@ export function Field({
   readonly children: ReactNode
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+    <FieldRoot className="min-w-0 gap-1.5">
+      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
       {children}
-      {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
+      {hint !== undefined && <FieldDescription>{hint}</FieldDescription>}
+    </FieldRoot>
   )
 }

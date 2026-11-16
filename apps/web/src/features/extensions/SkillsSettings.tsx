@@ -1,11 +1,15 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { Skill } from "@humanity/contracts"
+import { cn } from "cn"
 import { Exit } from "effect"
 import { Pencil, Plus, Sparkles } from "lucide-react"
 import { type FormEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item"
 import { Textarea } from "@/components/ui/textarea"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
@@ -13,6 +17,7 @@ import { removeSkillAtom, saveSkillAtom } from "./atoms.ts"
 import { ConfirmRemove } from "./ConfirmRemove.tsx"
 import { Field } from "./McpServersSettings.tsx"
 import { checkSkill, skillSlug } from "./mcpForm.ts"
+import { EMPTY_BOX, LIST_ROW, TAG } from "./styles.ts"
 
 const reactivityKeys = [keys.extensions]
 
@@ -54,9 +59,11 @@ export function SkillsSettings({
       )}
 
       {own.length === 0 && editing === undefined ? (
-        <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          No skills yet. Write one for a task the agent should always do your way.
-        </p>
+        <Empty className={EMPTY_BOX}>
+          <EmptyDescription className="text-sm">
+            No skills yet. Write one for a task the agent should always do your way.
+          </EmptyDescription>
+        </Empty>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border empty:hidden">
           {own.map((skill) =>
@@ -102,36 +109,45 @@ function SkillRow({
 }) {
   const remove = useAtomSet(removeSkillAtom, { mode: "promiseExit" })
   return (
-    <li className="flex items-center gap-3 p-3">
-      <Sparkles className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{skill.name}</span>
-          <code className="rounded-sm bg-muted px-1.5 font-mono text-[0.7rem] text-muted-foreground">
-            {skill.invocation}
-          </code>
-        </span>
-        <span className="line-clamp-2 text-xs text-muted-foreground">
-          {skill.description === "" ? "No description." : skill.description}
-        </span>
-      </div>
-      {onEdit !== undefined && (
-        <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="icon-sm" aria-label={`Edit ${skill.name}`} onClick={onEdit}>
-            <Pencil />
-          </Button>
-          <ConfirmRemove
-            label={`Remove ${skill.name}`}
-            title={`Remove “${skill.name}”?`}
-            description="Its folder in Humanity's data folder is deleted. The agent no longer finds it, from its next message on."
-            onConfirm={async () => {
-              const exit = await remove({ payload: { name: skill.name }, reactivityKeys })
-              return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
-            }}
-          />
-        </div>
-      )}
-    </li>
+    <Item asChild className={LIST_ROW}>
+      <li>
+        <ItemMedia variant="icon">
+          <Sparkles className="text-muted-foreground" aria-hidden="true" />
+        </ItemMedia>
+        <ItemContent className="min-w-0 gap-0.5">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{skill.name}</span>
+            <Badge asChild variant="secondary" className={cn(TAG, "font-mono")}>
+              <code>{skill.invocation}</code>
+            </Badge>
+          </span>
+          <span className="line-clamp-2 text-xs text-muted-foreground">
+            {skill.description === "" ? "No description." : skill.description}
+          </span>
+        </ItemContent>
+        {onEdit !== undefined && (
+          <ItemActions className="gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Edit ${skill.name}`}
+              onClick={onEdit}
+            >
+              <Pencil />
+            </Button>
+            <ConfirmRemove
+              label={`Remove ${skill.name}`}
+              title={`Remove “${skill.name}”?`}
+              description="Its folder in Humanity's data folder is deleted. The agent no longer finds it, from its next message on."
+              onConfirm={async () => {
+                const exit = await remove({ payload: { name: skill.name }, reactivityKeys })
+                return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+              }}
+            />
+          </ItemActions>
+        )}
+      </li>
+    </Item>
   )
 }
 

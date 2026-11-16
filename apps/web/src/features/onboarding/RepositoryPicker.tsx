@@ -2,9 +2,12 @@ import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { GitHubRepo, GitLabRepo } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { Check, ChevronDown, ChevronUp, Download, LoaderCircle, Lock } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, Download, Lock } from "lucide-react"
 import { useEffect, useId, useState } from "react"
+import { InlineError } from "@/components/InlineError"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Spinner } from "@/components/ui/spinner"
 import {
   cloneProjectAtom,
   type CloneTarget,
@@ -117,7 +120,7 @@ export function RepositoryPicker() {
       {githubConnected && <GitHubReposLoader onLoaded={setGithubRepos} />}
       {gitlabConnected && <GitLabReposLoader onLoaded={setGitlabRepos} />}
       <div className="flex items-center gap-3">
-        <Checkbox
+        <GuideCheckbox
           aria-label="Select all repositories"
           checked={all.length > 0 && chosen.length === all.length}
           indeterminate={chosen.length > 0 && chosen.length < all.length}
@@ -152,26 +155,28 @@ export function RepositoryPicker() {
             <span className="flex-1 text-muted-foreground">
               {chosen.length} of {all.length} selected
             </span>
-            <button
-              type="button"
-              className="font-medium hover:underline disabled:opacity-50"
+            <Button
+              variant="link"
+              size="xs"
+              className="h-auto p-0 text-foreground"
               disabled={importing || chosen.length === all.length}
               onClick={() => setSelected(new Set(all.map(({ key }) => key)))}
             >
               Select all
-            </button>
-            <button
-              type="button"
-              className="font-medium text-muted-foreground hover:underline disabled:opacity-50"
+            </Button>
+            <Button
+              variant="link"
+              size="xs"
+              className="h-auto p-0 text-muted-foreground"
               disabled={importing || chosen.length === 0}
               onClick={() => setSelected(new Set())}
             >
               Select none
-            </button>
+            </Button>
           </div>
           {loading ? (
             <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
+              <Spinner />
               Loading repositories…
             </p>
           ) : all.length === 0 ? (
@@ -181,7 +186,7 @@ export function RepositoryPicker() {
               {all.map((option) => (
                 <li key={option.key}>
                   <label className="flex cursor-pointer items-center gap-3 rounded-md py-1.5 pr-2 hover:bg-muted/50">
-                    <Checkbox
+                    <GuideCheckbox
                       checked={selected.has(option.key)}
                       disabled={importing}
                       onChange={() => toggle(option.key)}
@@ -229,8 +234,8 @@ export function RepositoryPicker() {
   )
 }
 
-/** A native checkbox in the guide's blue; `indeterminate` shows some, not all, are chosen. */
-function Checkbox({
+/** A checkbox in the guide's blue; `indeterminate` shows some, not all, are chosen. */
+function GuideCheckbox({
   checked,
   indeterminate = false,
   disabled,
@@ -244,15 +249,11 @@ function Checkbox({
   readonly "aria-label"?: string
 }) {
   return (
-    <input
-      type="checkbox"
-      ref={(element) => {
-        if (element !== null) element.indeterminate = indeterminate
-      }}
-      checked={checked}
+    <Checkbox
+      checked={indeterminate ? "indeterminate" : checked}
       disabled={disabled}
-      onChange={(event) => onChange(event.target.checked)}
-      className="size-4 shrink-0 cursor-pointer accent-blue-600 disabled:cursor-not-allowed"
+      onCheckedChange={(next) => onChange(next === true)}
+      className="data-checked:border-brand data-checked:bg-brand data-checked:text-brand-foreground data-[state=indeterminate]:border-brand data-[state=indeterminate]:bg-brand data-[state=indeterminate]:text-brand-foreground dark:data-checked:bg-brand dark:data-[state=indeterminate]:bg-brand"
       {...props}
     />
   )
@@ -264,7 +265,7 @@ function ProgressLine({ progress }: { readonly progress: Progress }) {
     <div className="flex flex-col gap-1 text-xs" aria-live="polite">
       {progress.current !== undefined ? (
         <span className="flex items-center gap-1.5 text-muted-foreground">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+          <Spinner className="size-3.5 shrink-0" />
           <span className="truncate">
             Importing {progress.current}… ({progress.done + 1} of {progress.total})
           </span>
@@ -272,15 +273,15 @@ function ProgressLine({ progress }: { readonly progress: Progress }) {
       ) : (
         imported > 0 && (
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Check className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <Check className="size-3.5 shrink-0 text-success" />
             Imported {imported} {plural(imported)}
           </span>
         )
       )}
       {progress.failures.map((failure) => (
-        <p key={failure.name} role="alert" className="whitespace-pre-wrap text-destructive">
+        <InlineError key={failure.name}>
           {failure.name}: {failure.message}
-        </p>
+        </InlineError>
       ))}
     </div>
   )

@@ -1,8 +1,11 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import type { McpServer, ProjectId, Skill } from "@humanity/contracts"
+import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { Paperclip, Plus, Server, Settings2, Sparkles } from "lucide-react"
 import { useRef, useState } from "react"
+import { InlineError } from "@/components/InlineError"
+import { Badge } from "@/components/ui/badge"
 import {
   Command,
   CommandEmpty,
@@ -24,6 +27,7 @@ import {
   type PromptInsertion,
   usableServers,
 } from "@/features/extensions/prompt"
+import { TAG } from "@/features/extensions/styles"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
 
@@ -99,8 +103,8 @@ export function AddMenu({
           <TooltipTrigger asChild>
             <PopoverTrigger asChild disabled={disabled}>
               <InputGroupButton
+                variant="muted"
                 size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
                 aria-label="Add files, skills or MCP servers"
               >
                 <Plus />
@@ -147,9 +151,9 @@ export function AddMenu({
                   </div>
                 ),
                 onFailure: ({ cause }) => (
-                  <p className="px-3 py-4 text-sm text-destructive" role="alert">
+                  <InlineError className="px-3 py-4 text-sm">
                     Could not load them: {describeCause(cause)}
-                  </p>
+                  </InlineError>
                 ),
                 onSuccess: ({ value }) => (
                   <Entries
@@ -256,8 +260,8 @@ function Entries({
 function Origin({ source }: { readonly source: Skill["source"] }) {
   if (source === "humanity") return null
   return (
-    <span className="shrink-0 rounded-sm bg-muted px-1 text-[0.65rem] text-muted-foreground">
+    <Badge variant="secondary" className={cn(TAG, "shrink-0 px-1 text-[0.65rem]")}>
       repository
-    </span>
+    </Badge>
   )
 }
