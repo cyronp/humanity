@@ -2,13 +2,14 @@
 
 An app for running coding agents in threads, with you in charge of how much each one does on its own.
 
-The agent (Claude, through the Claude Agent SDK) works on its own by default: it reads, edits files and runs commands without stopping, and every call it makes is shown as it happens. Any thread can instead ask first, so that file changes and commands wait for you to allow or deny them. A thread starts in your checkout and can be moved into its own git worktree and branch.
+The agent (Claude, through the Claude Agent SDK, or OpenAI's Codex, through its CLI) works on its own by default: it reads, edits files and runs commands without stopping, and every call it makes is shown as it happens. Any thread can instead ask first, so that file changes and commands wait for you to allow or deny them. A thread starts in your checkout and can be moved into its own git worktree and branch.
 
 ## Requirements
 
 - **Node.js 22.13 or newer** (24 LTS recommended). The database uses Node's built-in `node:sqlite`; Node prints an "experimental" warning for it, which is harmless.
 - **git** on your `PATH`.
 - **A Claude login.** Run `claude auth login` once with your Claude Pro, Max, Team or Enterprise account (or the bundled CLI's own `auth login` command, shown in the first-run guide). An `ANTHROPIC_API_KEY` in the environment also works, but Claude Code then bills that key instead of your plan.
+- Optional, for threads on Codex: **a Codex login.** Run `codex login` once with your ChatGPT account (Settings, under Providers, shows the exact command for the Codex that ships with Humanity). The model you pick for a new thread decides whether it runs on Claude Code or on Codex.
 - Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), a token saved in Humanity (Settings, under Repositories, or the first-run guide), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
 - Optional, for GitLab (gitlab.com or a self-hosted instance): the [GitLab CLI](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`), a token saved in Humanity together with the instance's host (Settings, under Repositories), or a `GITLAB_TOKEN` (with `GITLAB_HOST` for an instance of your own). A personal access token with the `read_api` and `read_repository` scopes is enough. The token is only ever sent to its own instance, over https.
 
@@ -65,6 +66,8 @@ Keyboard shortcuts in the review panel: `a` allow, `d` deny, `c` comment (`Esc` 
 
 The agent loads your Claude Code user settings and the repository's own `CLAUDE.md`, skills and `.claude/settings.json`, but a settings file can never pre-approve a tool on Humanity's behalf: the thread's mode decides.
 
+A thread on Codex follows the same modes. Codex asks Humanity before each file change and each command it does not know to be a harmless read, whatever approval policy or sandbox your own Codex settings name, and the thread's mode answers. A file change by Codex is one patch, shown with the diff of every file it touches and allowed or denied as a whole. Codex loads your `~/.codex/config.toml` and the repository's `AGENTS.md`; command rules you wrote for Codex yourself (`~/.codex/rules`) still let the commands they name run without asking.
+
 ## Running it for real
 
 ```sh
@@ -108,7 +111,7 @@ Everything Humanity writes lives in the data directory:
    repos/<host>/<group>/<repo>/      clones made from GitLab
 ```
 
-Claude Code itself keeps its login and its session transcripts (used to resume sessions) in its own config directory, `~/.claude` or `CLAUDE_CONFIG_DIR`, as it does for your terminal sessions. Humanity never reads or stores your Claude credentials.
+Claude Code itself keeps its login and its session transcripts (used to resume sessions) in its own config directory, `~/.claude` or `CLAUDE_CONFIG_DIR`, as it does for your terminal sessions. Codex does the same in `~/.codex` or `CODEX_HOME`. Humanity never reads or stores your Claude or OpenAI credentials.
 
 API keys and tokens are never stored in the database. The GitHub or GitLab token is passed to `git clone` only as a header for that one process, so it never ends up in a clone's configuration.
 
