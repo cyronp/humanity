@@ -47,6 +47,7 @@ describe("planRows", () => {
       "Fable 7-day limit",
     ])
     expect(rows.map((row) => row.utilization)).toEqual([20, 40, 60])
+    expect(rows.map((row) => row.blocking)).toEqual([true, true, false])
   })
 
   it("has nothing to list without plan limits or for windows that were not reported", () => {
@@ -68,14 +69,26 @@ describe("planRows", () => {
 })
 
 describe("planHeadline", () => {
-  const row = (label: string, utilization: number) => ({ label, utilization, resetsAt: null })
+  const row = (label: string, utilization: number, blocking = true) => ({
+    label,
+    blocking,
+    utilization,
+    resetsAt: null,
+  })
 
   it("is the fullest window above 50%, and nothing while all are at most half used", () => {
     expect(planHeadline([row("5-hour limit", 50), row("7-day limit", 10)])).toBeUndefined()
-    expect(
-      planHeadline([row("5-hour limit", 62), row("7-day limit", 30), row("Fable 7-day limit", 80)])
-        ?.label,
-    ).toBe("Fable 7-day limit")
+    expect(planHeadline([row("5-hour limit", 62), row("7-day limit", 80)])?.label).toBe(
+      "7-day limit",
+    )
+  })
+
+  it("is never a model's own window, which does not stop the agent", () => {
+    const fable = row("Fable 7-day limit", 95, false)
+    expect(planHeadline([row("5-hour limit", 62), row("7-day limit", 30), fable])?.label).toBe(
+      "5-hour limit",
+    )
+    expect(planHeadline([row("5-hour limit", 20), fable])).toBeUndefined()
   })
 })
 

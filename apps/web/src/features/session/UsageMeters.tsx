@@ -133,9 +133,10 @@ const refreshNote = (state: Refresh): string => {
 }
 
 /**
- * Reads "Usage" while every window is at most half used, then names the
- * fullest one in its colour. Clicking it refreshes and lists every window of
- * the plan.
+ * Reads "Usage" while the 5-hour and 7-day windows are at most half used, then
+ * names the fuller one in its colour. A model's own window never shows here,
+ * because running out of it does not stop the agent. Clicking it refreshes and
+ * lists every window of the plan.
  */
 function PlanUsageButton({
   sessionId,
