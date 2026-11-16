@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Humanity as a desktop app: a window around the daemon and the web app.",
-  "author": "Humanity contributors",
+  "author": "Cyronp",
   "main": "dist/main.cjs",
   "scripts": {
     "build": "node scripts/build.mjs",
