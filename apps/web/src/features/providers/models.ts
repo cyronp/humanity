@@ -33,6 +33,11 @@ const DEFAULT_ROW: Record<AgentProvider, ReportedModel> = {
     displayName: "Default",
     description: "The model your Codex settings pick",
   },
+  kiro: {
+    value: DEFAULT_MODEL,
+    displayName: "Default",
+    description: "The model your Kiro settings pick",
+  },
 }
 
 /**
@@ -55,6 +60,19 @@ export const pickerModels = (
     legacy: provider === "claude-code" && value.startsWith("claude-"),
   }))
 }
+
+/**
+ * The providers a thread can be started on: the ones with someone signed in.
+ * The one already chosen stays, so its model can still be read and changed;
+ * an open thread (`locked`) is offered no other.
+ */
+export const offeredProviders = (
+  all: ReadonlyArray<AgentProvider>,
+  current: AgentProvider,
+  connected: Readonly<Record<AgentProvider, boolean>>,
+  locked: boolean,
+): Array<AgentProvider> =>
+  all.filter((provider) => provider === current || (!locked && connected[provider]))
 
 /** One name per row across providers. Claude Code's stay bare, as they were starred before Codex. */
 export const modelKey = (model: Pick<PickerModel, "provider" | "value">): string =>

@@ -20,6 +20,7 @@ import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 const FOLDERS: Record<ProviderId, { readonly variable: string; readonly example: string }> = {
   "claude-code": { variable: "CLAUDE_CONFIG_DIR", example: "~/.claude-personal" },
   codex: { variable: "CODEX_HOME", example: "~/.codex-work" },
+  kiro: { variable: "KIRO_HOME", example: "~/.kiro-work" },
 }
 
 /** Where the new account's login lives: a folder made for it, or one the human already has. */

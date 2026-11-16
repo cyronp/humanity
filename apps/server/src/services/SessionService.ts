@@ -71,6 +71,7 @@ import {
 } from "../agent/AgentRunner.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
+import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
 import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
@@ -82,6 +83,7 @@ import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
+import { KiroAccountService } from "./KiroAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
@@ -285,6 +287,7 @@ export class SessionService extends Context.Service<
       const preferences = yield* PreferencesService
       const accounts = yield* ClaudeAccountService
       const codexAccounts = yield* CodexAccountService
+      const kiroAccounts = yield* KiroAccountService
       const extensions = yield* ExtensionsService
       const claude = yield* ClaudeCode
       const codex = yield* Codex
@@ -295,7 +298,7 @@ export class SessionService extends Context.Service<
 
       /** Each provider keeps its own accounts, and a thread runs as one of its provider's. */
       const accountsOf = (provider: AgentProvider) =>
-        provider === "codex" ? codexAccounts : accounts
+        provider === "codex" ? codexAccounts : provider === "kiro" ? kiroAccounts : accounts
       /** The config folder of the account a thread runs as; `undefined` is its provider's default login. */
       const accountDir = (session: Session) =>
         Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
@@ -608,6 +611,10 @@ export class SessionService extends Context.Service<
           }
           return usage
         }
+        // Kiro reports no plan limits through ACP, so an idle Kiro thread has none to ask for.
+        if (session.provider === "kiro") {
+          return yield* unavailable("Kiro does not report plan limits here.")
+        }
         const plan =
           session.provider === "codex"
             ? yield* codex
@@ -625,7 +632,11 @@ export class SessionService extends Context.Service<
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
           const normalized =
-            session.provider === "codex" ? normalizeCodexEvent(raw) : normalizeSdkMessage(raw)
+            session.provider === "codex"
+              ? normalizeCodexEvent(raw)
+              : session.provider === "kiro"
+                ? normalizeAcpEvent(raw)
+                : normalizeSdkMessage(raw)
           if (normalized._tag === "Skip") return
           if (normalized._tag === "TextDelta") {
             yield* events.publish(session.id, { _tag: "TextDelta", text: normalized.text })
