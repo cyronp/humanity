@@ -199,6 +199,14 @@
     0px,
     calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
   );
+  /* How far down those buttons reach; zero in a browser too. */
+  --titlebar-height: env(titlebar-area-height, 0px);
+  /*
+   * The buttons are drawn over everything, a dialog included, so a dialog
+   * keeps to the page below them: centred there, and no taller than it.
+   */
+  --dialog-center: calc(50% + var(--titlebar-height) / 2);
+  --dialog-max-height: calc(100svh - var(--titlebar-height) - 2rem);
 }
 .titlebar {
   app-region: drag;
