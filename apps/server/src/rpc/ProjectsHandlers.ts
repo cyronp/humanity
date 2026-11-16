@@ -16,6 +16,7 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
       // Its conversations from the Claude Code CLI follow into the thread history.
       "Projects.addLocal": ({ path }) =>
         Effect.tap(projects.addLocal(path), (project) => imports.syncInBackground(project.id)),
+      "Projects.listFolders": ({ folder, prefix }) => projects.listFolders(folder, prefix),
       "Projects.cloneFromGitHub": ({ fullName }) => projects.cloneFromGitHub(fullName),
       "Projects.cloneFromGitLab": ({ fullPath }) => projects.cloneFromGitLab(fullPath),
       // Stop the project's agents before their worktrees disappear.

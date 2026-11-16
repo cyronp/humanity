@@ -151,22 +151,33 @@ export function SettingsSplit({
   )
 }
 
-/** One setting: its name and what it does on the left, the control on the right. */
+/**
+ * One setting: its name and what it does on the left, the control on the
+ * right, or below and full width when `stacked`, for a control too wide to sit
+ * beside it.
+ */
 export function SettingsRow({
   label,
   labelId,
   detail,
+  stacked = false,
   children,
 }: {
   readonly label: string
   /** Lets the control name itself by the label, with `aria-labelledby`. */
   readonly labelId?: string
   readonly detail?: ReactNode
+  readonly stacked?: boolean
   readonly children: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-4">
-      <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
+    <div
+      className={cn(
+        "flex gap-3 py-4",
+        stacked ? "flex-col" : "flex-wrap items-center justify-between",
+      )}
+    >
+      <div className={cn("flex min-w-0 flex-col gap-0.5", !stacked && "flex-1 basis-64")}>
         <span id={labelId} className="text-sm font-medium">
           {label}
         </span>

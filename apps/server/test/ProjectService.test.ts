@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { join, sep } from "node:path"
 import { GitService } from "../src/services/GitService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { baseLayer, git, tempDir, tempRepo } from "./helpers.ts"
@@ -98,6 +98,36 @@ describe("ProjectService", () => {
         yield* projects.addLocal(repo)
         const duplicate = yield* Effect.flip(projects.addLocal(repo))
         assert.strictEqual(duplicate._tag, "ProjectAlreadyExists")
+      }).pipe(Effect.provide(services(home)))
+    }),
+  )
+
+  it.live("lists the folders that complete a typed path, repositories marked", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const root = yield* tempDir("humanity-browse-")
+      mkdirSync(join(root, "Apps"))
+      mkdirSync(join(root, "app-two", ".git"), { recursive: true })
+      mkdirSync(join(root, ".hidden-app"))
+      mkdirSync(join(root, "other"))
+      writeFileSync(join(root, "app.txt"), "not a folder\n")
+
+      yield* Effect.gen(function* () {
+        const projects = yield* ProjectService
+        const folder = `${root}${sep}`
+
+        // Case-insensitive, folders only, hidden ones left out, in name order.
+        assert.deepStrictEqual(yield* projects.listFolders(folder, "app"), [
+          { name: "app-two", isRepository: true },
+          { name: "Apps", isRepository: false },
+        ])
+        // A prefix with a dot asks for hidden folders.
+        assert.deepStrictEqual(yield* projects.listFolders(folder, ".h"), [
+          { name: ".hidden-app", isRepository: false },
+        ])
+        assert.strictEqual((yield* projects.listFolders(folder, "")).length, 3)
+        // A folder that cannot be read lists nothing, rather than failing.
+        assert.deepStrictEqual(yield* projects.listFolders(join(root, "nope") + sep, ""), [])
       }).pipe(Effect.provide(services(home)))
     }),
   )

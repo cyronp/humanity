@@ -3,7 +3,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
 import { GitLabFullPath } from "../domain/GitLab.ts"
 import { Autonomy } from "../domain/Policy.ts"
-import { Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
+import { FolderEntry, Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
 import {
   CloneTargetExists,
   GitCommandFailed,
@@ -34,6 +34,16 @@ export const ProjectsRpcs = RpcGroup.make(
       GitCommandFailed,
       ProjectAlreadyExists,
     ]),
+  }),
+  /**
+   * The folders in `folder` (an absolute path, or one from `~`) whose names
+   * start with `prefix`, case-insensitively, to complete a path as it is
+   * typed. Hidden ones only when `prefix` starts with a dot. Empty when the
+   * folder cannot be read. Only reads.
+   */
+  Rpc.make("Projects.listFolders", {
+    payload: { folder: Schema.String, prefix: Schema.String },
+    success: Schema.Array(FolderEntry),
   }),
   /** Clones into the data directory with live progress, then adds the clone as a project. */
   Rpc.make("Projects.cloneFromGitHub", {

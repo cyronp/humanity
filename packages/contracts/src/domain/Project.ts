@@ -22,6 +22,14 @@ export const Project = Schema.Struct({
 })
 export type Project = typeof Project.Type
 
+/** A folder on the daemon's computer, offered while a path to add is typed. */
+export const FolderEntry = Schema.Struct({
+  name: Schema.String,
+  /** Whether it is a git repository's root (it has `.git`), so it can be added as is. */
+  isRepository: Schema.Boolean,
+})
+export type FolderEntry = typeof FolderEntry.Type
+
 /** A project's favicon, found in its repository and sent inline. */
 export const ProjectIcon = Schema.Struct({
   /** `image/svg+xml`, `image/png`, `image/x-icon`, ... */

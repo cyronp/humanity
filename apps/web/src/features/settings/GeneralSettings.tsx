@@ -1,24 +1,13 @@
-import { type LucideIcon, Monitor, Moon, Sun } from "lucide-react"
 import { useId } from "react"
-import { type ThemeChoice, useThemeChoice } from "@/lib/theme"
+import { useThemeChoice } from "@/lib/theme"
 import {
-  SettingsChoice,
   SettingsFrame,
   SettingsGroup,
   SettingsPane,
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
-
-const THEMES = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-] as const satisfies ReadonlyArray<{
-  readonly value: ThemeChoice
-  readonly label: string
-  readonly icon: LucideIcon
-}>
+import { ThemePicker } from "./ThemePicker.tsx"
 
 /** Settings of the app itself, not of a provider or a project. */
 export function GeneralSettings() {
@@ -40,8 +29,8 @@ function ThemeSetting() {
   const labelId = useId()
 
   return (
-    <SettingsRow label="Theme" labelId={labelId}>
-      <SettingsChoice labelledBy={labelId} options={THEMES} value={choice} onChange={choose} />
+    <SettingsRow label="Theme" labelId={labelId} stacked>
+      <ThemePicker labelledBy={labelId} value={choice} onChange={choose} />
     </SettingsRow>
   )
 }

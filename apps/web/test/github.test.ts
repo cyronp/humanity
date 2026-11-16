@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest"
 import { installCliCommand, isConnected, summarizeGitHub } from "@/features/github/connection"
 import {
   addableRepos,
+  folderPath,
+  folderQuery,
   parseLocalPath,
   parseRepoInput,
   repoNeedle,
@@ -55,6 +57,28 @@ describe("parseRepoInput", () => {
   })
 })
 
+describe("folderQuery", () => {
+  it("splits a typed path into the folder to list and the name begun in it", () => {
+    expect(folderQuery("C:\\code\\ap")).toEqual({ folder: "C:\\code\\", prefix: "ap" })
+    expect(folderQuery("C:\\")).toEqual({ folder: "C:\\", prefix: "" })
+    expect(folderQuery("/home/me/")).toEqual({ folder: "/home/me/", prefix: "" })
+    expect(folderQuery("~/co")).toEqual({ folder: "~/", prefix: "co" })
+    expect(folderQuery("c:/code\\my-")).toEqual({ folder: "c:/code\\", prefix: "my-" })
+  })
+
+  it("completes only a path typed from a root or from home", () => {
+    expect(folderQuery("")).toBeUndefined()
+    expect(folderQuery("code/app")).toBeUndefined()
+    expect(folderQuery('"C:\\code"')).toBeUndefined()
+    expect(folderQuery("~")).toBeUndefined()
+  })
+
+  it("goes into a folder with the separator already typed", () => {
+    expect(folderPath({ folder: "C:\\code\\", prefix: "ap" }, "app")).toBe("C:\\code\\app\\")
+    expect(folderPath({ folder: "~/", prefix: "" }, "code")).toBe("~/code/")
+  })
+})
+
 describe("parseLocalPath", () => {
   it("accepts absolute Windows and POSIX paths", () => {
     expect(parseLocalPath(" C:\\code\\app ")).toBe("C:\\code\\app")
@@ -63,11 +87,32 @@ describe("parseLocalPath", () => {
     expect(parseLocalPath("/home/me/app")).toBe("/home/me/app")
   })
 
+  it("accepts a path from the home folder, which the daemon expands", () => {
+    expect(parseLocalPath("~/code/app")).toBe("~/code/app")
+    expect(parseLocalPath("~\\code\\app")).toBe("~\\code\\app")
+  })
+
+  it("drops the quotes of a copied path", () => {
+    expect(parseLocalPath('"C:\\Users\\me\\code\\my app"')).toBe("C:\\Users\\me\\code\\my app")
+    expect(parseLocalPath(" '/home/me/app' ")).toBe("/home/me/app")
+    expect(parseLocalPath('"code/app"')).toBeUndefined()
+  })
+
+  it("reads file URLs", () => {
+    expect(parseLocalPath("file:///C:/code/my%20app")).toBe("C:/code/my app")
+    expect(parseLocalPath("file:///home/me/app")).toBe("/home/me/app")
+    expect(parseLocalPath("file://server/share/app")).toBe("\\\\server\\share\\app")
+    expect(parseLocalPath("file:///")).toBeUndefined()
+  })
+
   it("rejects relative paths, repository names and bare roots", () => {
     expect(parseLocalPath("code/app")).toBeUndefined()
     expect(parseLocalPath("acme/widgets")).toBeUndefined()
     expect(parseLocalPath("https://github.com/acme/widgets")).toBeUndefined()
     expect(parseLocalPath("/")).toBeUndefined()
+    expect(parseLocalPath("~")).toBeUndefined()
+    expect(parseLocalPath("~other/app")).toBeUndefined()
+    expect(parseLocalPath('""')).toBeUndefined()
     expect(parseLocalPath("")).toBeUndefined()
   })
 })
@@ -79,6 +124,8 @@ describe("the add-repository list", () => {
   it("searches by the repository a pasted URL names", () => {
     expect(repoNeedle("  https://github.com/Acme/Widgets.git ")).toBe("acme/widgets")
     expect(repoNeedle(" Gadg ")).toBe("gadg")
+    // A quoted path still finds the row that adds its folder.
+    expect(repoNeedle('"C:\\Code\\App"')).toBe("c:\\code\\app")
   })
 
   it("leaves out the repositories that already are projects", () => {

@@ -2,6 +2,7 @@ import {
   Autonomy,
   type CloneEvent,
   CloneTargetExists,
+  type FolderEntry,
   GITLAB_DEFAULT_HOST,
   PathNotFound,
   type Project,
@@ -13,8 +14,9 @@ import {
 import { Context, DateTime, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
+import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
-import { isInsideDir } from "../paths.ts"
+import { expandHome, isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
@@ -48,6 +50,10 @@ const toProject = (row: typeof ProjectRow.Type): Project => ({
   createdAt: row.created_at,
 })
 
+/** How many folders a completion offers, and how many names it looks at to find them. */
+const MAX_FOLDERS = 50
+const MAX_CANDIDATES = 500
+
 // Windows and default macOS file systems are case-insensitive.
 const samePath = (a: string, b: string) =>
   process.platform === "linux" ? a === b : a.toLowerCase() === b.toLowerCase()
@@ -61,6 +67,15 @@ export class ProjectService extends Context.Service<
     readonly addLocal: (
       path: string,
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
+    /**
+     * The folders in `folder` whose names start with `prefix`, to complete a
+     * path as it is typed; hidden ones only for a prefix that starts with a
+     * dot. Empty when the folder cannot be read. Only reads.
+     */
+    readonly listFolders: (
+      folder: string,
+      prefix: string,
+    ) => Effect.Effect<ReadonlyArray<FolderEntry>>
     /**
      * Sets the autonomy the project's new threads start with; `null` follows
      * the human's default for every project.
@@ -131,8 +146,41 @@ export class ProjectService extends Context.Service<
         return toProject(row.value)
       })
 
+      const listFolders = Effect.fn("ProjectService.listFolders")(function* (
+        folder: string,
+        prefix: string,
+      ) {
+        const dir = expandHome(folder, homedir())
+        const wanted = prefix.toLowerCase()
+        const hidden = prefix.startsWith(".")
+        const names = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []))
+        const candidates = names
+          .filter(
+            (name) => name.toLowerCase().startsWith(wanted) && (hidden || !name.startsWith(".")),
+          )
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }))
+          .slice(0, MAX_CANDIDATES)
+        // A folder the daemon may not stat (a system folder, a broken link) is left out.
+        const isFolder = (name: string) =>
+          fs.stat(join(dir, name)).pipe(
+            Effect.map((info) => info.type === "Directory"),
+            Effect.orElseSucceed(() => false),
+          )
+        const folders = yield* Effect.filter(candidates, isFolder, { concurrency: 16 })
+        return yield* Effect.forEach(
+          folders.slice(0, MAX_FOLDERS),
+          (name) =>
+            fs.exists(join(dir, name, ".git")).pipe(
+              Effect.orElseSucceed(() => false),
+              Effect.map((isRepository): FolderEntry => ({ name, isRepository })),
+            ),
+          { concurrency: 16 },
+        )
+      })
+
       const addLocal = Effect.fn("ProjectService.addLocal")(function* (path: string) {
-        const trimmed = path.trim()
+        // `~/code/app` is offered by the web app, which cannot know whose home `~` is.
+        const trimmed = expandHome(path.trim(), homedir())
         const isDirectory = yield* fs.stat(trimmed).pipe(
           Effect.map((info) => info.type === "Directory"),
           Effect.catch(() => Effect.succeed(false)),
@@ -332,6 +380,7 @@ export class ProjectService extends Context.Service<
         list,
         get,
         addLocal,
+        listFolders,
         setDefaultAutonomy,
         remove,
         icon,
