@@ -24,6 +24,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),
       "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),
+      "Sessions.commits": ({ sessionId }) => sessions.commits(sessionId),
       "Sessions.commit": ({ sessionId, message, paths }) =>
         sessions.commit(sessionId, message, paths),
       "Sessions.subscribe": ({ sessionId }) => sessions.subscribe(sessionId),

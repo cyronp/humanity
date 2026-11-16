@@ -8,6 +8,8 @@ import {
   AttachmentRejected,
   type AttachmentUpload,
   type Autonomy,
+  type BranchCommits,
+  BranchNotCheckedOut,
   ChangeId,
   type ClaudeModel,
   DEFAULT_AUTONOMY,
@@ -140,6 +142,13 @@ export const matchModel = (
   )?.value
 }
 
+/** How many of a branch's commits the source control panel lists. */
+const COMMIT_LIST_LIMIT = 50
+
+/** The session's own branch; `null` when it started on a detached HEAD. */
+export const threadBranch = (session: Session): string | null =>
+  session.branch === "HEAD" ? null : session.branch
+
 export class SessionService extends Context.Service<
   SessionService,
   {
@@ -232,15 +241,26 @@ export class SessionService extends Context.Service<
     /** Uncommitted changes where the session works: its worktree or the project's checkout. */
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
     /**
-     * Commits where the session works to the branch checked out there: what
-     * the agent changed, on its own or with the human's allow. Only the files
-     * under `paths` when given, else everything.
+     * The commits of the session's branch, wherever the checkout is now: those
+     * the project's default branch lacks, or the latest on the default branch.
+     */
+    readonly commits: (
+      sessionId: string,
+    ) => Effect.Effect<BranchCommits, SessionNotFound | ProjectNotFound | GitError | GitRefNotFound>
+    /**
+     * Commits where the session works to the session's branch: what the agent
+     * changed, on its own or with the human's allow. Only the files under
+     * `paths` when given, else everything. Refused while another branch is
+     * checked out there.
      */
     readonly commit: (
       sessionId: string,
       message: string,
       paths?: ReadonlyArray<string>,
-    ) => Effect.Effect<string, SessionNotFound | SessionBusy | NothingToCommit | GitError>
+    ) => Effect.Effect<
+      string,
+      SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
+    >
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     /** Every session of every project, again after each change. Most recently active first. */
     readonly watchAll: Stream.Stream<ReadonlyArray<Session>>
@@ -287,6 +307,33 @@ export class SessionService extends Context.Service<
           yield* events.publish(sessionId, { _tag: "SessionStatusChanged", status, error })
           yield* events.publishListChanged
         })
+
+      /**
+       * Records the branch the session's folder is on as its turn ends: the
+       * agent may have switched to another or made a new one. Read only then,
+       * while the folder is this thread's, so another thread switching the
+       * checkout later leaves this thread's branch where it was.
+       */
+      const followBranch = (sessionId: string) =>
+        Effect.gen(function* () {
+          const session = yield* get(sessionId)
+          const current = yield* git.currentBranch(session.worktreePath)
+          if (current === undefined || current === session.branch) return
+          // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
+          yield* repo.update(sessionId, { branch: current, updatedAt: session.updatedAt })
+          yield* events.publish(sessionId, {
+            _tag: "SessionUpdated",
+            session: yield* get(sessionId),
+          })
+          yield* events.publishListChanged
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("could not read the session's branch", {
+              sessionId,
+              error: String(error),
+            }),
+          ),
+        )
 
       const addMessage = (sessionId: string, content: MessageContent, raw?: unknown) =>
         Effect.gen(function* () {
@@ -597,6 +644,7 @@ export class SessionService extends Context.Service<
           }
 
           if (content._tag === "result") {
+            yield* followBranch(session.id)
             if (state.interrupted) {
               yield* setStatus(session.id, "interrupted")
             } else if (content.isError) {
@@ -941,7 +989,10 @@ export class SessionService extends Context.Service<
         const branch = sessionBranchName(session.id, session.title)
         const path = join(config.worktreesDir, project.id, session.id)
         const checkout = yield* git.status(project.localPath)
-        yield* git.worktreeAdd(project.localPath, { path, branch, base: "HEAD" })
+        // From the thread's own branch, even when another thread has switched the checkout since.
+        const own = threadBranch(session)
+        const base = own === null || own === checkout.branch ? "HEAD" : own
+        yield* git.worktreeAdd(project.localPath, { path, branch, base })
 
         // The agent process keeps its cwd; the next message starts one in the worktree.
         yield* stopRun(sessionId)
@@ -957,7 +1008,7 @@ export class SessionService extends Context.Service<
         yield* addMessage(sessionId, {
           _tag: "notice",
           level: "info",
-          text: `Set up a worktree: the agent now works on ${branch}, started from ${checkout.branch ?? "HEAD"}.${left}`,
+          text: `Set up a worktree: the agent now works on ${branch}, started from ${base === "HEAD" ? (checkout.branch ?? "HEAD") : base}.${left}`,
         })
         const updated = yield* get(sessionId)
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
@@ -1089,6 +1140,27 @@ export class SessionService extends Context.Service<
       const diff = (sessionId: string) =>
         Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
 
+      const commits = Effect.fn("SessionService.commits")(function* (sessionId: string) {
+        const session = yield* get(sessionId)
+        const project = yield* projects.get(session.projectId)
+        const cwd = session.worktreePath
+        const own = threadBranch(session)
+        let base: string | undefined
+        if (own !== project.defaultBranch) {
+          // The remote's default branch is what a pull request would merge into.
+          for (const candidate of [`origin/${project.defaultBranch}`, project.defaultBranch]) {
+            if (yield* git.hasCommit(cwd, candidate)) {
+              base = candidate
+              break
+            }
+          }
+        }
+        // By its full name, so a tag of the same name is never read instead.
+        const ref = own === null ? "HEAD" : `refs/heads/${own}`
+        const listed = yield* git.log(cwd, ref, { exclude: base, limit: COMMIT_LIST_LIMIT })
+        return { branch: own ?? "HEAD", base: base ?? null, ...listed } satisfies BranchCommits
+      })
+
       const commit = Effect.fn("SessionService.commit")(function* (
         sessionId: string,
         message: string,
@@ -1100,10 +1172,14 @@ export class SessionService extends Context.Service<
           return yield* new SessionBusy({ sessionId })
         }
         const status = yield* git.status(session.worktreePath)
+        const own = threadBranch(session)
+        // Another thread can have switched the checkout: its changes are not this thread's.
+        if (own !== null && status.branch !== own) {
+          return yield* new BranchNotCheckedOut({ branch: own, checkedOut: status.branch })
+        }
         if (status.entries.length === 0) return yield* new NothingToCommit({ sessionId })
         const hash = yield* git.commit(session.worktreePath, message.trim(), paths)
         const subject = message.trim().split("\n")[0] ?? ""
-        // A checkout can have switched branches since the session started.
         const branch = status.branch ?? session.branch
         yield* addMessage(sessionId, {
           _tag: "notice",
@@ -1186,6 +1262,7 @@ export class SessionService extends Context.Service<
         end,
         stopProject,
         diff,
+        commits,
         commit,
         subscribe,
         watchAll,

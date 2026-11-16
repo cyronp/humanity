@@ -1,4 +1,10 @@
-import type { Branch, RepoStatus, StatusEntry, StatusEntryKind } from "@humanity/contracts"
+import type {
+  Branch,
+  CommitSummary,
+  RepoStatus,
+  StatusEntry,
+  StatusEntryKind,
+} from "@humanity/contracts"
 
 /** Field separator used in `--format` strings; it cannot occur in ref names or subjects. */
 export const FIELD = "\u001f"
@@ -14,6 +20,22 @@ export const BRANCH_FORMAT = [
   "%(committerdate:iso-strict)",
   "%(upstream:track,nobracket)",
 ].join(FIELD)
+
+/** Ends each commit of `git log`; a subject cannot contain it. */
+export const RECORD = ""
+
+export const LOG_FORMAT = ["%H", "%h", "%s", "%an", "%cI"].join(FIELD) + RECORD
+
+export const parseLog = (output: string): Array<CommitSummary> =>
+  output
+    .split(RECORD)
+    .map((record) => record.trim())
+    .filter((record) => record !== "")
+    .map((record) => {
+      const [hash = "", shortHash = "", subject = "", author = "", committedAt = ""] =
+        record.split(FIELD)
+      return { hash, shortHash, subject, author, committedAt }
+    })
 
 /** `ahead 2, behind 1`, `ahead 3`, `gone` or empty, as `%(upstream:track,nobracket)` prints it. */
 const trackCount = (track: string, word: "ahead" | "behind") =>

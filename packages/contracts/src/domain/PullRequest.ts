@@ -34,8 +34,14 @@ export type PullRequest = typeof PullRequest.Type
 export const BranchPublication = Schema.Struct({
   /** `null` when the project's `origin` is on neither GitHub nor a known GitLab instance. */
   forge: Schema.NullOr(Forge),
-  /** The checked-out branch; `null` on a detached HEAD. */
+  /** The session's own branch; `null` when it started on a detached HEAD. */
   branch: Schema.NullOr(Schema.String),
+  /**
+   * The branch checked out where the session works right now; `null` on a
+   * detached HEAD. In the project's checkout another thread can have switched
+   * it, so it can differ from `branch`.
+   */
+  checkedOut: Schema.NullOr(Schema.String),
   /** The project's default branch, the usual base of a new pull request. */
   defaultBranch: Schema.String,
   /** The branch's upstream, such as `origin/feat/x`; `null` until it is pushed. */
@@ -44,7 +50,7 @@ export const BranchPublication = Schema.Struct({
   ahead: Schema.Int,
   /** Commits its upstream has that the branch lacks. */
   behind: Schema.Int,
-  /** Files with uncommitted changes. */
+  /** Files with uncommitted changes; 0 while `checkedOut` is another branch, whose changes they are. */
   uncommitted: Schema.Int,
 })
 export type BranchPublication = typeof BranchPublication.Type

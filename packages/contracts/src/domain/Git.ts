@@ -52,6 +52,31 @@ export const RepoStatus = Schema.Struct({
 })
 export type RepoStatus = typeof RepoStatus.Type
 
+export const CommitSummary = Schema.Struct({
+  hash: Schema.String,
+  shortHash: Schema.String,
+  /** The message's first line. */
+  subject: Schema.String,
+  author: Schema.String,
+  /** Committer date, ISO 8601. */
+  committedAt: Schema.String,
+})
+export type CommitSummary = typeof CommitSummary.Type
+
+/** The commits of a session's branch, newest first. */
+export const BranchCommits = Schema.Struct({
+  branch: Schema.String,
+  /**
+   * What the list starts after: the project's default branch for any other
+   * branch. `null` on the default branch itself, which lists its latest commits.
+   */
+  base: Schema.NullOr(Schema.String),
+  commits: Schema.Array(CommitSummary),
+  /** True when the branch has more commits than listed. */
+  more: Schema.Boolean,
+})
+export type BranchCommits = typeof BranchCommits.Type
+
 export const WorkingTreeDiff = Schema.Struct({
   /** What the working tree is compared against, e.g. `HEAD` or a base branch. */
   base: Schema.String,

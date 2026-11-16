@@ -19,7 +19,7 @@ import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { ProjectService } from "./ProjectService.ts"
-import { SessionService } from "./SessionService.ts"
+import { SessionService, threadBranch } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
@@ -33,6 +33,13 @@ type Remote =
       /** Why the connected instance can't be used for this project, when it can't. */
       readonly mismatch: string | null
     }
+
+/** Where a branch stands against its upstream. */
+interface Tracking {
+  readonly upstream: string | null
+  readonly ahead: number
+  readonly behind: number
+}
 
 /** The agent is mid-turn, so the branch may be about to change under the push. */
 const isBusy = (session: Session) =>
@@ -50,9 +57,10 @@ const targetOf = (remote: Remote | null, branch: string | null): ForgeTarget | n
 
 /**
  * Publishing a session's branch: push it, open its pull request (a merge
- * request on GitLab), and follow its checks and comments. Everything acts
- * where the session works, on the branch checked out there. Where the branch
- * stands comes from git alone; what the forge says comes through `ForgeSync`,
+ * request on GitLab), and follow its checks and comments. Everything acts on
+ * the session's own branch, even when another thread has since switched the
+ * checkout it shares to another one. Where the branch stands comes from git
+ * alone; what the forge says comes through `ForgeSync`,
  * which asks it once for everyone watching.
  */
 export class PullRequestService extends Context.Service<
@@ -82,7 +90,10 @@ export class PullRequestService extends Context.Service<
       const gitlab = yield* GitLabService
       const sync = yield* ForgeSync
       /** Where each session's branch stood against its remote when last read. */
-      const lastSeen = new Map<string, { upstream: string | null; ahead: number }>()
+      const lastSeen = new Map<
+        string,
+        { branch: string | null; upstream: string | null; ahead: number }
+      >()
 
       const remoteOf = (project: Project) =>
         Effect.gen(function* () {
@@ -110,14 +121,32 @@ export class PullRequestService extends Context.Service<
           } satisfies Remote
         })
 
-      /** The session, its project and where its branch stands, read fresh. */
+      /**
+       * Where `branch` stands against its upstream. The folder's status has it
+       * when the branch is checked out there; otherwise its ref is asked.
+       */
+      const trackingOf = (cwd: string, branch: string | null, status: RepoStatus) =>
+        branch === null || branch === status.branch
+          ? Effect.succeed<Tracking>(status)
+          : Effect.map(git.listBranches(cwd), (branches): Tracking => {
+              const found = branches.find((each) => !each.isRemote && each.name === branch)
+              return {
+                upstream: found?.upstream ?? null,
+                ahead: found?.ahead ?? 0,
+                behind: found?.behind ?? 0,
+              }
+            })
+
+      /** The session, its project, its folder and where the session's branch stands, read fresh. */
       const load = (sessionId: string) =>
         Effect.gen(function* () {
           const session = yield* sessions.get(sessionId)
           const project = yield* projects.get(session.projectId)
           const status = yield* git.status(session.worktreePath)
           const remote = yield* remoteOf(project)
-          return { session, project, status, remote }
+          const branch = threadBranch(session)
+          const tracking = yield* trackingOf(session.worktreePath, branch, status)
+          return { session, project, status, remote, branch, tracking }
         })
 
       const find = (
@@ -128,42 +157,58 @@ export class PullRequestService extends Context.Service<
           ? github.findPullRequest(remote.fullName, branch)
           : gitlab.findMergeRequest(remote.fullPath, branch)
 
-      const describe = (
-        project: Project,
-        status: RepoStatus,
-        remote: Remote | null,
-      ): BranchPublication => ({
+      const describe = ({
+        project,
+        status,
+        remote,
+        branch,
+        tracking,
+      }: {
+        readonly project: Project
+        readonly status: RepoStatus
+        readonly remote: Remote | null
+        readonly branch: string | null
+        readonly tracking: Tracking
+      }): BranchPublication => ({
         forge: remote?.forge ?? null,
-        branch: status.branch,
+        branch,
+        checkedOut: status.branch,
         defaultBranch: project.defaultBranch,
-        upstream: status.upstream,
-        ahead: status.ahead,
-        behind: status.behind,
-        uncommitted: status.entries.length,
+        upstream: tracking.upstream,
+        ahead: tracking.ahead,
+        behind: tracking.behind,
+        // What another branch has uncommitted is that branch's, not this thread's.
+        uncommitted: branch === null || branch === status.branch ? status.entries.length : 0,
       })
 
       /**
        * A branch that reached its remote since it was last read was pushed
        * outside Humanity, most likely by the agent: the forge has news.
        */
-      const notePush = (sessionId: string, status: RepoStatus, remote: Remote | null) =>
+      const notePush = (
+        sessionId: string,
+        branch: string | null,
+        tracking: Tracking,
+        remote: Remote | null,
+      ) =>
         Effect.suspend(() => {
           const before = lastSeen.get(sessionId)
-          lastSeen.set(sessionId, { upstream: status.upstream, ahead: status.ahead })
-          const target = targetOf(remote, status.branch)
+          lastSeen.set(sessionId, { branch, upstream: tracking.upstream, ahead: tracking.ahead })
+          const target = targetOf(remote, branch)
           const pushed =
             before !== undefined &&
-            status.upstream !== null &&
-            (before.upstream !== status.upstream || status.ahead < before.ahead)
+            before.branch === branch &&
+            tracking.upstream !== null &&
+            (before.upstream !== tracking.upstream || tracking.ahead < before.ahead)
           return pushed && target !== null ? sync.changed(target) : Effect.void
         })
 
       const publication = Effect.fn("PullRequestService.publication")(function* (
         sessionId: string,
       ) {
-        const { project, status, remote } = yield* load(sessionId)
-        yield* notePush(sessionId, status, remote)
-        return describe(project, status, remote)
+        const loaded = yield* load(sessionId)
+        yield* notePush(sessionId, loaded.branch, loaded.tracking, loaded.remote)
+        return describe(loaded)
       })
 
       /** The token for `origin`'s host, for this one push. */
@@ -188,25 +233,31 @@ export class PullRequestService extends Context.Service<
             )
           : Effect.void
 
-      const requireBranch = (status: RepoStatus) =>
-        status.branch === null
+      const requireBranch = (branch: string | null) =>
+        branch === null
           ? Effect.fail(
               new PullRequestUnavailable({
-                reason: "No branch is checked out (detached HEAD). Check out a branch first.",
+                reason:
+                  "This thread started on a detached HEAD, so it has no branch of its own. Check out a branch first.",
               }),
             )
-          : Effect.succeed(status.branch)
+          : Effect.succeed(branch)
 
       const push = Effect.fn("PullRequestService.push")(function* (sessionId: string) {
-        const { session, project, status, remote } = yield* load(sessionId)
+        const { session, remote, branch: own } = yield* load(sessionId)
         yield* requireIdle(session)
-        const branch = yield* requireBranch(status)
+        const branch = yield* requireBranch(own)
+        // A full refspec: it pushes the thread's branch whatever the checkout is on.
         yield* git.push(session.worktreePath, branch, yield* pushEnv(remote))
-        const after = yield* git.status(session.worktreePath)
-        lastSeen.set(sessionId, { upstream: after.upstream, ahead: after.ahead })
-        const target = targetOf(remote, after.branch)
+        const after = yield* load(sessionId)
+        lastSeen.set(sessionId, {
+          branch,
+          upstream: after.tracking.upstream,
+          ahead: after.tracking.ahead,
+        })
+        const target = targetOf(remote, branch)
         if (target !== null) yield* sync.changed(target)
-        return describe(project, after, remote)
+        return describe(after)
       })
 
       const forgeName = (forge: Forge) => (forge === "github" ? "pull request" : "merge request")
@@ -215,7 +266,7 @@ export class PullRequestService extends Context.Service<
         sessionId: string,
         input: NewPullRequest,
       ) {
-        const { session, status, remote } = yield* load(sessionId)
+        const { session, remote, branch: own, tracking } = yield* load(sessionId)
         yield* requireIdle(session)
         if (remote === null) {
           return yield* new PullRequestUnavailable({
@@ -226,7 +277,7 @@ export class PullRequestService extends Context.Service<
         if (remote.forge === "gitlab" && remote.mismatch !== null) {
           return yield* new PullRequestUnavailable({ reason: remote.mismatch })
         }
-        const branch = yield* requireBranch(status)
+        const branch = yield* requireBranch(own)
         if (branch === input.base) {
           return yield* new PullRequestUnavailable({
             reason: `The ${forgeName(remote.forge)} would merge ${branch} into itself. Pick another base branch, or work on another branch.`,
@@ -239,7 +290,7 @@ export class PullRequestService extends Context.Service<
           })
         }
         // The forge can only open it from a branch it has, at the commit the human sees.
-        if (status.upstream === null || status.ahead > 0) {
+        if (tracking.upstream === null || tracking.ahead > 0) {
           yield* git.push(session.worktreePath, branch, yield* pushEnv(remote))
         }
         const created =
@@ -266,8 +317,8 @@ export class PullRequestService extends Context.Service<
       const watch = (sessionId: string) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            const { status, remote } = yield* load(sessionId)
-            const target = targetOf(remote, status.branch)
+            const { remote, branch } = yield* load(sessionId)
+            const target = targetOf(remote, branch)
             if (target !== null) return sync.watch(target)
             // Nothing to ask: say why once, when there is a why.
             const problem = remote?.forge === "gitlab" ? remote.mismatch : null
@@ -277,8 +328,8 @@ export class PullRequestService extends Context.Service<
         )
 
       const refresh = Effect.fn("PullRequestService.refresh")(function* (sessionId: string) {
-        const { status, remote } = yield* load(sessionId)
-        const target = targetOf(remote, status.branch)
+        const { remote, branch } = yield* load(sessionId)
+        const target = targetOf(remote, branch)
         if (target !== null) yield* sync.refresh(target)
       })
 

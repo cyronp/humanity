@@ -1,5 +1,6 @@
 import {
   type Branch,
+  type CommitSummary,
   type FileDiff,
   GitBranchExists,
   GitCommandFailed,
@@ -17,7 +18,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { join, resolve } from "node:path"
 import {
   BRANCH_FORMAT,
+  LOG_FORMAT,
   parseBranches,
+  parseLog,
   parseStatus,
   parseWorktrees,
   type Worktree,
@@ -74,6 +77,20 @@ export class GitService extends Context.Service<
       branch: string,
     ) => Effect.Effect<void, GitError | GitInvalidBranchName>
     readonly status: (cwd: string) => Effect.Effect<RepoStatus, GitError>
+    /** Whether `ref` names a commit in the repository at `cwd`. */
+    readonly hasCommit: (cwd: string, ref: string) => Effect.Effect<boolean, GitNotInstalled>
+    /**
+     * Commits reachable from `ref` that `exclude` can't reach (all of them
+     * without it), newest first, at most `limit`. `more` tells whether others follow.
+     */
+    readonly log: (
+      cwd: string,
+      ref: string,
+      options: { readonly exclude?: string | undefined; readonly limit: number },
+    ) => Effect.Effect<
+      { readonly commits: ReadonlyArray<CommitSummary>; readonly more: boolean },
+      GitError | GitRefNotFound
+    >
     /**
      * Changes in the working tree relative to `base` (default `HEAD`),
      * including untracked files, as reviewable hunks.
@@ -271,6 +288,36 @@ export class GitService extends Context.Service<
           "-z",
         ]).pipe(Effect.map(parseStatus))
 
+      const hasCommit = (cwd: string, ref: string) =>
+        requireCommit(cwd, ref).pipe(
+          Effect.as(true),
+          Effect.catch((error) =>
+            error._tag === "GitRefNotFound" ? Effect.succeed(false) : Effect.fail(error),
+          ),
+        )
+
+      const log = Effect.fn("GitService.log")(function* (
+        cwd: string,
+        ref: string,
+        options: { readonly exclude?: string | undefined; readonly limit: number },
+      ) {
+        yield* requireCommit(cwd, ref)
+        if (options.exclude !== undefined) yield* requireCommit(cwd, options.exclude)
+        // Both are checked to be commits, and come after `--end-of-options`.
+        const revisions = options.exclude === undefined ? [ref] : [ref, `^${options.exclude}`]
+        const output = yield* exec(cwd, [
+          ...STABLE_OUTPUT,
+          "log",
+          `--max-count=${options.limit + 1}`,
+          `--format=${LOG_FORMAT}`,
+          "--end-of-options",
+          ...revisions,
+          "--",
+        ])
+        const commits = parseLog(output)
+        return { commits: commits.slice(0, options.limit), more: commits.length > options.limit }
+      })
+
       /** A new file is shown as one all-additions hunk; large or binary files have none. */
       const untrackedFileDiff = (cwd: string, path: string) =>
         Effect.gen(function* () {
@@ -441,6 +488,8 @@ export class GitService extends Context.Service<
         createBranch,
         checkout,
         status,
+        hasCommit,
+        log,
         diff,
         worktreeAdd,
         worktreeRemove,

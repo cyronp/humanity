@@ -177,6 +177,8 @@ export class SessionRepo extends Context.Service<
         readonly model?: string | null
         /** `null` stores the model's default effort. */
         readonly effort?: ReasoningEffort | null
+        /** The branch the session's folder is on, when the agent switched it. */
+        readonly branch?: string
         /** Set together when the session moves into its own worktree. */
         readonly worktree?: { readonly branch: string; readonly path: string }
         /** Stops refreshing an imported thread from its Claude Code transcript. */
@@ -328,6 +330,7 @@ export class SessionRepo extends Context.Service<
           readonly autonomy?: Autonomy
           readonly model?: string | null
           readonly effort?: ReasoningEffort | null
+          readonly branch?: string
           readonly worktree?: { readonly branch: string; readonly path: string }
           readonly detachImport?: true
           readonly updatedAt: string
@@ -342,6 +345,7 @@ export class SessionRepo extends Context.Service<
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
             ...(changes.model === undefined ? {} : { model: changes.model }),
             ...(changes.effort === undefined ? {} : { effort: changes.effort }),
+            ...(changes.branch === undefined ? {} : { branch: changes.branch }),
             ...(changes.worktree === undefined
               ? {}
               : {

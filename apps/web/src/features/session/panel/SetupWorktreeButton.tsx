@@ -32,6 +32,7 @@ export function SetupWorktreeButton({ session }: { readonly session: Session }) 
         keys.sessions(session.projectId),
         keys.git(session.projectId),
         keys.sessionDiff(session.id),
+        keys.sessionCommits(session.id),
         keys.publication(session.id),
       ],
     })
