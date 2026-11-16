@@ -33,8 +33,23 @@ export const AUTO_TOOLS: ReadonlyArray<string> = [
   OPEN_THREAD_TOOL,
 ]
 
+/**
+ * A shell command, whichever agent runs it: Claude Code's `Bash` tool, and
+ * the commands Codex runs, which Humanity shows and decides under the same name.
+ */
+export const SHELL_TOOL = "Bash"
+
+/**
+ * A file change by Codex: one patch over one or more files, with the diff of
+ * each. Humanity's name for it; its input is `{ changes: PatchChange[] }`.
+ */
+export const PATCH_TOOL = "ApplyPatch"
+
+/** A request an MCP server makes of the human through Codex, such as allowing one of its tools. */
+export const MCP_REQUEST_TOOL = "McpRequest"
+
 /** File-mutating built-ins. */
-const EDIT_TOOLS: ReadonlyArray<string> = ["Edit", "Write", "NotebookEdit"]
+const EDIT_TOOLS: ReadonlyArray<string> = ["Edit", "Write", "NotebookEdit", PATCH_TOOL]
 
 /**
  * What a tool is. The same for every project; how much of it a thread asks

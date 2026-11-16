@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Attachment } from "./Attachment.ts"
 import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
+import { AgentProvider } from "./Provider.ts"
 
 export const SessionId = Schema.String.pipe(Schema.brand("SessionId"))
 export type SessionId = typeof SessionId.Type
@@ -26,7 +27,9 @@ export type ReasoningEffort = typeof ReasoningEffort.Type
 export const Session = Schema.Struct({
   id: SessionId,
   projectId: ProjectId,
-  /** The Agent SDK's own session id, known after the first turn; used to resume. */
+  /** The agent the thread runs on, for good. */
+  provider: AgentProvider,
+  /** The provider's own id of the conversation (a Claude Code session, a Codex thread), known after the first turn; used to resume. */
   sdkSessionId: Schema.NullOr(Schema.String),
   title: Schema.String,
   /**
@@ -41,7 +44,7 @@ export const Session = Schema.Struct({
   worktreePath: Schema.String,
   /** False until the human sets up a worktree; the agent works in the project's checkout until then. */
   inWorktree: Schema.Boolean,
-  /** The model the agent runs on (a value Claude Code reported), or `null` for Claude Code's default. */
+  /** The model the agent runs on (a value its provider reported), or `null` for the provider's default. */
   model: Schema.NullOr(Schema.String),
   /** How hard the model reasons, or `null` for the model's own default. */
   effort: Schema.NullOr(ReasoningEffort),
