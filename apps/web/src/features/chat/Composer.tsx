@@ -163,8 +163,13 @@ export const Composer = memo(function Composer({
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
-      <ChatBox className={dropTargetClass} {...(disabled ? {} : files.dropProps)}>
-        {mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />}
+      <ChatBox
+        className={dropTargetClass}
+        behind={
+          mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />
+        }
+        {...(disabled ? {} : files.dropProps)}
+      >
         <AttachmentTray draft={files} />
         <InputGroupTextarea
           ref={textarea}
@@ -178,7 +183,7 @@ export const Composer = memo(function Composer({
           }
           onKeyDown={onKeyDown}
           onPaste={disabled ? undefined : files.onPaste}
-          placeholder={disabled ? "This session has ended." : "Ask anything."}
+          placeholder={disabled ? "This session has ended." : "Ask anything. @ files."}
           disabled={disabled}
           rows={3}
           className="max-h-60 min-h-16 px-4 pt-3.5"

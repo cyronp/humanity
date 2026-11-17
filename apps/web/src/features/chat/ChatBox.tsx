@@ -1,21 +1,28 @@
 import { cn } from "cn"
 import { ArrowUp, Square } from "lucide-react"
-import type { ComponentProps } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 
-export function ChatBox({ className, ...props }: ComponentProps<typeof InputGroup>) {
+export function ChatBox({
+  className,
+  behind,
+  ...props
+}: ComponentProps<typeof InputGroup> & { readonly behind?: ReactNode }) {
   return (
-    <InputGroup
-      className={cn(
-        "rounded-2xl border-border/60 shadow-xs backdrop-blur-md",
-        "[--chat-box:color-mix(in_oklab,var(--card)_75%,transparent)] focus-within:[--chat-box:var(--card)] has-[[data-state=open]]:[--chat-box:var(--card)]",
-        "bg-(--chat-box) has-disabled:bg-(--chat-box) dark:bg-(--chat-box) dark:has-disabled:bg-(--chat-box)",
-        "has-disabled:opacity-100 has-[[data-slot=input-group-control]:disabled]:opacity-50",
-        "has-[[data-slot=input-group-control]:focus-visible]:border-ring/50 has-[[data-slot=input-group-control]:focus-visible]:ring-0",
-        className,
-      )}
-      {...props}
-    />
+    <div className="relative">
+      {behind}
+      <InputGroup
+        className={cn(
+          "z-10 rounded-2xl border-border/60 shadow-xs backdrop-blur-md",
+          "[--chat-box:color-mix(in_oklab,var(--card)_75%,transparent)] focus-within:[--chat-box:var(--card)] has-[[data-state=open]]:[--chat-box:var(--card)]",
+          "bg-(--chat-box) has-disabled:bg-(--chat-box) dark:bg-(--chat-box) dark:has-disabled:bg-(--chat-box)",
+          "has-disabled:opacity-100 has-[[data-slot=input-group-control]:disabled]:opacity-50",
+          "has-[[data-slot=input-group-control]:focus-visible]:border-ring/50 has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+          className,
+        )}
+        {...props}
+      />
+    </div>
   )
 }
 

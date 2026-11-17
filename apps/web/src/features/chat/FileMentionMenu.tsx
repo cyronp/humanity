@@ -42,44 +42,49 @@ export function FileMentionMenu({
 
   return (
     <div
-      id={ids.list}
-      role="listbox"
-      aria-label="Files and folders"
+      data-slot="file-mention-menu"
       onMouseDown={(event) => event.preventDefault()}
-      className="absolute inset-x-0 bottom-full z-50 mb-2 max-h-72 overflow-y-auto rounded-xl bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      className="absolute inset-x-0 bottom-[calc(100%-1rem)] overflow-hidden rounded-t-2xl border border-b-0 border-border/60 bg-card pb-4 text-sm text-card-foreground shadow-md duration-150 animate-in fade-in-0 slide-in-from-bottom-4"
     >
-      {status !== undefined && menu.entries.length === 0 ? (
-        <p className="px-2 py-1.5 text-muted-foreground" role="status">
-          {status}
-        </p>
-      ) : (
-        menu.entries.map((entry, index) => {
-          const { name, folder } = splitPath(entry)
-          const Icon = entry.kind === "directory" ? Folder : File
-          return (
-            <div
-              key={`${entry.kind}:${entry.path}`}
-              id={ids.option(index)}
-              role="option"
-              aria-selected={index === menu.highlighted}
-              onMouseEnter={() => menu.highlight(index)}
-              onClick={() => menu.pick(entry)}
-              className={cn(
-                "flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 select-none",
-                index === menu.highlighted && "bg-muted text-foreground",
-              )}
-            >
-              <Icon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="max-w-[70%] shrink-0 truncate">{name}</span>
-              {folder !== "" && (
-                <span className="min-w-0 truncate text-xs text-muted-foreground" dir="rtl">
-                  <bdi>{folder}</bdi>
-                </span>
-              )}
-            </div>
-          )
-        })
-      )}
+      <div
+        id={ids.list}
+        role="listbox"
+        aria-label="Files and folders"
+        className="max-h-72 overflow-y-auto p-1.5"
+      >
+        {status !== undefined && menu.entries.length === 0 ? (
+          <p className="px-2 py-1.5 text-muted-foreground" role="status">
+            {status}
+          </p>
+        ) : (
+          menu.entries.map((entry, index) => {
+            const { name, folder } = splitPath(entry)
+            const Icon = entry.kind === "directory" ? Folder : File
+            return (
+              <div
+                key={`${entry.kind}:${entry.path}`}
+                id={ids.option(index)}
+                role="option"
+                aria-selected={index === menu.highlighted}
+                onMouseEnter={() => menu.highlight(index)}
+                onClick={() => menu.pick(entry)}
+                className={cn(
+                  "flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 select-none",
+                  index === menu.highlighted && "bg-muted text-foreground",
+                )}
+              >
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="max-w-[70%] shrink-0 truncate">{name}</span>
+                {folder !== "" && (
+                  <span className="min-w-0 truncate text-xs text-muted-foreground" dir="rtl">
+                    <bdi>{folder}</bdi>
+                  </span>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }

@@ -33,11 +33,7 @@ import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
-export function NewChat({
-  projectId,
-}: {
-  readonly projectId: ProjectId | undefined
-}) {
+export function NewChat({ projectId }: { readonly projectId: ProjectId | undefined }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
   const claude = useAtomValue(claudeStatusAtom)
@@ -185,8 +181,13 @@ function NewChatForm({
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
-      <ChatBox className={dropTargetClass} {...(pending ? {} : files.dropProps)}>
-        {mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />}
+      <ChatBox
+        className={dropTargetClass}
+        behind={
+          mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />
+        }
+        {...(pending ? {} : files.dropProps)}
+      >
         <AttachmentTray draft={files} />
         <InputGroupTextarea
           ref={textarea}
@@ -200,7 +201,7 @@ function NewChatForm({
           }
           onKeyDown={onKeyDown}
           onPaste={pending ? undefined : files.onPaste}
-          placeholder="Ask anything."
+          placeholder="Ask anything. @ files."
           disabled={pending}
           rows={3}
           autoFocus
