@@ -48,4 +48,4 @@ The app's version is the one in `apps/desktop/package.json`, in [SemVer](https:/
   git push origin v0.1.0
   ```
   The Release workflow checks the tag matches the version, builds the Windows installer and publishes the release with generated notes. A tag with a pre-release part (`v0.2.0-beta.1`) is published as a pre-release.
-- **Nightly:** nothing to do. The Nightly workflow builds `main` every night it changed (or when run by hand) as version `<version>-nightly.<yyyymmdd>` (the next minor once `v<version>` is tagged), and replaces the single `nightly` pre-release.
+- **Nightly:** nothing to do. The Nightly workflow builds `main` every night it changed (or when run by hand) as version `<version>-nightly.<yyyymmdd>.<run>` (the next minor once `v<version>` is tagged), and replaces the single `nightly` pre-release.

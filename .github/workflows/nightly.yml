@@ -1,6 +1,7 @@
 # Builds main every night it changed and publishes it as the one `nightly`
 # pre-release, replacing the previous one. Its version leads to the next
-# stable one: 0.1.0-nightly.<yyyymmdd> until v0.1.0 is tagged, then 0.2.0-nightly.…
+# stable one: 0.1.0-nightly.<yyyymmdd>.<run> until v0.1.0 is tagged, then 0.2.0-nightly.…
+# The run number keeps two nightlies of one day apart, so the second still updates the first.
 name: Nightly
 
 on:
@@ -64,7 +65,7 @@ jobs:
             const [core] = '$current'.split('-')
             let [major, minor, patch] = core.split('.').map(Number)
             if ($released) { minor += 1; patch = 0 }
-            major + '.' + minor + '.' + patch + '-nightly.$date'
+            major + '.' + minor + '.' + patch + '-nightly.$date.$GITHUB_RUN_NUMBER'
           ")
           # After npm ci, which wants package.json and the lockfile to agree.
           npm pkg set version="$version" --workspace @humanity/desktop
