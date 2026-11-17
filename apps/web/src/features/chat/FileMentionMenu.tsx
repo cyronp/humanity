@@ -1,7 +1,7 @@
 import type { FileEntry } from "@humanity/contracts"
 import { cn } from "cn"
-import { File, Folder } from "lucide-react"
 import { useEffect } from "react"
+import { FileTypeIcon } from "./FileTypeIcon.tsx"
 import type { FileMentionMenuState } from "./useFileMention.ts"
 
 export const fileMentionIds = (base: string) => ({
@@ -44,7 +44,7 @@ export function FileMentionMenu({
     <div
       data-slot="file-mention-menu"
       onMouseDown={(event) => event.preventDefault()}
-      className="absolute inset-x-0 bottom-[calc(100%-1rem)] overflow-hidden rounded-t-2xl border border-b-0 border-border/60 bg-card pb-4 text-sm text-card-foreground shadow-md duration-150 animate-in fade-in-0 slide-in-from-bottom-4"
+      className="absolute inset-x-0 bottom-[calc(100%-1rem)] overflow-hidden rounded-t-2xl border border-b-0 border-border/60 bg-card pb-4 text-sm text-card-foreground shadow-md"
     >
       <div
         id={ids.list}
@@ -59,7 +59,6 @@ export function FileMentionMenu({
         ) : (
           menu.entries.map((entry, index) => {
             const { name, folder } = splitPath(entry)
-            const Icon = entry.kind === "directory" ? Folder : File
             return (
               <div
                 key={`${entry.kind}:${entry.path}`}
@@ -70,10 +69,10 @@ export function FileMentionMenu({
                 onClick={() => menu.pick(entry)}
                 className={cn(
                   "flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 select-none",
-                  index === menu.highlighted && "bg-muted text-foreground",
+                  index === menu.highlighted && "bg-file-ref/10 text-foreground",
                 )}
               >
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <FileTypeIcon path={entry.path} directory={entry.kind === "directory"} />
                 <span className="max-w-[70%] shrink-0 truncate">{name}</span>
                 {folder !== "" && (
                   <span className="min-w-0 truncate text-xs text-muted-foreground" dir="rtl">

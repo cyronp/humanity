@@ -15,7 +15,7 @@ import { completeMention, findMention } from "./fileMention.ts"
 
 export type FileSearch = (query: string) => Promise<Exit.Exit<ReadonlyArray<FileEntry>, unknown>>
 
-const SEARCH_DELAY_MS = 60
+const SEARCH_DELAY_MS = 150
 
 export interface FileMentionMenuState {
   readonly entries: ReadonlyArray<FileEntry>
@@ -74,6 +74,7 @@ export function useFileMention({
   }, [query])
 
   const entries = results?.entries ?? []
+  const searching = results?.query !== query
   const highlighted =
     highlightState.query === query ? Math.min(highlightState.index, entries.length - 1) : 0
 
@@ -105,8 +106,10 @@ export function useFileMention({
       }
       case "Enter":
       case "Tab": {
+        if (event.shiftKey) return false
+        if (searching) break
         const entry = entries[Math.max(highlighted, 0)]
-        if (entry === undefined || event.shiftKey) return false
+        if (entry === undefined) return false
         pick(entry)
         break
       }
@@ -140,7 +143,7 @@ export function useFileMention({
       : {
           entries,
           highlighted,
-          searching: results?.query !== query,
+          searching,
           error: results?.query === query ? results?.error : undefined,
           pick,
           highlight,

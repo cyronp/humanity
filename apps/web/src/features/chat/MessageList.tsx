@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/trace"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
+import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
@@ -188,7 +189,9 @@ function UserMessage({
           <MessageAttachments sessionId={sessionId} attachments={attachments} />
         )}
         <Bubble align="end" className="max-w-[85%]">
-          <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
+          <BubbleContent className="whitespace-pre-wrap">
+            <FileReferenceText text={text} />
+          </BubbleContent>
         </Bubble>
       </MessageBody>
     </Message>

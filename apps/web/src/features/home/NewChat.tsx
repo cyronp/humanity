@@ -7,12 +7,12 @@ import { FolderPlus } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { InputGroupTextarea } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
 import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
+import { MentionTextarea } from "@/features/chat/MentionTextarea"
 import { useFileMention } from "@/features/chat/useFileMention"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { codexStatusAtom } from "@/features/codex/atoms"
@@ -189,7 +189,7 @@ function NewChatForm({
         {...(pending ? {} : files.dropProps)}
       >
         <AttachmentTray draft={files} />
-        <InputGroupTextarea
+        <MentionTextarea
           ref={textarea}
           value={text}
           {...mentions.textareaProps}
@@ -205,7 +205,7 @@ function NewChatForm({
           disabled={pending}
           rows={3}
           autoFocus
-          className="max-h-72 min-h-20 px-4 pt-3.5"
+          className="max-h-72 min-h-20"
           aria-label="First message to the agent"
         />
         <ChatBoxFooter>

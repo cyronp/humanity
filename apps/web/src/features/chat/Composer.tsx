@@ -17,7 +17,6 @@ import {
   useState,
 } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { InputGroupTextarea } from "@/components/ui/input-group"
 import type { PromptInsertion } from "@/features/extensions/prompt"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
@@ -36,6 +35,7 @@ import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachmen
 import { AddMenu } from "./AddMenu.tsx"
 import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
 import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
+import { MentionTextarea } from "./MentionTextarea.tsx"
 import { useFileMention } from "./useFileMention.ts"
 
 export interface ComposerHandle {
@@ -171,7 +171,7 @@ export const Composer = memo(function Composer({
         {...(disabled ? {} : files.dropProps)}
       >
         <AttachmentTray draft={files} />
-        <InputGroupTextarea
+        <MentionTextarea
           ref={textarea}
           value={text}
           {...mentions.textareaProps}
@@ -186,7 +186,7 @@ export const Composer = memo(function Composer({
           placeholder={disabled ? "This session has ended." : "Ask anything. @ files."}
           disabled={disabled}
           rows={3}
-          className="max-h-60 min-h-16 px-4 pt-3.5"
+          className="max-h-60 min-h-16"
           aria-label="Message to the agent"
         />
         <ChatBoxFooter>

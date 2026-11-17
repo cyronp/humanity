@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { completeMention, findMention, mentionOf } from "@/features/chat/fileMention"
+import { completeMention, findMention, mentionOf, splitMentions } from "@/features/chat/fileMention"
 
 describe("finding the `@` being typed", () => {
   it("finds an `@` at the start or after whitespace, up to the caret", () => {
@@ -52,5 +52,57 @@ describe("writing a picked file", () => {
       text: "@src/",
       caret: 5,
     })
+  })
+})
+
+describe("splitMentions", () => {
+  it("finds file references among the text", () => {
+    expect(splitMentions("look at @src/app.ts and @docs/")).toEqual([
+      { kind: "text", text: "look at " },
+      { kind: "file", text: "@src/app.ts", path: "src/app.ts" },
+      { kind: "text", text: " and " },
+      { kind: "file", text: "@docs/", path: "docs/" },
+    ])
+  })
+
+  it("reads a quoted path with spaces", () => {
+    expect(splitMentions('@"my notes/a b.md" please')).toEqual([
+      { kind: "file", text: '@"my notes/a b.md"', path: "my notes/a b.md" },
+      { kind: "text", text: " please" },
+    ])
+  })
+
+  it("leaves punctuation after a reference out of it", () => {
+    expect(splitMentions("fix @a.ts, then @b.ts.")).toEqual([
+      { kind: "text", text: "fix " },
+      { kind: "file", text: "@a.ts", path: "a.ts" },
+      { kind: "text", text: ", then " },
+      { kind: "file", text: "@b.ts", path: "b.ts" },
+      { kind: "text", text: "." },
+    ])
+  })
+
+  it("ignores an @ inside a word and a lone @", () => {
+    expect(splitMentions("mail a@b.com @ now")).toEqual([
+      { kind: "text", text: "mail a@b.com @ now" },
+    ])
+  })
+
+  it("leaves an @ that does not look like a path as text", () => {
+    expect(splitMentions("use @Effect.gen, ask @someone, see @Makefile and @.env")).toEqual([
+      { kind: "text", text: "use @Effect.gen, ask @someone, see " },
+      { kind: "file", text: "@Makefile", path: "Makefile" },
+      { kind: "text", text: " and " },
+      { kind: "file", text: "@.env", path: ".env" },
+    ])
+  })
+
+  it("keeps every character of the text", () => {
+    const text = 'a @x.ts\n@"y z" @w.'
+    expect(
+      splitMentions(text)
+        .map((segment) => segment.text)
+        .join(""),
+    ).toBe(text)
   })
 })
