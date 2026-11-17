@@ -40,9 +40,9 @@ import {
 } from "./threadFilter.ts"
 
 export function AppSidebar() {
-  const { setOpenMobile } = useSidebar()
-  // Choosing a destination on a phone closes the sheet the sidebar lives in.
-  const close = () => setOpenMobile(false)
+  const { setOpenFloating } = useSidebar()
+  // Choosing a destination closes the sidebar while it floats over the page.
+  const close = () => setOpenFloating(false)
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
   const [query, setQuery] = useState("")

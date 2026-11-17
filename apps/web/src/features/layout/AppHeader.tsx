@@ -48,7 +48,7 @@ function ProgressiveBlur({ className }: { readonly className?: string }) {
 export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [insetEnd, setInsetEnd] = useState(0)
-  const { state, isMobile } = useSidebar()
+  const { state, isFloating } = useSidebar()
   return (
     <HeaderSlot.Provider value={slot}>
       <HeaderInsetEnd.Provider value={setInsetEnd}>{children}</HeaderInsetEnd.Provider>
@@ -64,7 +64,7 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
           )}
         >
           {/* The toggle lives in the sidebar; it shows here only when the sidebar is hidden. */}
-          {(state === "collapsed" || isMobile) && <SidebarTrigger />}
+          {(state === "collapsed" || isFloating) && <SidebarTrigger />}
           <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         </div>
       </header>

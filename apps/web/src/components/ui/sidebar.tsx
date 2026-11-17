@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { Slot } from "radix-ui"
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsBelowWidth } from "@/hooks/use-below-width"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -22,17 +22,24 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "20rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+/**
+ * Below this window width the sidebar stops taking room from the page and
+ * floats over it instead, opened from the header, so the chat keeps the
+ * width its composer needs. The desktop app can be as narrow as 800px.
+ */
+const SIDEBAR_FLOAT_BELOW = 1024
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
   setOpen: (open: boolean) => void
-  openMobile: boolean
-  setOpenMobile: (open: boolean) => void
-  isMobile: boolean
+  /** Open while floating; `open` is the docked sidebar, kept apart. */
+  openFloating: boolean
+  setOpenFloating: (open: boolean) => void
+  /** The window is narrow: the sidebar floats over the page instead of docking. */
+  isFloating: boolean
   toggleSidebar: () => void
 }
 
@@ -60,8 +67,15 @@ function SidebarProvider({
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
-  const isMobile = useIsMobile()
-  const [openMobile, setOpenMobile] = React.useState(false)
+  const isFloating = useIsBelowWidth(SIDEBAR_FLOAT_BELOW)
+  const [openFloating, setOpenFloating] = React.useState(false)
+  // Widening the window docks the sidebar again; narrowing it later starts
+  // with the floating one closed, not open from before.
+  const [wasFloating, setWasFloating] = React.useState(isFloating)
+  if (wasFloating !== isFloating) {
+    setWasFloating(isFloating)
+    setOpenFloating(false)
+  }
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -84,8 +98,8 @@ function SidebarProvider({
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
-  }, [isMobile, setOpen, setOpenMobile])
+    return isFloating ? setOpenFloating((open) => !open) : setOpen((open) => !open)
+  }, [isFloating, setOpen, setOpenFloating])
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
@@ -109,12 +123,12 @@ function SidebarProvider({
       state,
       open,
       setOpen,
-      isMobile,
-      openMobile,
-      setOpenMobile,
+      isFloating,
+      openFloating,
+      setOpenFloating,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [state, open, setOpen, isFloating, openFloating, setOpenFloating, toggleSidebar],
   )
 
   return (
@@ -153,7 +167,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isFloating, state, openFloating, setOpenFloating } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -170,25 +184,32 @@ function Sidebar({
     )
   }
 
-  if (isMobile) {
+  if (isFloating) {
+    // The same full-height sidebar as when docked, edge to edge, only laid
+    // over the page instead of beside it, so the page keeps its full width.
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+      <Sheet open={openFloating} onOpenChange={setOpenFloating} {...props}>
         <SheetContent
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
-          data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          data-floating="true"
+          className={cn(
+            "border-sidebar-border bg-sidebar p-0 text-sidebar-foreground shadow-xl [&>button]:hidden",
+            // Docked width; on a phone, short of the full width so the page still shows beside it.
+            "data-[side=left]:w-(--sidebar-width) data-[side=left]:max-w-[85vw] data-[side=right]:w-(--sidebar-width) data-[side=right]:max-w-[85vw]",
+          )}
           style={
             {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+              // The sheet is portalled out of the provider, so it does not inherit the width.
+              "--sidebar-width": SIDEBAR_WIDTH,
             } as React.CSSProperties
           }
           side={side}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetDescription>Threads, search and settings.</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
@@ -485,7 +506,7 @@ function SidebarMenuButton({
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
-  const { isMobile, state } = useSidebar()
+  const { isFloating, state } = useSidebar()
 
   const button = (
     <Comp
@@ -514,7 +535,7 @@ function SidebarMenuButton({
       <TooltipContent
         side="right"
         align="center"
-        hidden={state !== "collapsed" || isMobile}
+        hidden={state !== "collapsed" || isFloating}
         {...tooltip}
       />
     </Tooltip>
