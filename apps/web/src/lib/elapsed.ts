@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 
 /**
  * A short duration for tight spaces: `12s`, `5m`, `3h`, `2d`, `6w`.
@@ -17,13 +17,60 @@ export const formatElapsed = (ms: number): string => {
   return `${Math.floor(days / 7)}w`
 }
 
+interface Clock {
+  now: number
+  readonly listeners: Set<() => void>
+  timer: ReturnType<typeof setInterval> | undefined
+}
+
+const clocks = new Map<number, Clock>()
+
+const clockFor = (intervalMs: number): Clock => {
+  let clock = clocks.get(intervalMs)
+  if (clock === undefined) {
+    clock = { now: Date.now(), listeners: new Set(), timer: undefined }
+    clocks.set(intervalMs, clock)
+  }
+  return clock
+}
+
+/**
+ * A clock that ticks every `intervalMs` for whoever listens, on one timer
+ * shared by all of them: a sidebar of a hundred threads runs one interval, and
+ * its rows update together, not each on a timer of its own.
+ */
+export const sharedClock = (intervalMs: number) => ({
+  subscribe: (listener: () => void): (() => void) => {
+    const clock = clockFor(intervalMs)
+    clock.listeners.add(listener)
+    if (clock.timer === undefined) {
+      clock.now = Date.now()
+      clock.timer = setInterval(() => {
+        clock.now = Date.now()
+        for (const each of clock.listeners) each()
+      }, intervalMs)
+    }
+    return () => {
+      clock.listeners.delete(listener)
+      if (clock.listeners.size > 0) return
+      clearInterval(clock.timer)
+      clocks.delete(intervalMs)
+    }
+  },
+  /** The time of the last tick: the same value between ticks, as React requires. */
+  getSnapshot: (): number => clockFor(intervalMs).now,
+})
+
+const shared = new Map<number, ReturnType<typeof sharedClock>>()
+
+/** The current time, updated every `intervalMs` by a clock shared with every other reader at that pace. */
 export const useNow = (intervalMs: number): number => {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
-  return now
+  let clock = shared.get(intervalMs)
+  if (clock === undefined) {
+    clock = sharedClock(intervalMs)
+    shared.set(intervalMs, clock)
+  }
+  return useSyncExternalStore(clock.subscribe, clock.getSnapshot)
 }
 
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
