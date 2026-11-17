@@ -141,26 +141,41 @@ export const reduceSessionEvent = (
   }
 }
 
+/**
+ * Folds a batch of events, in order. The live view takes events in batches so
+ * that a reply streaming token by token renders a few times a second, not once
+ * per token.
+ */
+export const reduceSessionEvents = (
+  view: SessionView | undefined,
+  events: ReadonlyArray<SessionEvent>,
+): SessionView | undefined => events.reduce(reduceSessionEvent, view)
+
 /** Statuses in which the agent is doing something and can be interrupted. */
 export const isBusy = (status: SessionStatus): boolean =>
   status === "running" || status === "waiting_for_human"
 
 /** File changes still waiting for the human, oldest first. */
-export const pendingChanges = (view: SessionView): Array<ProposedChange> =>
-  view.approvals.flatMap((approval) =>
+export const pendingChanges = (approvals: ReadonlyArray<Approval>): Array<ProposedChange> =>
+  approvals.flatMap((approval) =>
     approval._tag === "change" && isPendingApproval(approval) ? [approval.change] : [],
   )
 
 /** Tool calls still waiting for an allow or deny, oldest first. */
-export const pendingConfirmations = (view: SessionView): Array<PendingConfirmation> =>
-  view.approvals.flatMap((approval) =>
+export const pendingConfirmations = (
+  approvals: ReadonlyArray<Approval>,
+): Array<PendingConfirmation> =>
+  approvals.flatMap((approval) =>
     approval._tag === "confirmation" && isPendingApproval(approval) ? [approval.confirmation] : [],
   )
 
-/** The approval attached to a tool call, if the call needed one. */
-export const approvalForToolUse = (view: SessionView, toolUseId: string): Approval | undefined =>
-  view.approvals.findLast((approval) =>
-    approval._tag === "change"
-      ? approval.change.toolUseId === toolUseId
-      : approval.confirmation.toolUseId === toolUseId,
+/** The approval attached to each tool call that needed one, by `toolUseId`: the latest wins. */
+export const approvalsByToolUse = (
+  approvals: ReadonlyArray<Approval>,
+): ReadonlyMap<string, Approval> =>
+  new Map(
+    approvals.map((approval) => [
+      approval._tag === "change" ? approval.change.toolUseId : approval.confirmation.toolUseId,
+      approval,
+    ]),
   )

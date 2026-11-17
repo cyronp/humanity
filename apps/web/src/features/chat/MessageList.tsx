@@ -7,7 +7,7 @@ import type {
   ToolCall,
 } from "@humanity/contracts"
 import { Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
-import type { ReactNode } from "react"
+import { memo, type ReactNode, useMemo } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent as MessageBody, MessageHeader } from "@/components/ui/message"
@@ -35,17 +35,24 @@ import { Markdown } from "./Markdown.tsx"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
+/** Tool results show up inside their tool call card, and other entries not at all. */
+const isShown = (message: ChatMessage) =>
+  message.content._tag !== "tool_results" && message.content._tag !== "other"
+
 /**
  * The transcript: what the human said, what the agent said and did. Built on
  * shadcn's Message Scroller, which follows the reply while it streams unless
  * the human scrolls up, and offers a button back to the end.
+ *
+ * Each message is memoized: while a reply streams, only the draft renders
+ * again, not the messages above it.
  */
 export function MessageList({
   messages,
   toolCalls,
   draft,
   working,
-  approvalFor,
+  approvals,
   worktreePath,
   empty,
   footer,
@@ -56,7 +63,8 @@ export function MessageList({
   readonly draft: string
   /** The agent is mid-turn: shows a working line while no text is streaming. */
   readonly working: boolean
-  readonly approvalFor: (toolUseId: string) => Approval | undefined
+  /** The approval of each tool call that needed one, by `toolUseId`. */
+  readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
   readonly empty?: ReactNode
   /** Shown after the last message, such as the reason the agent stopped. */
@@ -64,16 +72,7 @@ export function MessageList({
   /** Pixels at the bottom covered by something floating over the transcript, such as the message box. */
   readonly bottomInset?: number
 }) {
-  const items = messages.flatMap((message) => {
-    const rendered = renderContent(
-      message.sessionId,
-      message.content,
-      toolCalls,
-      approvalFor,
-      worktreePath,
-    )
-    return rendered === null ? [] : [{ message, rendered }]
-  })
+  const items = useMemo(() => messages.filter(isShown), [messages])
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
@@ -87,13 +86,18 @@ export function MessageList({
             {items.length === 0 && draft === "" && empty !== undefined && (
               <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
             )}
-            {items.map(({ message, rendered }) => (
+            {items.map((message) => (
               <MessageScrollerItem
                 key={message.id}
                 messageId={message.id}
                 scrollAnchor={message.content._tag === "user"}
               >
-                {rendered}
+                <TranscriptEntry
+                  message={message}
+                  toolCalls={toolCalls}
+                  approvals={approvals}
+                  worktreePath={worktreePath}
+                />
               </MessageScrollerItem>
             ))}
             {draft !== "" && (
@@ -125,11 +129,25 @@ export function MessageList({
   )
 }
 
+const TranscriptEntry = memo(function TranscriptEntry({
+  message,
+  toolCalls,
+  approvals,
+  worktreePath,
+}: {
+  readonly message: ChatMessage
+  readonly toolCalls: Readonly<Record<string, ToolCall>>
+  readonly approvals: ReadonlyMap<string, Approval>
+  readonly worktreePath: string
+}) {
+  return renderContent(message.sessionId, message.content, toolCalls, approvals, worktreePath)
+})
+
 const renderContent = (
   sessionId: SessionId,
   content: MessageContent,
   toolCalls: Readonly<Record<string, ToolCall>>,
-  approvalFor: (toolUseId: string) => Approval | undefined,
+  approvals: ReadonlyMap<string, Approval>,
   worktreePath: string,
 ) => {
   switch (content._tag) {
@@ -146,7 +164,7 @@ const renderContent = (
         <AssistantMessage
           content={content}
           toolCalls={toolCalls}
-          approvalFor={approvalFor}
+          approvals={approvals}
           worktreePath={worktreePath}
         />
       )
@@ -189,12 +207,12 @@ function UserMessage({
 function AssistantMessage({
   content,
   toolCalls,
-  approvalFor,
+  approvals,
   worktreePath,
 }: {
   readonly content: Content<"assistant">
   readonly toolCalls: Readonly<Record<string, ToolCall>>
-  readonly approvalFor: (toolUseId: string) => Approval | undefined
+  readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
 }) {
   const nested = content.parentToolUseId !== null
@@ -215,7 +233,7 @@ function AssistantMessage({
                   toolName={block.toolName}
                   input={block.input}
                   call={toolCalls[block.toolUseId]}
-                  approval={approvalFor(block.toolUseId)}
+                  approval={approvals.get(block.toolUseId)}
                   worktreePath={worktreePath}
                 />
               )

@@ -2,7 +2,7 @@ import { useAtomSet } from "@effect/atom-react"
 import { type PendingConfirmation, parseMcpToolName } from "@humanity/contracts"
 import { Exit } from "effect"
 import { Hand } from "lucide-react"
-import { useState } from "react"
+import { memo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -63,7 +63,11 @@ function ToolName({ name }: { readonly name: string }) {
 }
 
 /** A tool call waiting for an allow or deny, pinned above the message box until decided. */
-export function ConfirmationCard({ confirmation }: { readonly confirmation: PendingConfirmation }) {
+export const ConfirmationCard = memo(function ConfirmationCard({
+  confirmation,
+}: {
+  readonly confirmation: PendingConfirmation
+}) {
   const decide = useAtomSet(decideConfirmationAtom, { mode: "promiseExit" })
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
@@ -102,4 +106,4 @@ export function ConfirmationCard({ confirmation }: { readonly confirmation: Pend
       </ItemContent>
     </Item>
   )
-}
+})

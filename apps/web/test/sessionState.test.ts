@@ -11,11 +11,12 @@ import {
 } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import {
-  approvalForToolUse,
+  approvalsByToolUse,
   isBusy,
   pendingChanges,
   pendingConfirmations,
   reduceSessionEvent,
+  reduceSessionEvents,
   type SessionView,
 } from "@/features/session/state"
 
@@ -205,9 +206,11 @@ describe("reduceSessionEvent", () => {
       { _tag: "ApprovalRequested", approval: change },
       { _tag: "ApprovalRequested", approval: confirmation },
     ])
-    expect(waiting && pendingChanges(waiting).map((c) => c.id)).toEqual(["c1"])
-    expect(waiting && pendingConfirmations(waiting).map((c) => c.id)).toEqual(["k1"])
-    expect(waiting && approvalForToolUse(waiting, "toolu_bash")?._tag).toBe("confirmation")
+    expect(waiting && pendingChanges(waiting.approvals).map((c) => c.id)).toEqual(["c1"])
+    expect(waiting && pendingConfirmations(waiting.approvals).map((c) => c.id)).toEqual(["k1"])
+    expect(waiting && approvalsByToolUse(waiting.approvals).get("toolu_bash")?._tag).toBe(
+      "confirmation",
+    )
 
     const decided = fold(
       [
@@ -219,7 +222,31 @@ describe("reduceSessionEvent", () => {
       waiting,
     )
     expect(decided?.approvals).toHaveLength(2)
-    expect(decided && pendingChanges(decided)).toEqual([])
-    expect(decided && pendingConfirmations(decided)).toHaveLength(1)
+    expect(decided && pendingChanges(decided.approvals)).toEqual([])
+    expect(decided && pendingConfirmations(decided.approvals)).toHaveLength(1)
+    // A decided approval stays with its tool call.
+    expect(decided && approvalsByToolUse(decided.approvals).get("toolu_edit")?._tag).toBe("change")
+  })
+
+  it("folds a batch of events like the same events one by one", () => {
+    const events: ReadonlyArray<SessionEvent> = [
+      snapshot(),
+      { _tag: "SessionStatusChanged", status: "running", error: null },
+      { _tag: "TextDelta", text: "Hel" },
+      { _tag: "TextDelta", text: "lo" },
+    ]
+    const batched = reduceSessionEvents(reduceSessionEvents(undefined, events.slice(0, 2)), [
+      ...events.slice(2),
+    ])
+    expect(batched).toEqual(fold(events))
+    expect(batched?.draft).toBe("Hello")
+  })
+
+  it("leaves what a streamed token does not touch as it was, so the transcript can skip it", () => {
+    const before = fold([snapshot({ messages: [message("m1", { _tag: "user", text: "hi" })] })])
+    const after = before && reduceSessionEvent(before, { _tag: "TextDelta", text: "x" })
+    expect(after?.messages).toBe(before?.messages)
+    expect(after?.toolCalls).toBe(before?.toolCalls)
+    expect(after?.approvals).toBe(before?.approvals)
   })
 })

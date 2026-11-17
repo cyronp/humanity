@@ -1,5 +1,5 @@
 import type { ProposedChange } from "@humanity/contracts"
-import { useEffect, useEffectEvent } from "react"
+import { memo, useEffect, useEffectEvent } from "react"
 import { ChangeCard } from "./ChangeCard.tsx"
 
 const isTyping = (target: EventTarget | null) =>
@@ -11,7 +11,7 @@ const isTyping = (target: EventTarget | null) =>
  * Keyboard, outside the message box, for the oldest change (or the one a link
  * named): `a` allow, `d` deny, `c` comment.
  */
-export function ChangeCards({
+export const ChangeCards = memo(function ChangeCards({
   changes,
   file,
 }: {
@@ -68,4 +68,4 @@ export function ChangeCards({
       <ChangeCard change={change} />
     </div>
   ))
-}
+})

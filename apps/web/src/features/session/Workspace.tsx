@@ -1,6 +1,6 @@
 import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
@@ -12,7 +12,7 @@ import { SessionPanel } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
 import { SourceControlButton } from "./SourceControlButton.tsx"
 import {
-  approvalForToolUse,
+  approvalsByToolUse,
   isBusy,
   pendingChanges,
   pendingConfirmations,
@@ -37,9 +37,11 @@ export function Workspace({
   readonly view: SessionView
   readonly search: WorkspaceSearch
 }) {
-  const { session } = view
-  const changes = pendingChanges(view)
-  const confirmations = pendingConfirmations(view)
+  const { session, approvals } = view
+  // Kept while only the draft changes, so what reads them renders once per approval, not per token.
+  const changes = useMemo(() => pendingChanges(approvals), [approvals])
+  const confirmations = useMemo(() => pendingConfirmations(approvals), [approvals])
+  const byToolUse = useMemo(() => approvalsByToolUse(approvals), [approvals])
   const waiting = changes.length + confirmations.length
   // The oldest question takes the message box's place; every other call keeps its card.
   const asked = confirmations.find((confirmation) => confirmation.toolName === QUESTION_TOOL)
@@ -116,7 +118,7 @@ export function Workspace({
               toolCalls={view.toolCalls}
               draft={view.draft}
               working={session.status === "running"}
-              approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
+              approvals={byToolUse}
               worktreePath={session.worktreePath}
               empty={
                 <p className="py-12 text-center text-sm text-muted-foreground">No messages yet.</p>
