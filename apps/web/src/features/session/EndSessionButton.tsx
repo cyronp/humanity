@@ -17,12 +17,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { endSessionAtom } from "./atoms.ts"
 
-/** A small icon button that ends `session` after asking, optionally deleting its worktree if it has one. */
+/** A small "End session" button that ends `session` after asking, optionally deleting its worktree if it has one. */
 export function EndSessionButton({
   session,
   className,
@@ -47,21 +46,17 @@ export function EndSessionButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-xs"
-              className={className}
-              aria-label={`End session “${session.title}”`}
-            >
-              <CircleStop />
-            </Button>
-          </AlertDialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right">End session</TooltipContent>
-      </Tooltip>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="muted"
+          size="xs"
+          className={className}
+          aria-label={`End session “${session.title}”`}
+        >
+          <CircleStop />
+          End session
+        </Button>
+      </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>End “{session.title}”?</AlertDialogTitle>
