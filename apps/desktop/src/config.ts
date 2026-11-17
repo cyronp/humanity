@@ -76,6 +76,9 @@ export const resolveDesktopConfig = (input: {
         HUMANITY_PORT: String(port),
         HUMANITY_WEB_DIST: join(daemonDir, "web"),
         HUMANITY_EXIT_WITH_PARENT: "1",
+        // Node keeps the bundle's compiled code here, so later starts skip
+        // compiling it again (about a fifth of the daemon's start).
+        NODE_COMPILE_CACHE: join(home, "compile-cache"),
       },
     },
   }

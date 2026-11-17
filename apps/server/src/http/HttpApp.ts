@@ -7,6 +7,7 @@ import {
   HttpStaticServer,
 } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
+import { join } from "node:path"
 import { AuthToken } from "../AuthToken.ts"
 import { answerMcp, HumanityMcp, MCP_PARSE_ERROR, MCP_PATH } from "../mcp/HumanityMcp.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -85,13 +86,37 @@ const McpRoute = HttpRouter.use(
   }),
 )
 
+/**
+ * A built file under `assets/` has a hash of its content in its name, and a
+ * new build names it anew: the window keeps it, compiled code included, and
+ * never asks about it again.
+ */
+const ASSETS_CACHE = "public, max-age=31536000, immutable"
+/**
+ * Everything else, `index.html` first, is checked on every load (a cheap 304
+ * when unchanged): it names the current build's assets, and a stale copy kept
+ * after an update would ask for assets that are gone.
+ */
+const PAGE_CACHE = "no-cache"
+
+/** The built web app in `webDist`, with each file cached as long as it stays right. */
+export const staticRoutes = (webDist: string) =>
+  Layer.mergeAll(
+    HttpStaticServer.layer({
+      root: join(webDist, "assets"),
+      prefix: "/assets",
+      cacheControl: ASSETS_CACHE,
+    }),
+    HttpStaticServer.layer({ root: webDist, spa: true, cacheControl: PAGE_CACHE }),
+  )
+
 /** In production the daemon also serves the built web app. */
 const StaticRoute = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig
     return config.webDist === undefined
       ? Layer.empty
-      : HttpStaticServer.layer({ root: config.webDist, spa: true }).pipe(Layer.orDie)
+      : staticRoutes(config.webDist).pipe(Layer.orDie)
   }),
 )
 

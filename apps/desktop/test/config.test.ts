@@ -32,6 +32,7 @@ describe("resolveDesktopConfig", () => {
           HUMANITY_PORT: String(DEFAULT_DESKTOP_PORT),
           HUMANITY_WEB_DIST: join(daemonDir, "web"),
           HUMANITY_EXIT_WITH_PARENT: "1",
+          NODE_COMPILE_CACHE: join(home, "compile-cache"),
         },
       },
     })
