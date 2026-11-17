@@ -1,12 +1,13 @@
 import { GitRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
-import { searchFiles } from "../services/fileSearch.ts"
+import { FileSearchService } from "../services/FileSearchService.ts"
 import { GitService } from "../services/GitService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 
 export const GitHandlers = GitRpcs.toLayer(
   Effect.gen(function* () {
     const projects = yield* ProjectService
+    const files = yield* FileSearchService
     const git = yield* GitService
 
     return GitRpcs.of({
@@ -22,7 +23,7 @@ export const GitHandlers = GitRpcs.toLayer(
         Effect.flatMap(projects.get(projectId), (project) => git.diff(project.localPath)),
       "Git.searchFiles": ({ projectId, query }) =>
         Effect.flatMap(projects.get(projectId), (project) =>
-          Effect.map(git.listFiles(project.localPath), (files) => searchFiles(files, query)),
+          files.search(project.localPath, query),
         ),
     })
   }),

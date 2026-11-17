@@ -9,9 +9,15 @@ import {
   CliUpdateFailed,
   PROVIDER_NAMES,
 } from "@humanity/contracts"
-import { Context, Effect, Layer, Stream } from "effect"
+import { Context, Effect, Layer, Semaphore, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { type CliLaunch, isOutdated, locateCli, parseCliVersion } from "../agent/installedCli.ts"
+import {
+  type CliLaunch,
+  forgetLocatedClis,
+  isOutdated,
+  locateCli,
+  parseCliVersion,
+} from "../agent/installedCli.ts"
 
 const VERSION_TIMEOUT = "15 seconds"
 const UPDATE_TIMEOUT = "10 minutes"
@@ -37,6 +43,15 @@ export class AgentCliService extends Context.Service<
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
 
       const locate = (provider: AgentProvider) => locateCli(CLI_COMMANDS[provider])
+
+      const updates = new Map<AgentProvider, Semaphore.Semaphore>()
+      const updateLock = (provider: AgentProvider) => {
+        const existing = updates.get(provider)
+        if (existing !== undefined) return existing
+        const created = Semaphore.makeUnsafe(1)
+        updates.set(provider, created)
+        return created
+      }
 
       const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
         stream.pipe(Stream.decodeText(), Stream.mkString)
@@ -84,7 +99,7 @@ export class AgentCliService extends Context.Service<
           } satisfies AgentCli
         }).pipe(Effect.withSpan("AgentCliService.status", { attributes: { provider } }))
 
-      const update = Effect.fn("AgentCliService.update")(function* (provider: AgentProvider) {
+      const runUpdate = Effect.fnUntraced(function* (provider: AgentProvider) {
         const product = PROVIDER_NAMES[provider]
         const command = updateCommand(provider)
         const launch = locate(provider)
@@ -112,11 +127,17 @@ export class AgentCliService extends Context.Service<
               ),
           }),
         )
+        forgetLocatedClis()
         if (ran.exitCode !== 0) {
           return yield* new CliUpdateFailed({ product, command, output: ran.output })
         }
         return { output: ran.output, cli: yield* status(provider) } satisfies AgentCliUpdate
       })
+
+      const update = (provider: AgentProvider) =>
+        updateLock(provider)
+          .withPermits(1)(runUpdate(provider))
+          .pipe(Effect.withSpan("AgentCliService.update", { attributes: { provider } }))
 
       return { locate, status, update }
     }),

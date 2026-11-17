@@ -39,6 +39,7 @@ import { GitHubService } from "./services/GitHubService.ts"
 import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitLabService } from "./services/GitLabService.ts"
 import { GitLabToken } from "./services/GitLabToken.ts"
+import { FileSearchService } from "./services/FileSearchService.ts"
 import { GitService } from "./services/GitService.ts"
 import { HistoryImport } from "./services/HistoryImport.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
@@ -55,6 +56,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(ApprovalService.layer),
     Layer.provideMerge(PreferencesService.layer),
     Layer.provideMerge(ProjectService.layer),
+    Layer.provideMerge(FileSearchService.layer),
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(SessionEvents.layer),

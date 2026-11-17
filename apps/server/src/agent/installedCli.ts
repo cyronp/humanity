@@ -31,7 +31,17 @@ export const systemLocateOptions = (): LocateOptions => ({
   },
 })
 
+const NODE = "node"
+
 const pathOf = (platform: NodeJS.Platform) => (platform === "win32" ? win32 : posix)
+
+const pathKey = (
+  env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform,
+): string =>
+  platform === "win32"
+    ? (Object.keys(env).find((candidate) => candidate.toUpperCase() === "PATH") ?? "Path")
+    : "PATH"
 
 const envValue = (env: LocateOptions["env"], name: string, platform: NodeJS.Platform) => {
   if (platform !== "win32") return env[name]
@@ -67,7 +77,7 @@ export const searchFolders = (options: LocateOptions): ReadonlyArray<string> => 
   return [...new Set([...fromPath, ...usual])]
 }
 
-export const findCommand = (command: string, options: LocateOptions): string | undefined => {
+export function* findCommands(command: string, options: LocateOptions): Generator<string> {
   const path = pathOf(options.platform)
   const extensions =
     options.platform === "win32"
@@ -79,9 +89,13 @@ export const findCommand = (command: string, options: LocateOptions): string | u
   for (const folder of searchFolders(options)) {
     for (const extension of extensions) {
       const candidate = path.join(folder, `${command}${extension}`)
-      if (options.exists(candidate)) return candidate
+      if (options.exists(candidate)) yield candidate
     }
   }
+}
+
+export const findCommand = (command: string, options: LocateOptions): string | undefined => {
+  for (const found of findCommands(command, options)) return found
   return undefined
 }
 
@@ -92,51 +106,126 @@ export const shimTarget = (shim: string): string | undefined => {
 
 const SCRIPT_EXTENSIONS = new Set([".js", ".mjs", ".cjs"])
 
-export const launchFor = (found: string, options: LocateOptions): CliLaunch | undefined => {
+const runtimeFor = (shim: string | undefined, options: LocateOptions): string => {
+  if (shim !== undefined) {
+    const path = pathOf(options.platform)
+    const beside = path.join(path.dirname(shim), options.platform === "win32" ? "node.exe" : NODE)
+    if (options.exists(beside)) return beside
+  }
+  return findCommand(NODE, options) ?? NODE
+}
+
+export const launchFor = (
+  found: string,
+  options: LocateOptions,
+  shim?: string,
+): CliLaunch | undefined => {
   const path = pathOf(options.platform)
   const extension = extname(found).toLowerCase()
   if (options.platform === "win32" && (extension === ".cmd" || extension === ".bat")) {
-    const shim = options.readFile(found)
-    const relative = shim === undefined ? undefined : shimTarget(shim)
+    if (shim !== undefined) return undefined
+    const content = options.readFile(found)
+    const relative = content === undefined ? undefined : shimTarget(content)
     if (relative === undefined) return undefined
     const target = path.join(path.dirname(found), relative)
     if (!options.exists(target)) return undefined
-    const launch = launchFor(target, options)
+    const launch = launchFor(target, options, found)
     return launch === undefined ? undefined : { ...launch, path: found }
   }
   if (options.platform === "win32" && extension === ".ps1") return undefined
   if (SCRIPT_EXTENSIONS.has(extension)) {
-    return { path: found, command: "node", args: [found], script: found }
+    return { path: found, command: runtimeFor(shim, options), args: [found], script: found }
   }
   return { path: found, command: found, args: [], script: undefined }
 }
 
-export const locateCli = (
-  command: string,
-  options: LocateOptions = systemLocateOptions(),
-): CliLaunch | undefined => {
-  const found = findCommand(command, options)
-  return found === undefined ? undefined : launchFor(found, options)
+export const findLaunch = (command: string, options: LocateOptions): CliLaunch | undefined => {
+  for (const found of findCommands(command, options)) {
+    const launch = launchFor(found, options)
+    if (launch !== undefined) return launch
+  }
+  return undefined
+}
+
+export const LOCATE_CACHE_MS = 5_000
+
+const located = new Map<string, { readonly at: number; readonly launch: CliLaunch | undefined }>()
+
+export const forgetLocatedClis = () => located.clear()
+
+export const locateCli = (command: string, options?: LocateOptions): CliLaunch | undefined => {
+  if (options !== undefined) return findLaunch(command, options)
+  const now = Date.now()
+  const cached = located.get(command)
+  if (cached !== undefined && now - cached.at < LOCATE_CACHE_MS) return cached.launch
+  const launch = findLaunch(command, systemLocateOptions())
+  located.set(command, { at: now, launch })
+  return launch
+}
+
+export const runtimeEnvironment = (
+  launch: CliLaunch,
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> => {
+  if (launch.script === undefined || launch.command === NODE) return env
+  const path = pathOf(platform)
+  const key = pathKey(env, platform)
+  const folder = path.dirname(launch.command)
+  const current = env[key]
+  const separator = platform === "win32" ? ";" : ":"
+  return {
+    ...env,
+    [key]: current === undefined || current === "" ? folder : `${folder}${separator}${current}`,
+  }
 }
 
 export const parseCliVersion = (output: string): string | undefined =>
   /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/.exec(output)?.[0]
 
-export const compareVersions = (a: string, b: string): number => {
-  const parse = (version: string) => {
-    const [core = "", pre] = version.split("-", 2)
-    return { parts: core.split(".").map((part) => Number.parseInt(part, 10) || 0), pre }
+const parseVersion = (version: string) => {
+  const withoutBuild = version.split("+", 1)[0] ?? ""
+  const dash = withoutBuild.indexOf("-")
+  const core = dash === -1 ? withoutBuild : withoutBuild.slice(0, dash)
+  return {
+    parts: core.split(".").map((part) => Number.parseInt(part, 10) || 0),
+    pre: dash === -1 ? undefined : withoutBuild.slice(dash + 1).split("."),
   }
-  const left = parse(a)
-  const right = parse(b)
+}
+
+const NUMERIC = /^\d+$/
+
+const comparePrerelease = (left: ReadonlyArray<string>, right: ReadonlyArray<string>): number => {
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const a = left[index]
+    const b = right[index]
+    if (a === undefined) return -1
+    if (b === undefined) return 1
+    const aNumeric = NUMERIC.test(a)
+    const bNumeric = NUMERIC.test(b)
+    if (aNumeric && bNumeric) {
+      const difference = Number(a) - Number(b)
+      if (difference !== 0) return difference
+    } else if (aNumeric !== bNumeric) {
+      return aNumeric ? -1 : 1
+    } else if (a !== b) {
+      return a < b ? -1 : 1
+    }
+  }
+  return 0
+}
+
+export const compareVersions = (a: string, b: string): number => {
+  const left = parseVersion(a)
+  const right = parseVersion(b)
   for (let index = 0; index < Math.max(left.parts.length, right.parts.length); index++) {
     const difference = (left.parts[index] ?? 0) - (right.parts[index] ?? 0)
     if (difference !== 0) return difference
   }
-  if (left.pre === right.pre) return 0
+  if (left.pre === undefined && right.pre === undefined) return 0
   if (left.pre === undefined) return 1
   if (right.pre === undefined) return -1
-  return left.pre < right.pre ? -1 : 1
+  return comparePrerelease(left.pre, right.pre)
 }
 
 export const isOutdated = (version: string | null, minimum: string | null): boolean =>

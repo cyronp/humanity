@@ -1,4 +1,10 @@
-import { CLI_COMMANDS, PATCH_TOOL, type KiroModel } from "@humanity/contracts"
+import {
+  CLI_COMMANDS,
+  CLI_INSTALL_URLS,
+  CliNotInstalled,
+  PATCH_TOOL,
+  type KiroModel,
+} from "@humanity/contracts"
 import { Context, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
@@ -246,20 +252,23 @@ export class Kiro extends Context.Service<
         ),
       )
       const home = env["KIRO_HOME"] ?? join(homedir(), ".kiro")
-      const launch = () =>
-        locateCli(CLI_COMMANDS.kiro) ?? {
-          path: CLI_COMMANDS.kiro,
-          command: CLI_COMMANDS.kiro,
-          args: [],
-          script: undefined,
-        }
-      const executable = () => launch().path
+      const launch = () => locateCli(CLI_COMMANDS.kiro)
+      const executable = () => launch()?.path ?? CLI_COMMANDS.kiro
+      const notInstalled = () =>
+        new AcpFailed({
+          reason: new CliNotInstalled({
+            product: KIRO_PRODUCT,
+            command: CLI_COMMANDS.kiro,
+            installUrl: CLI_INSTALL_URLS.kiro,
+          }).message,
+        })
       const envFor = (kiroHome: string | undefined) =>
         kiroHome === undefined ? env : { ...env, KIRO_HOME: kiroHome }
 
       const connect: AcpConnect = (options) =>
         Effect.suspend(() => {
           const found = launch()
+          if (found === undefined) return Effect.fail(notInstalled())
           return connectAcp({
             product: KIRO_PRODUCT,
             executable: found.command,
@@ -277,6 +286,7 @@ export class Kiro extends Context.Service<
       const cli = (kiroHome: string | undefined, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
           const found = launch()
+          if (found === undefined) return yield* notInstalled()
           const handle = yield* spawner.spawn(
             ChildProcess.make(found.command, [...found.args, ...args], { env: envFor(kiroHome) }),
           )
@@ -287,8 +297,10 @@ export class Kiro extends Context.Service<
           return { stdout, stderr, exitCode: Number(exitCode) }
         }).pipe(
           Effect.scoped,
-          Effect.mapError(
-            (cause) => new AcpFailed({ reason: `Kiro could not be started: ${String(cause)}` }),
+          Effect.mapError((cause) =>
+            cause instanceof AcpFailed
+              ? cause
+              : new AcpFailed({ reason: `Kiro could not be started: ${String(cause)}` }),
           ),
           Effect.timeoutOrElse({
             duration: PROBE_TIMEOUT,

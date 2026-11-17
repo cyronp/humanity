@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { ServerConfig } from "../ServerConfig.ts"
 import type { ReportedAccount } from "./account.ts"
 import { CLI_COMMANDS, CLI_INSTALL_URLS } from "@humanity/contracts"
-import { locateCli } from "../agent/installedCli.ts"
+import { type CliLaunch, locateCli, runtimeEnvironment } from "../agent/installedCli.ts"
 import { claudeConfigDir, claudeEnvironment } from "./environment.ts"
 import { readPlanUsage } from "./planUsage.ts"
 
@@ -31,6 +31,8 @@ export const notInstalled = () =>
     reason: `Claude Code is not installed: no "claude" command was found. Install it (${CLI_INSTALL_URLS["claude-code"]}), then check again.`,
   })
 
+export const claudeExecutable = (launch: CliLaunch) => launch.script ?? launch.command
+
 type Initialized = Awaited<ReturnType<Query["initializationResult"]>>
 
 const lastLines = (chunks: ReadonlyArray<string>) =>
@@ -39,11 +41,11 @@ const lastLines = (chunks: ReadonlyArray<string>) =>
 const idleSession = <A>(
   cwd: string,
   env: Record<string, string>,
-  executable: string | undefined,
+  launch: CliLaunch | undefined,
   ask: (session: Query, init: Initialized) => Promise<A>,
 ) =>
   Effect.suspend(() => {
-    if (executable === undefined) return Effect.fail(notInstalled())
+    if (launch === undefined) return Effect.fail(notInstalled())
     const stderr: Array<string> = []
     return Effect.tryPromise({
       try: async (signal) => {
@@ -54,8 +56,8 @@ const idleSession = <A>(
           prompt: idlePrompt(abortController.signal),
           options: {
             cwd,
-            env,
-            pathToClaudeCodeExecutable: executable,
+            env: runtimeEnvironment(launch, env),
+            pathToClaudeCodeExecutable: claudeExecutable(launch),
             abortController,
             permissionMode: "default",
             allowedTools: [],
@@ -97,8 +99,8 @@ const idleSession = <A>(
     }),
   )
 
-const probe = (cwd: string, env: Record<string, string>, executable: string | undefined) =>
-  idleSession(cwd, env, executable, (_session, init): Promise<ProbeResult> =>
+const probe = (cwd: string, env: Record<string, string>, launch: CliLaunch | undefined) =>
+  idleSession(cwd, env, launch, (_session, init): Promise<ProbeResult> =>
     Promise.resolve({
       cliVersion: init.claude_code_version,
       account: init.account,
@@ -110,8 +112,8 @@ const probe = (cwd: string, env: Record<string, string>, executable: string | un
     }),
   )
 
-const planUsage = (cwd: string, env: Record<string, string>, executable: string | undefined) =>
-  idleSession(cwd, env, executable, async (session) =>
+const planUsage = (cwd: string, env: Record<string, string>, launch: CliLaunch | undefined) =>
+  idleSession(cwd, env, launch, async (session) =>
     readPlanUsage(
       await session.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
         skipBehaviors: true,
@@ -123,7 +125,7 @@ export class ClaudeCode extends Context.Service<
   ClaudeCode,
   {
     readonly configDir: string
-    readonly executable: () => string | undefined
+    readonly launch: () => CliLaunch | undefined
     readonly environment: Record<string, string>
     readonly probe: (configDir?: string) => Effect.Effect<ProbeResult, ClaudeProbeFailed>
     readonly planUsage: (
@@ -136,18 +138,15 @@ export class ClaudeCode extends Context.Service<
     Effect.gen(function* () {
       const config = yield* ServerConfig
       const environment = claudeEnvironment(process.env)
-      const executable = () => {
-        const found = locateCli(CLI_COMMANDS["claude-code"])
-        return found?.script ?? found?.command
-      }
+      const launch = () => locateCli(CLI_COMMANDS["claude-code"])
       const envFor = (configDir: string | undefined) =>
         configDir === undefined ? environment : { ...environment, CLAUDE_CONFIG_DIR: configDir }
       return {
         configDir: claudeConfigDir(process.env, homedir()),
-        executable,
+        launch,
         environment,
-        probe: (configDir) => probe(config.home, envFor(configDir), executable()),
-        planUsage: (configDir) => planUsage(config.home, envFor(configDir), executable()),
+        probe: (configDir) => probe(config.home, envFor(configDir), launch()),
+        planUsage: (configDir) => planUsage(config.home, envFor(configDir), launch()),
       }
     }),
   )
@@ -166,7 +165,12 @@ export class ClaudeCode extends Context.Service<
   ) =>
     Layer.succeed(ClaudeCode, {
       configDir: options.configDir ?? "/home/test/.claude",
-      executable: () => "/usr/local/bin/claude",
+      launch: () => ({
+        path: "/usr/local/bin/claude",
+        command: "/usr/local/bin/claude",
+        args: [],
+        script: undefined,
+      }),
       environment: {},
       probe: typeof probe === "function" ? probe : () => probe,
       planUsage: options.planUsage ?? (() => Effect.succeed(undefined)),

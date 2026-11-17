@@ -13,7 +13,8 @@ import {
   toolMode,
 } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
-import { ClaudeCode, notInstalled } from "../claude/ClaudeCode.ts"
+import { ClaudeCode, claudeExecutable, notInstalled } from "../claude/ClaudeCode.ts"
+import { runtimeEnvironment } from "./installedCli.ts"
 import { Codex } from "../codex/Codex.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
@@ -159,8 +160,8 @@ export const AgentRunnerLive = Layer.effect(
 
     const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {
-        const executable = claude.executable()
-        if (executable === undefined) return notStarted(notInstalled().reason)
+        const launch = claude.launch()
+        if (launch === undefined) return notStarted(notInstalled().reason)
         const context = yield* Effect.context<never>()
         const runPromise = Effect.runPromiseWith(context)
         const inbox = new Inbox<SDKUserMessage>()
@@ -183,7 +184,7 @@ export const AgentRunnerLive = Layer.effect(
           prompt: inbox,
           options: {
             cwd: options.cwd,
-            pathToClaudeCodeExecutable: executable,
+            pathToClaudeCodeExecutable: claudeExecutable(launch),
             ...(options.resume === undefined ? {} : { resume: options.resume }),
             ...(options.model === undefined ? {} : { model: options.model }),
             ...(options.effort === undefined ? {} : { effort: options.effort }),
@@ -200,11 +201,11 @@ export const AgentRunnerLive = Layer.effect(
               path,
               skipMcpDiscovery: true,
             })),
-            env: {
+            env: runtimeEnvironment(launch, {
               ...claude.environment,
               ...(options.configDir === undefined ? {} : { CLAUDE_CONFIG_DIR: options.configDir }),
               CLAUDE_AGENT_SDK_CLIENT_APP: "humanity/0.1.0",
-            },
+            }),
             stderr: (data) => {
               runPromise(Effect.logDebug("agent stderr", data.trimEnd())).catch(() => {})
             },

@@ -89,7 +89,7 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
-import { searchFiles as rankFiles } from "./fileSearch.ts"
+import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
@@ -254,6 +254,7 @@ export class SessionService extends Context.Service<
       const runner = yield* AgentRunner
       const projects = yield* ProjectService
       const git = yield* GitService
+      const fileSearch = yield* FileSearchService
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
       const preferences = yield* PreferencesService
@@ -1098,9 +1099,7 @@ export class SessionService extends Context.Service<
         Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
 
       const searchFiles = (sessionId: string, query: string) =>
-        Effect.flatMap(get(sessionId), (session) =>
-          Effect.map(git.listFiles(session.worktreePath), (files) => rankFiles(files, query)),
-        )
+        Effect.flatMap(get(sessionId), (session) => fileSearch.search(session.worktreePath, query))
 
       const commits = Effect.fn("SessionService.commits")(function* (sessionId: string) {
         const session = yield* get(sessionId)

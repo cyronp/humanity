@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseFileList, searchFiles } from "../src/services/fileSearch.ts"
+import { indexFiles, parseFileList, searchFiles, searchIndex } from "../src/services/fileSearch.ts"
 
 const FILES = [
   "README.md",
@@ -69,5 +69,24 @@ describe("searchFiles", () => {
   it("returns nothing when nothing matches, and at most `limit` entries", () => {
     expect(paths("zzz")).toEqual([])
     expect(paths("s", 2)).toHaveLength(2)
+  })
+})
+
+describe("searchIndex", () => {
+  it("keeps the same best results as ranking every match", () => {
+    const files: Array<string> = []
+    for (let a = 0; a < 12; a++)
+      for (let b = 0; b < 9; b++) files.push(`pkg${a}/src/mod${b}/file${(a * 7 + b) % 13}.ts`)
+    files.push("file1.ts", "README.md", "pkg3/file10.tsx")
+    const index = indexFiles(files)
+    for (const query of ["", "f", "file1", "mod3", "pkg1/", "p3f", "zzz"]) {
+      const all = searchIndex(index, query, Number.MAX_SAFE_INTEGER)
+      expect(searchIndex(index, query, 30)).toEqual(all.slice(0, 30))
+      expect(searchFiles(files, query, 5)).toEqual(all.slice(0, 5))
+    }
+  })
+
+  it("returns nothing for a limit of zero", () => {
+    expect(searchIndex(indexFiles(FILES), "", 0)).toEqual([])
   })
 })

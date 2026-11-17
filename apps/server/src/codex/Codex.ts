@@ -11,7 +11,7 @@ import {
   type ServerMessage,
   type ServerReply,
 } from "./AppServer.ts"
-import { CLI_COMMANDS, CLI_INSTALL_URLS } from "@humanity/contracts"
+import { CLI_COMMANDS, CLI_INSTALL_URLS, CliNotInstalled } from "@humanity/contracts"
 import { locateCli } from "../agent/installedCli.ts"
 import { codexEnvironment, codexNativeExecutable } from "./environment.ts"
 import {
@@ -137,7 +137,11 @@ export class Codex extends Context.Service<
           if (found === undefined) {
             return Effect.fail(
               new CodexFailed({
-                reason: `Codex is not installed: no "codex" command was found. Install it (${CLI_INSTALL_URLS.codex}), then check again.`,
+                reason: new CliNotInstalled({
+                  product: "Codex",
+                  command: CLI_COMMANDS.codex,
+                  installUrl: CLI_INSTALL_URLS.codex,
+                }).message,
               }),
             )
           }

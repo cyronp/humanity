@@ -7,6 +7,7 @@ import {
   type LocateOptions,
   locateCli,
   parseCliVersion,
+  runtimeEnvironment,
   searchFolders,
   shimTarget,
 } from "../src/agent/installedCli.ts"
@@ -94,6 +95,55 @@ describe("finding an installed CLI", () => {
     expect(launchFor(shim, windows({ [shim]: "@echo off" }))).toBeUndefined()
   })
 
+  it("runs a shim's script on the node.exe beside it, else the first node found", () => {
+    const shim = "C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd"
+    const script =
+      "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js"
+    const beside = "C:\\Users\\me\\AppData\\Roaming\\npm\\node.exe"
+    const onPath = "C:\\Tools\\node.exe"
+    expect(
+      locateCli("codex", windows({ [shim]: NPM_SHIM, [script]: "", [beside]: "", [onPath]: "" }))
+        ?.command,
+    ).toBe(beside)
+    expect(
+      locateCli("codex", windows({ [shim]: NPM_SHIM, [script]: "", [onPath]: "" }))?.command,
+    ).toBe(onPath)
+  })
+
+  it("keeps looking when the first command found cannot be run", () => {
+    const wrapper = "C:\\Tools\\claude.cmd"
+    const native = "C:\\Users\\me\\.local\\bin\\claude.exe"
+    expect(locateCli("claude", windows({ [wrapper]: "@echo off", [native]: "" }))).toEqual({
+      path: native,
+      command: native,
+      args: [],
+      script: undefined,
+    })
+  })
+
+  it("never follows a shim into another shim", () => {
+    const shim = "C:\\Tools\\loop.cmd"
+    expect(launchFor(shim, windows({ [shim]: '"%~dp0\\loop.cmd" %*' }))).toBeUndefined()
+  })
+
+  it("puts the runtime of a script first on the PATH it is started with", () => {
+    const launch = {
+      path: "C:\\npm\\claude.cmd",
+      command: "C:\\npm\\node.exe",
+      args: ["C:\\npm\\cli.js"],
+      script: "C:\\npm\\cli.js",
+    }
+    expect(runtimeEnvironment(launch, { Path: "C:\\Windows", HOME: "x" }, "win32")).toEqual({
+      Path: "C:\\npm;C:\\Windows",
+      HOME: "x",
+    })
+    expect(
+      runtimeEnvironment({ ...launch, command: "node" }, { Path: "C:\\Windows" }, "win32"),
+    ).toEqual({ Path: "C:\\Windows" })
+    const native = { path: "/bin/claude", command: "/bin/claude", args: [], script: undefined }
+    expect(runtimeEnvironment(native, { PATH: "/usr/bin" }, "linux")).toEqual({ PATH: "/usr/bin" })
+  })
+
   it("reads the last quoted %dp0% path of a shim", () => {
     expect(shimTarget(NPM_SHIM)).toBe("node_modules\\@openai\\codex\\bin\\codex.js")
     expect(shimTarget('"%~dp0\\cli.js" %*')).toBe("cli.js")
@@ -114,6 +164,11 @@ describe("CLI versions", () => {
     expect(compareVersions("2.1.9", "2.1.10")).toBeLessThan(0)
     expect(compareVersions("1.0.0", "1.0.0")).toBe(0)
     expect(compareVersions("1.0.0-beta", "1.0.0")).toBeLessThan(0)
+    expect(compareVersions("1.0.0-rc-1", "1.0.0-rc-2")).toBeLessThan(0)
+    expect(compareVersions("1.0.0-beta.10", "1.0.0-beta.2")).toBeGreaterThan(0)
+    expect(compareVersions("1.0.0-alpha", "1.0.0-alpha.1")).toBeLessThan(0)
+    expect(compareVersions("1.0.0-1", "1.0.0-alpha")).toBeLessThan(0)
+    expect(compareVersions("1.0.0+build.5", "1.0.0")).toBe(0)
   })
 
   it("calls a known version below the minimum outdated, and nothing else", () => {

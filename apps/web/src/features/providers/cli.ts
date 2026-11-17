@@ -13,16 +13,7 @@ export const agentCliAtom = Atom.family((provider: AgentProvider) =>
 
 export const updateAgentCliAtom = HumanityClient.mutation("AgentClis.update")
 
-const ACCOUNT_KEYS: Readonly<Record<AgentProvider, string>> = {
-  "claude-code": keys.claude,
-  codex: keys.codex,
-  kiro: keys.kiro,
-}
-
-export const updatedKeys = (provider: AgentProvider) => [
-  keys.agentCli(provider),
-  ACCOUNT_KEYS[provider],
-]
+export const updatedKeys = (provider: AgentProvider) => [keys.agentCli(provider)]
 
 export const cliProblem = (cli: AgentCli): string | undefined => {
   const name = PROVIDER_NAMES[cli.provider]
