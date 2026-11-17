@@ -49,16 +49,21 @@ const migrations = {
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })
 
-// SQLite only enforces ON DELETE CASCADE when foreign keys are switched on per connection.
-const ForeignKeys = Layer.effectDiscard(
+const Pragmas = Layer.effectDiscard(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
+    // SQLite only enforces ON DELETE CASCADE when foreign keys are switched on per connection.
     yield* sql`PRAGMA foreign_keys = ON`
+    // The driver keeps the database in WAL mode, where NORMAL is still safe from
+    // corruption and syncs at checkpoints instead of on every commit: each message
+    // an agent writes no longer waits for the disk. A power cut can lose the last
+    // commits, never the database.
+    yield* sql`PRAGMA synchronous = NORMAL`
   }),
 )
 
 const layerFor = (filename: string) =>
-  Layer.mergeAll(Migrations, ForeignKeys).pipe(
+  Layer.mergeAll(Migrations, Pragmas).pipe(
     Layer.provideMerge(SqliteClient.layer({ filename })),
     Layer.orDie,
   )
