@@ -19,7 +19,6 @@ export function KiroSection() {
     <ProviderAccountList
       provider="kiro"
       result={result}
-      version={accounts?.[0]?.status.cliVersion ?? null}
       refreshing={refreshing}
       refreshError={refreshError}
       onRefresh={() => void refresh(true).then(setRefreshError)}

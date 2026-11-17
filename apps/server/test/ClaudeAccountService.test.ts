@@ -26,7 +26,7 @@ const scripted = (account: Ref.Ref<ReportedAccount | "fail">, probes: Ref.Ref<nu
       }
       return { cliVersion: "2.1.321", account: current, models: MODELS } satisfies ProbeResult
     }),
-    { configDir: "/home/me/.claude", bundledExecutable: "/sdk/claude" },
+    { configDir: "/home/me/.claude" },
   )
 
 const setup = (initial: ReportedAccount | "fail") =>
@@ -74,7 +74,6 @@ describe("ClaudeAccountService", () => {
       assert.strictEqual(status.connection._tag, "Connected")
       assert.strictEqual(status.cliVersion, "2.1.321")
       assert.strictEqual(status.configDir, "/home/me/.claude")
-      assert.strictEqual(status.bundledExecutable, "/sdk/claude")
       assert.deepStrictEqual(status.models, MODELS)
     }),
   )

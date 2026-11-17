@@ -4,7 +4,9 @@ import { Context, Data, Effect, Layer } from "effect"
 import { homedir } from "node:os"
 import { ServerConfig } from "../ServerConfig.ts"
 import type { ReportedAccount } from "./account.ts"
-import { bundledClaudeExecutable, claudeConfigDir, claudeEnvironment } from "./environment.ts"
+import { CLI_COMMANDS, CLI_INSTALL_URLS } from "@humanity/contracts"
+import { locateCli } from "../agent/installedCli.ts"
+import { claudeConfigDir, claudeEnvironment } from "./environment.ts"
 import { readPlanUsage } from "./planUsage.ts"
 
 export interface ProbeResult {
@@ -30,6 +32,12 @@ async function* idlePrompt(signal: AbortSignal): AsyncGenerator<never> {
   await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()))
 }
 
+/** Why Claude Code could not start: it is not installed. */
+export const notInstalled = () =>
+  new ClaudeProbeFailed({
+    reason: `Claude Code is not installed: no "claude" command was found. Install it (${CLI_INSTALL_URLS["claude-code"]}), then check again.`,
+  })
+
 type Initialized = Awaited<ReturnType<Query["initializationResult"]>>
 
 const lastLines = (chunks: ReadonlyArray<string>) =>
@@ -42,9 +50,11 @@ const lastLines = (chunks: ReadonlyArray<string>) =>
 const idleSession = <A>(
   cwd: string,
   env: Record<string, string>,
+  executable: string | undefined,
   ask: (session: Query, init: Initialized) => Promise<A>,
 ) =>
   Effect.suspend(() => {
+    if (executable === undefined) return Effect.fail(notInstalled())
     const stderr: Array<string> = []
     return Effect.tryPromise({
       try: async (signal) => {
@@ -56,6 +66,7 @@ const idleSession = <A>(
           options: {
             cwd,
             env,
+            pathToClaudeCodeExecutable: executable,
             abortController,
             // Never `bypassPermissions`; this session runs no tools anyway.
             permissionMode: "default",
@@ -98,8 +109,8 @@ const idleSession = <A>(
     }),
   )
 
-const probe = (cwd: string, env: Record<string, string>) =>
-  idleSession(cwd, env, (_session, init): Promise<ProbeResult> =>
+const probe = (cwd: string, env: Record<string, string>, executable: string | undefined) =>
+  idleSession(cwd, env, executable, (_session, init): Promise<ProbeResult> =>
     Promise.resolve({
       cliVersion: init.claude_code_version,
       account: init.account,
@@ -111,8 +122,8 @@ const probe = (cwd: string, env: Record<string, string>) =>
     }),
   )
 
-const planUsage = (cwd: string, env: Record<string, string>) =>
-  idleSession(cwd, env, async (session) =>
+const planUsage = (cwd: string, env: Record<string, string>, executable: string | undefined) =>
+  idleSession(cwd, env, executable, async (session) =>
     readPlanUsage(
       // Experimental in the SDK; `skipBehaviors` leaves out the local transcript scan.
       await session.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
@@ -122,16 +133,20 @@ const planUsage = (cwd: string, env: Record<string, string>) =>
   )
 
 /**
- * The Claude Code runtime agent sessions run on: the CLI bundled with the
- * Agent SDK, authenticated by whatever login lives in its config directory
- * (the human's `claude auth login`), exactly like their own terminal sessions.
+ * The Claude Code runtime agent sessions run on: the `claude` the human
+ * installed, found on the PATH each time it starts, authenticated by
+ * whatever login lives in its config directory (the human's
+ * `claude auth login`), exactly like their own terminal sessions.
  */
 export class ClaudeCode extends Context.Service<
   ClaudeCode,
   {
     readonly configDir: string
-    /** The bundled CLI, or `null` when its platform package is missing. */
-    readonly bundledExecutable: string | null
+    /**
+     * What the Agent SDK starts: the installed `claude`, or the script behind
+     * an npm-installed one. `undefined` when Claude Code is not installed.
+     */
+    readonly executable: () => string | undefined
     readonly environment: Record<string, string>
     /**
      * Starts Claude Code just long enough to read the account it would use.
@@ -153,15 +168,19 @@ export class ClaudeCode extends Context.Service<
     Effect.gen(function* () {
       const config = yield* ServerConfig
       const environment = claudeEnvironment(process.env)
+      const executable = () => {
+        const found = locateCli(CLI_COMMANDS["claude-code"])
+        return found?.script ?? found?.command
+      }
       const envFor = (configDir: string | undefined) =>
         configDir === undefined ? environment : { ...environment, CLAUDE_CONFIG_DIR: configDir }
       return {
         configDir: claudeConfigDir(process.env, homedir()),
-        bundledExecutable: bundledClaudeExecutable(),
+        executable,
         environment,
         // Humanity's own data directory: never the user's repository.
-        probe: (configDir) => probe(config.home, envFor(configDir)),
-        planUsage: (configDir) => planUsage(config.home, envFor(configDir)),
+        probe: (configDir) => probe(config.home, envFor(configDir), executable()),
+        planUsage: (configDir) => planUsage(config.home, envFor(configDir), executable()),
       }
     }),
   )
@@ -181,7 +200,7 @@ export class ClaudeCode extends Context.Service<
   ) =>
     Layer.succeed(ClaudeCode, {
       configDir: options.configDir ?? "/home/test/.claude",
-      bundledExecutable: options.bundledExecutable ?? null,
+      executable: () => "/usr/local/bin/claude",
       environment: {},
       probe: typeof probe === "function" ? probe : () => probe,
       planUsage: options.planUsage ?? (() => Effect.succeed(undefined)),

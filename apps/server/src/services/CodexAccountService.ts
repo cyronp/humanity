@@ -49,7 +49,7 @@ export class CodexAccountService extends Context.Service<
         Effect.gen(function* () {
           const result = yield* Effect.result(codex.probe(codexHome))
           const checkedAt = DateTime.formatIso(yield* DateTime.now)
-          const base = { executable: codex.executable, checkedAt }
+          const base = { executable: codex.executable(), checkedAt }
           if (Result.isFailure(result)) {
             yield* Effect.logWarning("Codex check failed", result.failure.reason)
             return {

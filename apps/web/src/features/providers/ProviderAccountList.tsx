@@ -7,16 +7,17 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { describeCause } from "@/lib/errors"
 import { AddAccount } from "./AddAccount.tsx"
+import { CliNotice, CliVersion, useCliUpdate } from "./CliStatus.tsx"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
 /**
- * A provider's accounts: its CLI version with the buttons that check again
- * and add an account, then a row per account.
+ * A provider's accounts: its CLI's version (with the button that updates it)
+ * and the buttons that check again and add an account, then a row per
+ * account. A CLI that is missing or outdated is called out under the header.
  */
 export function ProviderAccountList<Account extends { readonly id: string }>({
   provider,
   result,
-  version,
   refreshing,
   refreshError,
   onRefresh,
@@ -25,7 +26,6 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
 }: {
   readonly provider: ProviderId
   readonly result: AsyncResult.AsyncResult<ReadonlyArray<Account>, unknown>
-  readonly version: string | null
   readonly refreshing: boolean
   readonly refreshError: string | undefined
   readonly onRefresh: () => void
@@ -34,13 +34,14 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
 }) {
   const { name, beta } = PROVIDERS[provider]
   const loaded = AsyncResult.isSuccess(result)
+  const cli = useCliUpdate(provider, onRefresh)
 
   return (
     <section aria-label={`${name} accounts`} className="flex flex-col gap-4">
       <div className="flex flex-col">
         <div className="flex flex-wrap items-center gap-2 border-b pb-3">
           <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
-            {version !== null && <span>CLI v{version}</span>}
+            <CliVersion update={cli} />
             {beta && (
               <span className="rounded border px-1.5 py-0.5 text-[10px] tracking-wide uppercase">
                 Beta
@@ -52,6 +53,10 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
             {refreshing ? "Checking…" : "Check again"}
           </Button>
           {loaded && <AddAccount provider={provider} onAdd={onAdd} />}
+        </div>
+
+        <div className="pt-3 empty:hidden">
+          <CliNotice update={cli} />
         </div>
 
         {AsyncResult.match(result, {

@@ -1,5 +1,5 @@
 import type { ClaudeAccount, ClaudeConnection, ClaudeStatus } from "@humanity/contracts"
-import { ChevronDown, CircleAlert, KeyRound } from "lucide-react"
+import { CircleAlert, KeyRound } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { CopyCommand } from "@/components/CopyCommand"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -7,7 +7,6 @@ import { NumberedStep } from "@/components/NumberedStep"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Spinner } from "@/components/ui/spinner"
 import { RemoveAccount } from "@/features/providers/RemoveAccount"
 import { ClaudeMark } from "./ClaudeMark.tsx"
@@ -155,22 +154,6 @@ function SignInSteps({ account }: { readonly account: ClaudeAccount }) {
           </span>
         </NumberedStep>
       </ol>
-      {status.bundledExecutable !== null && (
-        <Collapsible className="rounded-lg border px-3 py-2 text-sm">
-          <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 text-left font-medium">
-            <span>
-              No <code>claude</code> command on this computer?
-            </span>
-            <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-2 pt-2 text-muted-foreground">
-            <p>Use the copy that ships with Humanity:</p>
-            <CopyCommand
-              command={signInCommand({ configDir, executable: status.bundledExecutable })}
-            />
-          </CollapsibleContent>
-        </Collapsible>
-      )}
       {(account.isDefault || account.linkedFolder) && (
         <p className="text-xs text-muted-foreground">
           The login is read from <code className="break-all">{status.configDir}</code>.

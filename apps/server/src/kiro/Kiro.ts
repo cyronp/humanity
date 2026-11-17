@@ -1,4 +1,4 @@
-import { PATCH_TOOL, type KiroModel } from "@humanity/contracts"
+import { CLI_COMMANDS, PATCH_TOOL, type KiroModel } from "@humanity/contracts"
 import { Context, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
@@ -6,6 +6,7 @@ import { isAbsolute, join, resolve } from "node:path"
 import { AcpFailed, connectAcp } from "../acp/Connection.ts"
 import { decode, type ToolCallFields } from "../acp/protocol.ts"
 import type { AcpConnect, AcpProfile, AcpUpdate } from "../agent/AcpRunner.ts"
+import { locateCli } from "../agent/installedCli.ts"
 import { acpPatchFile, acpPath, type NamedTool } from "../agent/normalizeAcp.ts"
 import { isInsideDir } from "../paths.ts"
 
@@ -293,8 +294,8 @@ export const kiroProfile =
 export class Kiro extends Context.Service<
   Kiro,
   {
-    /** The executable Humanity runs: `kiro-cli` from the PATH. */
-    readonly executable: string
+    /** The executable Humanity runs: the installed `kiro-cli`, else the bare command. */
+    readonly executable: () => string
     /** Where the default login lives: `KIRO_HOME`, else `~/.kiro`. */
     readonly home: string
     /**
@@ -322,20 +323,31 @@ export class Kiro extends Context.Service<
         ),
       )
       const home = env["KIRO_HOME"] ?? join(homedir(), ".kiro")
-      const executable = "kiro-cli"
+      /** The installed `kiro-cli`, found again each time it starts; the bare command when it is missing. */
+      const launch = () =>
+        locateCli(CLI_COMMANDS.kiro) ?? {
+          path: CLI_COMMANDS.kiro,
+          command: CLI_COMMANDS.kiro,
+          args: [],
+          script: undefined,
+        }
+      const executable = () => launch().path
       // An added account is a Kiro folder of its own; the default login is whatever Kiro finds.
       const envFor = (kiroHome: string | undefined) =>
         kiroHome === undefined ? env : { ...env, KIRO_HOME: kiroHome }
 
       const connect: AcpConnect = (options) =>
-        connectAcp({
-          product: KIRO_PRODUCT,
-          executable,
-          args: KIRO_ARGS,
-          cwd: options.cwd,
-          env: envFor(options.configDir),
-          onRequest: options.onRequest,
-          onNotification: options.onNotification,
+        Effect.suspend(() => {
+          const found = launch()
+          return connectAcp({
+            product: KIRO_PRODUCT,
+            executable: found.command,
+            args: [...found.args, ...KIRO_ARGS],
+            cwd: options.cwd,
+            env: envFor(options.configDir),
+            onRequest: options.onRequest,
+            onNotification: options.onNotification,
+          })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
       const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
@@ -344,8 +356,9 @@ export class Kiro extends Context.Service<
       /** Runs the CLI to its end and hands on what it printed. */
       const cli = (kiroHome: string | undefined, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
+          const found = launch()
           const handle = yield* spawner.spawn(
-            ChildProcess.make(executable, [...args], { env: envFor(kiroHome) }),
+            ChildProcess.make(found.command, [...found.args, ...args], { env: envFor(kiroHome) }),
           )
           const [stdout, stderr, exitCode] = yield* Effect.all(
             [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
@@ -404,7 +417,7 @@ export class Kiro extends Context.Service<
   static readonly layerTest = (options: { readonly probe?: Kiro["Service"]["probe"] } = {}) => {
     const unused = new AcpFailed({ reason: "Kiro is not used by this test." })
     return Layer.succeed(Kiro, {
-      executable: "kiro-cli",
+      executable: () => "kiro-cli",
       home: "/home/me/.kiro",
       connect: () => Effect.fail(unused),
       profile: kiroProfile(() => Effect.succeed(undefined)),

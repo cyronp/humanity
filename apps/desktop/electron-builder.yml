@@ -7,8 +7,9 @@ icon: build/icon.png
 files:
   - dist/main.cjs
   - package.json
-# The daemon runs as a child process and starts the Claude Code and Codex
-# executables, so it needs real paths on disk: it ships next to the archive, not inside it.
+# The daemon runs as a child process with the Agent SDK beside it, which needs
+# real paths on disk: it ships next to the archive, not inside it. No agent
+# ships: threads run on the CLIs the human installed.
 extraResources:
   - from: dist/daemon
     to: daemon

@@ -13,6 +13,7 @@ import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { HumanityMcp } from "./mcp/HumanityMcp.ts"
+import { AgentClisHandlers } from "./rpc/AgentClisHandlers.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { CodexHandlers } from "./rpc/CodexHandlers.ts"
@@ -27,6 +28,7 @@ import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
 import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
+import { AgentCliService } from "./services/AgentCliService.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { CodexAccountService } from "./services/CodexAccountService.ts"
@@ -65,6 +67,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(CodexAccountService.layer),
     Layer.provideMerge(KiroAccountService.layer),
     Layer.provideMerge(ExtensionsService.layer),
+    Layer.provideMerge(AgentCliService.layer),
   ),
 )
 
@@ -82,6 +85,7 @@ export const RpcHandlers = Layer.mergeAll(
   ExtensionsHandlers,
   PullRequestsHandlers,
   UpdatesHandlers,
+  AgentClisHandlers,
 )
 
 /**

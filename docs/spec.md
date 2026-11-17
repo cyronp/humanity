@@ -58,6 +58,16 @@ Humanity's own MCP server (`humanity`, with `open_thread`) reaches the agent of 
 - **`open_thread` takes a provider.** `provider` (`claude-code`, `codex`, `kiro`) is left out for the opening thread's own. The model is checked against what that provider offers its active account, and refused with the list of those it does; a provider nobody is signed in to opens no thread. The new thread runs as that provider's active account, in its project's default autonomy, like any new thread.
 - **Under one name everywhere.** The call is `mcp__humanity__open_thread` on every provider and still runs without asking in every thread. Codex asks about an MCP call by its server alone, so it is configured to approve that one tool of the `humanity` server itself. Kiro titles an MCP call `@<server>/<tool>`; Humanity names it `mcp__<server>__<tool>` when Kiro names the server too.
 
+## Amendment: the human's own CLIs (2026-11-17)
+
+Humanity ships no agent. Every provider runs on the CLI the human installed and signed in to, the same one they use in a terminal. This supersedes the parts of "Desktop app" and "Codex" that bundle the Claude Code and Codex executables and pin Codex to an exact version.
+
+- **Found, not shipped.** The daemon looks for `claude`, `codex` and `kiro-cli` on the PATH, then in the folders their installers use (`~/.local/bin`, npm's global folder, Kiro's own), every time a thread or a check starts one, so a CLI installed or updated while Humanity runs is picked up without a restart. A Windows npm shim (`.cmd`) is read for the script or executable it runs, because it cannot be spawned without a shell. Claude Code is always given to the Agent SDK by path (`pathToClaudeCodeExecutable`), never the copy the SDK may find in `node_modules`; this holds in development too. The same `apps/server/src/agent/installedCli.ts` serves a provider added later.
+- **A tested minimum, not a pin.** Each provider has the oldest CLI version Humanity is tested against (`CLI_MINIMUM_VERSIONS` in `packages/contracts`): for Claude Code the `claudeCodeVersion` of the Agent SDK Humanity is built with, for Codex the version its app-server protocol was written against, none yet for Kiro. An older CLI still runs threads; Settings and the model picker say it may not work properly and ask the human to update it. A missing CLI links to its install guide.
+- **Updating is the human's click.** Each provider's header in Settings has an Update button that runs the CLI's own updater (`claude update`, `codex update`, `kiro-cli update`), which updates it where and how it was installed. It is the one thing Humanity starts that writes outside `~/.humanity/` and the session's folder, and it only ever runs when the human asks.
+- **Packaging:** the desktop app ships the daemon, the web app and the Agent SDK's JavaScript, without its platform executables; `@openai/codex` is no longer a dependency. The installer no longer carries ~300 MB of agent executables.
+- **Unchanged:** every rule of "Autonomy first" and of each provider's amendment about permissions, accounts and sessions.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

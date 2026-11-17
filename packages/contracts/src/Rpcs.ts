@@ -1,3 +1,4 @@
+import { AgentClisRpcs } from "./rpc/AgentClis.ts"
 import { ApprovalsRpcs } from "./rpc/Approvals.ts"
 import { ClaudeRpcs } from "./rpc/Claude.ts"
 import { CodexRpcs } from "./rpc/Codex.ts"
@@ -26,6 +27,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   ExtensionsRpcs,
   PullRequestsRpcs,
   UpdatesRpcs,
+  AgentClisRpcs,
 )
 
 /** Path of the RPC WebSocket on the daemon (and on the Vite dev proxy). */

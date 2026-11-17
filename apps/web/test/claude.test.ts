@@ -15,7 +15,6 @@ const status = (connection: ClaudeStatus["connection"]): ClaudeStatus => ({
   cliVersion: "2.1.321",
   models: [],
   configDir: "/home/me/.claude",
-  bundledExecutable: null,
   checkedAt: "2026-11-10T09:00:00.000Z",
 })
 

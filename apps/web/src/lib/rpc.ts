@@ -41,6 +41,8 @@ export const keys = {
   codex: "codex",
   /** The Kiro (Beta) login threads on Kiro run as. */
   kiro: "kiro",
+  /** A provider's CLI as installed on this computer: where it is and its version. */
+  agentCli: (provider: string) => `agent-cli:${provider}`,
   /** How GitHub is reached, and so which repositories it lists. */
   github: "github",
   /** How GitLab is reached, and so which repositories it lists. */

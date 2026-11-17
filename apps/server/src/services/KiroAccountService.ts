@@ -30,7 +30,7 @@ export class KiroAccountService extends Context.Service<
         Effect.gen(function* () {
           const result = yield* Effect.result(kiro.probe(kiroHome))
           const checkedAt = DateTime.formatIso(yield* DateTime.now)
-          const base = { executable: kiro.executable, checkedAt }
+          const base = { executable: kiro.executable(), checkedAt }
           if (Result.isFailure(result)) {
             yield* Effect.logWarning("Kiro check failed", result.failure.reason)
             return {

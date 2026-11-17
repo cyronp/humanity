@@ -13,11 +13,12 @@ import {
   toolMode,
 } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
-import { ClaudeCode } from "../claude/ClaudeCode.ts"
+import { ClaudeCode, notInstalled } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
   type AgentExtensions,
+  type AgentRun,
   type AgentRunOptions,
   AgentRunError,
   AgentRunner,
@@ -71,6 +72,21 @@ When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOO
 
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause)
+
+/** A run whose agent could not start: its messages fail with why, the moment they are read. */
+const notStarted = (message: string): AgentRun => {
+  const error = new AgentRunError({ message })
+  return {
+    messages: Stream.fail(error),
+    send: () => Effect.void,
+    interrupt: Effect.void,
+    setModel: () => Effect.fail(error),
+    setEffort: () => Effect.fail(error),
+    applyExtensions: () => Effect.fail(error),
+    contextUsage: Effect.succeed(undefined),
+    planUsage: Effect.succeed(undefined),
+  }
+}
 
 /**
  * Asks the agent process something that is only nice to know: a failure, a
@@ -159,6 +175,9 @@ export const AgentRunnerLive = Layer.effect(
 
     const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {
+        // The installed Claude Code; never the copy the Agent SDK may find in node_modules.
+        const executable = claude.executable()
+        if (executable === undefined) return notStarted(notInstalled().reason)
         const context = yield* Effect.context<never>()
         const runPromise = Effect.runPromiseWith(context)
         const inbox = new Inbox<SDKUserMessage>()
@@ -181,6 +200,7 @@ export const AgentRunnerLive = Layer.effect(
           prompt: inbox,
           options: {
             cwd: options.cwd,
+            pathToClaudeCodeExecutable: executable,
             ...(options.resume === undefined ? {} : { resume: options.resume }),
             ...(options.model === undefined ? {} : { model: options.model }),
             ...(options.effort === undefined ? {} : { effort: options.effort }),

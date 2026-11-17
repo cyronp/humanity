@@ -327,3 +327,26 @@ export class UpdatesUnavailable extends Schema.TaggedError<UpdatesUnavailable>()
     return this.reason
   }
 }
+
+/** A provider's CLI is not on the PATH, nor in a folder it usually installs to. */
+export class CliNotInstalled extends Schema.TaggedError<CliNotInstalled>()("CliNotInstalled", {
+  product: Schema.String,
+  command: Schema.String,
+  installUrl: Schema.String,
+}) {
+  override get message() {
+    return `${this.product} is not installed: no \`${this.command}\` command was found. Install it (${this.installUrl}), then check again.`
+  }
+}
+
+/** A CLI's own updater ran and failed; `output` is what it printed. */
+export class CliUpdateFailed extends Schema.TaggedError<CliUpdateFailed>()("CliUpdateFailed", {
+  product: Schema.String,
+  command: Schema.String,
+  output: Schema.String,
+}) {
+  override get message() {
+    const output = this.output.trim()
+    return `\`${this.command}\` did not update ${this.product}.${output === "" ? "" : `\n${output}`}`
+  }
+}

@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { Check, ChevronLeft, ChevronRight, Star } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Star, TriangleAlert } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useState } from "react"
 import {
   Command,
@@ -27,6 +27,7 @@ import {
   pickerModels,
   shortModelName,
 } from "./models.ts"
+import { agentCliAtom, cliProblem } from "./cli.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -253,6 +254,7 @@ export function ModelPicker({
                 onToggleFavorite={() => toggleFavorite(modelKey(model))}
               />
             ))}
+            {section !== "favorites" && !searching && <CliPickerNote provider={section} />}
             {/* Only the provider already chosen is shown while nobody is signed in to it. */}
             {section !== "favorites" && !searching && answered[section] && !connected[section] && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
@@ -360,5 +362,24 @@ function ModelRow({
         <Star className={cn("size-3.5", favorite && "fill-amber-400 text-amber-400")} />
       </RowToggle>
     </CommandItem>
+  )
+}
+
+/** Why a provider's models may not work: its CLI is missing or older than Humanity is tested with. */
+function CliPickerNote({ provider }: { readonly provider: ProviderId }) {
+  const result = useAtomValue(agentCliAtom(provider))
+  const problem = AsyncResult.isSuccess(result) ? cliProblem(result.value) : undefined
+  if (problem === undefined) return null
+  return (
+    <p className="flex gap-2 px-3 py-2 text-xs text-warning">
+      <TriangleAlert className="mt-px size-3.5 shrink-0" />
+      <span>
+        {problem} Settings, under Providers, has the{" "}
+        {AsyncResult.isSuccess(result) && result.value.path === null
+          ? "install link"
+          : "Update button"}
+        .
+      </span>
+    </p>
   )
 }

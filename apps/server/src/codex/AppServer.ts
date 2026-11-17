@@ -29,6 +29,8 @@ export interface AppServer {
 
 export interface AppServerOptions {
   readonly executable: string
+  /** Arguments before `app-server`: the launcher script, when `executable` is `node`. */
+  readonly args?: ReadonlyArray<string> | undefined
   readonly cwd: string
   readonly env: Record<string, string>
   /**
@@ -89,7 +91,7 @@ export const connectAppServer = (
 
     const handle = yield* spawner
       .spawn(
-        ChildProcess.make(options.executable, ["app-server"], {
+        ChildProcess.make(options.executable, [...(options.args ?? []), "app-server"], {
           cwd: options.cwd,
           env: options.env,
           stdin: Stream.fromQueue(outbound).pipe(

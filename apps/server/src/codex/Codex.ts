@@ -11,7 +11,9 @@ import {
   type ServerMessage,
   type ServerReply,
 } from "./AppServer.ts"
-import { bundledCodexExecutable, codexEnvironment } from "./environment.ts"
+import { CLI_COMMANDS, CLI_INSTALL_URLS } from "@humanity/contracts"
+import { locateCli } from "../agent/installedCli.ts"
+import { codexEnvironment, codexNativeExecutable } from "./environment.ts"
 import {
   AccountResponse,
   decode,
@@ -100,15 +102,15 @@ const withTimeout = <A>(effect: Effect.Effect<A, CodexFailed>) =>
   )
 
 /**
- * The Codex runtime threads run on: the CLI that ships with the
- * `@openai/codex` package, authenticated by the login in its own folder (the
+ * The Codex runtime threads run on: the `codex` the human installed, found
+ * on the PATH each time it starts, authenticated by the login in its own folder (the
  * human's `codex login`), exactly like their own terminal sessions.
  */
 export class Codex extends Context.Service<
   Codex,
   {
-    /** The executable Humanity runs: the bundled one, else `codex` from the PATH. */
-    readonly executable: string
+    /** The executable Humanity runs: the installed `codex`, else the bare command. */
+    readonly executable: () => string
     /** Where the default login lives: `CODEX_HOME`, else `~/.codex`. */
     readonly home: string
     /**
@@ -135,7 +137,21 @@ export class Codex extends Context.Service<
     Effect.gen(function* () {
       const config = yield* ServerConfig
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-      const executable = bundledCodexExecutable() ?? "codex"
+      /**
+       * How to start the installed Codex: its native executable when npm put
+       * one behind the `codex` launcher, else what the PATH has.
+       */
+      const launch = () => {
+        const found = locateCli(CLI_COMMANDS.codex)
+        if (found === undefined) return undefined
+        if (found.script === undefined)
+          return { path: found.path, command: found.command, args: [] }
+        const native = codexNativeExecutable(found.script)
+        return native === undefined
+          ? { path: found.path, command: found.command, args: found.args }
+          : { path: native, command: native, args: [] }
+      }
+      const executable = () => launch()?.path ?? CLI_COMMANDS.codex
       const env = codexEnvironment(process.env)
 
       const home = env["CODEX_HOME"] ?? join(homedir(), ".codex")
@@ -145,12 +161,23 @@ export class Codex extends Context.Service<
         readonly codexHome?: string | undefined
         readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
       }) =>
-        connectAppServer({
-          executable,
-          // An added account is a Codex folder of its own; the default login is whatever Codex finds.
-          env: options.codexHome === undefined ? env : { ...env, CODEX_HOME: options.codexHome },
-          cwd: options.cwd,
-          onRequest: options.onRequest,
+        Effect.suspend(() => {
+          const found = launch()
+          if (found === undefined) {
+            return Effect.fail(
+              new CodexFailed({
+                reason: `Codex is not installed: no "codex" command was found. Install it (${CLI_INSTALL_URLS.codex}), then check again.`,
+              }),
+            )
+          }
+          return connectAppServer({
+            executable: found.command,
+            args: found.args,
+            // An added account is a Codex folder of its own; the default login is whatever Codex finds.
+            env: options.codexHome === undefined ? env : { ...env, CODEX_HOME: options.codexHome },
+            cwd: options.cwd,
+            onRequest: options.onRequest,
+          })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
       /** A Codex in Humanity's own data directory, never the user's repository, to ask one thing. */
@@ -222,7 +249,7 @@ export class Codex extends Context.Service<
   ) => {
     const unused = new CodexFailed({ reason: "Codex is not used by this test." })
     return Layer.succeed(Codex, {
-      executable: "codex",
+      executable: () => "codex",
       home: "/home/me/.codex",
       connect: () => Effect.fail(unused),
       probe: options.probe ?? (() => Effect.fail(unused)),

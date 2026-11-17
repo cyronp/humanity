@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 
 /**
@@ -41,28 +40,34 @@ export const codexTargetTriple = (platform: NodeJS.Platform, arch: string): stri
 }
 
 /**
- * The Codex executable that ships with the `@openai/codex` package: an
- * optional package per platform, installed next to it. `null` when it is missing.
+ * The native Codex executable behind an npm-installed `codex`, whose command
+ * is a JavaScript launcher (`bin/codex.js`) that finds it in the platform
+ * package installed next to it. Started directly, Codex gets its input and
+ * its stop signal without a Node process in between. `undefined` when it is
+ * not where npm puts it; the launcher is then run as it is.
  */
-export const bundledCodexExecutable = (
+export const codexNativeExecutable = (
+  script: string,
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
-): string | null => {
+  exists: (path: string) => boolean = existsSync,
+): string | undefined => {
   const triple = codexTargetTriple(platform, arch)
-  if (triple === undefined) return null
+  if (triple === undefined) return undefined
   const binary = platform === "win32" ? "codex.exe" : "codex"
-  try {
-    const cli = createRequire(import.meta.url).resolve("@openai/codex/package.json")
-    // The platform package is the CLI's dependency, so it resolves from there.
-    const platformPackage = createRequire(cli).resolve(
-      `@openai/codex-${platform}-${arch}/package.json`,
-    )
-    const vendor = join(dirname(platformPackage), "vendor", triple)
+  const cli = dirname(dirname(script))
+  const platformPackage = `codex-${platform}-${arch}`
+  const packages = [
+    join(cli, "node_modules", "@openai", platformPackage),
+    join(dirname(cli), platformPackage),
+    // Older releases kept the executables in the CLI's own package.
+    cli,
+  ]
+  for (const folder of packages) {
+    const vendor = join(folder, "vendor", triple)
     for (const path of [join(vendor, "bin", binary), join(vendor, "codex", binary)]) {
-      if (existsSync(path)) return path
+      if (exists(path)) return path
     }
-  } catch {
-    // Not installed for this platform.
   }
-  return null
+  return undefined
 }

@@ -53,11 +53,6 @@ export const ClaudeStatus = Schema.Struct({
   cliVersion: Schema.NullOr(Schema.String),
   /** Where Claude Code keeps its login (`CLAUDE_CONFIG_DIR`, else `~/.claude`). */
   configDir: Schema.String,
-  /**
-   * The Claude Code executable bundled with the Agent SDK, which Humanity runs.
-   * Shown so a human without a global `claude` install can still sign in.
-   */
-  bundledExecutable: Schema.NullOr(Schema.String),
   /** ISO timestamp of the check this status comes from. */
   checkedAt: Schema.String,
 })

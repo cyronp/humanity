@@ -25,7 +25,6 @@ export class ClaudeAccountService extends Context.Service<
           const checkedAt = DateTime.formatIso(yield* DateTime.now)
           const base = {
             configDir: configDir ?? claude.configDir,
-            bundledExecutable: claude.bundledExecutable,
             checkedAt,
           }
           if (Result.isFailure(result)) {

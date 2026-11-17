@@ -49,8 +49,8 @@ export const CodexStatus = Schema.Struct({
   /** Where Codex keeps its login and settings (`CODEX_HOME`, else `~/.codex`). */
   codexHome: Schema.NullOr(Schema.String),
   /**
-   * The Codex executable Humanity runs: the one bundled with it, else `codex`
-   * from the PATH. Shown so the human can sign in with the same one.
+   * The Codex executable Humanity runs: the one installed on the PATH (or in
+   * a usual install folder), else `codex`. Shown so the human signs in with the same one.
    */
   executable: Schema.String,
   /** ISO timestamp of the check this status comes from. */
