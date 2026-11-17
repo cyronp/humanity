@@ -37,7 +37,7 @@ export function ThreadLink({
       onClick={onNavigate}
       data-active={active}
       aria-current={active ? "page" : undefined}
-      className="flex w-full rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+      className="flex w-full rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-colors group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">

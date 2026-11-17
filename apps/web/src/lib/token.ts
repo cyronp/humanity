@@ -49,15 +49,20 @@ export const rpcUrl = (): string => {
   return `${protocol}//${window.location.host}${RPC_PATH}?${TOKEN_PARAM}=${token}`
 }
 
-export type AuthStatus = "ok" | "unauthorized" | "unreachable"
+/** `missing`: no token yet; `rejected`: the daemon answered and refused it. */
+export type AuthStatus = "ok" | "missing" | "rejected" | "unreachable"
 
-/** Tells a wrong token apart from a daemon that is not running, before opening the socket. */
+/**
+ * Tells a missing or wrong token apart from a daemon that is not running,
+ * before opening the socket. Under `npm run dev` a daemon that is down shows
+ * up as a 5xx from Vite's proxy, so anything but 200 or 401 counts as down.
+ */
 export const checkAuth = async (token: string | undefined): Promise<AuthStatus> => {
-  if (token === undefined || token === "") return "unauthorized"
+  if (token === undefined || token === "") return "missing"
   try {
     const response = await fetch("/api/auth", { headers: { authorization: `Bearer ${token}` } })
     if (response.ok) return "ok"
-    return response.status === 401 ? "unauthorized" : "unreachable"
+    return response.status === 401 ? "rejected" : "unreachable"
   } catch {
     return "unreachable"
   }

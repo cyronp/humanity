@@ -40,9 +40,9 @@ import {
 } from "./threadFilter.ts"
 
 export function AppSidebar() {
-  const { setOpenMobile } = useSidebar()
-  // Choosing a destination on a phone closes the sheet the sidebar lives in.
-  const close = () => setOpenMobile(false)
+  const { setOpenFloating } = useSidebar()
+  // Choosing a destination closes the sidebar while it floats over the page.
+  const close = () => setOpenFloating(false)
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
   const [query, setQuery] = useState("")
@@ -230,7 +230,8 @@ function Conversations({
           {session.status !== "ended" && (
             <EndSessionButton
               session={session}
-              className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 pointer-coarse:opacity-100"
+              // The row's hover colour behind it, so a long project name does not show through.
+              className="absolute top-1 right-1.5 bg-sidebar-accent opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 pointer-coarse:opacity-100"
             />
           )}
         </SidebarMenuItem>

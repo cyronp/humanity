@@ -186,7 +186,17 @@ export function ModelPicker({
           </span>
         </InputGroupButton>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[26rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0">
+      {/*
+       * Always above the button, never flipped below: the list's height changes
+       * with the provider shown, and Radix would flip it whenever that changed
+       * which side had room. The list fits the room above instead (below).
+       */}
+      <PopoverContent
+        side="top"
+        align="end"
+        avoidCollisions={false}
+        className="w-[26rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0"
+      >
         <nav
           aria-label="Model providers"
           className="flex shrink-0 flex-col items-center gap-1 border-r p-2"
@@ -215,7 +225,12 @@ export function ModelPicker({
           className="min-w-0 flex-1 rounded-none! bg-transparent"
         >
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
-          <CommandList className="max-h-80">
+          {/*
+           * One height for every section, so switching providers does not
+           * resize the popover: 20rem, or less when the room above the button
+           * (less the search field and a margin from the window's edge) is less.
+           */}
+          <CommandList className="h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))] max-h-none">
             <CommandEmpty>No model matches.</CommandEmpty>
             {legacyOpen && !searching && section !== "favorites" && (
               <CommandItem
