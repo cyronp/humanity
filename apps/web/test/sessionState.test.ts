@@ -11,11 +11,14 @@ import {
 } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import {
-  approvalForToolUse,
+  addEarlierPage,
+  approvalsByToolUse,
   isBusy,
+  joinEarlier,
   pendingChanges,
   pendingConfirmations,
   reduceSessionEvent,
+  reduceSessionEvents,
   type SessionView,
 } from "@/features/session/state"
 
@@ -64,6 +67,7 @@ const snapshot = (overrides: Partial<Extract<SessionEvent, { _tag: "Snapshot" }>
     session,
     messages: [],
     toolCalls: [],
+    hasEarlier: false,
     approvals: [],
     usage: { context: null, plan: null },
     ...overrides,
@@ -205,9 +209,11 @@ describe("reduceSessionEvent", () => {
       { _tag: "ApprovalRequested", approval: change },
       { _tag: "ApprovalRequested", approval: confirmation },
     ])
-    expect(waiting && pendingChanges(waiting).map((c) => c.id)).toEqual(["c1"])
-    expect(waiting && pendingConfirmations(waiting).map((c) => c.id)).toEqual(["k1"])
-    expect(waiting && approvalForToolUse(waiting, "toolu_bash")?._tag).toBe("confirmation")
+    expect(waiting && pendingChanges(waiting.approvals).map((c) => c.id)).toEqual(["c1"])
+    expect(waiting && pendingConfirmations(waiting.approvals).map((c) => c.id)).toEqual(["k1"])
+    expect(waiting && approvalsByToolUse(waiting.approvals).get("toolu_bash")?._tag).toBe(
+      "confirmation",
+    )
 
     const decided = fold(
       [
@@ -219,7 +225,75 @@ describe("reduceSessionEvent", () => {
       waiting,
     )
     expect(decided?.approvals).toHaveLength(2)
-    expect(decided && pendingChanges(decided)).toEqual([])
-    expect(decided && pendingConfirmations(decided)).toHaveLength(1)
+    expect(decided && pendingChanges(decided.approvals)).toEqual([])
+    expect(decided && pendingConfirmations(decided.approvals)).toHaveLength(1)
+    // A decided approval stays with its tool call.
+    expect(decided && approvalsByToolUse(decided.approvals).get("toolu_edit")?._tag).toBe("change")
+  })
+
+  it("folds a batch of events like the same events one by one", () => {
+    const events: ReadonlyArray<SessionEvent> = [
+      snapshot(),
+      { _tag: "SessionStatusChanged", status: "running", error: null },
+      { _tag: "TextDelta", text: "Hel" },
+      { _tag: "TextDelta", text: "lo" },
+    ]
+    const batched = reduceSessionEvents(reduceSessionEvents(undefined, events.slice(0, 2)), [
+      ...events.slice(2),
+    ])
+    expect(batched).toEqual(fold(events))
+    expect(batched?.draft).toBe("Hello")
+  })
+
+  it("leaves what a streamed token does not touch as it was, so the transcript can skip it", () => {
+    const before = fold([snapshot({ messages: [message("m1", { _tag: "user", text: "hi" })] })])
+    const after = before && reduceSessionEvent(before, { _tag: "TextDelta", text: "x" })
+    expect(after?.messages).toBe(before?.messages)
+    expect(after?.toolCalls).toBe(before?.toolCalls)
+    expect(after?.approvals).toBe(before?.approvals)
+  })
+})
+
+describe("earlier pages", () => {
+  const user = (id: string) => message(id, { _tag: "user", text: id })
+  const live = fold([snapshot({ messages: [user("m5"), user("m6")], hasEarlier: true })])
+
+  it("shows the live view alone until a page is read", () => {
+    expect(live && joinEarlier(live, undefined)).toBe(live)
+  })
+
+  it("puts each page read before the ones already shown", () => {
+    if (live === undefined) return expect.fail("no view")
+    const once = addEarlierPage(undefined, "m5", {
+      messages: [user("m3"), user("m4")],
+      toolCalls: [toolCall("succeeded")],
+      hasEarlier: true,
+    })
+    const twice = addEarlierPage(once, "m5", {
+      messages: [user("m1"), user("m2")],
+      toolCalls: [],
+      hasEarlier: false,
+    })
+    const shown = joinEarlier(live, twice)
+    expect(shown.messages.map((each) => each.id)).toEqual(["m1", "m2", "m3", "m4", "m5", "m6"])
+    expect(shown.toolCalls["toolu_1"]?.status).toBe("succeeded")
+    expect(shown.hasEarlier).toBe(false)
+  })
+
+  it("drops the pages once a snapshot starts the live view elsewhere", () => {
+    const pages = addEarlierPage(undefined, "m5", {
+      messages: [user("m4")],
+      toolCalls: [],
+      hasEarlier: true,
+    })
+    const moved = fold([snapshot({ messages: [user("m6")], hasEarlier: true })])
+    expect(moved && joinEarlier(moved, pages)).toBe(moved)
+    // A page read for the new start does not keep the old ones either.
+    expect(addEarlierPage(pages, "m6", { messages: [], toolCalls: [], hasEarlier: true })).toEqual({
+      attachedTo: "m6",
+      messages: [],
+      toolCalls: {},
+      hasEarlier: true,
+    })
   })
 })

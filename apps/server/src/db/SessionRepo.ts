@@ -16,6 +16,8 @@ import {
   type ToolCall,
   ToolCallStatus,
   ToolResult,
+  TRANSCRIPT_PAGE_SIZE,
+  type TranscriptPage,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
@@ -76,6 +78,21 @@ const toAttachment = (row: typeof AttachmentRow.Type): Attachment => ({
 })
 
 const MessageJson = Schema.fromJsonString(MessageContent)
+
+/** The tool calls a run of messages started, in order. */
+const toolUseIdsOf = (messages: ReadonlyArray<ChatMessage>): Array<string> =>
+  messages.flatMap((message) =>
+    message.content._tag === "assistant"
+      ? message.content.blocks.flatMap((block) =>
+          block._tag === "tool_use" ? [block.toolUseId] : [],
+        )
+      : [],
+  )
+
+const chunksOf = <A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A>> =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  )
 
 const MessageRow = Schema.Struct({
   id: Schema.String,
@@ -209,6 +226,14 @@ export class SessionRepo extends Context.Service<
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
+    /**
+     * The latest `TRANSCRIPT_PAGE_SIZE` messages, or those just before the
+     * message `before`, with the tool calls they started.
+     */
+    readonly transcriptPage: (
+      sessionId: string,
+      before?: string | undefined,
+    ) => Effect.Effect<TranscriptPage>
     readonly insertToolCall: (toolCall: ToolCall) => Effect.Effect<void>
     readonly finishToolCall: (
       sessionId: string,
@@ -273,6 +298,28 @@ export class SessionRepo extends Context.Service<
         Result: ToolCallRow,
         execute: (sessionId) =>
           sql`SELECT * FROM tool_calls WHERE session_id = ${sessionId} ORDER BY rowid`,
+      })
+      const findMessagePage = SqlSchema.findAll({
+        Request: Schema.Struct({
+          sessionId: Schema.String,
+          before: Schema.NullOr(Schema.String),
+          limit: Schema.Number,
+        }),
+        Result: MessageRow,
+        // Newest first, so LIMIT keeps the end of the transcript.
+        execute: ({ sessionId, before, limit }) =>
+          before === null
+            ? sql`SELECT id, session_id, normalized_json, created_at FROM messages WHERE session_id = ${sessionId} ORDER BY rowid DESC LIMIT ${limit}`
+            : sql`SELECT id, session_id, normalized_json, created_at FROM messages WHERE session_id = ${sessionId} AND rowid < (SELECT rowid FROM messages WHERE id = ${before} AND session_id = ${sessionId}) ORDER BY rowid DESC LIMIT ${limit}`,
+      })
+      const findToolCallsOf = SqlSchema.findAll({
+        Request: Schema.Struct({
+          sessionId: Schema.String,
+          toolUseIds: Schema.Array(Schema.String),
+        }),
+        Result: ToolCallRow,
+        execute: ({ sessionId, toolUseIds }) =>
+          sql`SELECT * FROM tool_calls WHERE session_id = ${sessionId} AND ${sql.in("tool_use_id", toolUseIds)} ORDER BY rowid`,
       })
       const findToolCall = SqlSchema.findOneOption({
         Request: Schema.Struct({ sessionId: Schema.String, toolUseId: Schema.String }),
@@ -446,18 +493,39 @@ export class SessionRepo extends Context.Service<
           `
         }).pipe(Effect.orDie)
 
+      const toMessage = (row: typeof MessageRow.Type): ChatMessage => ({
+        id: row.id,
+        sessionId: row.session_id,
+        content: row.normalized_json,
+        createdAt: row.created_at,
+      })
+
       const listMessages = (sessionId: string) =>
         findMessages(sessionId).pipe(
-          Effect.map((rows) =>
-            rows.map((row): ChatMessage => ({
-              id: row.id,
-              sessionId: row.session_id,
-              content: row.normalized_json,
-              createdAt: row.created_at,
-            })),
-          ),
+          Effect.map((rows) => rows.map(toMessage)),
           Effect.orDie,
         )
+
+      const transcriptPage = (sessionId: string, before?: string | undefined) =>
+        Effect.gen(function* () {
+          // One more than a page, to learn whether anything is left before it.
+          const rows = yield* findMessagePage({
+            sessionId,
+            before: before ?? null,
+            limit: TRANSCRIPT_PAGE_SIZE + 1,
+          })
+          const messages = rows.slice(0, TRANSCRIPT_PAGE_SIZE).reverse().map(toMessage)
+          const toolUseIds = toolUseIdsOf(messages)
+          // A few hundred at a time, well under SQLite's limit on bound values.
+          const toolCalls = yield* Effect.forEach(chunksOf(toolUseIds, 500), (chunk) =>
+            findToolCallsOf({ sessionId, toolUseIds: chunk }),
+          )
+          return {
+            messages,
+            toolCalls: toolCalls.flat().map(toToolCall),
+            hasEarlier: rows.length > TRANSCRIPT_PAGE_SIZE,
+          }
+        }).pipe(Effect.orDie)
 
       const insertToolCall = (toolCall: ToolCall) =>
         sql`
@@ -622,6 +690,7 @@ export class SessionRepo extends Context.Service<
         setUsage,
         insertMessage,
         listMessages,
+        transcriptPage,
         insertToolCall,
         finishToolCall,
         getToolCall,

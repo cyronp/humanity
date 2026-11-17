@@ -3,7 +3,7 @@ import type { ContextUsage, SessionId, SessionUsage } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { Gauge, RefreshCw } from "lucide-react"
-import { useCallback, useRef, useState } from "react"
+import { memo, useCallback, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -40,7 +40,7 @@ const FLOATING = "rounded-full bg-background/60 px-2 py-0.5 text-xs tabular-nums
  * The line above the message box: the plan's usage on the far left, a button
  * that opens every window, and the context window on the right.
  */
-export function UsageMeters({
+export const UsageMeters = memo(function UsageMeters({
   sessionId,
   usage,
 }: {
@@ -55,7 +55,7 @@ export function UsageMeters({
       {usage.context !== null && <ContextMeter context={usage.context} />}
     </div>
   )
-}
+})
 
 /** Counts the context window down while a ring fills up with what is used. */
 function ContextMeter({ context }: { readonly context: ContextUsage }) {

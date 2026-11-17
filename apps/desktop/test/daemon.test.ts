@@ -28,7 +28,10 @@ if (process.env.CRASH === "1") {
   console.error("boom: cannot open database")
   process.exit(1)
 }
+let requests = 0
 createServer((_request, response) => {
+  // Like a daemon listening before its handler is attached: the first request is never answered.
+  if (process.env.HANG_FIRST === "1" && requests++ === 0) return
   response.statusCode = 401
   response.end()
   if (process.env.DIE_AFTER_REQUEST === "1") setTimeout(() => process.exit(1), 50)
@@ -75,6 +78,27 @@ describe("supervise", () => {
       yield* Fiber.join(fiber)
 
       // It left by itself, on the closed stdin, rather than being killed.
+      assert.deepStrictEqual(linesOf(fake.starts), ["start", "asked to stop"])
+    }).pipe(Effect.provide(Platform)),
+  )
+
+  it.live("does not wait on a readiness probe that is never answered", () =>
+    Effect.gen(function* () {
+      const fake = yield* fakeDaemon({ HANG_FIRST: "1" })
+      const stop = yield* Deferred.make<void>()
+      const ready = yield* Deferred.make<void>()
+      const fiber = yield* supervise({
+        daemon: fake.command,
+        readinessUrl: fake.readinessUrl,
+        stop,
+        readinessTimeout: "10 seconds",
+        onReady: Deferred.succeed(ready, undefined),
+      }).pipe(Effect.forkChild)
+
+      yield* Deferred.await(ready).pipe(Effect.timeout("5 seconds"))
+      yield* Deferred.succeed(stop, undefined)
+      yield* Fiber.join(fiber)
+      // Ready on the first start: the hung probe was given up on, not the daemon.
       assert.deepStrictEqual(linesOf(fake.starts), ["start", "asked to stop"])
     }).pipe(Effect.provide(Platform)),
   )

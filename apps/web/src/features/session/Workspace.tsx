@@ -1,7 +1,9 @@
 import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
@@ -12,13 +14,14 @@ import { SessionPanel } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
 import { SourceControlButton } from "./SourceControlButton.tsx"
 import {
-  approvalForToolUse,
+  approvalsByToolUse,
   isBusy,
   pendingChanges,
   pendingConfirmations,
   type SessionView,
 } from "./state.ts"
 import { UsageMeters } from "./UsageMeters.tsx"
+import { useTranscript } from "./useTranscript.ts"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
@@ -37,9 +40,12 @@ export function Workspace({
   readonly view: SessionView
   readonly search: WorkspaceSearch
 }) {
-  const { session } = view
-  const changes = pendingChanges(view)
-  const confirmations = pendingConfirmations(view)
+  const { session, approvals } = view
+  // Kept while only the draft changes, so what reads them renders once per approval, not per token.
+  const changes = useMemo(() => pendingChanges(approvals), [approvals])
+  const confirmations = useMemo(() => pendingConfirmations(approvals), [approvals])
+  const byToolUse = useMemo(() => approvalsByToolUse(approvals), [approvals])
+  const transcript = useTranscript(view)
   const waiting = changes.length + confirmations.length
   // The oldest question takes the message box's place; every other call keeps its card.
   const asked = confirmations.find((confirmation) => confirmation.toolName === QUESTION_TOOL)
@@ -112,14 +118,32 @@ export function Workspace({
           <div className="min-h-0 flex-1">
             <MessageList
               bottomInset={dockHeight}
-              messages={view.messages}
-              toolCalls={view.toolCalls}
+              messages={transcript.messages}
+              toolCalls={transcript.toolCalls}
               draft={view.draft}
               working={session.status === "running"}
-              approvalFor={(toolUseId) => approvalForToolUse(view, toolUseId)}
+              approvals={byToolUse}
               worktreePath={session.worktreePath}
               empty={
                 <p className="py-12 text-center text-sm text-muted-foreground">No messages yet.</p>
+              }
+              earlier={
+                transcript.hasEarlier ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={transcript.loading}
+                      onClick={() => void transcript.loadEarlier()}
+                    >
+                      {transcript.loading && <Spinner />}
+                      Show earlier messages
+                    </Button>
+                    {transcript.error !== undefined && (
+                      <p className="text-xs text-destructive">{transcript.error}</p>
+                    )}
+                  </div>
+                ) : undefined
               }
               footer={
                 view.error !== null ? (

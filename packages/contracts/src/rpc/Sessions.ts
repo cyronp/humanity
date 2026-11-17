@@ -6,7 +6,7 @@ import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
 import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
 import { BranchCommits, WorkingTreeDiff } from "../domain/Git.ts"
-import { SessionEvent } from "../domain/SessionEvent.ts"
+import { SessionEvent, TranscriptPage } from "../domain/SessionEvent.ts"
 import {
   AttachmentNotFound,
   AttachmentRejected,
@@ -209,6 +209,15 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId },
     success: SessionUsage,
     error: Schema.Union([SessionNotFound, PlanUsageUnavailable]),
+  }),
+  /**
+   * The page of messages just before the message `before`, with their tool
+   * calls: what a snapshot left out, read back a page at a time.
+   */
+  Rpc.make("Sessions.earlierMessages", {
+    payload: { sessionId: SessionId, before: Schema.String },
+    success: TranscriptPage,
+    error: SessionNotFound,
   }),
   /** A snapshot of the session, then every event as it happens. */
   Rpc.make("Sessions.subscribe", {

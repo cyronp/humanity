@@ -3,7 +3,7 @@ import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 import { pageVisible, whileVisible } from "@/lib/visibility"
-import { reduceSessionEvent, type SessionView } from "./state.ts"
+import { reduceSessionEvents, type SessionView } from "./state.ts"
 
 export const sessionsAtom = Atom.family((projectId: ProjectId) =>
   HumanityClient.query(
@@ -25,10 +25,16 @@ export const allSessionsAtom = HumanityClient.runtime
   )
   .pipe(Atom.keepAlive)
 
+/** How long events gather before the view is updated with all of them at once. */
+const BATCH_WINDOW = "50 millis"
+/** A burst this long is applied at once, without waiting out the window. */
+const BATCH_SIZE = 512
+
 /**
  * The live view of one session: the subscription's snapshot plus every event
  * since, folded by `reduceSessionEvent`. A dropped connection resubscribes and
- * the fresh snapshot replaces the old state.
+ * the fresh snapshot replaces the old state. Events are folded in batches, so
+ * a streaming reply updates the page at most every 50ms instead of once per token.
  */
 export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.runtime.atom(
@@ -36,10 +42,14 @@ export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
       HumanityClient.use((client) => Effect.succeed(client("Sessions.subscribe", { sessionId }))),
     ).pipe(
       Stream.retry(Schedule.spaced("1 second")),
-      Stream.scan((): SessionView | undefined => undefined, reduceSessionEvent),
+      Stream.groupedWithin(BATCH_SIZE, BATCH_WINDOW),
+      Stream.scan((): SessionView | undefined => undefined, reduceSessionEvents),
     ),
   ),
 )
+
+/** A page of the messages a snapshot left out, just before a given one. */
+export const earlierMessagesAtom = HumanityClient.mutation("Sessions.earlierMessages")
 
 export const createSessionAtom = HumanityClient.mutation("Sessions.create")
 export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")

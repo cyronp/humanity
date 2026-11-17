@@ -35,6 +35,13 @@ export interface SuperviseOptions {
 
 const OUTPUT_TAIL = 4_000
 const POLL_INTERVAL = "100 millis"
+/**
+ * How long one readiness probe may take. The daemon starts listening before
+ * its HTTP handler is attached, and a request that arrives in between is
+ * never answered: without a limit, that one probe would hold the splash until
+ * `readinessTimeout` and get a healthy daemon restarted.
+ */
+const PROBE_TIMEOUT = "1 second"
 
 /** 0.5s after a crash, doubling with each start that fails, up to 10s. */
 export const restartDelay = (failures: number): Duration.Duration =>
@@ -43,6 +50,8 @@ export const restartDelay = (failures: number): Duration.Duration =>
 const isUp = (url: string) =>
   HttpClient.get(url).pipe(
     Effect.map((response) => response.status === 200 || response.status === 401),
+    Effect.timeoutOption(PROBE_TIMEOUT),
+    Effect.map((answer) => Option.getOrElse(answer, () => false)),
     Effect.catch(() => Effect.succeed(false)),
   )
 

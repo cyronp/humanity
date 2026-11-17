@@ -18,6 +18,12 @@ import { SessionEvents } from "./SessionEvents.ts"
 
 /** How often the daemon looks for conversations the human had in the CLI since. */
 const SYNC_INTERVAL = "5 minutes"
+/**
+ * The first sync waits this long after the daemon starts: it reads every
+ * project's Claude Code transcripts and writes to the one database
+ * connection, which the window opening at the same time needs first.
+ */
+const FIRST_SYNC_DELAY = "5 seconds"
 
 const MAX_TITLE = 80
 
@@ -62,11 +68,11 @@ export class HistoryImport extends Context.Service<
         Effect.gen(function* () {
           const session = yield* repo.get(sessionId)
           if (Option.isNone(session)) return
+          const page = yield* repo.transcriptPage(sessionId)
           const snapshot: SessionEvent = {
             _tag: "Snapshot",
             session: session.value,
-            messages: yield* repo.listMessages(sessionId),
-            toolCalls: yield* repo.listToolCalls(sessionId),
+            ...page,
             approvals: yield* approvals.listForSession(sessionId),
             usage: yield* repo.getUsage(sessionId),
           }
@@ -175,11 +181,15 @@ export class HistoryImport extends Context.Service<
     }),
   )
 
-  /** Imports on start, then again every few minutes, for as long as the daemon runs. */
+  /** Imports soon after start, then again every few minutes, for as long as the daemon runs. */
   static readonly background = Layer.effectDiscard(
     Effect.gen(function* () {
       const imports = yield* HistoryImport
-      yield* imports.syncAll.pipe(Effect.repeat(Schedule.spaced(SYNC_INTERVAL)), Effect.forkScoped)
+      yield* imports.syncAll.pipe(
+        Effect.repeat(Schedule.spaced(SYNC_INTERVAL)),
+        Effect.delay(FIRST_SYNC_DELAY),
+        Effect.forkScoped,
+      )
     }),
   )
 }

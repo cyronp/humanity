@@ -27,6 +27,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.commits": ({ sessionId }) => sessions.commits(sessionId),
       "Sessions.commit": ({ sessionId, message, paths }) =>
         sessions.commit(sessionId, message, paths),
+      "Sessions.earlierMessages": ({ sessionId, before }) =>
+        sessions.earlierMessages(sessionId, before),
       "Sessions.subscribe": ({ sessionId }) => sessions.subscribe(sessionId),
     })
   }),

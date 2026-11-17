@@ -21,6 +21,7 @@ import claudeAccountFolder from "./migrations/0016_claude_account_folder.ts"
 import sessionProvider from "./migrations/0017_session_provider.ts"
 import codexAccounts from "./migrations/0018_codex_accounts.ts"
 import kiroAccounts from "./migrations/0019_kiro_accounts.ts"
+import messagesBySession from "./migrations/0020_messages_by_session.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
@@ -43,20 +44,26 @@ const migrations = {
   "0017_session_provider": sessionProvider,
   "0018_codex_accounts": codexAccounts,
   "0019_kiro_accounts": kiroAccounts,
+  "0020_messages_by_session": messagesBySession,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })
 
-// SQLite only enforces ON DELETE CASCADE when foreign keys are switched on per connection.
-const ForeignKeys = Layer.effectDiscard(
+const Pragmas = Layer.effectDiscard(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
+    // SQLite only enforces ON DELETE CASCADE when foreign keys are switched on per connection.
     yield* sql`PRAGMA foreign_keys = ON`
+    // The driver keeps the database in WAL mode, where NORMAL is still safe from
+    // corruption and syncs at checkpoints instead of on every commit: each message
+    // an agent writes no longer waits for the disk. A power cut can lose the last
+    // commits, never the database.
+    yield* sql`PRAGMA synchronous = NORMAL`
   }),
 )
 
 const layerFor = (filename: string) =>
-  Layer.mergeAll(Migrations, ForeignKeys).pipe(
+  Layer.mergeAll(Migrations, Pragmas).pipe(
     Layer.provideMerge(SqliteClient.layer({ filename })),
     Layer.orDie,
   )

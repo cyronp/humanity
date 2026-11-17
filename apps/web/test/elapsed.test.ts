@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
-import { formatTimeAgo } from "@/lib/elapsed"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { formatTimeAgo, sharedClock } from "@/lib/elapsed"
 
 const now = Date.parse("2026-11-11T12:00:00.000Z")
 const ago = (seconds: number) => formatTimeAgo(new Date(now - seconds * 1000).toISOString(), now)
@@ -16,5 +16,35 @@ describe("formatTimeAgo", () => {
 
   it("prints nothing for a date it cannot read", () => {
     expect(formatTimeAgo("", now)).toBe("")
+  })
+})
+
+describe("sharedClock", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("ticks every listener on one timer, and stops with the last one", () => {
+    vi.useFakeTimers({ now: 0 })
+    const clock = sharedClock(1000)
+    const first = vi.fn()
+    const second = vi.fn()
+    const stopFirst = clock.subscribe(first)
+    const stopSecond = clock.subscribe(second)
+    expect(vi.getTimerCount()).toBe(1)
+
+    // The same time between ticks, so React sees nothing to render.
+    expect(clock.getSnapshot()).toBe(clock.getSnapshot())
+    vi.advanceTimersByTime(1000)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(clock.getSnapshot()).toBe(1000)
+
+    stopFirst()
+    vi.advanceTimersByTime(1000)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(2)
+    stopSecond()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

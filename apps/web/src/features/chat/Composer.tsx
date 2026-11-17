@@ -7,7 +7,14 @@ import type {
   SessionId,
 } from "@humanity/contracts"
 import { Exit } from "effect"
-import { type FormEvent, type KeyboardEvent, type Ref, useImperativeHandle, useState } from "react"
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  memo,
+  type Ref,
+  useImperativeHandle,
+  useState,
+} from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
 import type { PromptInsertion } from "@/features/extensions/prompt"
@@ -37,7 +44,7 @@ export interface ComposerHandle {
  * Follow-ups are queued while the agent works; with nothing typed, the send
  * button is a red stop for the agent's current turn instead.
  */
-export function Composer({
+export const Composer = memo(function Composer({
   sessionId,
   projectId,
   autonomy,
@@ -207,4 +214,4 @@ export function Composer({
       </ChatBox>
     </form>
   )
-}
+})
