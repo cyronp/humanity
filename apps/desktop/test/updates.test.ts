@@ -5,7 +5,7 @@ import type {
   UpdateState,
   UpdateTrack,
 } from "@humanity/contracts"
-import { Effect, Queue, Ref, Stream } from "effect"
+import { type Cause, Effect, Queue, Ref, Stream } from "effect"
 import {
   describeUpdaterError,
   feedUrl,
@@ -155,6 +155,34 @@ describe("serveUpdates", () => {
       ])
       assert.isTrue(yield* Ref.get(fake.installed))
     }).pipe(Effect.scoped),
+  )
+
+  it.effect("still installs when stopping the daemon ends the connection", () =>
+    Effect.gen(function* () {
+      const commands = yield* Queue.unbounded<DesktopUpdateCommand, Cause.Done>()
+      const installed = yield* Ref.make(false)
+      const updater: Updater = {
+        check: () => Effect.succeed("0.3.0"),
+        download: Stream.make(100),
+        // Like the app's: the daemon stops, its socket closes, then the installer runs.
+        install: Queue.end(commands).pipe(
+          Effect.andThen(Effect.promise(() => new Promise((done) => setTimeout(done, 20)))),
+          Effect.andThen(Ref.set(installed, true)),
+        ),
+      }
+      yield* Queue.offerAll(commands, [
+        configure({ autoCheck: false, track: "stable" }),
+        { _tag: "Install" },
+      ])
+      yield* serveUpdates({
+        updater,
+        unsupported: "",
+        commands: Stream.fromQueue(commands),
+        report: () => Effect.void,
+        firstOpen: Effect.succeed(false),
+      })
+      assert.isTrue(yield* Ref.get(installed))
+    }),
   )
 
   it.effect("installs nothing when there is nothing newer", () =>

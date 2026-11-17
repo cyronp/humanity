@@ -111,7 +111,10 @@ export const serveUpdates = <E, R>(options: {
         Stream.runForEach((percent) => report({ _tag: "Downloading", version, percent })),
       )
       yield* report({ _tag: "Installing", version })
-      yield* updater.install
+      // Installing stops the daemon first, which ends this connection and with it
+      // the scope this runs in: interrupted then, the installer would never start,
+      // leaving the app open on a stopped daemon.
+      yield* Effect.uninterruptible(updater.install)
     }).pipe(
       Effect.catch((error) => report({ _tag: "Failed", message: errorMessage(error) })),
       Semaphore.withPermits(lock, 1),
