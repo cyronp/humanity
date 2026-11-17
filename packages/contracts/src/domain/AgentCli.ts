@@ -5,12 +5,12 @@ import { AgentProvider } from "./Provider.ts"
  * The oldest version of each provider's CLI that Humanity is tested against.
  * Older ones still run threads, but the human is asked to update them.
  * Claude Code's follows the Agent SDK Humanity is built with (its
- * `claudeCodeVersion`); Kiro has none yet, so it is never called outdated.
+ * `claudeCodeVersion`); Kiro's is the first with the ACP agent Humanity speaks to.
  */
 export const CLI_MINIMUM_VERSIONS: Readonly<Record<AgentProvider, string | null>> = {
   "claude-code": "2.1.321",
   codex: "0.169.0",
-  kiro: null,
+  kiro: "3.0.0",
 }
 
 /** The command each provider's CLI is run as, from the PATH. */
