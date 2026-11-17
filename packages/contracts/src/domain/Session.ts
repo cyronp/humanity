@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Attachment } from "./Attachment.ts"
+import { FileMentions } from "./Mention.ts"
 import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
 import { AgentProvider } from "./Provider.ts"
@@ -78,7 +79,6 @@ export type SessionUsage = typeof SessionUsage.Type
 
 export const NO_USAGE: SessionUsage = { context: null, plan: null }
 
-
 export const TextBlock = Schema.TaggedStruct("text", { text: Schema.String })
 export const ThinkingBlock = Schema.TaggedStruct("thinking", { text: Schema.String })
 export const ToolUseBlock = Schema.TaggedStruct("tool_use", {
@@ -108,6 +108,7 @@ export const MessageContent = Schema.Union([
   Schema.TaggedStruct("user", {
     text: Schema.String,
     attachments: Schema.optional(Schema.Array(Attachment)),
+    mentions: Schema.optional(FileMentions),
   }),
   Schema.TaggedStruct("assistant", {
     blocks: Schema.Array(AssistantBlock),

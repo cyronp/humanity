@@ -56,8 +56,10 @@ describe("writing a picked file", () => {
 })
 
 describe("splitMentions", () => {
-  it("finds file references among the text", () => {
-    expect(splitMentions("look at @src/app.ts and @docs/")).toEqual([
+  const picked = (...paths: Array<string>) => new Set(paths)
+
+  it("marks the files picked from the list among the text", () => {
+    expect(splitMentions("look at @src/app.ts and @docs/", picked("src/app.ts", "docs/"))).toEqual([
       { kind: "text", text: "look at " },
       { kind: "file", text: "@src/app.ts", path: "src/app.ts" },
       { kind: "text", text: " and " },
@@ -66,14 +68,14 @@ describe("splitMentions", () => {
   })
 
   it("reads a quoted path with spaces", () => {
-    expect(splitMentions('@"my notes/a b.md" please')).toEqual([
+    expect(splitMentions('@"my notes/a b.md" please', picked("my notes/a b.md"))).toEqual([
       { kind: "file", text: '@"my notes/a b.md"', path: "my notes/a b.md" },
       { kind: "text", text: " please" },
     ])
   })
 
   it("leaves punctuation after a reference out of it", () => {
-    expect(splitMentions("fix @a.ts, then @b.ts.")).toEqual([
+    expect(splitMentions("fix @a.ts, then @b.ts.", picked("a.ts", "b.ts"))).toEqual([
       { kind: "text", text: "fix " },
       { kind: "file", text: "@a.ts", path: "a.ts" },
       { kind: "text", text: ", then " },
@@ -82,25 +84,28 @@ describe("splitMentions", () => {
     ])
   })
 
+  it("leaves as text an @ that was not picked, whatever it looks like", () => {
+    expect(
+      splitMentions("use @effect/vitest, ask @someone, see @Taskfile", picked("Taskfile")),
+    ).toEqual([
+      { kind: "text", text: "use @effect/vitest, ask @someone, see " },
+      { kind: "file", text: "@Taskfile", path: "Taskfile" },
+    ])
+    expect(splitMentions("see @src/app.ts", picked())).toEqual([
+      { kind: "text", text: "see @src/app.ts" },
+    ])
+  })
+
   it("ignores an @ inside a word and a lone @", () => {
-    expect(splitMentions("mail a@b.com @ now")).toEqual([
+    expect(splitMentions("mail a@b.com @ now", picked("b.com"))).toEqual([
       { kind: "text", text: "mail a@b.com @ now" },
     ])
   })
 
-  it("leaves an @ that does not look like a path as text", () => {
-    expect(splitMentions("use @Effect.gen, ask @someone, see @Makefile and @.env")).toEqual([
-      { kind: "text", text: "use @Effect.gen, ask @someone, see " },
-      { kind: "file", text: "@Makefile", path: "Makefile" },
-      { kind: "text", text: " and " },
-      { kind: "file", text: "@.env", path: ".env" },
-    ])
-  })
-
   it("keeps every character of the text", () => {
-    const text = 'a @x.ts\n@"y z" @w.'
+    const text = 'a @x.ts\n@"y z" @w. @q'
     expect(
-      splitMentions(text)
+      splitMentions(text, picked("x.ts", "y z", "w"))
         .map((segment) => segment.text)
         .join(""),
     ).toBe(text)

@@ -148,6 +148,7 @@ function NewChatForm({
         ...(chosen === undefined ? {} : { baseBranch: chosen }),
         prompt,
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
+        ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
         autonomy,
         provider,
         ...(model === null ? {} : { model }),
@@ -161,6 +162,7 @@ function NewChatForm({
       return
     }
     setText("")
+    mentions.forgetPicked()
     files.clear()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",
@@ -192,6 +194,7 @@ function NewChatForm({
         <MentionTextarea
           ref={textarea}
           value={text}
+          mentions={mentions.picked}
           {...mentions.textareaProps}
           aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
           aria-activedescendant={

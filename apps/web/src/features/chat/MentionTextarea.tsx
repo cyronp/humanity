@@ -10,11 +10,12 @@ export function MentionTextarea({
   className,
   value,
   onScroll,
+  mentions,
   ...props
-}: ComponentProps<typeof InputGroupTextarea>) {
+}: ComponentProps<typeof InputGroupTextarea> & { readonly mentions: ReadonlyArray<string> }) {
   const mirror = useRef<HTMLDivElement>(null)
   const text = typeof value === "string" ? value : ""
-  const segments = useMemo(() => splitMentions(text), [text])
+  const segments = useMemo(() => splitMentions(text, new Set(mentions)), [text, mentions])
 
   return (
     <div className="relative flex w-full flex-1">

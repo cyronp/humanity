@@ -14,6 +14,7 @@ import {
   BranchNotCheckedOut,
   ChangeId,
   DEFAULT_AUTONOMY,
+  mentionedPaths,
   DEFAULT_ACCOUNT,
   DEFAULT_PROVIDER,
   type ChatMessage,
@@ -166,6 +167,7 @@ export class SessionService extends Context.Service<
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
       readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+      readonly mentions?: ReadonlyArray<string> | undefined
       readonly provider?: AgentProvider | undefined
       readonly model?: string | undefined
       readonly effort?: ReasoningEffort | undefined
@@ -208,6 +210,7 @@ export class SessionService extends Context.Service<
       sessionId: string,
       text: string,
       attachments?: ReadonlyArray<AttachmentUpload>,
+      mentions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, SessionNotFound | SessionEnded | AttachmentRejected>
     readonly attachment: (
       sessionId: string,
@@ -757,7 +760,12 @@ export class SessionService extends Context.Service<
           }
         })
 
-      const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
+      const deliver = (
+        session: Session,
+        text: string,
+        files: ReadonlyArray<PreparedAttachment>,
+        mentions: ReadonlyArray<string>,
+      ) =>
         Effect.gen(function* () {
           const moved = relocated.get(session.id)
           relocated.delete(session.id)
@@ -766,12 +774,13 @@ export class SessionService extends Context.Service<
               ? text
               : `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.\n\n${text}`
           const stored = yield* storeAttachments(session.id, files)
-          yield* addMessage(
-            session.id,
-            stored.length === 0
-              ? { _tag: "user", text }
-              : { _tag: "user", text, attachments: stored },
-          )
+          const mentioned = mentionedPaths(text, mentions)
+          yield* addMessage(session.id, {
+            _tag: "user",
+            text,
+            ...(stored.length === 0 ? {} : { attachments: stored }),
+            ...(mentioned.length === 0 ? {} : { mentions: mentioned }),
+          })
           const state = yield* ensureRun(session)
           state.interrupted = false
           yield* syncExtensions(session.id, state)
@@ -783,6 +792,7 @@ export class SessionService extends Context.Service<
         sessionId: string,
         text: string,
         uploads: ReadonlyArray<AttachmentUpload> = [],
+        mentions: ReadonlyArray<string> = [],
       ) {
         const session = yield* get(sessionId)
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
@@ -798,7 +808,7 @@ export class SessionService extends Context.Service<
             })
           }
         }
-        yield* deliver(session, text, files)
+        yield* deliver(session, text, files, mentions)
       })
 
       const attachment = Effect.fn("SessionService.attachment")(function* (
@@ -835,6 +845,7 @@ export class SessionService extends Context.Service<
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
         readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+        readonly mentions?: ReadonlyArray<string> | undefined
         readonly provider?: AgentProvider | undefined
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
@@ -883,7 +894,7 @@ export class SessionService extends Context.Service<
         const accountId = yield* accountsOf(provider).activeId
         if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
-        if (prompt) yield* deliver(session, prompt, files)
+        if (prompt) yield* deliver(session, prompt, files, options.mentions ?? [])
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
       })
 

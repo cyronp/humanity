@@ -1,4 +1,4 @@
-import type { FileEntry } from "@humanity/contracts"
+import { type FileEntry, mentionedPaths } from "@humanity/contracts"
 import { Exit } from "effect"
 import {
   type ChangeEvent,
@@ -8,6 +8,7 @@ import {
   type SetStateAction,
   useEffect,
   useEffectEvent,
+  useMemo,
   useState,
 } from "react"
 import { describeCause } from "@/lib/errors"
@@ -43,6 +44,8 @@ export function useFileMention({
   const [focused, setFocused] = useState(false)
   const [dismissed, setDismissed] = useState<number>()
   const [highlightState, setHighlight] = useState({ query: "", index: 0 })
+  const [chosen, setChosen] = useState<ReadonlyArray<string>>([])
+  const picked = useMemo(() => mentionedPaths(text, chosen), [text, chosen])
   const [results, setResults] = useState<{
     readonly query: string
     readonly entries: ReadonlyArray<FileEntry>
@@ -81,6 +84,8 @@ export function useFileMention({
   const pick = (entry: FileEntry) => {
     if (mention === undefined) return
     const edit = completeMention(text, mention, caret, entry)
+    const path = entry.kind === "directory" ? `${entry.path}/` : entry.path
+    setChosen((previous) => (previous.includes(path) ? previous : [...previous, path]))
     setText(edit.text)
     setCaret(edit.caret)
     requestAnimationFrame(() => {
@@ -149,5 +154,5 @@ export function useFileMention({
           highlight,
         }
 
-  return { menu, onKeyDown, textareaProps }
+  return { menu, onKeyDown, textareaProps, picked, forgetPicked: () => setChosen([]) }
 }

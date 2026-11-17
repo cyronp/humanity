@@ -150,6 +150,7 @@ const renderContent = (
           sessionId={sessionId}
           text={content.text}
           attachments={content.attachments ?? []}
+          mentions={content.mentions ?? NO_MENTIONS}
         />
       )
     case "assistant":
@@ -173,14 +174,18 @@ const renderContent = (
   }
 }
 
+const NO_MENTIONS: ReadonlyArray<string> = []
+
 function UserMessage({
   sessionId,
   text,
   attachments,
+  mentions,
 }: {
   readonly sessionId: SessionId
   readonly text: string
   readonly attachments: ReadonlyArray<Attachment>
+  readonly mentions: ReadonlyArray<string>
 }) {
   return (
     <Message align="end">
@@ -190,7 +195,7 @@ function UserMessage({
         )}
         <Bubble align="end" className="max-w-[85%]">
           <BubbleContent className="whitespace-pre-wrap">
-            <FileReferenceText text={text} />
+            <FileReferenceText text={text} mentions={mentions} />
           </BubbleContent>
         </Bubble>
       </MessageBody>

@@ -101,11 +101,13 @@ export const Composer = memo(function Composer({
         sessionId,
         text: trimmed,
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
+        ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
       },
     })
     setPending(false)
     if (Exit.isSuccess(exit)) {
       setText("")
+      mentions.forgetPicked()
       files.clear()
     } else setError(describeCause(exit.cause))
   }
@@ -174,6 +176,7 @@ export const Composer = memo(function Composer({
         <MentionTextarea
           ref={textarea}
           value={text}
+          mentions={mentions.picked}
           {...mentions.textareaProps}
           aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
           aria-activedescendant={

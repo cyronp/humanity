@@ -180,6 +180,38 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live("keeps the files picked with @ that a message still mentions", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({
+          projectId: project.id,
+          prompt: "read @README.md please",
+          mentions: ["README.md", "removed.ts"],
+        })
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.sendMessage(created.id, "and @src/", [], ["src/", "src/"])
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.sendMessage(created.id, "thanks")
+        yield* waitForStatus(created.id, "idle")
+
+        const users = (yield* contents(created.id)).messages.flatMap((message) =>
+          message.content._tag === "user" ? [message.content] : [],
+        )
+        assert.deepStrictEqual(
+          users.map((content) => content.mentions),
+          [["README.md"], ["src/"], undefined],
+        )
+        const sent = (yield* Ref.get(log.sent)).map((message) => message.text)
+        assert.deepStrictEqual(sent, ["read @README.md please", "and @src/", "thanks"])
+      }).pipe(Effect.provide(services(home, () => [{ text: "ok" }])))
+    }),
+  )
+
   it.live("keeps a thread on its own branch when another thread moves the shared checkout", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

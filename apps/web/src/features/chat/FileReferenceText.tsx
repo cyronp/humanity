@@ -2,8 +2,14 @@ import { useMemo } from "react"
 import { splitMentions } from "./fileMention.ts"
 import { FileTypeIcon } from "./FileTypeIcon.tsx"
 
-export function FileReferenceText({ text }: { readonly text: string }) {
-  const segments = useMemo(() => splitMentions(text), [text])
+export function FileReferenceText({
+  text,
+  mentions,
+}: {
+  readonly text: string
+  readonly mentions: ReadonlyArray<string>
+}) {
+  const segments = useMemo(() => splitMentions(text, new Set(mentions)), [text, mentions])
   return segments.map((segment, index) =>
     segment.kind === "text" ? (
       segment.text

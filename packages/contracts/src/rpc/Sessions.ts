@@ -6,6 +6,7 @@ import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
 import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
 import { BranchCommits, FileEntry, WorkingTreeDiff } from "../domain/Git.ts"
+import { FileMentions } from "../domain/Mention.ts"
 import { SessionEvent, TranscriptPage } from "../domain/SessionEvent.ts"
 import {
   AttachmentNotFound,
@@ -47,6 +48,7 @@ export const SessionsRpcs = RpcGroup.make(
       baseBranch: Schema.optional(Schema.String),
       prompt: Schema.optional(Schema.String),
       attachments: Schema.optional(Schema.Array(AttachmentUpload)),
+      mentions: Schema.optional(FileMentions),
       provider: Schema.optional(AgentProvider),
       model: Schema.optional(Schema.String),
       effort: Schema.optional(ReasoningEffort),
@@ -100,6 +102,7 @@ export const SessionsRpcs = RpcGroup.make(
       sessionId: SessionId,
       text: Schema.NonEmptyString,
       attachments: Schema.optional(Schema.Array(AttachmentUpload)),
+      mentions: Schema.optional(FileMentions),
     },
     error: Schema.Union([SessionNotFound, SessionEnded, AttachmentRejected]),
   }),
