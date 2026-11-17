@@ -42,3 +42,41 @@ export const startCommand = (surroundings: Surroundings): string | undefined => 
  */
 export const retryDelayMs = (failures: number): number =>
   Math.min(2000 * 2 ** Math.max(0, failures - 1), 10_000)
+
+/** Where the RPC socket stands, once the app is past the connect screen. */
+export type SocketState = "connecting" | "open" | "lost"
+
+interface Watchable {
+  addEventListener(type: "open" | "close", listener: () => void): void
+}
+
+/**
+ * The state of the app's RPC socket, as an external store for
+ * `useSyncExternalStore`. The socket reconnects by itself; this only tells the
+ * UI whether it is currently through.
+ */
+export const createSocketStore = () => {
+  let state: SocketState = "connecting"
+  const listeners = new Set<() => void>()
+  const set = (next: SocketState) => {
+    if (next === state) return
+    state = next
+    for (const listener of listeners) listener()
+  }
+  return {
+    get: (): SocketState => state,
+    subscribe: (listener: () => void): (() => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    /** Follows one socket; every reconnect makes a new one. */
+    watch: (socket: Watchable): void => {
+      socket.addEventListener("open", () => set("open"))
+      socket.addEventListener("close", () => set("lost"))
+    },
+  }
+}
+
+export const socketStore = createSocketStore()

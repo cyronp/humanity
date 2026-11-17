@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
+import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { TokenScreen, UnreachableScreen } from "@/components/connect/ConnectScreens"
 import { type AuthStatus, checkAuth, readToken } from "@/lib/token"
 
@@ -49,7 +50,14 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
   }, [status, check])
 
   if (status === undefined) return <Loading />
-  if (status === "ok") return children
+  if (status === "ok") {
+    return (
+      <>
+        {children}
+        <ConnectionBanner />
+      </>
+    )
+  }
   return status === "unreachable" ? (
     <UnreachableScreen checking={checking} failures={failures} onRetry={check} />
   ) : (

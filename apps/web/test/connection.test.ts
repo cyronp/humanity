@@ -1,6 +1,6 @@
 import { DEFAULT_DESKTOP_PORT } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { retryDelayMs, startCommand, surroundingsOf } from "@/lib/connection"
+import { createSocketStore, retryDelayMs, startCommand, surroundingsOf } from "@/lib/connection"
 
 describe("surroundingsOf", () => {
   it("is the dev server under Vite, whatever the port", () => {
@@ -31,5 +31,53 @@ describe("retryDelayMs", () => {
 
   it("starts at 2s before any failure", () => {
     expect(retryDelayMs(0)).toBe(2000)
+  })
+})
+
+/** A socket that fires the events a test asks for. */
+const fakeSocket = () => {
+  const listeners = new Map<string, Array<() => void>>()
+  return {
+    addEventListener: (type: string, listener: () => void) => {
+      listeners.set(type, [...(listeners.get(type) ?? []), listener])
+    },
+    fire: (type: "open" | "close") => {
+      for (const listener of listeners.get(type) ?? []) listener()
+    },
+  }
+}
+
+describe("createSocketStore", () => {
+  it("follows each socket from connecting to open to lost and back", () => {
+    const store = createSocketStore()
+    const seen: Array<string> = []
+    store.subscribe(() => seen.push(store.get()))
+    expect(store.get()).toBe("connecting")
+
+    const first = fakeSocket()
+    store.watch(first)
+    first.fire("open")
+    first.fire("close")
+
+    // The reconnect is a new socket.
+    const second = fakeSocket()
+    store.watch(second)
+    second.fire("close")
+    second.fire("open")
+
+    expect(seen).toEqual(["open", "lost", "open"])
+    expect(store.get()).toBe("open")
+  })
+
+  it("stops telling a listener once it unsubscribes", () => {
+    const store = createSocketStore()
+    let calls = 0
+    const unsubscribe = store.subscribe(() => calls++)
+    const socket = fakeSocket()
+    store.watch(socket)
+    socket.fire("open")
+    unsubscribe()
+    socket.fire("close")
+    expect(calls).toBe(1)
   })
 })

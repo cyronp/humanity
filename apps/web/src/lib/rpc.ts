@@ -3,12 +3,23 @@ import { Effect, Layer } from "effect"
 import { AtomRpc } from "effect/reactivity"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 import { Socket } from "effect/socket"
+import { socketStore } from "./connection.ts"
 import { rpcUrl } from "./token.ts"
+
+/** The browser's WebSocket, with each socket reported to `socketStore` so the UI sees a lost daemon. */
+const WatchedWebSocket = Layer.succeed(Socket.WebSocketConstructor)((url, options) => {
+  if (options !== undefined && typeof options !== "string" && !Array.isArray(options)) {
+    throw new TypeError("The browser's WebSocket takes no client options")
+  }
+  const socket = new globalThis.WebSocket(url, options)
+  socketStore.watch(socket)
+  return socket
+})
 
 const Protocol = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
   // The URL is read on every (re)connect, so a token pasted later is picked up.
   Layer.provide(Socket.layerWebSocket(Effect.sync(rpcUrl))),
-  Layer.provide(Socket.layerWebSocketConstructorGlobal),
+  Layer.provide(WatchedWebSocket),
   Layer.provide(RpcSerialization.layerJson),
 )
 
