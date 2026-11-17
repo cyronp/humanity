@@ -10,6 +10,7 @@ import {
   type SessionStatus,
   type SessionUsage,
   type ToolCall,
+  type TranscriptPage,
 } from "@humanity/contracts"
 
 export interface SkillLoad {
@@ -21,7 +22,10 @@ export interface SkillLoad {
 /** Everything the workspace shows about one session, rebuilt from its event stream. */
 export interface SessionView {
   readonly session: Session
+  /** The latest messages: the snapshot's, then every one since. */
   readonly messages: ReadonlyArray<ChatMessage>
+  /** Older messages exist than the snapshot carried; `Sessions.earlierMessages` reads them. */
+  readonly hasEarlier: boolean
   /** Tool calls by `toolUseId`, so tool_use blocks can find their status and output. */
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly skills: ReadonlyArray<SkillLoad>
@@ -68,6 +72,7 @@ export const reduceSessionEvent = (
     return {
       session: event.session,
       messages: event.messages,
+      hasEarlier: event.hasEarlier,
       toolCalls: byToolUseId(event.toolCalls),
       skills: skillsFrom(event.toolCalls),
       approvals: event.approvals,
@@ -150,6 +155,47 @@ export const reduceSessionEvents = (
   view: SessionView | undefined,
   events: ReadonlyArray<SessionEvent>,
 ): SessionView | undefined => events.reduce(reduceSessionEvent, view)
+
+/**
+ * Older messages read back a page at a time, joined before the live view's
+ * first message. They belong to that message: a fresh snapshot that starts
+ * elsewhere (after a reconnect, say) leaves a gap, so they are dropped then.
+ */
+export interface EarlierPages {
+  /** The id of the live view's first message, which these pages end just before. */
+  readonly attachedTo: string
+  readonly messages: ReadonlyArray<ChatMessage>
+  readonly toolCalls: Readonly<Record<string, ToolCall>>
+  readonly hasEarlier: boolean
+}
+
+/** `pages` with `page`, read just before them, put first. */
+export const addEarlierPage = (
+  pages: EarlierPages | undefined,
+  attachedTo: string,
+  page: TranscriptPage,
+): EarlierPages => {
+  const kept = pages?.attachedTo === attachedTo ? pages : undefined
+  return {
+    attachedTo,
+    messages: [...page.messages, ...(kept?.messages ?? [])],
+    toolCalls: { ...byToolUseId(page.toolCalls), ...kept?.toolCalls },
+    hasEarlier: page.hasEarlier,
+  }
+}
+
+/** The whole transcript shown: the earlier pages that still fit the live view, then the view. */
+export const joinEarlier = (
+  view: Pick<SessionView, "messages" | "toolCalls" | "hasEarlier">,
+  pages: EarlierPages | undefined,
+): Pick<SessionView, "messages" | "toolCalls" | "hasEarlier"> => {
+  if (pages === undefined || pages.attachedTo !== view.messages[0]?.id) return view
+  return {
+    messages: [...pages.messages, ...view.messages],
+    toolCalls: { ...pages.toolCalls, ...view.toolCalls },
+    hasEarlier: pages.hasEarlier,
+  }
+}
 
 /** Statuses in which the agent is doing something and can be interrupted. */
 export const isBusy = (status: SessionStatus): boolean =>

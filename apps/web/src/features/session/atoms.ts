@@ -48,6 +48,9 @@ export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
+/** A page of the messages a snapshot left out, just before a given one. */
+export const earlierMessagesAtom = HumanityClient.mutation("Sessions.earlierMessages")
+
 export const createSessionAtom = HumanityClient.mutation("Sessions.create")
 export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const setupWorktreeAtom = HumanityClient.mutation("Sessions.setupWorktree")

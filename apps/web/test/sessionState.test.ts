@@ -11,8 +11,10 @@ import {
 } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import {
+  addEarlierPage,
   approvalsByToolUse,
   isBusy,
+  joinEarlier,
   pendingChanges,
   pendingConfirmations,
   reduceSessionEvent,
@@ -65,6 +67,7 @@ const snapshot = (overrides: Partial<Extract<SessionEvent, { _tag: "Snapshot" }>
     session,
     messages: [],
     toolCalls: [],
+    hasEarlier: false,
     approvals: [],
     usage: { context: null, plan: null },
     ...overrides,
@@ -248,5 +251,49 @@ describe("reduceSessionEvent", () => {
     expect(after?.messages).toBe(before?.messages)
     expect(after?.toolCalls).toBe(before?.toolCalls)
     expect(after?.approvals).toBe(before?.approvals)
+  })
+})
+
+describe("earlier pages", () => {
+  const user = (id: string) => message(id, { _tag: "user", text: id })
+  const live = fold([snapshot({ messages: [user("m5"), user("m6")], hasEarlier: true })])
+
+  it("shows the live view alone until a page is read", () => {
+    expect(live && joinEarlier(live, undefined)).toBe(live)
+  })
+
+  it("puts each page read before the ones already shown", () => {
+    if (live === undefined) return expect.fail("no view")
+    const once = addEarlierPage(undefined, "m5", {
+      messages: [user("m3"), user("m4")],
+      toolCalls: [toolCall("succeeded")],
+      hasEarlier: true,
+    })
+    const twice = addEarlierPage(once, "m5", {
+      messages: [user("m1"), user("m2")],
+      toolCalls: [],
+      hasEarlier: false,
+    })
+    const shown = joinEarlier(live, twice)
+    expect(shown.messages.map((each) => each.id)).toEqual(["m1", "m2", "m3", "m4", "m5", "m6"])
+    expect(shown.toolCalls["toolu_1"]?.status).toBe("succeeded")
+    expect(shown.hasEarlier).toBe(false)
+  })
+
+  it("drops the pages once a snapshot starts the live view elsewhere", () => {
+    const pages = addEarlierPage(undefined, "m5", {
+      messages: [user("m4")],
+      toolCalls: [],
+      hasEarlier: true,
+    })
+    const moved = fold([snapshot({ messages: [user("m6")], hasEarlier: true })])
+    expect(moved && joinEarlier(moved, pages)).toBe(moved)
+    // A page read for the new start does not keep the old ones either.
+    expect(addEarlierPage(pages, "m6", { messages: [], toolCalls: [], hasEarlier: true })).toEqual({
+      attachedTo: "m6",
+      messages: [],
+      toolCalls: {},
+      hasEarlier: true,
+    })
   })
 })

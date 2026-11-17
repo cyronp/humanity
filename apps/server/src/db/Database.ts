@@ -21,6 +21,7 @@ import claudeAccountFolder from "./migrations/0016_claude_account_folder.ts"
 import sessionProvider from "./migrations/0017_session_provider.ts"
 import codexAccounts from "./migrations/0018_codex_accounts.ts"
 import kiroAccounts from "./migrations/0019_kiro_accounts.ts"
+import messagesBySession from "./migrations/0020_messages_by_session.ts"
 
 /** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
@@ -43,6 +44,7 @@ const migrations = {
   "0017_session_provider": sessionProvider,
   "0018_codex_accounts": codexAccounts,
   "0019_kiro_accounts": kiroAccounts,
+  "0020_messages_by_session": messagesBySession,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

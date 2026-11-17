@@ -62,11 +62,11 @@ export class HistoryImport extends Context.Service<
         Effect.gen(function* () {
           const session = yield* repo.get(sessionId)
           if (Option.isNone(session)) return
+          const page = yield* repo.transcriptPage(sessionId)
           const snapshot: SessionEvent = {
             _tag: "Snapshot",
             session: session.value,
-            messages: yield* repo.listMessages(sessionId),
-            toolCalls: yield* repo.listToolCalls(sessionId),
+            ...page,
             approvals: yield* approvals.listForSession(sessionId),
             usage: yield* repo.getUsage(sessionId),
           }

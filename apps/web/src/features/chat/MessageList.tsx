@@ -55,6 +55,7 @@ export function MessageList({
   approvals,
   worktreePath,
   empty,
+  earlier,
   footer,
   bottomInset = 0,
 }: {
@@ -67,6 +68,8 @@ export function MessageList({
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
   readonly empty?: ReactNode
+  /** Shown before the first message, such as a way to read older ones. */
+  readonly earlier?: ReactNode
   /** Shown after the last message, such as the reason the agent stopped. */
   readonly footer?: ReactNode
   /** Pixels at the bottom covered by something floating over the transcript, such as the message box. */
@@ -85,6 +88,9 @@ export function MessageList({
           >
             {items.length === 0 && draft === "" && empty !== undefined && (
               <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
+            )}
+            {earlier !== undefined && (
+              <MessageScrollerItem messageId="earlier">{earlier}</MessageScrollerItem>
             )}
             {items.map((message) => (
               <MessageScrollerItem

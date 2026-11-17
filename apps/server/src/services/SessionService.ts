@@ -37,6 +37,7 @@ import {
   SessionBusy,
   SessionEnded,
   type SessionEvent,
+  type TranscriptPage,
   SessionId,
   SessionNotFound,
   type SessionStatus,
@@ -287,6 +288,11 @@ export class SessionService extends Context.Service<
       SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
     >
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
+    /** The messages just before `before`, which the snapshot left out, a page at a time. */
+    readonly earlierMessages: (
+      sessionId: string,
+      before: string,
+    ) => Effect.Effect<TranscriptPage, SessionNotFound>
     /** Every session of every project, again after each change. Most recently active first. */
     readonly watchAll: Stream.Stream<ReadonlyArray<Session>>
   }
@@ -1289,17 +1295,20 @@ export class SessionService extends Context.Service<
             // Subscribe before reading the snapshot, so nothing falls in between.
             const subscription = yield* events.subscribe(sessionId)
             const session = yield* get(sessionId)
+            const page = yield* repo.transcriptPage(sessionId)
             const snapshot: SessionEvent = {
               _tag: "Snapshot",
               session,
-              messages: yield* repo.listMessages(sessionId),
-              toolCalls: yield* repo.listToolCalls(sessionId),
+              ...page,
               approvals: yield* approvals.listForSession(sessionId),
               usage: yield* repo.getUsage(sessionId),
             }
             return Stream.concat(Stream.make(snapshot), Stream.fromSubscription(subscription))
           }),
         )
+
+      const earlierMessages = (sessionId: string, before: string) =>
+        Effect.andThen(get(sessionId), repo.transcriptPage(sessionId, before))
 
       const watchAll: Stream.Stream<ReadonlyArray<Session>> = Stream.unwrap(
         Effect.gen(function* () {
@@ -1353,6 +1362,7 @@ export class SessionService extends Context.Service<
         commits,
         commit,
         subscribe,
+        earlierMessages,
         watchAll,
       })
     }),
