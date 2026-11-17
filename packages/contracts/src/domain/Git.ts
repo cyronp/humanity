@@ -2,7 +2,6 @@ import { Schema } from "effect"
 import { FileDiff } from "./Diff.ts"
 
 export const Branch = Schema.Struct({
-  /** Short name: `main`, or `origin/main` for a remote-tracking branch. */
   name: Schema.String,
   isCurrent: Schema.Boolean,
   isRemote: Schema.Boolean,
@@ -10,11 +9,8 @@ export const Branch = Schema.Struct({
   commit: Schema.String,
   subject: Schema.String,
   author: Schema.String,
-  /** When the last commit was made (committer date, ISO 8601). */
   committedAt: Schema.String,
-  /** Commits the branch has that its upstream lacks; 0 without an upstream. */
   ahead: Schema.Number,
-  /** Commits its upstream has that the branch lacks; 0 without an upstream. */
   behind: Schema.Number,
 })
 export type Branch = typeof Branch.Type
@@ -35,15 +31,12 @@ export const StatusEntry = Schema.Struct({
   path: Schema.String,
   previousPath: Schema.optional(Schema.String),
   kind: StatusEntryKind,
-  /** True when the change (or part of it) is in the index. */
   staged: Schema.Boolean,
-  /** True when the working tree differs from the index. */
   unstaged: Schema.Boolean,
 })
 export type StatusEntry = typeof StatusEntry.Type
 
 export const RepoStatus = Schema.Struct({
-  /** `null` on a detached HEAD. */
   branch: Schema.NullOr(Schema.String),
   upstream: Schema.NullOr(Schema.String),
   ahead: Schema.Int,
@@ -55,38 +48,27 @@ export type RepoStatus = typeof RepoStatus.Type
 export const CommitSummary = Schema.Struct({
   hash: Schema.String,
   shortHash: Schema.String,
-  /** The message's first line. */
   subject: Schema.String,
   author: Schema.String,
-  /** Committer date, ISO 8601. */
   committedAt: Schema.String,
 })
 export type CommitSummary = typeof CommitSummary.Type
 
-/** The commits of a session's branch, newest first. */
 export const BranchCommits = Schema.Struct({
   branch: Schema.String,
-  /**
-   * What the list starts after: the project's default branch for any other
-   * branch. `null` on the default branch itself, which lists its latest commits.
-   */
   base: Schema.NullOr(Schema.String),
   commits: Schema.Array(CommitSummary),
-  /** True when the branch has more commits than listed. */
   more: Schema.Boolean,
 })
 export type BranchCommits = typeof BranchCommits.Type
 
 export const WorkingTreeDiff = Schema.Struct({
-  /** What the working tree is compared against, e.g. `HEAD` or a base branch. */
   base: Schema.String,
   files: Schema.Array(FileDiff),
 })
 export type WorkingTreeDiff = typeof WorkingTreeDiff.Type
 
-/** A file or folder of a working copy, as `@` in the message box offers it. */
 export const FileEntry = Schema.Struct({
-  /** Relative to the working copy, with `/` separators and no trailing slash. */
   path: Schema.String,
   kind: Schema.Literals(["file", "directory"]),
 })

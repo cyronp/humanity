@@ -1,7 +1,6 @@
 import { CircleAlert } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-/** Every failure the UI knows about ends up here: visible, specific, never silent. */
 export function ErrorNote({
   title = "Something went wrong",
   message,

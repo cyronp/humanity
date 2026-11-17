@@ -32,11 +32,9 @@ describe("ProjectService", () => {
       const home = yield* tempDir()
       const repo = yield* tempRepo()
 
-      // First "daemon": add the project, then tear every layer down.
       const added = yield* ProjectService.use((projects) => projects.addLocal(repo)).pipe(
         Effect.provide(services(home)),
       )
-      // Second "daemon": fresh layers over the same data directory.
       const listed = yield* ProjectService.use((projects) => projects.list).pipe(
         Effect.provide(services(home)),
       )
@@ -72,7 +70,6 @@ describe("ProjectService", () => {
 
       assert.strictEqual(project.githubFullName, null)
       assert.deepStrictEqual(project.gitlab, { host: "gitlab.com", fullPath: "acme/tools/widgets" })
-      // It survives the round trip through the database.
       const listed = yield* ProjectService.use((projects) => projects.list).pipe(
         Effect.provide(services(home)),
       )
@@ -116,17 +113,14 @@ describe("ProjectService", () => {
         const projects = yield* ProjectService
         const folder = `${root}${sep}`
 
-        // Case-insensitive, folders only, hidden ones left out, in name order.
         assert.deepStrictEqual(yield* projects.listFolders(folder, "app"), [
           { name: "app-two", isRepository: true },
           { name: "Apps", isRepository: false },
         ])
-        // A prefix with a dot asks for hidden folders.
         assert.deepStrictEqual(yield* projects.listFolders(folder, ".h"), [
           { name: ".hidden-app", isRepository: false },
         ])
         assert.strictEqual((yield* projects.listFolders(folder, "")).length, 3)
-        // A folder that cannot be read lists nothing, rather than failing.
         assert.deepStrictEqual(yield* projects.listFolders(join(root, "nope") + sep, ""), [])
       }).pipe(Effect.provide(services(home)))
     }),

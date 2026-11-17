@@ -4,19 +4,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-/** The human's answer to a request, as the decide RPCs take it. */
 export interface Verdict {
   readonly decision: ApprovalDecision
   readonly comment?: string
   readonly allowForSession?: true
 }
 
-/**
- * The answer to anything the agent waits on, a file change or a tool call
- * alike: deny (with a word for the agent), allow once, or allow this tool for
- * the rest of the thread. The buttons carry `data-decide` so the pending
- * change cards' shortcuts can press them.
- */
 export function DecisionActions({
   toolName,
   pending,

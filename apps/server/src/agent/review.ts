@@ -10,7 +10,6 @@ import { Predicate } from "effect"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import { isInsideDir } from "../paths.ts"
 
-/** Tools whose effect on a file can be simulated, and so shown as a diff before they run. */
 const SIMULATORS: Record<string, (original: string, input: Record<string, unknown>) => Simulation> =
   {
     Edit: (original, input) =>
@@ -31,22 +30,14 @@ export type ReviewTarget =
   | {
       readonly _tag: "Target"
       readonly absolutePath: string
-      /** Relative to the worktree, with forward slashes. */
       readonly filePath: string
     }
-  /** The call cannot be shown as a diff; ask for an allow or deny of the call instead. */
   | { readonly _tag: "Confirm" }
-  /** The call must not run at all. */
   | { readonly _tag: "Deny"; readonly message: string }
 
-/** Where a `review` tool call would write, or why it cannot be reviewed as a file change. */
 const outsideMessage = (rawPath: string, workdir: string) =>
   `DENIED: ${rawPath} is outside the folder this session works in (${workdir}). Only files inside it can be changed.`
 
-/**
- * Why a Codex patch must not be applied, if it must not: a file it changes, or
- * moves one to, outside the folder the session works in.
- */
 const patchDenial = (input: Record<string, unknown>, worktree: string): string | undefined => {
   const changes = input["changes"]
   if (!Array.isArray(changes) || changes.length === 0) return "The patch names no files."
@@ -70,7 +61,6 @@ export const reviewTarget = (
   worktree: string,
 ): ReviewTarget => {
   if (toolName === PATCH_TOOL) {
-    // Codex applies the patch itself; Humanity shows its diffs and allows or denies it whole.
     const denial = patchDenial(input, worktree)
     return denial === undefined ? { _tag: "Confirm" } : { _tag: "Deny", message: denial }
   }
@@ -93,11 +83,6 @@ export const reviewTarget = (
   }
 }
 
-/**
- * Why a `review` tool the session lets through without a review must still be
- * denied, if it must: a file outside the worktree. `undefined` when it may run.
- * Covers tools without a simulator too, through their `notebook_path`.
- */
 export const outsideWorktreeDenial = (
   toolName: string,
   input: Record<string, unknown>,
@@ -121,7 +106,6 @@ export type PlannedChange =
   | { readonly _tag: "Change"; readonly proposedContent: string; readonly hunks: Array<Hunk> }
   | { readonly _tag: "Deny"; readonly message: string }
 
-/** Simulates the call on the file's current content and splits the result into hunks. */
 export const planChange = (options: {
   readonly toolName: string
   readonly input: Record<string, unknown>

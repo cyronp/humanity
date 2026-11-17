@@ -31,26 +31,16 @@ const TABS: ReadonlyArray<{
   { value: "pull-request", label: "Pull request", icon: <GitPullRequest /> },
 ]
 
-/**
- * The side panel of a session: what changed where it works, the commits of its
- * branch, committing and publishing it, and the pull request that follows, one
- * tab each. All of it is the session's own branch, even after another thread
- * moved the checkout they share. Its title bar offers a worktree of its own
- * while the session works in the checkout.
- */
 export function SessionPanel({
   session,
   activity,
   onReference,
 }: {
   readonly session: Session
-  /** Changes whenever the agent may have written files, to refresh what the panel shows. */
   readonly activity: number
-  /** Puts a `path:line` reference in the message box; absent when no box can take it. */
   readonly onReference?: ((reference: string) => void) | undefined
 }) {
   const [tab, setTab] = useState<PanelTab>("diff")
-  // Files opened in the changes tab; the tab itself unmounts while another shows.
   const [openFiles, setOpenFiles] = useState<ReadonlySet<string>>(new Set())
   const setFileOpen = (key: string, open: boolean) =>
     setOpenFiles((current) => {
@@ -64,8 +54,6 @@ export function SessionPanel({
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
   const refreshPullRequest = useAtomSet(refreshPullRequestAtom)
 
-  // Both come from git on this machine: no forge is asked as the agent works.
-  // The branch can change as a turn ends, so a new one is read too.
   useEffect(() => {
     refreshDiff()
     refreshCommits()
@@ -76,7 +64,6 @@ export function SessionPanel({
     refreshDiff()
     refreshCommits()
     refreshPublication()
-    // Only this asks the forge, and only once for everyone watching the branch.
     refreshPullRequest({ payload: { sessionId: session.id } })
   }
 
@@ -86,12 +73,7 @@ export function SessionPanel({
       onValueChange={(value) => setTab(value as PanelTab)}
       className="flex min-h-0 flex-1 flex-col gap-0"
     >
-      {/*
-        The panel's own title bar, level with the app header beside it. It ends
-        under the desktop app's window buttons, so it leaves them room.
-      */}
       <div className="titlebar flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3 pr-[calc(var(--titlebar-controls)+--spacing(3))]">
-        {/* The open tab is underlined on the bar's bottom edge, as in VS Code. */}
         <TabsList
           aria-label="Panel"
           variant="line"
@@ -104,10 +86,6 @@ export function SessionPanel({
               aria-label={label}
               className="h-full flex-none px-0 text-muted-foreground group-data-[orientation=horizontal]/tabs:after:bottom-[-1px]"
             >
-              {/*
-                The tooltip sits inside the tab: as the tab's own trigger, its
-                `data-state` would replace the tab's, and no tab would look open.
-              */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex h-full items-center px-2.5">{icon}</span>

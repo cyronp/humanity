@@ -6,12 +6,11 @@ const lines = (count: number, prefix = "line") =>
 
 const text = (rows: ReadonlyArray<string>, eol = "\n") => rows.map((row) => row + eol).join("")
 
-/** A file with three well-separated edits, which yields three hunks. */
 const threeEdits = (eol = "\n") => {
   const before = lines(40)
   const after = [...before]
   after[2] = "CHANGED 3"
-  after.splice(20, 1) // delete line 21
+  after.splice(20, 1)
   after.splice(34, 0, "INSERTED a", "INSERTED b")
   return { original: text(before, eol), proposed: text(after, eol) }
 }

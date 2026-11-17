@@ -13,17 +13,11 @@ const remember = (key: string, result: HighlightResult) => {
   cache.set(key, result)
 }
 
-/**
- * Streamdown's code blocks highlighted by the same Shiki instance and themes
- * as diffs. Streamdown colours a token with `color` and, under `.dark`, with
- * `--shiki-dark`, so both themes are emitted and the page's theme picks one.
- */
 export const shikiCodePlugin: CodeHighlighterPlugin = {
   name: "shiki",
   type: "code-highlighter",
   getSupportedLanguages: () => [],
   getThemes: () => [SHIKI_THEMES.light, SHIKI_THEMES.dark],
-  // Unknown fences fall back to plain text when their grammar fails to load.
   supportsLanguage: () => true,
   highlight: ({ code, language, isIncomplete }, callback) => {
     const key = `${language}\u0000${code}`
@@ -45,12 +39,10 @@ export const shikiCodePlugin: CodeHighlighterPlugin = {
               })),
             ),
           }
-          // A block still streaming is replaced by its next update; don't keep it.
           if (!isIncomplete) remember(key, result)
           callback?.(result)
         },
         () => {
-          // Leave the block as plain text.
         },
       )
     return null

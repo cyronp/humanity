@@ -29,7 +29,6 @@ import {
 const lines = (count: number) => Array.from({ length: count }, (_, i) => `line ${i + 1}`)
 const text = (rows: ReadonlyArray<string>) => rows.map((row) => `${row}\n`).join("")
 
-/** A 40-line file and a Write that changes it in three far-apart places: three hunks. */
 const ORIGINAL = text(lines(40))
 const PROPOSED = (() => {
   const rows = lines(40)
@@ -47,7 +46,6 @@ const writeScript: FakeScript = (_prompt, turn) =>
       ]
     : [{ text: "OK." }]
 
-/** A repository whose agent immediately proposes that change. */
 const startWithPendingChange = (script: FakeScript = writeScript) =>
   Effect.gen(function* () {
     const { home, repo } = yield* setup({ "data.txt": ORIGINAL })
@@ -89,7 +87,6 @@ const decisionFor = (toolName: string) =>
     )
   })
 
-/** A thread that asks before it acts: what these flows are about. New threads run on their own. */
 const createSession = (repo: string, prompt = "Make the changes") =>
   Effect.gen(function* () {
     const sessions = yield* SessionService
@@ -119,7 +116,6 @@ describe("file changes", () => {
             [3, "pending"],
           ],
         )
-        // Nothing has touched the file while the human is deciding.
         yield* Effect.sleep("100 millis")
         const file = join(session.worktreePath, "data.txt")
         assert.strictEqual(readFileSync(file, "utf8"), ORIGINAL)
@@ -222,7 +218,6 @@ describe("file changes", () => {
         const change = yield* pendingChange(session.id)
         yield* approvals.decideChange(change.id, { decision: "allow", allowForSession: true })
         assert.isTrue(approvals.allowsInSession(session.id, "Write"))
-        // Only the tool that was allowed: the command still asks.
         const command = yield* pendingConfirmation(session.id)
         yield* approvals.decideConfirmation(command.id, { decision: "allow" })
         yield* waitForStatus(session.id, "idle")
@@ -230,7 +225,6 @@ describe("file changes", () => {
         yield* sessions.sendMessage(session.id, "again")
         const again = yield* pendingConfirmation(session.id)
         assert.strictEqual(again.toolName, "Bash")
-        // The second Write ran without a request of its own.
         assert.strictEqual(readFileSync(join(session.worktreePath, "data.txt"), "utf8"), "turn 2\n")
         assert.lengthOf(
           (yield* contents(session.id)).approvals.filter((each) => each._tag === "change"),
@@ -448,7 +442,6 @@ describe("confirm flow", () => {
 
         yield* sessions.sendMessage(session.id, "again")
         yield* waitForStatus(session.id, "idle")
-        // The running agent still asks canUseTool, which now allows it without a human.
         const asked = yield* Ref.get(log.permissions)
         assert.deepStrictEqual(asked[1]?.decision, { behavior: "allow" })
         const snapshot = yield* contents(session.id)
@@ -458,7 +451,6 @@ describe("confirm flow", () => {
           ["succeeded", "succeeded"],
         )
 
-        // Another thread of the same project that asks still asks.
         const other = yield* sessions.create({
           projectId: project.id,
           prompt: "run it",
@@ -496,7 +488,6 @@ describe("confirm flow", () => {
         const sessions = yield* SessionService
         const approvals = yield* ApprovalService
         const project = yield* addProject(repo)
-        // Even "Auto mode" cannot answer for the human.
         const session = yield* sessions.create({
           projectId: project.id,
           prompt: "Pick a library",
@@ -517,7 +508,6 @@ describe("confirm flow", () => {
           updatedInput: { ...questionInput, answers: { [QUESTION]: "Luxon" } },
         })
         yield* waitForStatus(session.id, "idle")
-        // "Always allow" means nothing for a question: the next one is asked again.
         assert.isFalse(approvals.allowsInSession(session.id, "AskUserQuestion"))
         yield* sessions.sendMessage(session.id, "And for dates?")
         assert.strictEqual((yield* pendingConfirmation(session.id)).toolName, "AskUserQuestion")
@@ -597,17 +587,14 @@ describe("autonomy", () => {
 
           assert.strictEqual(yield* create(), "auto")
 
-          // The human's default for every project.
           yield* preferences.setPinnedDefaults({ autonomy: "ask", effort: null })
           assert.strictEqual(yield* create(), "ask")
 
-          // The project's own default wins over it, and is kept.
           const updated = yield* projects.setDefaultAutonomy(project.id, "accept_edits")
           assert.strictEqual(updated.defaultAutonomy, "accept_edits")
           assert.strictEqual((yield* projects.get(project.id)).defaultAutonomy, "accept_edits")
           assert.strictEqual(yield* create(), "accept_edits")
 
-          // What the human picks for one thread wins over both.
           assert.strictEqual(yield* create("auto"), "auto")
 
           yield* projects.setDefaultAutonomy(project.id, null)
@@ -709,7 +696,6 @@ describe("autonomy", () => {
         const before = yield* sessions.get(session.id)
         const updated = yield* sessions.setAutonomy(session.id, "auto")
         assert.strictEqual(updated.autonomy, "auto")
-        // The sidebar counts from `updatedAt`; a change of autonomy is not a change of status.
         assert.strictEqual(updated.updatedAt, before.updatedAt)
 
         yield* sessions.sendMessage(session.id, "again")
@@ -763,7 +749,6 @@ describe("restart", () => {
   )
 })
 
-// Type-only guards: the snapshot exposes both approval shapes.
 export type _Shapes = [ProposedChange, PendingConfirmation]
 
 describe("committing the work", () => {
@@ -809,7 +794,6 @@ describe("committing the work", () => {
           "Bump a to 2",
         )
         assert.strictEqual(git(session.worktreePath, "status", "--porcelain").trim(), "")
-        // The user's checkout and its branch are untouched.
         assert.strictEqual(git(repo, "log", "-1", "--format=%s", "main").trim(), "initial")
         assert.strictEqual(readFileSync(join(repo, "app.ts"), "utf8"), "const a = 1\n")
 
@@ -820,7 +804,6 @@ describe("committing the work", () => {
         const notice = snapshot.messages.at(-1)?.content
         assert.match(notice?._tag === "notice" ? notice.text : "", new RegExp(`^Committed ${hash}`))
 
-        // Busy again: a commit must wait for the agent.
         yield* sessions.sendMessage(session.id, "keep going")
         yield* waitForStatus(session.id, "running")
         const busy = yield* Effect.flip(sessions.commit(session.id, "mid-turn"))

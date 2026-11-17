@@ -2,13 +2,9 @@ import type { Project, Session, SessionStatus } from "@humanity/contracts"
 
 export type ThreadOrder = "newest" | "oldest"
 
-/** What the sidebar shows, besides the search text. */
 export interface ThreadFilter {
-  /** Only these projects' threads. Empty means every project. */
   readonly projectIds: ReadonlyArray<string>
-  /** Only threads in these states. */
   readonly statuses: ReadonlyArray<SessionStatus>
-  /** By last activity: when the thread last changed state. */
   readonly order: ThreadOrder
 }
 
@@ -24,7 +20,6 @@ export const STATUS_OPTIONS: ReadonlyArray<{
   { value: "ended", label: "Ended" },
 ]
 
-/** Every thread that is not over, newest first: what the sidebar always showed. */
 export const DEFAULT_THREAD_FILTER: ThreadFilter = {
   projectIds: [],
   statuses: ["waiting_for_human", "running", "idle", "interrupted", "error"],
@@ -44,7 +39,6 @@ export const isDefaultFilter = (filter: ThreadFilter): boolean =>
   sameMembers(filter.statuses, DEFAULT_THREAD_FILTER.statuses) &&
   filter.order === DEFAULT_THREAD_FILTER.order
 
-/** Every word of the query must appear in the title, the project's name or the branch. */
 const matchesQuery = (thread: Thread, query: string) => {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) return true
@@ -59,7 +53,6 @@ export const selectThreads = (
   query: string,
   filter: ThreadFilter,
 ): ReadonlyArray<Thread> => {
-  // A chosen project that has since been removed narrows nothing.
   const projectIds = filter.projectIds.filter((id) =>
     threads.some((thread) => thread.project.id === id),
   )
@@ -74,10 +67,6 @@ export const selectThreads = (
     .toSorted((a, b) => sign * (Date.parse(a.session.updatedAt) - Date.parse(b.session.updatedAt)))
 }
 
-/**
- * The threads that are over, for the sidebar's history: always newest first,
- * searched and narrowed to the chosen projects like the list above it.
- */
 export const selectHistory = (
   threads: ReadonlyArray<Thread>,
   query: string,
@@ -94,7 +83,6 @@ const STORAGE_KEY = "humanity.threadFilter"
 const isStatus = (value: unknown): value is SessionStatus =>
   STATUS_OPTIONS.some((option) => option.value === value)
 
-/** The filter this browser last used, or the default when there is none or it is unreadable. */
 export const readStoredFilter = (): ThreadFilter => {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")
@@ -118,6 +106,5 @@ export const storeFilter = (filter: ThreadFilter) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filter))
   } catch {
-    // Storage can be unavailable (private windows); the filter then lasts until reload.
   }
 }

@@ -31,16 +31,9 @@ import { TAG } from "@/features/extensions/styles"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
 
-/** Entries list their name first in `keywords`, then what else they may be found by. */
 const filter = (value: string, search: string, keywords?: ReadonlyArray<string>) =>
   menuScore(keywords?.[0] ?? value, keywords?.slice(1) ?? [], search)
 
-/**
- * The message box's "+": everything that can go into a message. Files from
- * disk first (pasting and dropping them works too), then the skills and MCP
- * servers the agent of this project can use; picking one puts its call in
- * the message. The last row opens the settings to add or change them.
- */
 export function AddMenu({
   projectId,
   onFiles,
@@ -56,9 +49,7 @@ export function AddMenu({
   const result = useAtomValue(atom)
   const refresh = useAtomRefresh(atom)
   const [open, setOpen] = useState(false)
-  // Outside the popover, which unmounts on close, so its change still arrives.
   const fileInput = useRef<HTMLInputElement>(null)
-  // After a pick the caret belongs in the message box, not back on this button.
   const picked = useRef(false)
 
   const pick = (insertion: PromptInsertion) => {
@@ -87,7 +78,6 @@ export function AddMenu({
         tabIndex={-1}
         onChange={(event) => {
           onFiles(Array.from(event.target.files ?? []))
-          // Picking the same file again must fire again.
           event.target.value = ""
         }}
       />
@@ -95,7 +85,6 @@ export function AddMenu({
         open={open}
         onOpenChange={(next) => {
           setOpen(next)
-          // A skill just added to the repository shows without a reload.
           if (next) refresh()
         }}
       >
@@ -124,7 +113,6 @@ export function AddMenu({
         >
           <Command filter={filter} className="rounded-lg! bg-transparent">
             <CommandInput placeholder="Search skills and MCP servers…" />
-            {/* Never taller than the room the popover has, so the footer stays on screen. */}
             <CommandList className="max-h-[min(24rem,calc(var(--radix-popover-content-available-height)-6rem))]">
               <CommandGroup>
                 <CommandItem
@@ -163,7 +151,6 @@ export function AddMenu({
               })}
             </CommandList>
           </Command>
-          {/* Below the scrolling list, so the settings stay one step away whatever the search. */}
           <button
             type="button"
             onClick={manage}
@@ -253,7 +240,6 @@ function Entries({
   )
 }
 
-/** Where an entry comes from, for the ones the repository brings. */
 function Origin({ source }: { readonly source: Skill["source"] }) {
   if (source === "humanity") return null
   return (

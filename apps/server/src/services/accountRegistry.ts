@@ -14,7 +14,6 @@ import { isAbsolute, join, resolve } from "node:path"
 import { expandHome, isInsideDir, isSamePath } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 
-/** A working login rarely changes; anything else is re-checked soon, so a fresh login shows up. */
 const CONNECTED_TTL = Duration.minutes(5)
 const OTHER_TTL = Duration.seconds(10)
 
@@ -30,12 +29,10 @@ type AccountRow = typeof AccountRow.Type
 const ActiveRow = Schema.Struct({ value_json: Schema.fromJsonString(Schema.String) })
 const CountRow = Schema.Struct({ count: Schema.Number })
 
-/** What every provider's status says, whatever else it carries. */
 interface StatusLike {
   readonly connection: { readonly _tag: string }
 }
 
-/** One login of a provider, as its contract describes an account. */
 export interface RegisteredAccount<Status> {
   readonly id: string
   readonly name: string
@@ -45,50 +42,29 @@ export interface RegisteredAccount<Status> {
   readonly status: Status
 }
 
-/** The accounts of one provider and which of them new threads run as. */
 export interface AccountRegistry<Status> {
-  /** The active account's status. Concurrent callers share one check. */
   readonly status: (options: { readonly refresh: boolean }) => Effect.Effect<Status>
-  /** Every account with its status, the default login first. */
   readonly accounts: (options: {
     readonly refresh: boolean
   }) => Effect.Effect<ReadonlyArray<RegisteredAccount<Status>>>
-  /**
-   * Adds an account. Without `configDir` it gets an empty config folder of
-   * its own: signed out until the human signs in. With it, the account runs
-   * on that existing folder, which Humanity never writes to.
-   */
   readonly add: (
     name: string,
     configDir?: string,
   ) => Effect.Effect<RegisteredAccount<Status>, AccountNameInvalid | AccountFolderInvalid>
-  /** Removes an added account, and its config folder when Humanity made it. Never the default login. */
   readonly remove: (accountId: string) => Effect.Effect<void, AccountNotFound | AccountInUse>
   readonly setActive: (accountId: string) => Effect.Effect<void, AccountNotFound>
   readonly activeId: Effect.Effect<string>
-  /**
-   * The config folder the provider's CLI runs with for an account;
-   * `undefined` means its default login, which is also what an account that
-   * no longer exists falls back to.
-   */
   readonly configDirFor: (accountId: string | null) => Effect.Effect<string | undefined>
 }
 
 export interface AccountRegistryOptions<Status> {
   readonly provider: AgentProvider
-  /** The table the added accounts are kept in: `id`, `name`, `config_dir`, `created_at`. */
   readonly table: "claude_accounts" | "codex_accounts" | "kiro_accounts"
-  /** The preference that holds the id of the active account. */
   readonly activeKey: string
-  /** Where Humanity makes the folder of an account that has none: `<accountsDir>/<accountId>`. */
   readonly accountsDir: string
-  /** The folder of the default login. */
   readonly defaultDir: string
-  /** The provider as the human knows it, e.g. `Claude Code`. */
   readonly product: string
-  /** What a folder of the human's own could be called, e.g. `.claude-personal`. */
   readonly folderExample: string
-  /** Asks the provider's CLI who is signed in for a folder (`undefined` is the default login). Never fails. */
   readonly check: (configDir: string | undefined) => Effect.Effect<Status>
 }
 
@@ -97,18 +73,11 @@ interface StatusCheck<Status> {
   readonly invalidate: Effect.Effect<void>
 }
 
-/** An added account's config folder, and whether the human picked it. */
 interface AccountFolder {
   readonly dir: string
   readonly linked: boolean
 }
 
-/**
- * Builds the accounts of a provider. Every provider keeps them the same way:
- * a default login that is its CLI's own, and added ones that are each a
- * config folder of that CLI, of which Humanity stores only the name and the
- * path. The credential always stays in the folder.
- */
 export const makeAccountRegistry = <Status extends StatusLike>(
   options: AccountRegistryOptions<Status>,
 ): Effect.Effect<
@@ -158,7 +127,6 @@ export const makeAccountRegistry = <Status extends StatusLike>(
 
     const added = selectAccounts(undefined).pipe(Effect.orDie)
 
-    // One cached check per account, made when the account first appears.
     const checks = new Map<string, StatusCheck<Status>>()
     const folders = new Map<string, AccountFolder>()
     checks.set(DEFAULT_ACCOUNT, yield* makeCheck(undefined))
@@ -170,7 +138,6 @@ export const makeAccountRegistry = <Status extends StatusLike>(
 
     const activeId = Effect.gen(function* () {
       const stored = yield* selectActive(options.activeKey).pipe(
-        // A value this version cannot read is no choice: the default login.
         Effect.catch(() => Effect.succeedNone),
       )
       return stored.pipe(
@@ -210,7 +177,6 @@ export const makeAccountRegistry = <Status extends StatusLike>(
         })
       }).pipe(Effect.withSpan("AccountRegistry.accounts", { attributes: { provider } }))
 
-    /** Checks a folder the human picked and returns its absolute path. Only reads it. */
     const linkableFolder = Effect.fn("AccountRegistry.linkableFolder")(function* (
       requested: string,
     ) {
@@ -281,7 +247,6 @@ export const makeAccountRegistry = <Status extends StatusLike>(
       const folder = folders.get(accountId)
       folders.delete(accountId)
       const dir = ownDirOf(accountId)
-      // Only ever a folder Humanity created for this account; a linked one is the human's.
       if (folder?.linked !== true && isInsideDir(options.accountsDir, dir)) {
         yield* fs.remove(dir, { recursive: true, force: true }).pipe(
           Effect.catch((error) =>

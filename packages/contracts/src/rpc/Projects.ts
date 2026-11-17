@@ -35,17 +35,10 @@ export const ProjectsRpcs = RpcGroup.make(
       ProjectAlreadyExists,
     ]),
   }),
-  /**
-   * The folders in `folder` (an absolute path, or one from `~`) whose names
-   * start with `prefix`, case-insensitively, to complete a path as it is
-   * typed. Hidden ones only when `prefix` starts with a dot. Empty when the
-   * folder cannot be read. Only reads.
-   */
   Rpc.make("Projects.listFolders", {
     payload: { folder: Schema.String, prefix: Schema.String },
     success: Schema.Array(FolderEntry),
   }),
-  /** Clones into the data directory with live progress, then adds the clone as a project. */
   Rpc.make("Projects.cloneFromGitHub", {
     payload: { fullName: GitHubFullName },
     success: CloneEvent,
@@ -62,7 +55,6 @@ export const ProjectsRpcs = RpcGroup.make(
     ]),
     stream: true,
   }),
-  /** The same for a repository of the connected GitLab instance. */
   Rpc.make("Projects.cloneFromGitLab", {
     payload: { fullPath: GitLabFullPath },
     success: CloneEvent,
@@ -83,16 +75,11 @@ export const ProjectsRpcs = RpcGroup.make(
     payload: { projectId: ProjectId },
     error: ProjectNotFound,
   }),
-  /** The project's favicon, looked up in its repository, or `null` when it has none. Read-only. */
   Rpc.make("Projects.icon", {
     payload: { projectId: ProjectId },
     success: Schema.NullOr(ProjectIcon),
     error: ProjectNotFound,
   }),
-  /**
-   * The autonomy the project's new threads start with; `null` follows the
-   * human's default for every project. Threads that already exist keep theirs.
-   */
   Rpc.make("Projects.setDefaultAutonomy", {
     payload: { projectId: ProjectId, autonomy: Schema.NullOr(Autonomy) },
     success: Project,

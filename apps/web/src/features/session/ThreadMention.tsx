@@ -7,11 +7,6 @@ import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { useProject } from "@/features/projects/useProject"
 import { allSessionsAtom } from "./atoms.ts"
 
-/**
- * A link to a thread inside running text: its project's icon and its title,
- * which follows the thread if it is renamed. `children` is what the text
- * called it, shown until (or unless) the thread is known.
- */
 export function ThreadMention({
   projectId,
   sessionId,

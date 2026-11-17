@@ -16,7 +16,6 @@ describe("highlight", () => {
 
   it("takes a fence's alias and plain text without a grammar", async () => {
     expect(await highlight("echo hi", "sh")).toHaveLength(1)
-    // Callers fall back to it as `"text" as BundledLanguage`, as codePlugin.ts does.
     const plain = await highlight("a\nb", "text" as BundledLanguage)
     expect(plain.map((line) => line[0]?.content)).toEqual(["a", "b"])
   })

@@ -13,10 +13,6 @@ import {
 
 const reactivityKeys = [keys.kiro]
 
-/**
- * The Kiro accounts and what can be done with them. Every action resolves
- * to an error message, or `undefined` when it worked.
- */
 export function useKiroAccounts() {
   const result = useAtomValue(kiroAccountsAtom)
   const check = useAtomSet(refreshKiroAccountsAtom, { mode: "promiseExit" })
@@ -25,7 +21,6 @@ export function useKiroAccounts() {
   const setActiveAccount = useAtomSet(setActiveKiroAccountAtom, { mode: "promiseExit" })
   const [refreshing, setRefreshing] = useState(false)
 
-  /** `force` starts Kiro again for every account; without it the daemon's short cache answers. */
   const refresh = useCallback(
     async (force: boolean) => {
       setRefreshing(true)
@@ -36,7 +31,6 @@ export function useKiroAccounts() {
     [check],
   )
 
-  /** Without `configDir` the account gets a new login; with it, it runs on that existing folder. */
   const add = useCallback(
     async (name: string, configDir?: string) => {
       const payload = configDir === undefined ? { name } : { name, configDir }

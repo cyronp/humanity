@@ -39,15 +39,9 @@ import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
 import { useFileMention } from "./useFileMention.ts"
 
 export interface ComposerHandle {
-  /** Writes at the caret and gives the box the focus. */
   readonly insert: (insertion: PromptInsertion) => void
 }
 
-/**
- * The message box of an open thread. Enter sends, Shift+Enter adds a line.
- * Follow-ups are queued while the agent works; with nothing typed, the send
- * button is a red stop for the agent's current turn instead.
- */
 export const Composer = memo(function Composer({
   sessionId,
   projectId,
@@ -61,15 +55,10 @@ export const Composer = memo(function Composer({
 }: {
   readonly ref?: Ref<ComposerHandle>
   readonly sessionId: SessionId
-  /** The session's project, whose repository may bring skills and MCP servers of its own. */
   readonly projectId: ProjectId
-  /** The session's current autonomy; it changes from the next tool call on. */
   readonly autonomy: Autonomy
-  /** The agent the session runs on; it never changes. */
   readonly provider: AgentProvider
-  /** The session's model; `null` is its provider's default. */
   readonly model: string | null
-  /** The session's reasoning effort; `null` is the model's default. */
   readonly effort: ReasoningEffort | null
   readonly disabled: boolean
   readonly busy: boolean
@@ -89,7 +78,6 @@ export const Composer = memo(function Composer({
   const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
-  // No dependencies: `insert` reads the text of the render it was made in.
   useImperativeHandle(ref, () => ({ insert }))
   const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
   const mentions = useFileMention({
@@ -122,7 +110,6 @@ export const Composer = memo(function Composer({
     } else setError(describeCause(exit.cause))
   }
 
-  // The session's status event then turns `busy` off, and the stop back into send.
   const stop = async () => {
     setStopping(true)
     setStopError(undefined)
@@ -130,17 +117,14 @@ export const Composer = memo(function Composer({
     setStopping(false)
     if (Exit.isFailure(exit)) setStopError(describeCause(exit.cause))
   }
-  // A typed message is queued rather than stopping anything, so it keeps its send button.
   const canStop = busy && !disabled && text.trim() === ""
 
-  // The session's `SessionUpdated` event brings the new value back into `autonomy`.
   const changeAutonomy = async (next: Autonomy) => {
     setAutonomyError(undefined)
     const exit = await updateAutonomy({ payload: { sessionId, autonomy: next } })
     if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
   }
 
-  // Like the autonomy, the new model comes back through `SessionUpdated`.
   const changeModel = async (next: string | null) => {
     setModelError(undefined)
     const exit = await updateModel({ payload: { sessionId, model: next } })

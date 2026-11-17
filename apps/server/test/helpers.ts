@@ -12,16 +12,13 @@ import { GitHubToken } from "../src/services/GitHubToken.ts"
 import { GitLabService } from "../src/services/GitLabService.ts"
 import { GitLabToken } from "../src/services/GitLabToken.ts"
 
-/** A temp directory removed when the scope closes. */
 export const tempDir = (prefix = "humanity-test-") =>
   Effect.acquireRelease(
     Effect.sync(() => realpathSync.native(mkdtempSync(join(tmpdir(), prefix)))),
     (dir) =>
-      // git marks objects read-only; retry so Windows can release its handles.
       Effect.sync(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
   )
 
-/** Runs git with an argument array, isolated from the developer's own git config. */
 export const git = (cwd: string, ...args: ReadonlyArray<string>): string =>
   execFileSync("git", args, {
     cwd,
@@ -38,7 +35,6 @@ export const git = (cwd: string, ...args: ReadonlyArray<string>): string =>
     },
   })
 
-/** A temp repository on branch `main` with one commit. */
 export const tempRepo = (files: Record<string, string> = { "README.md": "# fixture\n" }) =>
   Effect.gen(function* () {
     const dir = yield* tempDir("humanity-repo-")
@@ -56,28 +52,21 @@ export const tempRepo = (files: Record<string, string> = { "README.md": "# fixtu
     return dir
   })
 
-/** Tests never reach the network: any request fails the test that made it. */
 export const offlineHttp = Layer.succeed(
   HttpClient.HttpClient,
   HttpClient.make((request) => Effect.die(`unexpected network request: ${request.url}`)),
 )
 
-/** GitHub without a token and without a network, unless a test provides its own. */
 export const offlineGitHub = GitHubService.layer.pipe(
   Layer.provide(GitHubToken.layerTest(undefined)),
   Layer.provide(offlineHttp),
 )
 
-/** GitLab likewise. */
 export const offlineGitLab = GitLabService.layer.pipe(
   Layer.provide(GitLabToken.layerTest(undefined)),
   Layer.provide(offlineHttp),
 )
 
-/**
- * Config, platform, an on-disk database rooted at `home`, and an offline
- * GitHub and GitLab. A test that follows pull requests passes its own GitHub.
- */
 export const baseLayer = (home: string, github: Layer.Layer<GitHubService> = offlineGitHub) =>
   Layer.mergeAll(DatabaseLive, github, offlineGitLab).pipe(
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),

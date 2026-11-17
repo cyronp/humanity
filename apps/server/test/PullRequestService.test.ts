@@ -22,7 +22,6 @@ const pull = {
   created_at: "2026-11-10T10:00:00Z",
 }
 
-/** A GitHub with one open pull request for `feat/login`, counting what it is asked. */
 const fakeGitHub = () => {
   const requests: Array<string> = []
   const client = HttpClient.make((request) =>
@@ -63,20 +62,17 @@ describe("PullRequestService", () => {
         const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
         yield* waitForStatus(session.id, "idle")
 
-        // What the header button and every tool call ask for: no request leaves.
         for (let call = 0; call < 5; call++) {
           const publication = yield* pullRequests.publication(session.id)
           assert.deepInclude(publication, { forge: "github", branch: "feat/login", upstream: null })
         }
         assert.lengthOf(requests, 0)
 
-        // Watching asks once: the lookup, two for the checks, three for the comments.
         const [feed] = yield* pullRequests.watch(session.id).pipe(Stream.take(1), Stream.runCollect)
         assert.strictEqual(feed?.pullRequest?.number, 7)
         assert.deepInclude(feed, { problem: null, pausedUntil: null, needsToken: false })
         assert.lengthOf(requests, 6)
 
-        // A second look within the minute is answered from what the daemon knows.
         const [again] = yield* pullRequests
           .watch(session.id)
           .pipe(Stream.take(1), Stream.runCollect)

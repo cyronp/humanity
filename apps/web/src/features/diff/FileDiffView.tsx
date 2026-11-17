@@ -19,7 +19,6 @@ const ICON = {
   rename: FileSymlink,
 } as const
 
-/** `+12 −3`, the size of a change at a glance. */
 export function ChangeCount({
   added,
   removed,
@@ -35,15 +34,6 @@ export function ChangeCount({
   )
 }
 
-/**
- * A read-only view of one file's changes, in one box: a bar naming the file,
- * then its hunks, each after the first opened by its `@@` range. The bar and
- * each range carry their hunk's VS Code and Reference buttons.
- *
- * Only the bar shows until it is clicked: a file's lines are highlighted when
- * it is first opened, so a long list of changes stays quick. `open` and
- * `onOpenChange` let the caller remember which files are open.
- */
 export function FileDiffView({
   file,
   onReference,
@@ -52,9 +42,7 @@ export function FileDiffView({
   onOpenChange,
 }: {
   readonly file: FileDiff
-  /** Puts a `path:line` reference in the next message; its buttons show only when given. */
   readonly onReference?: ((reference: string) => void) | undefined
-  /** The absolute folder the file is in; when given, its hunks and lines open in VS Code. */
   readonly editorRoot?: string | undefined
   readonly open?: boolean | undefined
   readonly onOpenChange?: ((open: boolean) => void) | undefined
@@ -67,7 +55,6 @@ export function FileDiffView({
   }
   const Icon = ICON[file.kind]
   const counts = countChanges(file.hunks)
-  // A deleted file is no longer on disk to open.
   const root = file.kind === "delete" ? undefined : editorRoot
   const [first] = file.hunks
   const links = { filePath: file.filePath, onReference, editorRoot: root }
@@ -115,7 +102,6 @@ export function FileDiffView({
   )
 }
 
-/** The hunks of an open file: mounted only while it is open. */
 function FileDiffBody({
   file,
   links,

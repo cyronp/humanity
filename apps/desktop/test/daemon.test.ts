@@ -19,7 +19,6 @@ const freePort = Effect.callback<number>((resume) => {
   })
 })
 
-/** A stand-in daemon: answers 401 like `/api/auth` does, and exits when its stdin ends. */
 const FAKE_DAEMON = `
 import { createServer } from "node:http"
 import { appendFileSync } from "node:fs"
@@ -77,7 +76,6 @@ describe("supervise", () => {
       yield* Deferred.succeed(stop, undefined)
       yield* Fiber.join(fiber)
 
-      // It left by itself, on the closed stdin, rather than being killed.
       assert.deepStrictEqual(linesOf(fake.starts), ["start", "asked to stop"])
     }).pipe(Effect.provide(Platform)),
   )
@@ -98,7 +96,6 @@ describe("supervise", () => {
       yield* Deferred.await(ready).pipe(Effect.timeout("5 seconds"))
       yield* Deferred.succeed(stop, undefined)
       yield* Fiber.join(fiber)
-      // Ready on the first start: the hung probe was given up on, not the daemon.
       assert.deepStrictEqual(linesOf(fake.starts), ["start", "asked to stop"])
     }).pipe(Effect.provide(Platform)),
   )
@@ -153,7 +150,6 @@ describe("supervise", () => {
       const fake = yield* fakeDaemon({})
       const stop = yield* Deferred.make<void>()
       const ready = yield* Deferred.make<void>()
-      // Someone else's daemon: started outside the supervision under test.
       const other = yield* supervise({
         daemon: fake.command,
         readinessUrl: fake.readinessUrl,

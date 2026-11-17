@@ -15,7 +15,6 @@ describe("Database", () => {
         assert.strictEqual(mode?.journal_mode, "wal")
         const value = (rows: unknown) =>
           Object.values(Schema.decodeUnknownSync(Pragma)(rows)[0] ?? {})[0]
-        // 1 is NORMAL.
         assert.strictEqual(value(yield* sql`PRAGMA synchronous`), 1)
         assert.strictEqual(value(yield* sql`PRAGMA foreign_keys`), 1)
       }).pipe(Effect.provide(baseLayer(home)))

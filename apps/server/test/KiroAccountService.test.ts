@@ -18,7 +18,6 @@ import { baseLayer, tempDir } from "./helpers.ts"
 
 const MODELS = [{ value: "claude-sonnet", displayName: "Claude Sonnet", description: "For tests" }]
 
-/** A scripted Kiro: the default login is signed in, the folder of an added account is not. */
 const scripted = (probed: Ref.Ref<ReadonlyArray<string | undefined>>) =>
   Kiro.layerTest({
     probe: (kiroHome) =>
@@ -85,7 +84,6 @@ describe("Kiro (Beta)", () => {
   })
 })
 
-/** What Kiro 2.32 writes, as its recorded sessions show it. */
 describe("Kiro's own way with the protocol", () => {
   const CWD = process.platform === "win32" ? "C:\\work\\repo" : "/work/repo"
   const FILE = join(CWD, "notes.txt")
@@ -139,7 +137,6 @@ describe("Kiro's own way with the protocol", () => {
       const outside = process.platform === "win32" ? "C:\\Users\\me\\.bashrc" : "/home/me/.bashrc"
       const { profile, read } = profileWith({ [outside]: "secret" })
       const named = yield* nameOf(profile, write(outside, "x"))
-      // Still a file change by its path, which is what gets it denied.
       assert.deepStrictEqual(named, {
         toolName: "ApplyPatch",
         input: { changes: [{ path: outside, kind: "add", diff: "x" }] },
@@ -168,7 +165,6 @@ describe("Kiro's own way with the protocol", () => {
   it.effect("names an MCP call the way every agent's go by, from Kiro's title and server", () =>
     Effect.gen(function* () {
       const { profile } = profileWith()
-      // As Kiro 2 announces a call of an HTTP MCP server it was given.
       const call: ToolCallFields = {
         toolCallId: "tooluse_l4S16",
         title: "@humanity/open_thread",
@@ -181,7 +177,6 @@ describe("Kiro's own way with the protocol", () => {
         toolName: "mcp__humanity__open_thread",
         input: { prompt: "say hi", provider: "codex" },
       })
-      // A title alone, or one that names another server, is not taken at its word.
       assert.isUndefined(yield* nameOf(profile, { ...call, _meta: undefined }))
       assert.isUndefined(
         yield* nameOf(profile, { ...call, _meta: { kiro: { serverName: "docs" } } }),
@@ -224,7 +219,6 @@ describe("Kiro's own way with the protocol", () => {
       }),
     )
     assert.isUndefined(profile.update?.(call({ status: "completed" })))
-    // Over: the id means nothing any more.
     assert.isDefined(profile.update?.(call({ status: "in_progress" })))
   })
 
@@ -241,7 +235,6 @@ describe("Kiro's own way with the protocol", () => {
       })
       return (update?.["content"] as { readonly text: string }).text
     }
-    // Before a steer, text is not looked at.
     assert.strictEqual(say("[STEERING steer-1: kept]"), "[STEERING steer-1: kept]")
     profile.update?.(info("steering_injected"))
     const chunks = [

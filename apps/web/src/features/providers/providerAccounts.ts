@@ -7,31 +7,21 @@ import { kiroLine } from "@/features/kiro/summary"
 import { useKiroAccounts } from "@/features/kiro/useKiroAccounts"
 import type { ProviderId } from "./ProviderIcon.tsx"
 
-/**
- * The accounts of any provider in one shape, for the places that show every
- * provider alike. A new provider adds its hook to `ACCOUNT_HOOKS`, which the
- * compiler asks for, and shows up in all of them.
- */
 
-/** Signed in, runs but signed out, or its CLI did not start. */
 export type AccountState = "connected" | "signedOut" | "unavailable"
 
 export interface ProviderAccount {
   readonly id: string
   readonly name: string
-  /** New threads of the provider run as this account. */
   readonly active: boolean
   readonly state: AccountState
-  /** One line about its login: the plan and who is signed in, or what is wrong. */
   readonly detail: string
 }
 
 export interface ProviderAccounts {
   readonly result: AsyncResult.AsyncResult<ReadonlyArray<ProviderAccount>, unknown>
-  /** `force` asks the provider's CLI again; without it the daemon's short cache answers. */
   readonly refresh: (force: boolean) => Promise<string | undefined>
   readonly refreshing: boolean
-  /** Resolves to an error message, or `undefined` when the account was added. */
   readonly add: (name: string, configDir?: string) => Promise<string | undefined>
   readonly setActive: (accountId: string) => Promise<string | undefined>
 }
@@ -82,9 +72,5 @@ const ACCOUNT_HOOKS: Record<ProviderId, () => ProviderAccounts> = {
   kiro: useKiro,
 }
 
-/**
- * A provider's accounts. The provider picks the hook, so it must stay the same
- * for the life of the component: render one component per provider, keyed by it.
- */
 export const useProviderAccounts = (provider: ProviderId): ProviderAccounts =>
   ACCOUNT_HOOKS[provider]()

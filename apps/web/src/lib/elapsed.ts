@@ -1,9 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-/**
- * A short duration for tight spaces: `12s`, `5m`, `3h`, `2d`, `6w`.
- * Under a second (or a clock that runs slightly behind) reads `now`.
- */
 export const formatElapsed = (ms: number): string => {
   const seconds = Math.floor(ms / 1000)
   if (seconds < 1) return "now"
@@ -34,11 +30,6 @@ const clockFor = (intervalMs: number): Clock => {
   return clock
 }
 
-/**
- * A clock that ticks every `intervalMs` for whoever listens, on one timer
- * shared by all of them: a sidebar of a hundred threads runs one interval, and
- * its rows update together, not each on a timer of its own.
- */
 export const sharedClock = (intervalMs: number) => ({
   subscribe: (listener: () => void): (() => void) => {
     const clock = clockFor(intervalMs)
@@ -57,13 +48,11 @@ export const sharedClock = (intervalMs: number) => ({
       clocks.delete(intervalMs)
     }
   },
-  /** The time of the last tick: the same value between ticks, as React requires. */
   getSnapshot: (): number => clockFor(intervalMs).now,
 })
 
 const shared = new Map<number, ReturnType<typeof sharedClock>>()
 
-/** The current time, updated every `intervalMs` by a clock shared with every other reader at that pace. */
 export const useNow = (intervalMs: number): number => {
   let clock = shared.get(intervalMs)
   if (clock === undefined) {
@@ -84,7 +73,6 @@ const UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
   ["minute", 60],
 ]
 
-/** How long ago `iso` was, spelled out: `41 minutes ago`, `yesterday`, `3 weeks ago`. */
 export const formatTimeAgo = (iso: string, now: number = Date.now()): string => {
   const seconds = Math.round((now - Date.parse(iso)) / 1000)
   if (Number.isNaN(seconds)) return ""

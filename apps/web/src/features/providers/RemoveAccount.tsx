@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
-/** Asks before removing an added account of a provider: its login goes with it. */
 export function RemoveAccount({
   provider,
   account,
@@ -28,9 +27,7 @@ export function RemoveAccount({
     readonly name: string
     readonly linkedFolder: boolean
   }
-  /** Where the account's login lives. */
   readonly folder: string | null
-  /** Resolves to an error message, or `undefined` when the account was removed. */
   readonly onRemove: (accountId: string) => Promise<string | undefined>
 }) {
   const { name: providerName } = PROVIDERS[provider]

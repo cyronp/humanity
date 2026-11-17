@@ -7,14 +7,8 @@ import { publicationAtom, sessionDiffAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { checkoutMoved } from "./publication.ts"
 
-/** Tells two entries of one path apart: staged as deleted, and back on disk. */
 export const fileKey = (file: FileDiff) => `${file.kind}:${file.filePath}`
 
-/**
- * Every uncommitted change where the session works, one closed bar per file
- * until the human opens it. While the shared checkout is on another branch,
- * what is uncommitted there is that branch's, so it isn't shown as this thread's.
- */
 export function DiffTab({
   session,
   onReference,
@@ -22,9 +16,7 @@ export function DiffTab({
   onOpenChange,
 }: {
   readonly session: Session
-  /** Puts a `path:line` reference in the message box; absent when no box can take it. */
   readonly onReference?: ((reference: string) => void) | undefined
-  /** Files the human opened, by `fileKey`; kept by the panel so they stay open across tabs. */
   readonly open: ReadonlySet<string>
   readonly onOpenChange: (key: string, open: boolean) => void
 }) {

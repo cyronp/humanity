@@ -10,7 +10,6 @@ import {
 } from "../src/mcp/HumanityMcp.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
 
-/** Tools that open every thread asked for, and remember what they were asked. */
 const recordingTools = () => {
   const asked: Array<OpenThreadRequest> = []
   const tools: HumanityTools = {
@@ -60,7 +59,6 @@ describe("Humanity's MCP server", () => {
           serverInfo: { name: "humanity", title: "Humanity", version: "0.1.0" },
         },
       })
-      // A version from after this server was written (Kiro asks for one first).
       const newer = yield* answerMcp(
         tools,
         call(1, "initialize", { protocolVersion: "2099-01-01" }),
@@ -116,7 +114,6 @@ describe("Humanity's MCP server", () => {
         }
       ).result.tools
       assert.strictEqual(tool?.name, "open_thread")
-      // Claude Code loads it up front, so a thread that asks never asks to look it up.
       assert.isTrue(tool?._meta["anthropic/alwaysLoad"])
       assert.deepStrictEqual(tool?.inputSchema.required, ["prompt"])
       assert.deepStrictEqual(tool?.inputSchema.properties["provider"]?.enum, [
@@ -162,7 +159,6 @@ describe("Humanity's MCP server", () => {
       assert.include(result.content[0].text, 'Opened the thread "Flaky" on Kiro, claude-sonnet-5.5')
       assert.include(result.content[0].text, "[Flaky](/projects/p1/sessions/s2)")
 
-      // Agents that write `null` for what they leave out are understood too.
       yield* answerMcp(tools, openThread({ prompt: "Again", provider: null, effort: null }))
       assert.deepStrictEqual(asked[1], { prompt: "Again", provider: null, effort: null })
     }),

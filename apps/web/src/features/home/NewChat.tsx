@@ -33,16 +33,9 @@ import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
-/**
- * The home page: one message box, like any AI chat. It starts a new session
- * in the repository the human prompted last, with that thread's model and
- * reasoning effort (or the pinned effort) and the project's or the human's
- * default autonomy, unless they pick otherwise.
- */
 export function NewChat({
   projectId,
 }: {
-  /** The project chosen in the URL (from the header's switcher); the last prompted one otherwise. */
   readonly projectId: ProjectId | undefined
 }) {
   const projects = useAtomValue(projectsAtom)
@@ -53,7 +46,6 @@ export function NewChat({
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)
   const { pinned } = usePinnedDefaults()
-  // Until the human picks one, follow the last prompted project as it loads.
   const project =
     list.find((candidate) => candidate.id === projectId) ??
     list.find((candidate) => candidate.id === lastProjectId) ??
@@ -94,7 +86,6 @@ export function NewChat({
   )
 }
 
-/** The project of the most recently active session: where the human was last prompting. */
 const lastPrompted = (sessions: ReadonlyArray<Session>): ProjectId | undefined =>
   sessions[0]?.projectId
 
@@ -115,12 +106,10 @@ function NewChatForm({
   defaults,
 }: {
   readonly project: Project
-  /** What a new thread starts with here; each setting follows it until the human picks another. */
   readonly defaults: ThreadDefaults
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
-  // `undefined` is "not picked yet"; a `null` model is a picked "Default".
   const [chosenModel, setModel] = useState<ModelChoice>()
   const [chosenEffort, setEffort] = useState<ReasoningEffort | null>()
   const [chosenAutonomy, setAutonomy] = useState<Autonomy>()
@@ -134,7 +123,6 @@ function NewChatForm({
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
   const searchFiles = useAtomSet(searchProjectFilesAtom, { mode: "promiseExit" })
-  // The checkout as it is now, before a branch picked here is switched to.
   const mentions = useFileMention({
     text,
     setText,
@@ -147,7 +135,6 @@ function NewChatForm({
 
   const branches = useAtomValue(branchesAtom(project.id))
   const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
-  // The checkout stays on its branch unless the human picks another one.
   const current = AsyncResult.isSuccess(branches)
     ? branches.value.find((branch) => branch.isCurrent && !branch.isRemote)?.name
     : undefined

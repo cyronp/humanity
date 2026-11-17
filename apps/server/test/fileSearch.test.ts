@@ -39,7 +39,6 @@ describe("searchFiles", () => {
   it("ranks an exact name, then a name prefix, then a name substring", () => {
     expect(paths("button.tsx")).toEqual([
       "src/components/Button.tsx",
-      // Scattered: b-u-t-t-o-n, then . t s x further on.
       "src/components/ButtonGroup.tsx",
     ])
     expect(paths("button")).toEqual([

@@ -15,15 +15,10 @@ export interface CliUpdate {
   readonly cli: AgentCli | undefined
   readonly run: () => void
   readonly updating: boolean
-  /** What the last update did, in one line. */
   readonly outcome: string | undefined
   readonly error: string | undefined
 }
 
-/**
- * A provider's CLI and its Update button's state. Updating runs the CLI's
- * own updater, then `onUpdated`, so the accounts are checked again on it.
- */
 export function useCliUpdate(provider: AgentProvider, onUpdated: () => void): CliUpdate {
   const result = useAtomValue(agentCliAtom(provider))
   const update = useAtomSet(updateAgentCliAtom, { mode: "promiseExit" })
@@ -70,10 +65,6 @@ function UpdateButton({
   )
 }
 
-/**
- * The CLI's version in its provider's header, with a quiet Update button.
- * A CLI that needs attention gets its button in `CliNotice` instead.
- */
 export function CliVersion({ update }: { readonly update: CliUpdate }) {
   const { cli } = update
   if (cli === undefined) return null
@@ -94,10 +85,6 @@ export function CliVersion({ update }: { readonly update: CliUpdate }) {
   )
 }
 
-/**
- * Under a provider's header: why its CLI needs attention (missing, or older
- * than Humanity is tested with) with the way out, then what the last update did.
- */
 export function CliNotice({ update }: { readonly update: CliUpdate }) {
   const { cli } = update
   const problem = cli === undefined ? undefined : cliProblem(cli)

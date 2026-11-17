@@ -20,15 +20,9 @@ import { describeCause } from "@/lib/errors"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { branchesAtom } from "./atoms.ts"
 
-/** Most recently committed first, like VS Code's branch picker. */
 const byRecentCommit = (a: Branch, b: Branch) =>
   (Date.parse(b.committedAt) || 0) - (Date.parse(a.committedAt) || 0)
 
-/**
- * Picks the branch the project's checkout switches to for a new thread: a
- * searchable palette floating at the top of the page, like VS Code's quick
- * pick, listing local and remote branches with their last commit.
- */
 export function BranchPicker({
   project,
   value,
@@ -42,7 +36,6 @@ export function BranchPicker({
 }) {
   const [open, setOpen] = useState(false)
   const branches = useAtomValue(branchesAtom(project.id))
-  // Refreshed once a minute, so "x minutes ago" stays true while the popup is open.
   const now = useNow(60_000)
 
   const all = AsyncResult.isSuccess(branches) ? branches.value : []
@@ -117,10 +110,6 @@ export function BranchPicker({
   )
 }
 
-/**
- * Two lines, as in VS Code: the branch, how far it is from its upstream and
- * how long ago it last moved; then who made that commit, its hash and subject.
- */
 function BranchRow({
   branch,
   selected,

@@ -16,38 +16,19 @@ import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
-/** How often the daemon looks for conversations the human had in the CLI since. */
 const SYNC_INTERVAL = "5 minutes"
-/**
- * The first sync waits this long after the daemon starts: it reads every
- * project's Claude Code transcripts and writes to the one database
- * connection, which the window opening at the same time needs first.
- */
 const FIRST_SYNC_DELAY = "5 seconds"
 
 const MAX_TITLE = 80
 
 const iso = (ms: number) => new Date(ms).toISOString()
 
-/**
- * Brings the conversations the human had in the Claude Code CLI into each
- * project's thread history, like t3code imports them: every conversation held
- * in the project's checkout becomes an ended thread that can be read, and
- * continued from where the CLI left it. A thread is imported once per Claude
- * Code session, and refreshed while its transcript keeps changing, until the
- * human continues it in Humanity. Nothing is imported while the human has the
- * import turned off; the threads already imported stay.
- */
 export class HistoryImport extends Context.Service<
   HistoryImport,
   {
-    /** Imports the project's new or changed conversations. Returns how many threads it wrote. */
     readonly syncProject: (projectId: string) => Effect.Effect<number, ProjectNotFound>
-    /** Every project, one after the other. A project that cannot be read is skipped and logged. */
     readonly syncAll: Effect.Effect<void>
-    /** Starts `syncProject` without waiting for it, as when a project was just added. */
     readonly syncInBackground: (projectId: string) => Effect.Effect<void>
-    /** Starts `syncAll` without waiting for it, as when the import was just turned on. */
     readonly syncAllInBackground: Effect.Effect<void>
   }
 >()("humanity/HistoryImport") {
@@ -61,7 +42,6 @@ export class HistoryImport extends Context.Service<
       const approvals = yield* ApprovalService
       const preferences = yield* PreferencesService
       const scope = yield* Effect.scope
-      // Two syncs of one project at once would import the same conversation twice.
       const lock = yield* Semaphore.make(1)
 
       const republish = (sessionId: SessionId) =>
@@ -82,14 +62,12 @@ export class HistoryImport extends Context.Service<
       const importOne = (project: Project, conversation: ClaudeConversation, index: ImportIndex) =>
         Effect.gen(function* () {
           const known = index.bySource.get(conversation.sessionId)
-          // Continued in Humanity, or unchanged since the last import.
           if (
             known !== undefined &&
             (known.mtime === null || known.mtime >= conversation.lastModified)
           ) {
             return false
           }
-          // A thread Humanity started itself, whose session also shows up in Claude Code.
           if (known === undefined && index.sdkSessionIds.has(conversation.sessionId)) return false
 
           const id = known?.sessionId ?? SessionId.make(randomUUID())
@@ -141,7 +119,6 @@ export class HistoryImport extends Context.Service<
             let written = 0
             for (const conversation of conversations) {
               const wrote = yield* importOne(project, conversation, index).pipe(
-                // One unreadable transcript does not stop the others.
                 Effect.catchTag("ClaudeHistoryUnavailable", (error) =>
                   Effect.as(
                     Effect.logWarning(
@@ -167,7 +144,6 @@ export class HistoryImport extends Context.Service<
 
       const syncAll = Effect.gen(function* () {
         for (const project of yield* projects.list) {
-          // Removed while the sync ran.
           yield* syncProject(project.id).pipe(Effect.ignore)
         }
       })
@@ -181,7 +157,6 @@ export class HistoryImport extends Context.Service<
     }),
   )
 
-  /** Imports soon after start, then again every few minutes, for as long as the daemon runs. */
   static readonly background = Layer.effectDiscard(
     Effect.gen(function* () {
       const imports = yield* HistoryImport

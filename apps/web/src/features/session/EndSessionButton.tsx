@@ -21,7 +21,6 @@ import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { endSessionAtom } from "./atoms.ts"
 
-/** A small "End session" button that ends `session` after asking, optionally deleting its worktree if it has one. */
 export function EndSessionButton({
   session,
   className,
@@ -73,7 +72,6 @@ export function EndSessionButton({
         </AlertDialogHeader>
         {session.inWorktree && (
           <div className="flex items-center gap-2">
-            {/* As small as the box it replaced, so the label stays where it was. */}
             <Checkbox
               className="size-3.5 [&_svg]:size-3"
               id={`remove-worktree-${session.id}`}

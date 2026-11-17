@@ -5,16 +5,11 @@ import { stringField } from "../inputs.ts"
 import type { ToolRenderer } from "../registry.ts"
 import { Field, OutputText } from "./common.tsx"
 
-/** A provider the agent named, as the human knows it; one Humanity does not know, as written. */
 const providerName = (provider: string | undefined): string | undefined =>
   provider !== undefined && Object.hasOwn(PROVIDER_NAMES, provider)
     ? PROVIDER_NAMES[provider as AgentProvider]
     : provider
 
-/**
- * Humanity's own tool: the agent opening a new thread at the human's request.
- * The link to the thread is in the agent's reply; here is what it asked for.
- */
 export const threadRenderer: ToolRenderer = {
   name: "Thread",
   match: (toolName) => toolName === OPEN_THREAD_TOOL,
@@ -58,7 +53,6 @@ export const threadRenderer: ToolRenderer = {
               <OutputText text={call.output.content} error />
             </Field>
           ) : (
-            // The result carries the thread's link, which reads as the thread here too.
             <Field label="Result">
               <div className="rounded-md border p-2">
                 <Markdown text={call.output.content} />

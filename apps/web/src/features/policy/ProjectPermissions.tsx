@@ -16,17 +16,11 @@ import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { AUTONOMY_OPTIONS } from "./AutonomyPicker.tsx"
 
-/** The select's value for "no default of its own". */
 const INHERIT = "inherit"
 
 const labelOf = (autonomy: Autonomy) =>
   AUTONOMY_OPTIONS.find((option) => option.value === autonomy)?.label ?? autonomy
 
-/**
- * The permissions a project's new threads start with: its own, or the human's
- * default for every project. A thread's own permissions are changed in its
- * message box and are not touched here.
- */
 export function ProjectPermissions({ project }: { readonly project: Project }) {
   const save = useAtomSet(setDefaultAutonomyAtom, { mode: "promiseExit" })
   const { pinned } = usePinnedDefaults()

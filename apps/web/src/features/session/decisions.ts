@@ -17,7 +17,6 @@ export const describeDecision = (approval: Approval): string => {
   switch (status) {
     case "applied":
       return `You allowed the change to ${filePath}`
-    // Only on changes from when hunks were decided one by one.
     case "partially_applied":
       return `You approved ${approved} of ${hunks.length} hunks of ${filePath}`
     case "rejected":

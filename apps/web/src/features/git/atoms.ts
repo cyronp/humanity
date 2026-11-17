@@ -16,5 +16,4 @@ export const workingTreeDiffAtom = Atom.family((projectId: ProjectId) =>
 
 export const createBranchAtom = HumanityClient.mutation("Git.createBranch")
 
-/** Files and folders of the project's checkout, for `@` in a new thread's message box. */
 export const searchProjectFilesAtom = HumanityClient.mutation("Git.searchFiles")

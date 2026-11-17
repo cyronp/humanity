@@ -19,7 +19,6 @@ interface Reply {
   readonly headers?: Record<string, string>
 }
 
-/** A fake forge: `answer` sees each request, and everything asked is recorded. */
 const fakeForge = (answer: (seen: Seen, count: number) => Reply) => {
   const requests: Array<Seen> = []
   const client = HttpClient.make((request) =>
@@ -68,7 +67,6 @@ const pull = {
 
 const find = GitHubService.use((service) => service.findPullRequest("acme/app", "feat/login"))
 
-/** Quota headers as GitHub sends them; the reset is an hour after the test clock's start. */
 const quota = (remaining: number) => ({
   "x-ratelimit-limit": "5000",
   "x-ratelimit-remaining": String(remaining),
@@ -184,7 +182,6 @@ describe("revalidating with ETags", () => {
         yield* service.comments("acme/app", mergeRequest)
         yield* service.comments("acme/app", mergeRequest)
       }).pipe(Effect.provide(gitlab(client)))
-      // The remembered `Link` header still leads to the second page.
       assert.deepStrictEqual(
         requests.map((request) => request.ifNoneMatch),
         [undefined, undefined, '"p1"', '"p2"'],
@@ -207,10 +204,8 @@ describe("staying within the rate limit", () => {
           resetAt: new Date(3_600_000).toISOString(),
         })
         assert.lengthOf(requests, 1)
-        // A click still goes through.
         yield* find
         assert.lengthOf(requests, 2)
-        // The next window starts with a full quota.
         yield* TestClock.adjust("61 minutes")
         yield* find.pipe(Effect.provideService(ForgeBackground, true))
         assert.lengthOf(requests, 3)
@@ -246,7 +241,6 @@ describe("staying within the rate limit", () => {
           _tag: "GitHubRateLimited",
           resetAt: new Date(120_000).toISOString(),
         })
-        // Even a click waits: asking while limited makes the limit last longer.
         assert.strictEqual((yield* Effect.flip(find))._tag, "GitHubRateLimited")
         assert.lengthOf(requests, 1)
         yield* TestClock.adjust("121 seconds")
@@ -270,7 +264,6 @@ describe("staying within the rate limit", () => {
         yield* TestClock.adjust("2 seconds")
         yield* Effect.flip(find)
         assert.lengthOf(requests, 2)
-        // The second pause is twice as long.
         yield* TestClock.adjust("31 seconds")
         yield* Effect.flip(find)
         assert.lengthOf(requests, 2)

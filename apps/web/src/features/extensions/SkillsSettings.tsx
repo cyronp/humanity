@@ -29,7 +29,6 @@ const INSTRUCTIONS_PLACEHOLDER = `# Reviewing SQL
 
 type Editing = { readonly kind: "new" } | { readonly kind: "edit"; readonly skill: Skill }
 
-/** Humanity's own skills, editable, then the repository's, read-only. */
 export function SkillsSettings({
   skills,
   repositoryName,
@@ -99,7 +98,6 @@ function SkillRow({
   onEdit,
 }: {
   readonly skill: Skill
-  /** `undefined` for a repository's skill, which is changed in the repository. */
   readonly onEdit: (() => void) | undefined
 }) {
   const remove = useAtomSet(removeSkillAtom, { mode: "promiseExit" })
@@ -150,7 +148,6 @@ function SkillEditor({
   skill,
   onDone,
 }: {
-  /** `undefined` adds a new skill. */
   readonly skill: Skill | undefined
   readonly onDone: () => void
 }) {
@@ -195,7 +192,6 @@ function SkillEditor({
           id={`${ids}-name`}
           value={name}
           onChange={(event) => setName(event.target.value)}
-          // Lowercase words joined by hyphens, as the agent's skill names must be.
           onBlur={() => setName((current) => skillSlug(current))}
           placeholder="review-sql"
           autoFocus

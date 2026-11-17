@@ -32,7 +32,6 @@ const unix = (files: ReadonlyArray<string>, path = "/usr/bin:/bin"): LocateOptio
   readFile: () => undefined,
 })
 
-/** What npm writes for a global `codex` on Windows, trimmed to the lines that matter. */
 const NPM_SHIM = [
   "@ECHO off",
   "SET dp0=%~dp0",

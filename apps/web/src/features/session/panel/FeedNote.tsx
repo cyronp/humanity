@@ -4,7 +4,6 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { feedNotice } from "./publication.ts"
 
-/** Says why the forge isn't being asked as usual, above whatever it last said. */
 export function FeedNote({
   feed,
   forge,

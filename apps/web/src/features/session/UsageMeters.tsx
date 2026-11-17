@@ -33,13 +33,8 @@ const LEVEL_CLASS: Record<UsageLevel, string> = {
   critical: "text-red-600 dark:text-red-400",
 }
 
-/** Small text that floats over the transcript: a faint blurred backing keeps it readable. */
 const FLOATING = "rounded-full bg-background/60 px-2 py-0.5 text-xs tabular-nums backdrop-blur-sm"
 
-/**
- * The line above the message box: the plan's usage on the far left, a button
- * that opens every window, and the context window on the right.
- */
 export const UsageMeters = memo(function UsageMeters({
   sessionId,
   usage,
@@ -57,7 +52,6 @@ export const UsageMeters = memo(function UsageMeters({
   )
 })
 
-/** Counts the context window down while a ring fills up with what is used. */
 function ContextMeter({ context }: { readonly context: ContextUsage }) {
   const used = contextPercentUsed(context)
   const left = Math.round(100 - used)
@@ -82,7 +76,6 @@ const BAR_CLASS: Record<UsageLevel, string> = {
   critical: "bg-red-500",
 }
 
-/** `14:30` for a reset later today, `Mon 09:00` for another day. */
 const formatReset = (resetsAt: string): string => {
   const date = new Date(resetsAt)
   const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -97,10 +90,6 @@ type Refresh =
   | { readonly _tag: "Refreshed"; readonly at: Date }
   | { readonly _tag: "Failed"; readonly error: string }
 
-/**
- * Asks the daemon for the plan's usage right now. The new numbers arrive on
- * the session's stream; this only tracks how the last ask went.
- */
 function useRefreshUsage(sessionId: SessionId) {
   const refreshUsage = useAtomSet(refreshUsageAtom, { mode: "promiseExit" })
   const [state, setState] = useState<Refresh>({ _tag: "Idle" })
@@ -133,12 +122,6 @@ const refreshNote = (state: Refresh): string => {
   }
 }
 
-/**
- * Reads "Usage" while the 5-hour and 7-day windows are at most half used, then
- * names the fuller one in its colour. A model's own window never shows here,
- * because running out of it does not stop the agent. Clicking it refreshes and
- * lists every window of the plan.
- */
 function PlanUsageButton({
   sessionId,
   rows,
@@ -231,7 +214,6 @@ function PlanRowMeter({ row }: { readonly row: PlanRow }) {
 const RADIUS = 6
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
-/** A ring that fills clockwise from the top, in the colour of its text. */
 function Ring({ percent }: { readonly percent: number }) {
   return (
     <svg viewBox="0 0 16 16" className="size-3.5 -rotate-90" aria-hidden>

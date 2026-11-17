@@ -26,7 +26,6 @@ const KIND_LABEL: Record<StatusEntry["kind"], string> = {
   type_changed: "type changed",
 }
 
-/** Status and uncommitted diff of the user's own working copy. Read-only. */
 export function StatusCard({ project }: { readonly project: Project }) {
   const status = useAtomValue(statusAtom(project.id))
   const diff = useAtomValue(workingTreeDiffAtom(project.id))

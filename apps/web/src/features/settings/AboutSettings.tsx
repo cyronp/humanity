@@ -5,7 +5,6 @@ import { APP_VERSION } from "@/lib/version"
 import { closeSettings } from "./settings.ts"
 import { SettingsFrame, SettingsPane, SettingsRow, SettingsRows } from "./SettingsLayout.tsx"
 
-/** Which Humanity this is, and the way back to its introduction. */
 export function AboutSettings() {
   const showOnboarding = () => {
     closeSettings()

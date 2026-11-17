@@ -1,10 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-/**
- * The app's settings, shown as a dialog over whatever page is open, so
- * changing one never loses the place in a thread. It opens from the sidebar
- * and from anywhere that points at a setting.
- */
 
 export const SETTINGS_SECTIONS = [
   "general",
@@ -18,7 +13,6 @@ export const SETTINGS_SECTIONS = [
 ] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
-/** The sections as the list shows them, a line between each group: General, the named ones, then the app itself. */
 export const SECTION_GROUPS: ReadonlyArray<{
   readonly label?: string
   readonly sections: ReadonlyArray<SettingsSection>
@@ -33,7 +27,6 @@ export const SECTION_INFO: Record<
   SettingsSection,
   {
     readonly label: string
-    /** Other words a human may search this section by. */
     readonly keywords: ReadonlyArray<string>
   }
 > = {
@@ -81,7 +74,6 @@ export const SECTION_INFO: Record<
   },
 }
 
-/** The sections a search shows: every one for an empty query, else those named or described by it. */
 export const matchSections = (query: string): ReadonlyArray<SettingsSection> => {
   const needle = query.trim().toLowerCase()
   if (needle === "") return SETTINGS_SECTIONS
@@ -94,7 +86,6 @@ export const matchSections = (query: string): ReadonlyArray<SettingsSection> => 
 interface SettingsState {
   readonly open: boolean
   readonly section: SettingsSection
-  /** The item last picked in each section's list: a provider, a repository service, a project. */
   readonly items: Partial<Record<SettingsSection, string>>
 }
 
@@ -111,7 +102,6 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => listeners.delete(listener)
 }
 
-/** Opens the settings at a section, or at the one shown last, and optionally at one of its items. */
 export const openSettings = (section: SettingsSection = state.section, item?: string): void =>
   setState({
     open: true,

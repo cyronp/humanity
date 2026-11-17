@@ -19,7 +19,6 @@ import {
   type ToolPermissionRequest,
 } from "./AgentRunner.ts"
 
-/** An MCP tool's result, as the agent reads it. */
 interface ToolResult {
   readonly content: ReadonlyArray<{ readonly text: string }>
   readonly isError?: boolean
@@ -30,10 +29,8 @@ export type FakeStep =
   | {
       readonly tool: string
       readonly input: Record<string, unknown>
-      /** What the tool "returns" when it runs. Edit and Write really change the file. */
       readonly output?: string
     }
-  /** Keeps the turn busy until it is interrupted, like a long tool call. */
   | { readonly hang: true }
 
 export type FakeScript = (prompt: string, turn: number) => ReadonlyArray<FakeStep>
@@ -47,7 +44,6 @@ export class FakeAgentLog extends Context.Service<
   {
     readonly runs: Ref.Ref<ReadonlyArray<AgentRunOptions>>
     readonly prompts: Ref.Ref<ReadonlyArray<string>>
-    /** Every user message as the agent received it, files included. */
     readonly sent: Ref.Ref<ReadonlyArray<AgentUserMessage>>
     readonly permissions: Ref.Ref<ReadonlyArray<PermissionLogEntry>>
     readonly modelChanges: Ref.Ref<ReadonlyArray<string | undefined>>
@@ -64,7 +60,6 @@ const readOrEmpty = (path: string) => {
   }
 }
 
-/** Runs Edit and Write for real, inside the run's cwd, like the SDK would after an `allow`. */
 const executeTool = (cwd: string, step: Extract<FakeStep, { tool: string }>) => {
   if (step.tool !== "Edit" && step.tool !== "Write") {
     return { content: step.output ?? `${step.tool} ran.`, isError: false }
@@ -85,13 +80,6 @@ const executeTool = (cwd: string, step: Extract<FakeStep, { tool: string }>) => 
   return { content: step.output ?? `The file ${rawPath} has been updated.`, isError: false }
 }
 
-/**
- * A scripted stand-in for the Agent SDK. It emits SDK-shaped messages, asks
- * `canUseTool` exactly where the real SDK would (anything not in
- * `allowedTools`, after the permission guard), and honors interrupts by aborting
- * the pending permission request. It calls Humanity's own tools on the
- * daemon's MCP server, so it needs `HumanityMcp`.
- */
 export const AgentRunnerFake = (script: FakeScript) =>
   Layer.effect(
     AgentRunner,
@@ -100,10 +88,6 @@ export const AgentRunnerFake = (script: FakeScript) =>
       const mcp = yield* HumanityMcp
       let runCounter = 0
 
-      /**
-       * Calls `open_thread` on Humanity's MCP server as the run was given it,
-       * with the run's own token, the way a real agent's MCP client would.
-       */
       const callHumanity = (options: AgentRunOptions, input: Record<string, unknown>) =>
         Effect.gen(function* () {
           const server = options.extensions.mcpServers[HUMANITY_MCP_SERVER]
@@ -131,7 +115,6 @@ export const AgentRunnerFake = (script: FakeScript) =>
           const prompts = yield* Queue.unbounded<string>()
           const current = yield* Ref.make(Option.none<Fiber.Fiber<void>>())
           let turn = 0
-          // Prompts sent but not finished, and an interrupt that arrived before its turn began.
           let pending = 0
           let interruptRequested = false
           let toolCounter = 0
@@ -214,7 +197,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
                   decision.behavior !== "allow"
                     ? { content: decision.message, isError: true }
                     : step.tool === OPEN_THREAD_TOOL
-                      ? // Humanity's own tool really runs, like Edit and Write.
+                      ?
                         yield* callHumanity(options, step.input)
                       : executeTool(options.cwd, step)
                 yield* emit({
@@ -247,7 +230,6 @@ export const AgentRunnerFake = (script: FakeScript) =>
               })
             }).pipe(Effect.onInterrupt(() => emitInterrupted))
 
-          // Turns run one at a time, like the real SDK in streaming input mode.
           yield* Effect.gen(function* () {
             while (true) {
               const prompt = yield* Queue.take(prompts)
@@ -291,7 +273,6 @@ export const AgentRunnerFake = (script: FakeScript) =>
               Ref.update(log.effortChanges, (all) => [...all, effort]),
             applyExtensions: (extensions: AgentExtensions) =>
               Ref.update(log.extensionChanges, (all) => [...all, extensions]),
-            // Each turn fills another tenth of a 200k window.
             contextUsage: Effect.sync(() => ({ usedTokens: turn * 20_000, maxTokens: 200_000 })),
             planUsage: Effect.succeed({
               fiveHour: { utilization: 62, resetsAt: "2099-01-01T00:00:00.000Z" },

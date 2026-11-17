@@ -4,7 +4,6 @@ import { File, Folder } from "lucide-react"
 import { useEffect } from "react"
 import type { FileMentionMenuState } from "./useFileMention.ts"
 
-/** The id of the list and of each of its options, for the message box's `aria-*`. */
 export const fileMentionIds = (base: string) => ({
   list: `${base}-files`,
   option: (index: number) => `${base}-file-${index}`,
@@ -18,11 +17,6 @@ const splitPath = (entry: FileEntry) => {
   }
 }
 
-/**
- * The files and folders offered under an `@`, drawn just above the message
- * box. The caret stays in the box: the list never takes the focus, and the
- * box's keys move through it.
- */
 export function FileMentionMenu({
   menu,
   idBase,
@@ -51,7 +45,6 @@ export function FileMentionMenu({
       id={ids.list}
       role="listbox"
       aria-label="Files and folders"
-      // Clicking an option must not take the focus, and the caret, out of the box.
       onMouseDown={(event) => event.preventDefault()}
       className="absolute inset-x-0 bottom-full z-50 mb-2 max-h-72 overflow-y-auto rounded-xl bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
     >
@@ -80,7 +73,6 @@ export function FileMentionMenu({
               <span className="max-w-[70%] shrink-0 truncate">{name}</span>
               {folder !== "" && (
                 <span className="min-w-0 truncate text-xs text-muted-foreground" dir="rtl">
-                  {/* rtl cuts a long folder from its start; bdi keeps it reading left to right. */}
                   <bdi>{folder}</bdi>
                 </span>
               )}

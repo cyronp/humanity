@@ -30,7 +30,6 @@ describe("inserting into the message box", () => {
   it("does not repeat the skill the message already starts with", () => {
     expect(insertSkill("/deploy now", "/deploy")).toEqual({ text: "/deploy now", caret: 11 })
     expect(insertSkill("/deploy", "/deploy").text).toBe("/deploy")
-    // Another command that merely starts the same way is a different skill.
     expect(insertSkill("/deployment x", "/deploy").text).toBe("/deploy /deployment x")
   })
 
@@ -51,9 +50,7 @@ describe("inserting into the message box", () => {
       text: "ask mcp__docs ",
       caret: 14,
     })
-    // A selection is replaced.
     expect(insertAtSelection("use X now", "mcp__docs", 4, 5).text).toBe("use mcp__docs now")
-    // A caret past the end (a stale selection) is clamped.
     expect(insertAtSelection("", "mcp__docs", 9, 9)).toEqual({ text: "mcp__docs ", caret: 10 })
   })
 
@@ -80,7 +77,6 @@ describe("the MCP server form", () => {
       args: "-y\n\n  @mcp/server-fs  \nC:\\My Folder\n",
       env: [
         { ...blankEntry(), name: "TOKEN", value: "abc" },
-        // Left entirely blank: ignored.
         blankEntry(),
       ],
     })

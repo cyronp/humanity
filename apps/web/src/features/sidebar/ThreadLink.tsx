@@ -14,11 +14,6 @@ import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon
 import { STATUS_TONE, TONE_TEXT } from "@/features/session/statusTone"
 import { formatElapsed, useNow } from "@/lib/elapsed"
 
-/**
- * One thread in the sidebar, live or in the history: the project's icon, its
- * name and how long the thread has been in its state; the thread's title; its
- * branch, whether it started in Claude Code, and the provider.
- */
 export function ThreadLink({
   session,
   project,
@@ -70,10 +65,6 @@ export function ThreadLink({
   )
 }
 
-/**
- * How each state shows in the row's corner. A state with a `badge` shows it
- * (icon and word) in place of the time; the others show the time, with a dot.
- */
 const STATE: Record<
   SessionStatus,
   {
@@ -93,12 +84,6 @@ const STATE: Record<
   ended: { label: "Ended" },
 }
 
-/**
- * The thread's state, or how long it has been in it. The daemon stamps
- * `updatedAt` on every status change, so the time counts from there; it is
- * always in the tooltip. A live thread's corner gives way to its end button on
- * hover; an ended one has none.
- */
 function ThreadTime({ session }: { readonly session: Session }) {
   const live = session.status === "running" || session.status === "waiting_for_human"
   const now = useNow(live ? 1000 : 30_000)
@@ -113,7 +98,6 @@ function ThreadTime({ session }: { readonly session: Session }) {
         session.status !== "ended" &&
           "transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0 pointer-coarse:opacity-0",
         tone !== undefined && TONE_TEXT[tone],
-        // A state shown as a word is a live one: it reads a little heavier.
         badge !== undefined && "font-medium",
       )}
       title={`${state.label} · ${elapsed}`}

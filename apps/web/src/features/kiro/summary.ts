@@ -1,7 +1,6 @@
 import type { KiroStatus } from "@humanity/contracts"
 import { callExecutable, isWindowsPath, quotePosix, quotePowerShell } from "@/lib/shell"
 
-/** One line about a Kiro login: what the CLI says of it, or what is wrong. */
 export const kiroLine = (status: KiroStatus): string => {
   const connection = status.connection
   switch (connection._tag) {
@@ -14,11 +13,9 @@ export const kiroLine = (status: KiroStatus): string => {
   }
 }
 
-/** A heading for a Kiro login's state. */
 export const kiroTitle = (status: KiroStatus): string =>
   status.connection._tag === "Connected" ? "Connected to your Kiro account" : kiroLine(status)
 
-/** True when the sign-in command is PowerShell's: the executable or the folder is a Windows path. */
 export const kiroSignInUsesPowerShell = (options: {
   readonly kiroHome: string | null
   readonly executable: string
@@ -26,11 +23,6 @@ export const kiroSignInUsesPowerShell = (options: {
   isWindowsPath(options.executable) ||
   (options.kiroHome !== null && isWindowsPath(options.kiroHome))
 
-/**
- * The command that signs an account in. `kiroHome` is the folder of an added
- * account (`null` for Kiro's default login), set only for the login so the
- * default one is left alone.
- */
 export const kiroSignInCommand = (options: {
   readonly kiroHome: string | null
   readonly executable: string

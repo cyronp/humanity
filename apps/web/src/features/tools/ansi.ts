@@ -1,13 +1,11 @@
 export interface AnsiSegment {
   readonly text: string
-  /** A Tailwind text colour class, if the run is coloured. */
   readonly color?: string
   readonly bold?: boolean
   readonly dim?: boolean
   readonly underline?: boolean
 }
 
-// Standard and bright foreground colours, readable in both themes.
 const COLORS: Record<number, string> = {
   30: "text-zinc-500",
   31: "text-red-600 dark:text-red-400",
@@ -48,7 +46,6 @@ const applyCodes = (style: Style, codes: ReadonlyArray<number>): Style => {
     } else if (code === 24) delete next.underline
     else if (code === 39) delete next.color
     else if (COLORS[code] !== undefined) next.color = COLORS[code]
-    // 256-colour and true-colour sequences carry extra parameters; skip them.
     else if (code === 38 || code === 48) i += codes[i + 1] === 5 ? 2 : 4
   }
   return next
@@ -57,11 +54,6 @@ const applyCodes = (style: Style, codes: ReadonlyArray<number>): Style => {
 // eslint-disable-next-line no-control-regex
 const ESCAPE = /\u001b\[([0-9;]*)([A-Za-z])/g
 
-/**
- * Splits terminal output into styled runs. Colour and weight (SGR) sequences
- * are honoured; every other escape sequence (cursor moves, clears) is dropped
- * so it never shows up as garbage.
- */
 export const parseAnsi = (input: string): Array<AnsiSegment> => {
   const segments: Array<AnsiSegment> = []
   let style: Style = {}

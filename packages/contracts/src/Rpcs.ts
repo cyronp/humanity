@@ -13,7 +13,6 @@ import { PullRequestsRpcs } from "./rpc/PullRequests.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
 import { UpdatesRpcs } from "./rpc/Updates.ts"
 
-/** Every RPC the daemon serves, merged into the single group the socket speaks. */
 export const HumanityRpcs = ProjectsRpcs.merge(
   GitRpcs,
   GitHubRpcs,
@@ -30,12 +29,10 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   AgentClisRpcs,
 )
 
-/** Path of the RPC WebSocket on the daemon (and on the Vite dev proxy). */
 export const RPC_PATH = "/rpc"
 
 export const TOKEN_PARAM = "token"
 
 export const DEFAULT_DAEMON_PORT = 7420
 
-/** The port of the daemon the desktop app starts: its own, so it never collides with `npm run dev` or `npm start`. */
 export const DEFAULT_DESKTOP_PORT = 7421

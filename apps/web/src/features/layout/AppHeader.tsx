@@ -6,11 +6,6 @@ import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
 const HeaderSlot = createContext<HTMLElement | null>(null)
 const HeaderInsetEnd = createContext<(pixels: number) => void>(() => undefined)
 
-/**
- * A blur that is strongest at the top and fades out downwards, so content
- * scrolling under the header softens instead of hitting a hard edge. Each
- * layer blurs more and is masked to a shorter band near the top.
- */
 function ProgressiveBlur({ className }: { readonly className?: string }) {
   const layers = [1, 2, 4, 8, 16]
   return (
@@ -36,15 +31,6 @@ function ProgressiveBlur({ className }: { readonly className?: string }) {
   )
 }
 
-/**
- * The header over every page of the app. It is transparent: content scrolls
- * underneath, softened by a progressive blur. Pages fill it with
- * `<AppHeader>`; pages scrolling under it leave `pt-14` of room at their top.
- * A page with a full-height panel on its right gives the header that panel's
- * width with `useAppHeaderInsetEnd`, and the header ends where it begins.
- * In the desktop app it is also the window's title bar: it moves the window,
- * and keeps clear of the window buttons when it reaches the right edge.
- */
 export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [insetEnd, setInsetEnd] = useState(0)
@@ -63,7 +49,6 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
             insetEnd === 0 && "pr-[calc(var(--titlebar-controls)+--spacing(3))]",
           )}
         >
-          {/* The toggle lives in the sidebar; it shows here only when the sidebar is hidden. */}
           {(state === "collapsed" || isFloating) && <SidebarTrigger />}
           <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         </div>
@@ -72,10 +57,6 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/**
- * Ends the app header `pixels` before the right edge, for as long as the
- * calling page stays mounted, so a panel there can run to the top.
- */
 export function useAppHeaderInsetEnd(pixels: number) {
   const setInsetEnd = useContext(HeaderInsetEnd)
   useEffect(() => {

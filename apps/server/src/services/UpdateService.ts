@@ -13,11 +13,6 @@ const NO_DESKTOP_REASON =
 const NO_DESKTOP: UpdateState = { _tag: "Unsupported", reason: NO_DESKTOP_REASON }
 const IDLE: UpdateState = { _tag: "Idle" }
 
-/**
- * The desktop app's updates, as seen by the daemon. The desktop app connects
- * as one more client: it receives the human's commands from here and reports
- * how they went, which every open page then sees.
- */
 export class UpdateService extends Context.Service<
   UpdateService,
   {
@@ -25,7 +20,6 @@ export class UpdateService extends Context.Service<
     readonly setPreferences: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
     readonly check: Effect.Effect<void, UpdatesUnavailable>
     readonly install: Effect.Effect<void, UpdatesUnavailable>
-    /** The desktop app's connection: commands for as long as it stays. */
     readonly attachDesktop: (version: string) => Stream.Stream<DesktopUpdateCommand>
     readonly report: (state: UpdateState) => Effect.Effect<void>
   }
@@ -40,7 +34,6 @@ export class UpdateService extends Context.Service<
         state: NO_DESKTOP,
       })
       const commands = yield* PubSub.unbounded<DesktopUpdateCommand>()
-      /** Connections of desktop apps; one in practice, but a reconnect may overlap the old one. */
       const attached = yield* Ref.make(0)
 
       const send = (command: DesktopUpdateCommand) =>
@@ -63,7 +56,6 @@ export class UpdateService extends Context.Service<
       const attachDesktop = (version: string): Stream.Stream<DesktopUpdateCommand> =>
         Stream.unwrap(
           Effect.gen(function* () {
-            // Subscribe before reading the preferences, so no change falls in between.
             const subscription = yield* PubSub.subscribe(commands)
             yield* Ref.update(attached, (count) => count + 1)
             yield* Effect.addFinalizer(() =>

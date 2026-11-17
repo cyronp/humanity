@@ -10,11 +10,6 @@ import { SkillsSettings } from "@/features/extensions/SkillsSettings"
 import { projectsAtom } from "@/features/projects/atoms"
 import { SettingsFrame, SettingsPane } from "./SettingsLayout.tsx"
 
-/**
- * The MCP servers and skills sections: Humanity's own, which reach every
- * project, and those of the repository open behind the settings, shown
- * read-only.
- */
 
 export function McpSettings() {
   return (

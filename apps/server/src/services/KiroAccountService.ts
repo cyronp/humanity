@@ -12,10 +12,6 @@ export const classifyKiroAccount = (probe: KiroProbe): KiroConnection =>
       }
     : { _tag: "SignedOut" }
 
-/**
- * The Kiro accounts (Beta): the default Kiro login and every Kiro folder
- * (`KIRO_HOME`) added next to it. Humanity holds no credential of its own.
- */
 export class KiroAccountService extends Context.Service<
   KiroAccountService,
   AccountRegistry<KiroStatus>

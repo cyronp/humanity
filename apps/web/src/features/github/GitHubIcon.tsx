@@ -1,7 +1,6 @@
 import { cn } from "cn"
 import type { SVGProps } from "react"
 
-/** GitHub's mark, from Simple Icons (CC0). Decorative: the text next to it names GitHub. */
 export function GitHubIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg

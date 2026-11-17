@@ -23,7 +23,6 @@ import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 
-/** `project ▾ / page`: the project switcher, then where in it the human is. */
 export function ProjectBreadcrumb({
   project,
   page,
@@ -52,7 +51,6 @@ export function ProjectBreadcrumb({
   )
 }
 
-/** Picking a project opens a new thread in it; "Add repository" brings in another one. */
 function ProjectSwitcher({ current }: { readonly current: Project | undefined }) {
   const projects = useAtomValue(projectsAtom)
   const navigate = useNavigate()

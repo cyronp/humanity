@@ -16,20 +16,12 @@ import { allSessionsAtom } from "@/features/session/atoms"
 import { selectHistory, type ThreadFilter } from "./threadFilter.ts"
 import { ThreadLink } from "./ThreadLink.tsx"
 
-/** How many ended threads the history opens with, and how many each "Show more" adds. */
 const FIRST_PAGE = 10
 const NEXT_PAGE = 25
 
-/** A ghost button drawn as a divider: muted label, a rule across the sidebar, a chevron. */
 const DIVIDER_BUTTON =
   "w-full gap-3 px-2 font-normal text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent"
 
-/**
- * The threads that are over, and the conversations imported from Claude Code,
- * folded away at the bottom of the sidebar under an "Ended" divider
- * that expands into the same rows as the list above, newest first. The
- * sidebar's search and project filter narrow it like the list above.
- */
 export function ThreadHistory({
   projects,
   query,
@@ -47,7 +39,6 @@ export function ThreadHistory({
   const [limit, setLimit] = useState(FIRST_PAGE)
   const listId = useId()
 
-  // The list above already says when the threads are loading or could not load.
   if (!AsyncResult.isSuccess(sessions)) return null
 
   const threads = sessions.value.flatMap((session) => {

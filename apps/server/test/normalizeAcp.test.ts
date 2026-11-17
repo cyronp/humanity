@@ -67,7 +67,6 @@ describe("acpToolCall", () => {
       toolName: "Bash",
       input: { command: "npm test", cwd: "/w", description: "Run the tests" },
     })
-    // Without a raw input the title is all there is to show.
     expect(acpToolCall(call({ kind: "execute", title: "npm test" }))).toEqual({
       toolName: "Bash",
       input: { command: "npm test" },
@@ -129,7 +128,6 @@ describe("acpToolCall", () => {
   })
 
   it("keeps the agent's own name for a call it cannot place", () => {
-    // A file change that shows no diff is not something a thread can accept unseen.
     expect(
       acpToolCall(call({ kind: "edit", title: "Rewrite a.ts", locations: [{ path: "/w/a.ts" }] })),
     ).toEqual({ toolName: "Rewrite a.ts", input: { paths: ["/w/a.ts"] } })

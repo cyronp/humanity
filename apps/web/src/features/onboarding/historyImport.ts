@@ -6,14 +6,12 @@ import { useState } from "react"
 import { describeCause } from "@/lib/errors"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** Whether conversations held in the agent's CLI become threads, kept by the daemon. */
 const historyPreferencesAtom = HumanityClient.query("Preferences.getHistory", undefined, {
   reactivityKeys: [keys.preferences],
 })
 
 const setHistoryPreferencesAtom = HumanityClient.mutation("Preferences.setHistory")
 
-/** The import of the CLI's older threads and the way to turn it on or off. */
 export const useHistoryImport = () => {
   const result = useAtomValue(historyPreferencesAtom)
   const save = useAtomSet(setHistoryPreferencesAtom, { mode: "promiseExit" })

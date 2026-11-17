@@ -9,7 +9,6 @@ const plugins = { code: shikiCodePlugin }
 
 const DefaultLink = defaultComponents.a
 
-/** A link to a Humanity thread reads as that thread, in the line; any other link is Streamdown's. */
 function MarkdownLink(props: ComponentProps<typeof DefaultLink>) {
   const thread = typeof props.href === "string" ? parseThreadHref(props.href) : undefined
   if (thread === undefined) return <DefaultLink {...props} />
@@ -18,7 +17,6 @@ function MarkdownLink(props: ComponentProps<typeof DefaultLink>) {
 
 const components = { a: MarkdownLink }
 
-/** Agent-written markdown. `streaming` tolerates half-finished syntax while text arrives. */
 export const Markdown = memo(function Markdown({
   text,
   streaming = false,

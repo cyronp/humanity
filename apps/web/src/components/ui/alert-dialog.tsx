@@ -35,11 +35,6 @@ function AlertDialogOverlay({
   )
 }
 
-/*
- * Humanity's confirmations look like its other dialogs (`dialog.tsx`): the
- * same width and text size, a left-aligned header and a close button in the
- * corner, which cancels.
- */
 function AlertDialogContent({
   className,
   children,

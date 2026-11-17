@@ -7,7 +7,6 @@ import { GitHubIcon } from "@/features/github/GitHubIcon"
 import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { publicationAtom } from "./atoms.ts"
 
-/** The host's own mark, or a plain branch where Humanity can't tell the host. */
 function ForgeMark({ forge }: { readonly forge: Forge | null }) {
   if (forge === "github") return <GitHubIcon />
   if (forge === "gitlab") return <GitLabIcon />
@@ -24,7 +23,6 @@ export function SourceControlButton({
   readonly onToggle: () => void
 }) {
   const result = useAtomValue(publicationAtom(session.id))
-  // A plain branch stands in until the host is known.
   const forge = AsyncResult.isSuccess(result) ? result.value.forge : null
 
   return (

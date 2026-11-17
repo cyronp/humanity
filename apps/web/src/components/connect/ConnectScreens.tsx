@@ -11,10 +11,6 @@ import { currentSurroundings, daemonAddress, retryDelayMs, startCommand } from "
 import { storeToken, tokenFromInput } from "@/lib/token"
 import { APP_VERSION } from "@/lib/version"
 
-/**
- * The page every connect screen sits on: the splash's colour, so going from
- * the splash to one of these does not flash, and a column in the middle.
- */
 function ConnectFrame({ children }: { readonly children: ReactNode }) {
   return (
     <main className="titlebar flex min-h-svh flex-col items-center bg-sidebar px-4 pt-[calc(var(--titlebar-height)+--spacing(6))] pb-6">
@@ -37,13 +33,8 @@ function Heading({ title, children }: { readonly title: string; readonly childre
   )
 }
 
-/** `down`: nothing answered; `refused`: it answered and turned the token down. */
 type LinkState = "down" | "refused" | "checking"
 
-/**
- * This window on the left, the daemon on the right, and what stands between
- * them: the picture says which end the trouble is at before the text does.
- */
 function LinkDiagram({
   state,
   from,
@@ -85,7 +76,6 @@ function LinkDiagram({
             state === "refused" ? "border-solid border-border" : "border-dashed border-border",
           )}
         />
-        {/* Solid underneath, so the line stops at the badge instead of showing through its tint. */}
         <span className="absolute top-0 left-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background">
           <span
             className={cn("grid size-full place-items-center rounded-full border", badge.className)}
@@ -130,7 +120,6 @@ function DiagramNode({
   )
 }
 
-/** A panel of left-aligned content under the centred heading. */
 function Panel({
   children,
   className,
@@ -207,7 +196,6 @@ export function UnreachableScreen({
                 Looking for the daemon…
               </>
             ) : (
-              // A new key restarts the countdown after every look.
               <Countdown key={failures} ms={retryDelayMs(failures)} onDone={onRetry} />
             )}
           </span>

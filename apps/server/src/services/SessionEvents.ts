@@ -1,12 +1,6 @@
 import type { SessionEvent } from "@humanity/contracts"
 import { Context, Effect, Layer, PubSub, type Scope } from "effect"
 
-/**
- * One in-process event bus per session, plus one signal shared by all of
- * them that fires whenever the list of sessions changes (a session is
- * created, changes status, or is removed). Subscribers only see events
- * published after they subscribe.
- */
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
@@ -22,7 +16,6 @@ export class SessionEvents extends Context.Service<
     SessionEvents,
     Effect.gen(function* () {
       const hubs = new Map<string, PubSub.PubSub<SessionEvent>>()
-      // Only "something changed" matters, so a burst of changes collapses into one.
       const listChanged = yield* PubSub.sliding<void>(1)
 
       const hub = (sessionId: string) =>

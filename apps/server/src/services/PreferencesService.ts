@@ -19,17 +19,13 @@ const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
 const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
 const HistoryPreferencesJson = Schema.fromJsonString(HistoryPreferences)
 
-/** The human's own choices that belong to no project or session. */
 export class PreferencesService extends Context.Service<
   PreferencesService,
   {
-    /** The settings pinned as the start of every new thread; nothing pinned until the human pins. */
     readonly pinnedDefaults: Effect.Effect<PinnedDefaults>
     readonly setPinnedDefaults: (pinned: PinnedDefaults) => Effect.Effect<PinnedDefaults>
-    /** How the desktop app looks for updates; `DEFAULT_UPDATE_PREFERENCES` until the human changes it. */
     readonly updates: Effect.Effect<UpdatePreferences>
     readonly setUpdates: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
-    /** What is imported from the agent CLIs; `DEFAULT_HISTORY_PREFERENCES` until the human changes it. */
     readonly history: Effect.Effect<HistoryPreferences>
     readonly setHistory: (preferences: HistoryPreferences) => Effect.Effect<HistoryPreferences>
   }
@@ -50,7 +46,6 @@ export class PreferencesService extends Context.Service<
       const pinnedDefaults = Effect.gen(function* () {
         const row = yield* selectByKey(PINNED_DEFAULTS_KEY).pipe(Effect.orDie)
         if (Option.isNone(row)) return NO_PINS
-        // A value this version no longer understands is no pin, not a broken app.
         return yield* decode(row.value.value_json).pipe(
           Effect.catch((error) =>
             Effect.as(

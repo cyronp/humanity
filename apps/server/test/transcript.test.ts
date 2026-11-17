@@ -85,7 +85,6 @@ describe("importTranscript", () => {
       text: "Read the README",
     })
     assert.strictEqual(imported.messages[3]?.message.createdAt, "2026-11-10T10:00:07.000Z")
-    // Ids are unique across threads and stable across refreshes of the same one.
     assert.deepStrictEqual(
       imported.messages.map(({ message }) => message.id),
       ["thread-1:0", "thread-1:1", "thread-1:2", "thread-1:3"],

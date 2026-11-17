@@ -4,10 +4,6 @@ import { searchFiles } from "../services/fileSearch.ts"
 import { GitService } from "../services/GitService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 
-/**
- * Git RPCs act on the project's own repository, read-only apart from creating
- * a branch ref. Nothing here checks out or edits the user's working copy.
- */
 export const GitHandlers = GitRpcs.toLayer(
   Effect.gen(function* () {
     const projects = yield* ProjectService

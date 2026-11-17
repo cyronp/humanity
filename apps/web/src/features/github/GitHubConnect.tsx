@@ -12,10 +12,6 @@ import { useGitHubConnection } from "./useGitHubConnection.ts"
 
 const NEW_TOKEN_URL = "https://github.com/settings/personal-access-tokens/new"
 
-/**
- * GitHub as the place repositories come from, and the two ways to connect
- * it: the GitHub CLI's login, or a token saved in Humanity.
- */
 export function GitHubConnect() {
   const { result, refresh, refreshing, saveToken, removeToken } = useGitHubConnection()
   return (
@@ -81,7 +77,6 @@ function TokenOption({
   onRemove,
 }: {
   readonly connection: GitHubConnection
-  /** Both resolve to an error message, or `undefined` when they worked. */
   readonly onSave: (token: string) => Promise<string | undefined>
   readonly onRemove: () => Promise<string | undefined>
 }) {

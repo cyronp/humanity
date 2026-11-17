@@ -1,11 +1,6 @@
 import type { AssistantBlock, MessageContent, ToolResult } from "@humanity/contracts"
 import { Option, Schema } from "effect"
 
-/**
- * Turns raw Agent SDK messages into Humanity's normalized shapes. Only the
- * fields Humanity uses are described; everything else in a message is
- * ignored here and preserved in the raw copy stored next to it.
- */
 
 const InitMessage = Schema.Struct({
   type: Schema.Literal("system"),
@@ -103,19 +98,14 @@ const decodeToolUse = decode(ToolUseContent)
 const decodeToolResult = decode(ToolResultContent)
 const decodeTyped = decode(TypedBlock)
 
-/** What one raw SDK message means to Humanity. */
 export type Normalized =
   | {
       readonly _tag: "Message"
       readonly content: MessageContent
-      /** The SDK session id, when the message announces it (`system`/`init`). */
       readonly sdkSessionId?: string
-      /** The tool's structured output (`tool_use_result`), for single-result messages. */
       readonly structuredResult?: unknown
     }
-  /** A chunk of streamed assistant text. Shown live, never persisted. */
   | { readonly _tag: "TextDelta"; readonly text: string }
-  /** Streaming noise with nothing to show or keep (other partial events). */
   | { readonly _tag: "Skip" }
 
 const message = (content: MessageContent, extra: Partial<Normalized> = {}): Normalized =>
@@ -141,7 +131,6 @@ const assistantBlocks = (content: ReadonlyArray<unknown>): Array<AssistantBlock>
     return []
   })
 
-/** Flattens a tool result's content to the text the model saw. */
 export const toolResultText = (content: string | ReadonlyArray<unknown> | undefined): string => {
   if (content === undefined) return ""
   if (typeof content === "string") return content
@@ -172,7 +161,6 @@ const toolResults = (content: ReadonlyArray<unknown>): Array<ToolResult> =>
 export const normalizeSdkMessage = (raw: unknown): Normalized => {
   const delta = decodeDelta(raw)
   if (Option.isSome(delta)) {
-    // Text streamed inside a subagent belongs to that tool call, not the chat.
     return (delta.value.parent_tool_use_id ?? null) === null
       ? { _tag: "TextDelta", text: delta.value.event.delta.text }
       : { _tag: "Skip" }
@@ -206,7 +194,6 @@ export const normalizeSdkMessage = (raw: unknown): Normalized => {
     const content = user.value.message.content
     const results = typeof content === "string" ? [] : toolResults(content)
     if (results.length === 0) {
-      // Echoes of prompts Humanity sent itself, or synthetic context: nothing new to show.
       return message({ _tag: "other", type: "user", subtype: null })
     }
     return message(

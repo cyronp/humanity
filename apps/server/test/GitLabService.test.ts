@@ -21,7 +21,6 @@ interface Reply {
 
 const API = gitlabApi("gitlab.com")
 
-/** A fake GitLab: replies by full URL, and records each request's URL and auth header. */
 const fakeGitLab = (routes: Record<string, Reply>) =>
   Effect.gen(function* () {
     const requests = yield* Ref.make<ReadonlyArray<{ url: string; auth: string | undefined }>>([])
@@ -179,7 +178,6 @@ describe("GitLabService", () => {
         problem: null,
       })
 
-      // Without a token nobody is asked anything.
       const before = (yield* Ref.get(requests)).length
       assert.deepStrictEqual(yield* connection.pipe(Effect.provide(gitlab(client, undefined))), {
         host: "gitlab.com",
@@ -207,7 +205,6 @@ describe("GitLabService", () => {
 
       yield* Effect.gen(function* () {
         const service = yield* GitLabService
-        // gitlab.com does not know this token: nothing is saved.
         const refused = yield* Effect.flip(service.saveToken("own-token", "gitlab.com"))
         assert.strictEqual(refused._tag, "GitLabRequestFailed")
         assert.strictEqual((yield* service.connection({ refresh: false })).source, null)
@@ -221,7 +218,6 @@ describe("GitLabService", () => {
           problem: null,
         })
 
-        // From then on every call goes to that instance, with that token.
         assert.deepStrictEqual(yield* service.listBranches("acme/widgets"), [
           { name: "main", commitSha: "abc", protected: true },
           { name: "dev", commitSha: "def", protected: false },
@@ -238,7 +234,6 @@ describe("GitLabService", () => {
 })
 
 describe("cloning from GitLab", () => {
-  /** Project and git services over a temp home, with a fake GitLab whose clone URL is local. */
   const services = (home: string, client: HttpClient.HttpClient, token: string | undefined) =>
     ProjectService.layer.pipe(
       Layer.provideMerge(GitService.layer),
@@ -269,7 +264,6 @@ describe("cloning from GitLab", () => {
 
       const target = join(home, "repos", "gitlab.com", "acme", "tools", "widgets")
       assert.strictEqual(last.project.localPath.toLowerCase(), target.toLowerCase())
-      // The token never lands in the clone's configuration.
       const config = readFileSync(join(target, ".git", "config"), "utf8")
       assert.notInclude(config, "secret-token")
       assert.notInclude(config, Buffer.from("oauth2:secret-token").toString("base64"))
@@ -312,9 +306,7 @@ describe("GitLabToken", () => {
           yield* tokens.clear
           assert.isFalse(existsSync(join(home, "gitlab-token")))
           assert.isFalse(existsSync(join(home, "gitlab-host")))
-          // Whatever this machine has (a glab login, GITLAB_TOKEN or nothing), it is not the saved one.
           assert.notStrictEqual((yield* tokens.resolve).source, "token")
-          // Forgetting twice is not an error.
           yield* tokens.clear
         }).pipe(
           Effect.provide(

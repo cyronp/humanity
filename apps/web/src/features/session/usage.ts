@@ -1,25 +1,17 @@
 import type { ContextUsage, PlanUsage, PlanWindow } from "@humanity/contracts"
 
-/** How close a meter is to its limit: quiet up to 50% used, then yellow, orange and red. */
 export type UsageLevel = "ok" | "notice" | "warning" | "critical"
 
-/** Above 50% is a notice, above 75% a warning, from 90% critical. */
 export const usageLevel = (percentUsed: number): UsageLevel =>
   percentUsed >= 90 ? "critical" : percentUsed > 75 ? "warning" : percentUsed > 50 ? "notice" : "ok"
 
-/** How much of the context window is used, 0 to 100. */
 export const contextPercentUsed = (context: ContextUsage): number =>
   context.maxTokens <= 0
     ? 0
     : Math.min(100, Math.max(0, (context.usedTokens / context.maxTokens) * 100))
 
-/** One of the plan's windows, ready to show. */
 export interface PlanRow extends PlanWindow {
   readonly label: string
-  /**
-   * Whether running out of this window stops the agent altogether. A model's
-   * own window does not: the other models still answer.
-   */
   readonly blocking: boolean
 }
 
@@ -29,11 +21,6 @@ const stillOpen = (window: PlanWindow, now: Date): boolean => {
   return Number.isNaN(resets) || resets > now.getTime()
 }
 
-/**
- * The plan's windows in the order they are shown: 5-hour, 7-day, then each
- * model's own weekly window. A window that has reset since the agent reported
- * it is left out, because its number is no longer true.
- */
 export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanRow> => {
   if (plan === null) return []
   const rows: Array<PlanRow> = [
@@ -50,11 +37,6 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
   return rows.filter((row) => stillOpen(row, now))
 }
 
-/**
- * The window worth the human's attention at a glance: the fullest one above
- * 50%, if any, among those that stop the agent. A model's own window is only
- * listed, never the headline.
- */
 export const planHeadline = (rows: ReadonlyArray<PlanRow>): PlanRow | undefined =>
   rows.reduce<PlanRow | undefined>(
     (fullest, row) =>
@@ -64,7 +46,6 @@ export const planHeadline = (rows: ReadonlyArray<PlanRow>): PlanRow | undefined 
     undefined,
   )
 
-/** `84k`, `1.2M`: token counts short enough for a tooltip. */
 export const formatTokens = (tokens: number): string =>
   tokens >= 1_000_000
     ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`

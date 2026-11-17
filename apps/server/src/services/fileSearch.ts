@@ -1,14 +1,11 @@
 import type { FileEntry } from "@humanity/contracts"
 
-/** How many entries one search returns at most. */
 export const FILE_SEARCH_LIMIT = 30
 
-/** `git ls-files -z` output as paths, without duplicates (a conflicted file is listed once per stage). */
 export const parseFileList = (output: string): Array<string> => [
   ...new Set(output.split("\0").filter((path) => path !== "")),
 ]
 
-/** The files, and every folder that holds one, each once. */
 const entriesOf = (files: ReadonlyArray<string>): Array<FileEntry> => {
   const directories = new Set<string>()
   for (const file of files) {
@@ -26,7 +23,6 @@ const entriesOf = (files: ReadonlyArray<string>): Array<FileEntry> => {
   ]
 }
 
-/** Whether every character of `needle` appears in `haystack`, in order. */
 const isSubsequence = (needle: string, haystack: string) => {
   let at = 0
   for (const char of haystack) {
@@ -36,11 +32,6 @@ const isSubsequence = (needle: string, haystack: string) => {
   return needle.length === 0
 }
 
-/**
- * How well `path` matches `query` (both lower case): lower is better,
- * `undefined` is no match. The name counts before the folders around it,
- * and a scattered match counts least.
- */
 const score = (path: string, query: string): number | undefined => {
   const name = path.slice(path.lastIndexOf("/") + 1)
   if (name === query) return 0
@@ -54,12 +45,6 @@ const score = (path: string, query: string): number | undefined => {
 
 const depth = (path: string) => path.split("/").length
 
-/**
- * The entries of `files` (paths relative to the working copy) that match
- * `query`, best first, at most `limit`. An empty query lists the top of the
- * tree: shallow entries first, folders before files. A query may name a
- * folder with a trailing `/`, or use `\` as Windows paths do.
- */
 export const searchFiles = (
   files: ReadonlyArray<string>,
   query: string,
@@ -72,7 +57,7 @@ export const searchFiles = (
     const matched =
       needle === ""
         ? 0
-        : // `src/` names the folder `src`, and what is inside it.
+        :
           needle.endsWith("/") && `${lower}/`.startsWith(needle)
           ? 3
           : score(lower, needle.replace(/\/+$/, ""))

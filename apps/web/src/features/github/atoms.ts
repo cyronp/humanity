@@ -3,14 +3,12 @@ import { Effect, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** How Humanity reaches GitHub: where the token comes from and who it signs in as. */
 export const githubConnectionAtom = HumanityClient.query(
   "GitHub.connection",
   { refresh: false },
   { reactivityKeys: [keys.github] },
 )
 
-/** Same RPC as a mutation: looks the token up again (with `refresh: true`, right away). */
 export const refreshGitHubConnectionAtom = HumanityClient.mutation("GitHub.connection")
 
 export const setGitHubTokenAtom = HumanityClient.mutation("GitHub.setToken")
@@ -24,18 +22,15 @@ export const githubBranchesAtom = Atom.family((fullName: string) =>
   HumanityClient.query("GitHub.listBranches", { fullName }),
 )
 
-/** A repository to clone: `owner/repo` on GitHub, or `group/name` on the connected GitLab instance. */
 export type CloneTarget =
   | { readonly provider: "github"; readonly fullName: string }
   | { readonly provider: "gitlab"; readonly fullPath: string }
 
-/** The repository's name as its host writes it. */
 export const cloneTargetName = (target: CloneTarget): string =>
   target.provider === "github" ? target.fullName : target.fullPath
 
 export interface CloneProgress {
   readonly target: CloneTarget
-  /** git's progress output so far, newest last, capped. */
   readonly lines: ReadonlyArray<string>
   readonly project: Project | undefined
 }
@@ -47,7 +42,6 @@ const reduceClone = (state: CloneProgress, event: CloneEvent): CloneProgress =>
     ? { ...state, lines: [...state.lines, event.line].slice(-MAX_LINES) }
     : { ...state, project: event.project }
 
-/** One of several streams, typed as a single stream that can fail the way any of them does. */
 const asOne = <S extends Stream.Stream<unknown, unknown, unknown>>(
   stream: S,
 ): Stream.Stream<Stream.Success<S>, Stream.Error<S>, Stream.Services<S>> => stream as never
@@ -68,11 +62,6 @@ export const cloneAtom = HumanityClient.runtime.fn((target: CloneTarget) =>
   ),
 )
 
-/**
- * Clones one repository without its progress, for adding several in a row.
- * Resolves to the new project. Kept alive, so a clone goes on when the page
- * that started it is left.
- */
 export const cloneProjectAtom = HumanityClient.runtime
   .fn((target: CloneTarget) =>
     HumanityClient.use((client) =>

@@ -20,7 +20,6 @@ import { DecisionActions, type Verdict } from "./DecisionActions.tsx"
 const asRecord = (input: unknown): Record<string, unknown> =>
   input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
 
-/** What the call would do, in the most readable form available for its tool. */
 function CallPreview({ confirmation }: { readonly confirmation: PendingConfirmation }) {
   const input = asRecord(confirmation.input)
   const command = input["command"]
@@ -62,7 +61,6 @@ function ToolName({ name }: { readonly name: string }) {
   )
 }
 
-/** A tool call waiting for an allow or deny, pinned above the message box until decided. */
 export const ConfirmationCard = memo(function ConfirmationCard({
   confirmation,
 }: {

@@ -3,10 +3,6 @@ import { cn } from "cn"
 
 type FileKind = FileDiff["kind"]
 
-/**
- * How VS Code's Git integration marks a changed file: a coloured letter, and
- * the file name in the same colour (struck through once deleted).
- */
 export const FILE_STATUS: Record<
   FileKind,
   { readonly letter: string; readonly label: string; readonly color: string }

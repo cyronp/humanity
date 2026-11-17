@@ -3,7 +3,6 @@ import type { DiffHunk, FileDiff, FileDiffKind } from "./types.ts"
 
 const NULL_FILE = "/dev/null"
 
-/** `a/src/x.ts` → `src/x.ts`; quoted and timestamped names are cleaned too. */
 const cleanFileName = (name: string | undefined): string | undefined => {
   if (name === undefined) return undefined
   let cleaned = name.split("\t")[0]?.trim() ?? ""
@@ -12,10 +11,6 @@ const cleanFileName = (name: string | undefined): string | undefined => {
   return cleaned.replace(/^[ab]\//, "")
 }
 
-/**
- * Parses unified diff text (for example `git diff --no-color`) into per-file
- * hunks with the same shape used for reviews, so one hunk view renders both.
- */
 export const parseUnifiedDiff = (text: string): Array<FileDiff> => {
   if (text.trim() === "") return []
   return parsePatch(text).flatMap((patch): Array<FileDiff> => {

@@ -15,7 +15,6 @@ const env = (): Record<string, string> => {
   return result
 }
 
-/** A real process speaking ACP: the fixture agent, run by this Node. */
 const connect = (
   onRequest: (request: AgentMessage) => Effect.Effect<unknown, AcpFailed> = () =>
     Effect.fail(new AcpFailed({ reason: "not answered", unsupported: true })),

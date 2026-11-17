@@ -35,57 +35,36 @@ export interface GitResult {
   readonly exitCode: number
 }
 
-/** Untracked files larger than this are listed in a diff without their content. */
 const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024
 
-// Options that keep git's output stable and parseable regardless of user config.
 const STABLE_OUTPUT = ["-c", "core.quotepath=false", "-c", "color.ui=never"]
 
 export class GitService extends Context.Service<
   GitService,
   {
-    /**
-     * Runs `git <args>` in `cwd` and returns stdout. Arguments are passed as an
-     * array straight to the process; nothing is ever interpreted by a shell.
-     */
     readonly exec: (cwd: string, args: ReadonlyArray<string>) => Effect.Effect<string, GitError>
-    /**
-     * Like `exec`, but hands back the exit code instead of failing on non-zero.
-     * `env` adds variables for this one process only.
-     */
     readonly execResult: (
       cwd: string,
       args: ReadonlyArray<string>,
       env?: Readonly<Record<string, string>>,
     ) => Effect.Effect<GitResult, GitNotInstalled>
-    /** Absolute path of the repository containing `path`. */
     readonly repositoryRoot: (path: string) => Effect.Effect<string, GitError>
-    /** Checked-out branch, or `undefined` on a detached HEAD. */
     readonly currentBranch: (cwd: string) => Effect.Effect<string | undefined, GitError>
-    /** The remote's default branch when known, else the current branch, else `main`. */
     readonly defaultBranch: (cwd: string) => Effect.Effect<string, GitError>
     readonly originUrl: (cwd: string) => Effect.Effect<string | undefined, GitError>
     readonly listBranches: (cwd: string) => Effect.Effect<ReadonlyArray<Branch>, GitError>
-    /** Creates a branch ref without checking it out. */
     readonly createBranch: (
       cwd: string,
       name: string,
       from: string,
     ) => Effect.Effect<Branch, GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound>
-    /** Switches the working tree at `cwd` to an existing branch. */
     readonly checkout: (
       cwd: string,
       branch: string,
     ) => Effect.Effect<void, GitError | GitInvalidBranchName>
     readonly status: (cwd: string) => Effect.Effect<RepoStatus, GitError>
-    /** Tracked and untracked files of the working copy, ignored ones left out, relative to it. */
     readonly listFiles: (cwd: string) => Effect.Effect<ReadonlyArray<string>, GitError>
-    /** Whether `ref` names a commit in the repository at `cwd`. */
     readonly hasCommit: (cwd: string, ref: string) => Effect.Effect<boolean, GitNotInstalled>
-    /**
-     * Commits reachable from `ref` that `exclude` can't reach (all of them
-     * without it), newest first, at most `limit`. `more` tells whether others follow.
-     */
     readonly log: (
       cwd: string,
       ref: string,
@@ -94,43 +73,23 @@ export class GitService extends Context.Service<
       { readonly commits: ReadonlyArray<CommitSummary>; readonly more: boolean },
       GitError | GitRefNotFound
     >
-    /**
-     * Changes in the working tree relative to `base` (default `HEAD`),
-     * including untracked files, as reviewable hunks.
-     */
     readonly diff: (cwd: string, base?: string) => Effect.Effect<WorkingTreeDiff, GitError>
-    /** Adds a worktree at `path` on a new branch `branch` starting from `base`. */
     readonly worktreeAdd: (
       cwd: string,
       options: { readonly path: string; readonly branch: string; readonly base: string },
     ) => Effect.Effect<void, GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound>
-    /** Removes a worktree, discarding uncommitted changes in it. Its branch is kept. */
     readonly worktreeRemove: (cwd: string, path: string) => Effect.Effect<void, GitError>
     readonly worktreeList: (cwd: string) => Effect.Effect<ReadonlyArray<Worktree>, GitError>
-    /**
-     * Commits the changes in `cwd`: only those under `paths` when given (other
-     * staged changes stay staged), else everything. Returns the new commit's short hash.
-     */
     readonly commit: (
       cwd: string,
       message: string,
       paths?: ReadonlyArray<string>,
     ) => Effect.Effect<string, GitError>
-    /**
-     * Pushes `branch` to the branch of the same name on `origin` and makes it
-     * the upstream. `env` adds variables for this one process only, such as a
-     * credential header, so nothing secret ends up in the config or the command line.
-     */
     readonly push: (
       cwd: string,
       branch: string,
       env?: Readonly<Record<string, string>>,
     ) => Effect.Effect<void, GitError>
-    /**
-     * Clones `url` into `target`, streaming git's progress lines. `env` adds
-     * variables for this one process only, such as a credential header, so
-     * nothing secret ends up in the clone's config or on the command line.
-     */
     readonly clone: (
       url: string,
       target: string,
@@ -157,7 +116,6 @@ export class GitService extends Context.Service<
             ChildProcess.make("git", args, {
               cwd,
               extendEnv: true,
-              // Never block on a credential prompt, and keep messages parseable.
               env: { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
             }),
           )
@@ -220,8 +178,6 @@ export class GitService extends Context.Service<
           Effect.map(parseBranches),
         )
 
-      // User-supplied names are validated by git itself before they are used as
-      // arguments, so a name such as "--force" can never be read as an option.
       const validateBranchName = (cwd: string, name: string) =>
         Effect.gen(function* () {
           const check = yield* execResult(cwd, ["check-ref-format", "--branch", name])
@@ -316,7 +272,6 @@ export class GitService extends Context.Service<
       ) {
         yield* requireCommit(cwd, ref)
         if (options.exclude !== undefined) yield* requireCommit(cwd, options.exclude)
-        // Both are checked to be commits, and come after `--end-of-options`.
         const revisions = options.exclude === undefined ? [ref] : [ref, `^${options.exclude}`]
         const output = yield* exec(cwd, [
           ...STABLE_OUTPUT,
@@ -331,7 +286,6 @@ export class GitService extends Context.Service<
         return { commits: commits.slice(0, options.limit), more: commits.length > options.limit }
       })
 
-      /** A new file is shown as one all-additions hunk; large or binary files have none. */
       const untrackedFileDiff = (cwd: string, path: string) =>
         Effect.gen(function* () {
           const absolute = join(cwd, path)
@@ -351,7 +305,6 @@ export class GitService extends Context.Service<
         }).pipe(Effect.catch(() => Effect.succeed(undefined)))
 
       const diff = Effect.fn("GitService.diff")(function* (cwd: string, base?: string) {
-        // A repository without commits has no HEAD to compare against.
         const hasHead =
           (yield* execResult(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"])).exitCode === 0
         const against = base ?? "HEAD"
@@ -421,10 +374,8 @@ export class GitService extends Context.Service<
           yield* exec(cwd, ["add", "--all"])
           yield* exec(cwd, ["commit", "--quiet", "--message", message])
         } else {
-          // Literal pathspecs: a file named `*.ts` or `:(glob)x` means only itself.
           const pathspecs = paths.map((path) => `:(literal)${path}`)
           yield* exec(cwd, ["add", "--all", "--", ...pathspecs])
-          // With paths, git commits only those, whatever else is staged.
           yield* exec(cwd, ["commit", "--quiet", "--message", message, "--", ...pathspecs])
         }
         return (yield* exec(cwd, ["rev-parse", "--short", "HEAD"])).trim()
@@ -435,7 +386,6 @@ export class GitService extends Context.Service<
         branch: string,
         env: Readonly<Record<string, string>> = {},
       ) {
-        // A full refspec: never read as an option, never a different ref.
         const ref = `refs/heads/${branch}`
         yield* exec(cwd, ["push", "--quiet", "--set-upstream", "origin", `${ref}:${ref}`], env)
       })
@@ -451,11 +401,9 @@ export class GitService extends Context.Service<
                 stdout: "ignore",
               }),
             )
-            // Kept for the error message if the clone fails.
             const recent: Array<string> = []
             const progress = handle.stderr.pipe(
               Stream.decodeText(),
-              // git redraws its progress with carriage returns.
               Stream.map((chunk) => chunk.replace(/\r/g, "\n")),
               Stream.splitLines,
               Stream.map((line) => line.trim()),
@@ -516,18 +464,12 @@ export class GitService extends Context.Service<
   )
 }
 
-/** `owner/repo` for a github.com remote URL (https or ssh), otherwise `undefined`. */
 export const parseGitHubFullName = (remoteUrl: string | undefined): string | undefined => {
   if (remoteUrl === undefined) return undefined
   const match = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim())
   return match ? `${match[1]}/${match[2]}` : undefined
 }
 
-/**
- * The instance and `group/name` of a remote URL (https or ssh) on one of the
- * GitLab `hosts`, otherwise `undefined`. Hosts are compared without their
- * port, since ssh and https use different ones.
- */
 export const parseGitLabRemote = (
   remoteUrl: string | undefined,
   hosts: ReadonlyArray<string>,

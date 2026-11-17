@@ -22,17 +22,11 @@ import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
 import { type ProviderId, PROVIDERS } from "./ProviderIcon.tsx"
 
-/** How long the pointer rests on the icon before the menu opens, and may leave before it closes. */
 const OPEN_DELAY_MS = 150
 const CLOSE_DELAY_MS = 200
 
-/**
- * Opens on hover and closes once the pointer has left both the icon and the
- * menu. A click keeps it open until the human clicks away; touch has only the click.
- */
 function useHoverOpen() {
   const [open, setOpen] = useState(false)
-  // Opened by a click (or the keyboard): hovering away leaves it open.
   const [pinned, setPinned] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const clear = () => clearTimeout(timer.current)
@@ -61,12 +55,10 @@ function useHoverOpen() {
   return {
     open,
     pinned,
-    /** Escape, a click outside, or a choice in the menu. */
     onOpenChange: (next: boolean) => (next ? setOpen(true) : close()),
     close,
     hover: { onPointerEnter, onPointerLeave },
     onClick: (event: MouseEvent) => {
-      // The toggle is decided here: a click on a menu opened by hover keeps it open.
       event.preventDefault()
       clear()
       if (open && pinned) {
@@ -79,11 +71,6 @@ function useHoverOpen() {
   }
 }
 
-/**
- * The accounts threads run as, as one icon in the sidebar. Hovering or
- * pressing it lists them provider by provider, and picks the one new threads
- * of a provider run as where it has more than one.
- */
 export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => void }) {
   const menu = useHoverOpen()
 
@@ -104,13 +91,11 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
         side="top"
         align="start"
         className="w-80 gap-0 p-0"
-        // Opened by hover, focus stays where it was; opened by a click, it moves into the menu.
         onOpenAutoFocus={(event) => {
           if (!menu.pinned) event.preventDefault()
         }}
         {...menu.hover}
       >
-        {/* The list scrolls inside the menu, fading at whichever edge has more past it. */}
         <ScrollArea viewportClassName="max-h-72 scroll-fade-y">
           <div className="flex flex-col gap-2 p-1.5">
             <ClaudeAccounts />
@@ -137,7 +122,6 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
   )
 }
 
-/** One provider's accounts, under its icon and name. */
 function ProviderGroup({
   provider,
   children,
@@ -161,19 +145,13 @@ function ProviderGroup({
   )
 }
 
-/** What the menu shows of an account, whatever its provider. */
 interface Choice {
   readonly id: string
   readonly name: string
   readonly active: boolean
-  /** One line about its login: the plan, or what is wrong. */
   readonly detail: string
 }
 
-/**
- * A provider's accounts, the active one checked; picking another makes new
- * threads of that provider run as it.
- */
 function AccountChoices<E>({
   provider,
   result,
@@ -181,7 +159,6 @@ function AccountChoices<E>({
 }: {
   readonly provider: ProviderId
   readonly result: AsyncResult.AsyncResult<ReadonlyArray<Choice>, E>
-  /** Resolves to an error message, or `undefined` when it worked. */
   readonly setActive: (accountId: string) => Promise<string | undefined>
 }) {
   const [error, setError] = useState<string>()

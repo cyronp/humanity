@@ -14,14 +14,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-/** A trash button that asks first; `onConfirm` resolves to an error message, or `undefined` once removed. */
 export function ConfirmRemove({
   label,
   title,
   description,
   onConfirm,
 }: {
-  /** The button's accessible name, e.g. "Remove github". */
   readonly label: string
   readonly title: string
   readonly description: ReactNode
@@ -65,7 +63,6 @@ export function ConfirmRemove({
         {error !== undefined && <ErrorNote title="Could not remove it" message={error} />}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          {/* Not AlertDialogAction: that closes at once, and a failure must stay in view. */}
           <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
             Remove
           </Button>

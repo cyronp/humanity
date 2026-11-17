@@ -1,6 +1,5 @@
 import type { ToolCall } from "@humanity/contracts"
 
-/** Pure helpers that read the tool inputs and outputs the renderers show. */
 
 export const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
@@ -17,7 +16,6 @@ export const numberField = (value: unknown, key: string): number | undefined => 
   return typeof field === "number" && Number.isFinite(field) ? field : undefined
 }
 
-/** The one input value that best describes a call, for a summary line. */
 export const describeInput = (input: unknown): string => {
   for (const key of ["command", "file_path", "notebook_path", "pattern", "url", "query", "skill"]) {
     const value = stringField(input, key)
@@ -27,7 +25,6 @@ export const describeInput = (input: unknown): string => {
   return typeof first === "string" ? first : ""
 }
 
-/** `src/app.ts` from an absolute path inside a worktree, for compact display. */
 export const shortPath = (path: string, worktreePath?: string): string => {
   const normalized = path.replace(/\\/g, "/")
   const root = worktreePath?.replace(/\\/g, "/").replace(/\/$/, "")
@@ -37,7 +34,6 @@ export const shortPath = (path: string, worktreePath?: string): string => {
   return normalized
 }
 
-/** "lines 10–29" for a Read with offset/limit, `undefined` for a whole-file read. */
 export const readRange = (input: unknown): string | undefined => {
   const offset = numberField(input, "offset")
   const limit = numberField(input, "limit")
@@ -46,10 +42,6 @@ export const readRange = (input: unknown): string | undefined => {
   return limit === undefined ? `from line ${start}` : `lines ${start}–${start + limit - 1}`
 }
 
-/**
- * The file content of a Read result, without the `   12→` line-number gutter
- * the tool adds, plus the first line number shown.
- */
 export const parseReadOutput = (
   output: string,
 ): { readonly firstLine: number; readonly lines: Array<string> } => {
@@ -73,7 +65,6 @@ export const resultLines = (output: string): Array<string> =>
     .map((line) => line.trimEnd())
     .filter((line) => line !== "")
 
-/** Bash's structured result, when the SDK provided one. */
 export const bashOutput = (
   call: ToolCall | undefined,
 ):
@@ -90,7 +81,6 @@ export const bashOutput = (
   }
 }
 
-/** Milliseconds between a call's start and finish, if it finished. */
 export const durationMs = (call: ToolCall): number | undefined => {
   if (call.finishedAt === null) return undefined
   const ms = Date.parse(call.finishedAt) - Date.parse(call.startedAt)

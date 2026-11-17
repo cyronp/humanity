@@ -2,9 +2,7 @@ import type { CodexStatus } from "@humanity/contracts"
 import { callExecutable, isWindowsPath, quotePosix, quotePowerShell } from "@/lib/shell"
 
 export interface CodexSummary {
-  /** One sentence for headings. */
   readonly title: string
-  /** What it means for the threads that run on Codex. */
   readonly detail: string | null
 }
 
@@ -37,14 +35,12 @@ export const summarizeCodex = (status: CodexStatus): CodexSummary => {
   }
 }
 
-/** One line about a Codex login: the plan and who is signed in, or what is wrong. */
 export const codexLine = (status: CodexStatus): string => {
   const connection = status.connection
   if (connection._tag !== "Connected") return summarizeCodex(status).title
   return connection.email === null ? connection.label : `${connection.label} · ${connection.email}`
 }
 
-/** True when the sign-in command is PowerShell's: the executable or the folder is a Windows path. */
 export const codexSignInUsesPowerShell = (options: {
   readonly codexHome: string | null
   readonly executable: string
@@ -52,12 +48,6 @@ export const codexSignInUsesPowerShell = (options: {
   isWindowsPath(options.executable) ||
   (options.codexHome !== null && isWindowsPath(options.codexHome))
 
-/**
- * The command that signs an account in, with the executable Humanity itself
- * runs. `codexHome` is the folder of an added account (`null` for Codex's
- * default login), set only for the login so the default one is left alone. A
- * Windows path gets a PowerShell command, the default shell there.
- */
 export const codexSignInCommand = (options: {
   readonly codexHome: string | null
   readonly executable: string

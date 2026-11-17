@@ -4,43 +4,28 @@ import { decode, InitializeResponse, PROTOCOL_VERSION } from "./protocol.ts"
 
 export class AcpFailed extends Data.TaggedError("AcpFailed")<{
   readonly reason: string
-  /** The request named a method Humanity does not answer. */
   readonly unsupported?: boolean
 }> {}
 
-/** A notification from the agent, or a request it makes of Humanity. */
 export interface AgentMessage {
   readonly method: string
   readonly params: unknown
 }
 
-/** One running ACP agent, spoken to over its standard input and output. */
 export interface AcpConnection {
-  /** What the agent said about itself and what it can do, when it shook hands. */
   readonly agent: InitializeResponse
   readonly request: (method: string, params?: unknown) => Effect.Effect<unknown, AcpFailed>
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>
-  /** Fails when the process stops on its own; never succeeds. */
   readonly stopped: Effect.Effect<never, AcpFailed>
 }
 
 export interface AcpConnectionOptions {
-  /** The agent as the human knows it, e.g. `Kiro`, for messages. */
   readonly product: string
   readonly executable: string
   readonly args: ReadonlyArray<string>
   readonly cwd: string
   readonly env: Record<string, string>
-  /**
-   * Answers a request from the agent (a permission, mostly). A failure goes
-   * back to the agent as an error. Interrupted when the connection closes.
-   */
   readonly onRequest: (request: AgentMessage) => Effect.Effect<unknown, AcpFailed>
-  /**
-   * Takes what the agent reports. Run in the order the agent wrote, and
-   * before the answer to a request that it wrote later is delivered, so a
-   * turn's last update is always handled before the turn is seen to end.
-   */
   readonly onNotification: (notification: AgentMessage) => Effect.Effect<void>
 }
 
@@ -64,12 +49,6 @@ const parseLine = (line: string): Record<string, unknown> | undefined => {
 
 const decodeInitialize = decode(InitializeResponse)
 
-/**
- * Starts an ACP agent and shakes hands with it. Messages are JSON-RPC 2.0,
- * one per line, in both directions. Humanity offers the agent neither its
- * file system nor a terminal: the agent uses its own tools, and asks before
- * it does. The process is stopped when the scope closes.
- */
 export const connectAcp = (
   options: AcpConnectionOptions,
 ): Effect.Effect<AcpConnection, AcpFailed, Scope.Scope | ChildProcessSpawner.ChildProcessSpawner> =>
@@ -106,7 +85,6 @@ export const connectAcp = (
 
     const answer = (id: unknown, request: AgentMessage) =>
       options.onRequest(request).pipe(
-        // The agent waits for an answer; one that could not be worked out is still an answer.
         Effect.catchDefect((defect) =>
           Effect.logWarning("acp request not answered", defect).pipe(
             Effect.andThen(
@@ -137,7 +115,6 @@ export const connectAcp = (
         if (typeof method === "string") {
           const incoming: AgentMessage = { method, params: message["params"] }
           if (id === undefined || id === null) yield* options.onNotification(incoming)
-          // Waiting for a human must not hold up what the agent says meanwhile.
           else yield* Effect.forkIn(answer(id, incoming), scope)
           return
         }
@@ -188,7 +165,6 @@ export const connectAcp = (
     yield* handle.stdout.pipe(
       Stream.decodeText(),
       Stream.splitLines,
-      // One message that cannot be handled must not end the reading of all that follow.
       Stream.runForEach((line) =>
         dispatch(line).pipe(
           Effect.catchDefect((defect) => Effect.logWarning("acp message not handled", defect)),
@@ -231,7 +207,6 @@ export const connectAcp = (
     const agent = Option.getOrElse(decodeInitialize(initialized), (): InitializeResponse => ({}))
     const speaks = agent.protocolVersion
     if (typeof speaks === "number" && speaks !== PROTOCOL_VERSION) {
-      // Agents in the wild name a later version and still answer in this one's shapes.
       yield* Effect.logWarning(
         `${product} speaks ACP version ${speaks}; Humanity asked for ${PROTOCOL_VERSION}.`,
       )

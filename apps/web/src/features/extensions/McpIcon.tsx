@@ -1,7 +1,6 @@
 import { cn } from "cn"
 import type { SVGProps } from "react"
 
-/** The Model Context Protocol's mark. Decorative: the text next to it names MCP. */
 export function McpIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg

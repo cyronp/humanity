@@ -1,7 +1,6 @@
 import { cn } from "cn"
 import type { SVGProps } from "react"
 
-/** GitLab's tanuki in its brand colours. Decorative: the text next to it names GitLab. */
 export function GitLabIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg

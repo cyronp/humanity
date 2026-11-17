@@ -2,10 +2,6 @@ import { cn } from "cn"
 import { Pin } from "lucide-react"
 import { RowToggle } from "@/components/RowToggle"
 
-/**
- * The pin on a picker's option: it makes that option the start of every new
- * thread. Pinning another option moves the pin; pressing a pinned one removes it.
- */
 export function PinDefaultButton({
   label,
   pinned,
@@ -13,7 +9,6 @@ export function PinDefaultButton({
   onToggle,
   className,
 }: {
-  /** The option's name, for the button's accessible label. */
   readonly label: string
   readonly pinned: boolean
   readonly disabled?: boolean

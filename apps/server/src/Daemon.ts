@@ -48,11 +48,6 @@ import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 import { UpdateService } from "./services/UpdateService.ts"
 
-/**
- * Domain services, built on whatever config, database, platform, agent runner,
- * Humanity's MCP server, Claude Code, Codex and Kiro runtimes and Claude Code
- * history they are given. Tests swap in the fake runner here.
- */
 export const Services = Layer.mergeAll(
   Layer.mergeAll(HistoryImport.layer, PullRequestService.layer, UpdateService.layer).pipe(
     Layer.provideMerge(ForgeSync.layer),
@@ -88,10 +83,6 @@ export const RpcHandlers = Layer.mergeAll(
   AgentClisHandlers,
 )
 
-/**
- * Routes, handlers and services. Still needs config, auth token, database,
- * platform, agent runner, the Claude Code, Codex and Kiro runtimes, GitHub, GitLab and an HTTP server.
- */
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
 
 const Banner = Layer.effectDiscard(
@@ -101,7 +92,6 @@ const Banner = Layer.effectDiscard(
     yield* Effect.logInfo(
       `Humanity daemon listening on http://${config.host}:${config.port} (data: ${config.home})`,
     )
-    // Printed with console so the URL stays one clean, clickable line.
     yield* Effect.sync(() =>
       console.log(`\n  Open Humanity:  ${config.webOrigin}/?${TOKEN_PARAM}=${token.value}\n`),
     )
@@ -125,7 +115,6 @@ export const describeClaudeForBanner = (status: ClaudeStatus): string => {
   }
 }
 
-/** Checks the Claude account in the background; the result is the one the UI then reads. */
 const ClaudeBanner = Layer.effectDiscard(
   Effect.gen(function* () {
     const account = yield* ClaudeAccountService
@@ -134,13 +123,11 @@ const ClaudeBanner = Layer.effectDiscard(
   }).pipe(Effect.forkScoped),
 )
 
-/** GitHub over the real network, with a saved token or the one from `gh` or `GITHUB_TOKEN`. */
 const GitHubLive = GitHubService.layer.pipe(
   Layer.provide(GitHubToken.layer),
   Layer.provide(FetchHttpClient.layer),
 )
 
-/** GitLab likewise: a saved token, or the one from `glab` or `GITLAB_TOKEN`, for its instance. */
 const GitLabLive = GitLabService.layer.pipe(
   Layer.provide(GitLabToken.layer),
   Layer.provide(FetchHttpClient.layer),
@@ -153,17 +140,13 @@ const HttpServerLive = Layer.unwrap(
   }),
 )
 
-/** The whole daemon as one layer. Needs only a `ServerConfig`. */
-// No per-request log: the RPC socket URL carries the auth token in its query string.
 export const Daemon = HttpRouter.serve(
   Layer.mergeAll(Banner, ClaudeBanner, HistoryImport.background).pipe(Layer.provideMerge(App)),
   { disableLogger: true },
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
-  // One for the routes and the sessions both: a thread's token is served where it was made.
   Layer.provide(HumanityMcp.layer),
-  // After the runner: both it and the account checks run on this Claude Code and this Codex.
   Layer.provide(ClaudeCode.layer),
   Layer.provide(Codex.layer),
   Layer.provide(Kiro.layer),

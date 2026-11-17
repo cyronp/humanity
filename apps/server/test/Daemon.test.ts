@@ -15,7 +15,6 @@ import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { App } from "../src/Daemon.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
-/** A Claude Code that reports a Max subscription. Nothing is spawned. */
 const ScriptedClaude = ClaudeCode.layerTest(
   Effect.succeed({
     cliVersion: "2.1.321",
@@ -24,7 +23,6 @@ const ScriptedClaude = ClaudeCode.layerTest(
   }),
 )
 
-/** The real routes and handlers on an ephemeral port, over a temp data directory and a scripted agent. */
 const daemon = (home: string, script: FakeScript = () => []) =>
   HttpRouter.serve(App, { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provide(ScriptedClaude),
@@ -46,7 +44,6 @@ const rpcUrl = (token: string | undefined) =>
     return `ws://localhost:${server.address.port}${RPC_PATH}${query}`
   })
 
-/** A client protocol dialing the test daemon with its real token, like the web app does. */
 const ClientProtocol = Layer.unwrap(
   Effect.gen(function* () {
     const token = yield* AuthToken
@@ -59,7 +56,6 @@ const ClientProtocol = Layer.unwrap(
   }),
 )
 
-/** Resolves with how a raw WebSocket handshake ended. */
 const handshake = (url: string) =>
   Effect.callback<"open" | "rejected">((resume) => {
     const socket = new WebSocket(url)
@@ -85,7 +81,6 @@ describe("daemon", () => {
         assert.strictEqual(project.defaultBranch, "main")
         assert.deepStrictEqual(yield* client("Projects.list", undefined), [project])
 
-        // Tagged errors cross the wire intact.
         const error = yield* Effect.flip(client("Projects.addLocal", { path: repo }))
         assert.strictEqual(error._tag, "ProjectAlreadyExists")
       }).pipe(Effect.provide(ClientProtocol.pipe(Layer.provideMerge(daemon(home)))))
@@ -297,7 +292,6 @@ describe("daemon", () => {
           })
         const list = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })
 
-        // Neither nothing nor the daemon's own token: only a thread's.
         assert.strictEqual((yield* post(undefined, list)).status, 401)
         assert.strictEqual((yield* post(`Bearer ${token.value}`, list)).status, 401)
 
@@ -321,11 +315,9 @@ describe("daemon", () => {
         )
         assert.strictEqual(notified.status, 202)
         assert.strictEqual((yield* post(authorization, "{not json")).status, 400)
-        // No stream for the server to speak first on.
         const stream = yield* http.get("/mcp", { headers: { authorization: authorization ?? "" } })
         assert.strictEqual(stream.status, 405)
 
-        // Once the thread's agent has stopped, its token opens nothing.
         yield* Scope.close(scope, Exit.void)
         assert.strictEqual((yield* post(authorization, list)).status, 401)
       }).pipe(Effect.provide(daemon(home)))

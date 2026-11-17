@@ -38,7 +38,6 @@ export function ThreadFilterMenu({
   readonly projects: ReadonlyArray<Project>
 }) {
   const narrowed = !isDefaultFilter(filter)
-  // Keeps the menu open while several boxes are ticked in a row.
   const keepOpen = (event: Event) => event.preventDefault()
   const projectSummary =
     filter.projectIds.length === 0 ? "All" : `${filter.projectIds.length} selected`

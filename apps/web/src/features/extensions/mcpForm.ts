@@ -1,16 +1,10 @@
 import type { McpServer, McpTransportInput } from "@humanity/contracts"
 
-/**
- * The MCP server editor's state, and the checks that turn it into what the
- * daemon saves. Kept free of React so the rules are tested on their own.
- */
 
 export interface EntryDraft {
   readonly id: number
   readonly name: string
-  /** What the human typed. Empty on a `saved` row means "keep the saved value". */
   readonly value: string
-  /** The daemon already holds a value under this name. */
   readonly saved: boolean
 }
 
@@ -20,7 +14,6 @@ export interface McpDraft {
   readonly name: string
   readonly transport: TransportKind
   readonly command: string
-  /** One argument per line, so arguments with spaces need no quoting. */
   readonly args: string
   readonly url: string
   readonly env: ReadonlyArray<EntryDraft>
@@ -45,7 +38,6 @@ export const EMPTY_DRAFT: McpDraft = {
 const savedEntries = (names: ReadonlyArray<string>): ReadonlyArray<EntryDraft> =>
   names.map((name) => ({ id: entryId(), name, value: "", saved: true }))
 
-/** The editor for a saved server. Values never come back from the daemon: rows start empty and keep theirs. */
 export const draftFromServer = (server: McpServer): McpDraft => {
   const transport = server.transport
   return transport._tag === "stdio"
@@ -82,7 +74,6 @@ const checkEntries = (
   const out: Array<{ name: string; value: string | null }> = []
   for (const entry of entries) {
     const name = entry.name.trim()
-    // A row left entirely blank is ignored.
     if (name === "" && entry.value === "") continue
     if (!pattern.test(name)) {
       return { error: `"${name}" is not a valid ${what} name. ${nameRule}` }
@@ -97,7 +88,6 @@ const checkEntries = (
   return { ok: out }
 }
 
-/** What the daemon saves, or the first thing the human needs to fix. */
 export const buildMcpInput = (
   draft: McpDraft,
 ): Checked<{ readonly name: string; readonly transport: McpTransportInput }> => {
@@ -136,7 +126,6 @@ export const buildMcpInput = (
 
 const SKILL_NAME = /^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-/** `Review SQL!` → `review-sql`, the shape a skill name must have. */
 export const skillSlug = (text: string) =>
   text
     .normalize("NFKD")

@@ -10,11 +10,6 @@ import { AddAccount } from "./AddAccount.tsx"
 import { CliNotice, CliVersion, useCliUpdate } from "./CliStatus.tsx"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
-/**
- * A provider's accounts: its CLI's version (with the button that updates it)
- * and the buttons that check again and add an account, then a row per
- * account. A CLI that is missing or outdated is called out under the header.
- */
 export function ProviderAccountList<Account extends { readonly id: string }>({
   provider,
   result,

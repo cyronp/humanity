@@ -60,7 +60,6 @@ describe("codexLine", () => {
   })
 })
 
-/** The default login's command, which names no folder. */
 const signIn = (executable: string) => codexSignInCommand({ codexHome: null, executable })
 
 describe("codexSignInCommand", () => {

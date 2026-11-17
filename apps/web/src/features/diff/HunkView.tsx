@@ -28,14 +28,6 @@ const ROW_STYLES: Record<DiffLine["kind"], string> = {
 
 const SIGN: Record<DiffLine["kind"], string> = { add: "+", remove: "-", context: " ", meta: "" }
 
-/**
- * One hunk: range header, line numbers, signs and highlighted code. It is the
- * single renderer for every diff in the app (reviews, tool cards and worktree
- * diffs); `actions` and `footer` are where a review adds its controls. With
- * `onReference`, the hunk and each of its lines get a button that hands a
- * `path:line` reference to the next message. With `editorRoot`, the hunk and
- * each of its lines also get a button that opens them in VS Code.
- */
 export function HunkView({
   hunk,
   filePath,
@@ -50,7 +42,6 @@ export function HunkView({
   readonly actions?: ReactNode
   readonly footer?: ReactNode
   readonly onReference?: ((reference: string) => void) | undefined
-  /** The absolute folder `filePath` is relative to, when the file is on disk there. */
   readonly editorRoot?: string | undefined
   readonly className?: string
 }) {
@@ -87,17 +78,14 @@ interface HunkLinkProps {
   readonly hunk: DiffHunk
   readonly filePath: string
   readonly onReference?: ((reference: string) => void) | undefined
-  /** The absolute folder `filePath` is relative to, when the file is on disk there. */
   readonly editorRoot?: string | undefined
 }
 
-/** A hunk's VS Code and Reference buttons, each shown only when it has somewhere to go. */
 export function HunkButtons({ hunk, filePath, onReference, editorRoot }: HunkLinkProps) {
   return (
     <>
       {editorRoot !== undefined && (
         <Button variant="ghost" size="icon-xs" asChild>
-          {/* A hunk that only removed lines opens where they were. */}
           <a
             href={vscodeUrl(editorRoot, filePath, Math.max(1, hunk.newStart))}
             aria-label={`Open ${filePath} in VS Code`}
@@ -167,7 +155,6 @@ export function HunkLines({ hunk, filePath, onReference, editorRoot }: HunkLinkP
   )
 }
 
-/** The gutter button of one row, shown while the row is hovered or the button focused. */
 function ReferenceCell({
   reference,
   onReference,
@@ -225,7 +212,6 @@ function LineNumber({ value }: { readonly value: number | undefined }) {
   )
 }
 
-/** A line of code, highlighted once its tokens have loaded. */
 export function CodeLine({
   text,
   tokens,

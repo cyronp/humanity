@@ -15,11 +15,6 @@ import { decideChangeAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { DecisionActions, type Verdict } from "./DecisionActions.tsx"
 
-/**
- * A file change the agent waits on, pinned above the message box until
- * decided: its diff, and one answer for all of it. The answer sits above the
- * diff, so a long change needs no scrolling to decide.
- */
 export function ChangeCard({ change }: { readonly change: ProposedChange }) {
   const decide = useAtomSet(decideChangeAtom, { mode: "promiseExit" })
   const [pending, setPending] = useState(false)

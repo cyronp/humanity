@@ -13,32 +13,19 @@ import {
 import { describeCause } from "@/lib/errors"
 import { completeMention, findMention } from "./fileMention.ts"
 
-/** Asks the daemon for the files and folders that match a query, best first. */
 export type FileSearch = (query: string) => Promise<Exit.Exit<ReadonlyArray<FileEntry>, unknown>>
 
-/** Long enough to skip the searches of a word typed in one go. */
 const SEARCH_DELAY_MS = 60
 
-/** What the suggestion list under an `@` shows. */
 export interface FileMentionMenuState {
   readonly entries: ReadonlyArray<FileEntry>
   readonly highlighted: number
-  /** True until the first answer for the current query arrives. */
   readonly searching: boolean
   readonly error: string | undefined
   readonly pick: (entry: FileEntry) => void
   readonly highlight: (index: number) => void
 }
 
-/**
- * `@` in a message box: while the caret is in an `@` that starts a word, the
- * box's files and folders that match what follows it are offered, and picking
- * one writes `@path` in its place. Arrows move through the list, Enter or Tab
- * picks, Escape closes it until another `@` is typed.
- *
- * The box hands its `onChange`, `onSelect`, `onFocus`, `onBlur` to the hook,
- * and its own `onKeyDown` asks `onKeyDown` first.
- */
 export function useFileMention({
   text,
   setText,
@@ -54,7 +41,6 @@ export function useFileMention({
 }) {
   const [caret, setCaret] = useState(0)
   const [focused, setFocused] = useState(false)
-  // The start of an `@` the human closed with Escape; it stays closed until they leave it.
   const [dismissed, setDismissed] = useState<number>()
   const [highlightState, setHighlight] = useState({ query: "", index: 0 })
   const [results, setResults] = useState<{
@@ -87,7 +73,6 @@ export function useFileMention({
     }
   }, [query])
 
-  // The previous answer stays on screen while the next one is on its way.
   const entries = results?.entries ?? []
   const highlighted =
     highlightState.query === query ? Math.min(highlightState.index, entries.length - 1) : 0
@@ -97,7 +82,6 @@ export function useFileMention({
     const edit = completeMention(text, mention, caret, entry)
     setText(edit.text)
     setCaret(edit.caret)
-    // After React has rendered the new text.
     requestAnimationFrame(() => {
       const box = textarea.current
       if (box === null) return
@@ -122,7 +106,6 @@ export function useFileMention({
       case "Enter":
       case "Tab": {
         const entry = entries[Math.max(highlighted, 0)]
-        // With nothing to pick, Enter sends the message as usual.
         if (entry === undefined || event.shiftKey) return false
         pick(entry)
         break

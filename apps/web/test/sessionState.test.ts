@@ -227,7 +227,6 @@ describe("reduceSessionEvent", () => {
     expect(decided?.approvals).toHaveLength(2)
     expect(decided && pendingChanges(decided.approvals)).toEqual([])
     expect(decided && pendingConfirmations(decided.approvals)).toHaveLength(1)
-    // A decided approval stays with its tool call.
     expect(decided && approvalsByToolUse(decided.approvals).get("toolu_edit")?._tag).toBe("change")
   })
 
@@ -288,7 +287,6 @@ describe("earlier pages", () => {
     })
     const moved = fold([snapshot({ messages: [user("m6")], hasEarlier: true })])
     expect(moved && joinEarlier(moved, pages)).toBe(moved)
-    // A page read for the new start does not keep the old ones either.
     expect(addEarlierPage(pages, "m6", { messages: [], toolCalls: [], hasEarlier: true })).toEqual({
       attachedTo: "m6",
       messages: [],

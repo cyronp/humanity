@@ -25,10 +25,6 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 }
 
-/*
- * Humanity's tooltips are small labels in the popover's colours: a light card
- * with a hairline border in light mode, a dark one in dark mode, no arrow.
- */
 function TooltipContent({
   className,
   sideOffset = 4,

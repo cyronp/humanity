@@ -15,11 +15,9 @@ import { ServiceRow, type ServiceState } from "./ServiceRow.tsx"
 
 type TokenSource = "token" | "cli" | "environment"
 
-/** How a login reached Humanity, after the name of who it signs in as. */
 const through = (source: TokenSource | null, cli: string, variable: string): string =>
   source === "cli" ? cli : source === "environment" ? variable : "access token"
 
-/** Where repositories come from: whether GitHub and GitLab are connected, and which repositories to import. */
 export function RepositoriesStep() {
   return (
     <div className="flex w-full flex-col gap-4">
@@ -37,7 +35,6 @@ export function RepositoriesStep() {
 function GitHubRow() {
   const { result, refresh, refreshing, saveToken } = useGitHubConnection()
   const connection = AsyncResult.isSuccess(result) ? result.value : undefined
-  // Only while there is no token at all: then a check is a local lookup, no request to GitHub.
   const poll = useCallback(() => void refresh(), [refresh])
   usePollWhile(connection?.source === null, poll, refreshing)
 
@@ -59,7 +56,6 @@ function GitLabRow() {
   const connection = AsyncResult.isSuccess(result) ? result.value : undefined
   const poll = useCallback(() => void refresh(), [refresh])
   usePollWhile(connection?.source === null, poll, refreshing)
-  // The guide connects gitlab.com; an instance of one's own is set in the settings.
   const save = useCallback((token: string) => saveToken(token, GITLAB_DEFAULT_HOST), [saveToken])
 
   return (
@@ -87,11 +83,9 @@ function Service({
   readonly icon: ReactNode
   readonly name: string
   readonly pending: boolean
-  /** Who the login signs in as; `undefined` when not connected. */
   readonly user: string | undefined
   readonly via: string
   readonly placeholder: string
-  /** Resolves to an error message, or `undefined` when it worked. */
   readonly onSave: (token: string) => Promise<string | undefined>
 }) {
   const [asking, setAsking] = useState(false)

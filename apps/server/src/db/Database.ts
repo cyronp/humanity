@@ -23,7 +23,6 @@ import codexAccounts from "./migrations/0018_codex_accounts.ts"
 import kiroAccounts from "./migrations/0019_kiro_accounts.ts"
 import messagesBySession from "./migrations/0020_messages_by_session.ts"
 
-/** One entry per migration file, keyed `<id>_<name>`. Never edit an applied migration; add a new one. */
 const migrations = {
   "0001_initial": initial,
   "0002_session_model": sessionModel,
@@ -52,12 +51,7 @@ const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migr
 const Pragmas = Layer.effectDiscard(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
-    // SQLite only enforces ON DELETE CASCADE when foreign keys are switched on per connection.
     yield* sql`PRAGMA foreign_keys = ON`
-    // The driver keeps the database in WAL mode, where NORMAL is still safe from
-    // corruption and syncs at checkpoints instead of on every commit: each message
-    // an agent writes no longer waits for the disk. A power cut can lose the last
-    // commits, never the database.
     yield* sql`PRAGMA synchronous = NORMAL`
   }),
 )
@@ -68,7 +62,6 @@ const layerFor = (filename: string) =>
     Layer.orDie,
   )
 
-/** The migrated database at `<home>/humanity.db`. */
 export const DatabaseLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig
@@ -76,5 +69,4 @@ export const DatabaseLive = Layer.unwrap(
   }),
 )
 
-/** A private, migrated in-memory database for tests. */
 export const DatabaseTest = layerFor(":memory:")

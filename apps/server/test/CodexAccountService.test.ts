@@ -12,7 +12,6 @@ const MODELS = [
 ]
 const PLUS: CodexProbe["account"] = { type: "chatgpt", email: "dev@example.com", planType: "plus" }
 
-/** A scripted Codex: the default login is signed in, the folder of an added account is not. */
 const scripted = (probed: Ref.Ref<ReadonlyArray<string | undefined>>) =>
   Codex.layerTest({
     probe: (codexHome) =>
@@ -99,7 +98,6 @@ describe("CodexAccountService", () => {
         return { id: work.id, folder }
       }).pipe(Effect.provide(layer))
 
-      // A restarted daemon still knows the account and that it is the active one.
       yield* Effect.gen(function* () {
         const service = yield* CodexAccountService
         assert.deepStrictEqual(

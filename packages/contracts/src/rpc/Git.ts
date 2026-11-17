@@ -20,12 +20,10 @@ export const GitRpcs = RpcGroup.make(
     success: Schema.Array(Branch),
     error: Schema.Union(GitFailure),
   }),
-  /** Creates a branch ref in the project's repository. Nothing is checked out. */
   Rpc.make("Git.createBranch", {
     payload: {
       projectId: ProjectId,
       name: Schema.String,
-      /** Branch or commit to start from. Defaults to the project's default branch. */
       from: Schema.optional(Schema.String),
     },
     success: Branch,
@@ -36,16 +34,11 @@ export const GitRpcs = RpcGroup.make(
     success: RepoStatus,
     error: Schema.Union(GitFailure),
   }),
-  /** Uncommitted changes of the project's working copy, including untracked files. */
   Rpc.make("Git.diff", {
     payload: { projectId: ProjectId },
     success: WorkingTreeDiff,
     error: Schema.Union(GitFailure),
   }),
-  /**
-   * Files and folders of the project's checkout whose path matches `query`,
-   * best first, for `@` in a new thread's message box. Ignored files are left out.
-   */
   Rpc.make("Git.searchFiles", {
     payload: { projectId: ProjectId, query: Schema.String },
     success: Schema.Array(FileEntry),

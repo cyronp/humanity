@@ -47,7 +47,6 @@ export const readRenderer: ToolRenderer = {
 const changeOf = (props: ToolCallProps): ProposedChange | undefined =>
   props.approval?._tag === "change" ? props.approval.change : undefined
 
-/** Hunks of the reviewed change, or a best-effort diff from the input alone. */
 const useHunks = (props: ToolCallProps) =>
   useMemo(() => {
     const change = changeOf(props)

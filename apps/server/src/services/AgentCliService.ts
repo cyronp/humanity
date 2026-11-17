@@ -14,7 +14,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { type CliLaunch, isOutdated, locateCli, parseCliVersion } from "../agent/installedCli.ts"
 
 const VERSION_TIMEOUT = "15 seconds"
-/** An updater downloads the new version, which can take a while on a slow connection. */
 const UPDATE_TIMEOUT = "10 minutes"
 
 interface Ran {
@@ -22,18 +21,11 @@ interface Ran {
   readonly exitCode: number
 }
 
-/**
- * The agents' CLIs as the human installed them: found on the PATH each time
- * they are asked for, so one installed or updated while Humanity runs is
- * picked up without a restart.
- */
 export class AgentCliService extends Context.Service<
   AgentCliService,
   {
-    /** How to start the provider's CLI; `undefined` when it is not installed. */
     readonly locate: (provider: AgentProvider) => CliLaunch | undefined
     readonly status: (provider: AgentProvider) => Effect.Effect<AgentCli>
-    /** Runs the CLI's own updater. Only ever started by the human. */
     readonly update: (
       provider: AgentProvider,
     ) => Effect.Effect<AgentCliUpdate, CliNotInstalled | CliUpdateFailed>
@@ -49,7 +41,6 @@ export class AgentCliService extends Context.Service<
       const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
         stream.pipe(Stream.decodeText(), Stream.mkString)
 
-      /** Runs the CLI to its end, with nothing on its input, and hands on all it printed. */
       const run = (launch: CliLaunch, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(

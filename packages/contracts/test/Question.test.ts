@@ -52,7 +52,6 @@ describe("answering a question", () => {
     const typed = typeOwnAnswer(single, picked, "  Temporal, natively  ")
     expect(answerFor(single, typed)).toBe("Temporal, natively")
     expect(answerFor(single, toggleOption(single, typed, "date-fns"))).toBe("date-fns")
-    // Clearing the field does not throw the picked option away.
     expect(answerFor(single, typeOwnAnswer(single, picked, ""))).toBe("Luxon")
   })
 

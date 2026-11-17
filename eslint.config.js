@@ -11,7 +11,6 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/.turbo/**",
       "apps/web/src/routeTree.gen.ts",
-      // shadcn/ui components are vendored from the registry; keep them as generated.
       "apps/web/src/components/ui/**",
       "apps/web/src/hooks/use-mobile.ts",
     ],
@@ -20,8 +19,8 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     rules: {
-      // Effect.gen bodies are generators that don't always yield.
       "require-yield": "off",
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports" }],
       "@typescript-eslint/no-unused-vars": [

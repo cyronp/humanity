@@ -31,10 +31,6 @@ import { agentCliAtom, cliProblem } from "./cli.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
-/**
- * Alt (⌥ on macOS) + 1–9 picks a row. Ctrl/⌘ + digit would read better, but
- * browsers keep those for switching tabs and never pass them to the page.
- */
 const SHORTCUT_PREFIX = isMac ? "⌥" : "Alt+"
 
 const FAVORITES_KEY = "humanity.favoriteModels"
@@ -48,7 +44,6 @@ const readFavorites = (): ReadonlyArray<string> => {
   }
 }
 
-/** Starred models, remembered in this browser only. */
 const useFavoriteModels = () => {
   const [favorites, setFavorites] = useState(readFavorites)
   const toggle = (value: string) =>
@@ -59,7 +54,6 @@ const useFavoriteModels = () => {
       try {
         localStorage.setItem(FAVORITES_KEY, JSON.stringify(next))
       } catch {
-        // Storage can be unavailable (private windows); the stars then last until reload.
       }
       return next
     })
@@ -68,13 +62,6 @@ const useFavoriteModels = () => {
 
 type Section = "favorites" | ProviderId
 
-/**
- * The model a thread runs on, and with it the provider, chosen before the
- * thread starts; in an open thread (`locked`) only the model changes, among
- * those of the thread's provider. A popover with a rail of providers (and the
- * starred models), a search over every model, and older models behind
- * "Legacy models". A `null` model means the provider's default.
- */
 export function ModelPicker({
   provider,
   value,
@@ -85,14 +72,12 @@ export function ModelPicker({
   readonly provider: ProviderId
   readonly value: string | null
   readonly onChange: (choice: ModelChoice) => void
-  /** The thread already runs on `provider`: models of other providers are not offered. */
   readonly locked?: boolean
   readonly disabled?: boolean
 }) {
   const claude = useAtomValue(claudeStatusAtom)
   const codex = useAtomValue(codexStatusAtom)
   const kiro = useAtomValue(kiroStatusAtom)
-  // Until a provider has answered, nobody is known to be signed in to it.
   const connected: Record<ProviderId, boolean> = {
     "claude-code": AsyncResult.isSuccess(claude) && claude.value.connection._tag === "Connected",
     codex: AsyncResult.isSuccess(codex) && codex.value.connection._tag === "Connected",
@@ -187,11 +172,6 @@ export function ModelPicker({
           </span>
         </InputGroupButton>
       </PopoverTrigger>
-      {/*
-       * Always above the button, never flipped below: the list's height changes
-       * with the provider shown, and Radix would flip it whenever that changed
-       * which side had room. The list fits the room above instead (below).
-       */}
       <PopoverContent
         side="top"
         align="end"
@@ -226,11 +206,6 @@ export function ModelPicker({
           className="min-w-0 flex-1 rounded-none! bg-transparent"
         >
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
-          {/*
-           * One height for every section, so switching providers does not
-           * resize the popover: 20rem, or less when the room above the button
-           * (less the search field and a margin from the window's edge) is less.
-           */}
           <CommandList className="h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))] max-h-none">
             <CommandEmpty>No model matches.</CommandEmpty>
             {legacyOpen && !searching && section !== "favorites" && (
@@ -255,7 +230,6 @@ export function ModelPicker({
               />
             ))}
             {section !== "favorites" && !searching && <CliPickerNote provider={section} />}
-            {/* Only the provider already chosen is shown while nobody is signed in to it. */}
             {section !== "favorites" && !searching && answered[section] && !connected[section] && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
                 {PROVIDERS[section].name} is not signed in. Settings, under Providers, shows how.
@@ -356,7 +330,6 @@ function ModelRow({
         label={favorite ? `Unstar ${model.displayName}` : `Star ${model.displayName}`}
         pressed={favorite}
         onToggle={onToggleFavorite}
-        // The star reads a little stronger than a pin when off.
         className="text-muted-foreground"
       >
         <Star className={cn("size-3.5", favorite && "fill-amber-400 text-amber-400")} />
@@ -365,7 +338,6 @@ function ModelRow({
   )
 }
 
-/** Why a provider's models may not work: its CLI is missing or older than Humanity is tested with. */
 function CliPickerNote({ provider }: { readonly provider: ProviderId }) {
   const result = useAtomValue(agentCliAtom(provider))
   const problem = AsyncResult.isSuccess(result) ? cliProblem(result.value) : undefined

@@ -2,10 +2,8 @@ import { useEffect, useState } from "react"
 import type { BundledLanguage, HighlighterCore } from "shiki"
 import type { bundledLanguages } from "shiki/langs"
 
-/** The light and dark themes used everywhere code is shown: diffs, tool cards and chat. */
 export const SHIKI_THEMES = { light: "github-light", dark: "github-dark" } as const
 
-/** One coloured run of text. `style` carries `--shiki-light` and `--shiki-dark`. */
 export interface CodeToken {
   readonly content: string
   readonly style: Record<string, string>
@@ -57,7 +55,6 @@ const EXTENSION_LANGUAGES: Record<string, BundledLanguage> = {
   ipynb: "json",
 }
 
-/** The Shiki language for a file path, or `undefined` when it should render as plain text. */
 export const languageForPath = (filePath: string): BundledLanguage | undefined => {
   const name = filePath.split(/[\\/]/).pop()?.toLowerCase() ?? ""
   if (name === "dockerfile") return "docker"
@@ -65,13 +62,10 @@ export const languageForPath = (filePath: string): BundledLanguage | undefined =
   return EXTENSION_LANGUAGES[extension]
 }
 
-/** Code longer than this is shown as plain text: tokenizing it would hold up the page. */
 export const MAX_HIGHLIGHT_LENGTH = 100_000
 
-/** Raised for code longer than `MAX_HIGHLIGHT_LENGTH`; callers show it as plain text. */
 export class CodeTooLongToHighlight extends Error {}
 
-/** Shiki's names for plain text, which have no grammar to load. */
 const PLAIN_LANGUAGES: ReadonlySet<string> = new Set(["text", "txt", "plain", "plaintext"])
 
 interface Shiki {
@@ -81,12 +75,6 @@ interface Shiki {
 
 let shikiPromise: Promise<Shiki> | undefined
 
-/**
- * Shiki's core with its JavaScript regex engine: no WebAssembly to fetch and
- * compile before the first block shows, and a pattern the engine cannot run is
- * skipped rather than failing its grammar. Shiki, the two themes and each
- * grammar are separate chunks, fetched the first time code is shown.
- */
 const getShiki = (): Promise<Shiki> =>
   (shikiPromise ??= Promise.all([
     import("shiki/core"),
@@ -109,12 +97,6 @@ const getShiki = (): Promise<Shiki> =>
     }),
   ))
 
-/**
- * Tokenizes `code` for both themes at once. Each token's colours are exposed
- * as CSS variables, and `index.css` picks one based on the `dark` class, so
- * switching theme never re-highlights. Fails for a language Shiki does not
- * know and for code longer than `MAX_HIGHLIGHT_LENGTH`.
- */
 export const highlight = async (
   code: string,
   language: BundledLanguage,
@@ -136,10 +118,6 @@ export const highlight = async (
   )
 }
 
-/**
- * Highlighted tokens for each of `lines`, or `undefined` while loading, for
- * unknown languages, or if highlighting fails. Callers render plain text then.
- */
 export const useHighlightedLines = (
   lines: ReadonlyArray<string>,
   language: BundledLanguage | undefined,
@@ -159,7 +137,6 @@ export const useHighlightedLines = (
         if (!cancelled) setResult({ key, tokens })
       },
       () => {
-        // A grammar that fails to load must not hide the code itself.
       },
     )
     return () => {

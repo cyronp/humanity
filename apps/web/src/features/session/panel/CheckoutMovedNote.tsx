@@ -3,10 +3,6 @@ import type { BranchPublication, Session } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { feedKey, pullRequestFeedAtom } from "../atoms.ts"
 
-/**
- * One line in place of the checkout's changes once it has moved off this
- * thread's branch: merged, when its pull request says so; else where it is now.
- */
 export function CheckoutMovedNote({
   session,
   publication,

@@ -82,7 +82,6 @@ function CommandInput({
 
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
-    // `className` styles the scrolling viewport, where the list's height limit lives.
     <ScrollArea viewportClassName={cn("max-h-72 scroll-py-1", className)}>
       <CommandPrimitive.List data-slot="command-list" className="outline-none" {...props} />
     </ScrollArea>

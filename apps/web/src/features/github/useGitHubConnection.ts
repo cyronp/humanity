@@ -12,10 +12,6 @@ import {
 
 const reactivityKeys = [keys.github]
 
-/**
- * The GitHub connection and what can be done with it. Every action resolves
- * to an error message, or `undefined` when it worked.
- */
 export function useGitHubConnection() {
   const result = useAtomValue(githubConnectionAtom)
   const check = useAtomSet(refreshGitHubConnectionAtom, { mode: "promiseExit" })
@@ -23,7 +19,6 @@ export function useGitHubConnection() {
   const dropToken = useAtomSet(removeGitHubTokenAtom, { mode: "promiseExit" })
   const [refreshing, setRefreshing] = useState(false)
 
-  /** Looks the token up again right away, so a login just made in a terminal shows up. */
   const refresh = useCallback(async () => {
     setRefreshing(true)
     const exit = await check({ payload: { refresh: true }, reactivityKeys })

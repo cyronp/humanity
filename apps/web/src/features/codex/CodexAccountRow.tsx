@@ -12,18 +12,12 @@ import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { RemoveAccount } from "@/features/providers/RemoveAccount"
 import { codexSignInCommand, codexSignInUsesPowerShell, summarizeCodex } from "./summary.ts"
 
-/**
- * One Codex account in the list of the provider's accounts: who it is signed
- * in as, or exactly what to do to sign it in, plus making it the account of
- * new threads and removing it.
- */
 export function CodexAccountRow({
   account,
   onSetActive,
   onRemove,
 }: {
   readonly account: CodexAccount
-  /** Both resolve to an error message, or `undefined` when they worked. */
   readonly onSetActive: (accountId: string) => Promise<string | undefined>
   readonly onRemove: (accountId: string) => Promise<string | undefined>
 }) {

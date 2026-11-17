@@ -15,7 +15,6 @@ const MODELS = [
   { value: "sonnet", displayName: "Sonnet", description: "Fast everyday model" },
 ]
 
-/** A scripted Claude Code that reports `account` and counts how often it was started. */
 const scripted = (account: Ref.Ref<ReportedAccount | "fail">, probes: Ref.Ref<number>) =>
   ClaudeCode.layerTest(
     Effect.gen(function* () {
@@ -45,7 +44,6 @@ const setup = (initial: ReportedAccount | "fail") =>
     return { account, probes, service }
   })
 
-/** Runs `body` with a service whose database stays open until the body is done. */
 const withService = <A, E, R>(
   body: (service: ClaudeAccountService["Service"]) => Effect.Effect<A, E, R>,
 ) =>
@@ -143,7 +141,6 @@ describe("ClaudeAccountService", () => {
       Effect.gen(function* () {
         const home = yield* tempDir()
         const probed = yield* Ref.make<ReadonlyArray<string | undefined>>([])
-        // The default login is signed in; a folder of an added account is not.
         const claude = ClaudeCode.layerTest((configDir) =>
           Effect.as(
             Ref.update(probed, (dirs) => [...dirs, configDir]),
@@ -183,7 +180,6 @@ describe("ClaudeAccountService", () => {
           return work
         }).pipe(Effect.provide(layer))
 
-        // A restarted daemon still knows the account and that it is the active one.
         yield* Effect.gen(function* () {
           const service = yield* ClaudeAccountService
           const accounts = yield* service.accounts({ refresh: false })

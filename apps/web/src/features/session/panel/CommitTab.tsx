@@ -20,15 +20,8 @@ import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { checkoutMoved, commitPaths } from "./publication.ts"
 import { PublishSection } from "./PublishSection.tsx"
 
-/** The list's checkboxes are as small as its text. */
 const SMALL_CHECKBOX = "size-3.5 [&_svg]:size-3"
 
-/**
- * Commits the changes where the session works, the files the human picks;
- * once nothing is left to commit, pushes the branch and opens its pull request.
- * While the shared checkout is on another branch, its changes are not this
- * thread's: only pushing the thread's branch is offered.
- */
 export function CommitTab({
   session,
   onOpenPullRequest,
@@ -70,7 +63,6 @@ function CommitForm({
   readonly files: ReadonlyArray<FileDiff>
 }) {
   const commit = useAtomSet(commitAtom, { mode: "promiseExit" })
-  // What the human unticked; a file that shows up later starts ticked.
   const [left, setLeft] = useState<ReadonlySet<string>>(new Set())
   const [message, setMessage] = useState("")
   const [pending, setPending] = useState(false)
@@ -98,7 +90,6 @@ function CommitForm({
       payload: {
         sessionId: session.id,
         message: message.trim(),
-        // Everything goes through `git add --all`, which also catches what appeared meanwhile.
         ...(everything ? {} : { paths: commitPaths(picked) }),
       },
       reactivityKeys: [

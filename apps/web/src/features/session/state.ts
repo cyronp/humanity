@@ -19,23 +19,15 @@ export interface SkillLoad {
   readonly at: string
 }
 
-/** Everything the workspace shows about one session, rebuilt from its event stream. */
 export interface SessionView {
   readonly session: Session
-  /** The latest messages: the snapshot's, then every one since. */
   readonly messages: ReadonlyArray<ChatMessage>
-  /** Older messages exist than the snapshot carried; `Sessions.earlierMessages` reads them. */
   readonly hasEarlier: boolean
-  /** Tool calls by `toolUseId`, so tool_use blocks can find their status and output. */
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly skills: ReadonlyArray<SkillLoad>
-  /** Every approval of the session in request order, pending and decided. */
   readonly approvals: ReadonlyArray<Approval>
-  /** Assistant text streamed so far for the message being written. */
   readonly draft: string
-  /** Why the session last stopped with an error, if it did. */
   readonly error: string | null
-  /** The context window and plan limits the agent last reported. */
   readonly usage: SessionUsage
 }
 
@@ -59,11 +51,6 @@ const withStatus = (view: SessionView, status: SessionStatus): SessionView => ({
   session: { ...view.session, status },
 })
 
-/**
- * Folds one event into the view. `undefined` means nothing has arrived yet;
- * every event before the first snapshot is ignored, and a snapshot (sent again
- * after a reconnect) replaces whatever was there.
- */
 export const reduceSessionEvent = (
   view: SessionView | undefined,
   event: SessionEvent,
@@ -98,7 +85,6 @@ export const reduceSessionEvent = (
     case "UsageUpdated":
       return { ...view, usage: event.usage }
     case "AgentMessage": {
-      // A message can arrive both in the snapshot and live; keep one copy.
       if (view.messages.some((message) => message.id === event.message.id)) return view
       const content = event.message.content
       const endsDraft =
@@ -146,30 +132,18 @@ export const reduceSessionEvent = (
   }
 }
 
-/**
- * Folds a batch of events, in order. The live view takes events in batches so
- * that a reply streaming token by token renders a few times a second, not once
- * per token.
- */
 export const reduceSessionEvents = (
   view: SessionView | undefined,
   events: ReadonlyArray<SessionEvent>,
 ): SessionView | undefined => events.reduce(reduceSessionEvent, view)
 
-/**
- * Older messages read back a page at a time, joined before the live view's
- * first message. They belong to that message: a fresh snapshot that starts
- * elsewhere (after a reconnect, say) leaves a gap, so they are dropped then.
- */
 export interface EarlierPages {
-  /** The id of the live view's first message, which these pages end just before. */
   readonly attachedTo: string
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly hasEarlier: boolean
 }
 
-/** `pages` with `page`, read just before them, put first. */
 export const addEarlierPage = (
   pages: EarlierPages | undefined,
   attachedTo: string,
@@ -184,7 +158,6 @@ export const addEarlierPage = (
   }
 }
 
-/** The whole transcript shown: the earlier pages that still fit the live view, then the view. */
 export const joinEarlier = (
   view: Pick<SessionView, "messages" | "toolCalls" | "hasEarlier">,
   pages: EarlierPages | undefined,
@@ -197,17 +170,14 @@ export const joinEarlier = (
   }
 }
 
-/** Statuses in which the agent is doing something and can be interrupted. */
 export const isBusy = (status: SessionStatus): boolean =>
   status === "running" || status === "waiting_for_human"
 
-/** File changes still waiting for the human, oldest first. */
 export const pendingChanges = (approvals: ReadonlyArray<Approval>): Array<ProposedChange> =>
   approvals.flatMap((approval) =>
     approval._tag === "change" && isPendingApproval(approval) ? [approval.change] : [],
   )
 
-/** Tool calls still waiting for an allow or deny, oldest first. */
 export const pendingConfirmations = (
   approvals: ReadonlyArray<Approval>,
 ): Array<PendingConfirmation> =>
@@ -215,7 +185,6 @@ export const pendingConfirmations = (
     approval._tag === "confirmation" && isPendingApproval(approval) ? [approval.confirmation] : [],
   )
 
-/** The approval attached to each tool call that needed one, by `toolUseId`: the latest wins. */
 export const approvalsByToolUse = (
   approvals: ReadonlyArray<Approval>,
 ): ReadonlyMap<string, Approval> =>

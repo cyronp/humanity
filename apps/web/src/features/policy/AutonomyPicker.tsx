@@ -36,7 +36,6 @@ const AUTO: AutonomyOption = {
   icon: Zap,
 }
 
-/** In the order of how much the agent may do on its own. */
 export const AUTONOMY_OPTIONS: ReadonlyArray<AutonomyOption> = [
   ASK,
   {
@@ -51,13 +50,6 @@ export const AUTONOMY_OPTIONS: ReadonlyArray<AutonomyOption> = [
 const findOption = (value: string): AutonomyOption | undefined =>
   AUTONOMY_OPTIONS.find((option) => option.value === value)
 
-/**
- * How much the agent does without the human, for one session. Each mode has
- * its own colour (sky for "Ask me", amber for accepted edits, purple for Auto
- * mode), so a thread that asks is never mistaken for one that runs on its own.
- * A new thread starts in its project's mode, else the pinned one, else Auto
- * mode.
- */
 export function AutonomyPicker({
   value,
   onChange,

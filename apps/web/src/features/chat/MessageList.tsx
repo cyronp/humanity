@@ -35,18 +35,9 @@ import { Markdown } from "./Markdown.tsx"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
-/** Tool results show up inside their tool call card, and other entries not at all. */
 const isShown = (message: ChatMessage) =>
   message.content._tag !== "tool_results" && message.content._tag !== "other"
 
-/**
- * The transcript: what the human said, what the agent said and did. Built on
- * shadcn's Message Scroller, which follows the reply while it streams unless
- * the human scrolls up, and offers a button back to the end.
- *
- * Each message is memoized: while a reply streams, only the draft renders
- * again, not the messages above it.
- */
 export function MessageList({
   messages,
   toolCalls,
@@ -62,17 +53,12 @@ export function MessageList({
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly draft: string
-  /** The agent is mid-turn: shows a working line while no text is streaming. */
   readonly working: boolean
-  /** The approval of each tool call that needed one, by `toolUseId`. */
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
   readonly empty?: ReactNode
-  /** Shown before the first message, such as a way to read older ones. */
   readonly earlier?: ReactNode
-  /** Shown after the last message, such as the reason the agent stopped. */
   readonly footer?: ReactNode
-  /** Pixels at the bottom covered by something floating over the transcript, such as the message box. */
   readonly bottomInset?: number
 }) {
   const items = useMemo(() => messages.filter(isShown), [messages])
@@ -180,7 +166,6 @@ const renderContent = (
       return <InitLine content={content} />
     case "notice":
       return <Notice content={content} />
-    // Tool results show up inside their tool call card.
     case "tool_results":
     case "other":
       return null
@@ -250,7 +235,6 @@ function AssistantMessage({
   )
 }
 
-/** The agent's thinking, collapsed to one line, as shadcn's Reasoning element does it. */
 function Thinking({ text }: { readonly text: string }) {
   return (
     <Trace>

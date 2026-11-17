@@ -2,7 +2,6 @@ import type { ProjectId } from "@humanity/contracts"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** Humanity's own MCP servers and skills, plus the project's when one is given. */
 export const extensionsAtom = Atom.family((projectId: ProjectId | null) =>
   HumanityClient.query("Extensions.list", { projectId }, { reactivityKeys: [keys.extensions] }),
 )

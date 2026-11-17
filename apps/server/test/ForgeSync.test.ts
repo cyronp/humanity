@@ -29,7 +29,6 @@ const pull = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 
-/** What GitHub says of a pull request with no checks and no comments. */
 const quiet = (url: string, pulls: ReadonlyArray<unknown>): Reply => {
   if (url.includes("/pulls?head=")) return { body: pulls }
   if (url.includes("/check-runs")) return { body: { check_runs: [] } }
@@ -37,7 +36,6 @@ const quiet = (url: string, pulls: ReadonlyArray<unknown>): Reply => {
   return { body: [] }
 }
 
-/** A fake GitHub that counts what it is asked. */
 const fakeGitHub = (answer: (url: string, count: number) => Reply) => {
   const requests: Array<string> = []
   const client = HttpClient.make((request) =>
@@ -69,13 +67,11 @@ const services = (client: HttpClient.HttpClient, authenticated = true) =>
 
 const target: ForgeTarget = { forge: "github", fullName: "acme/app", branch: "feat/login" }
 
-/** Reading a response body takes real time, which the test clock does not move. */
 const settle = Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 30)))
 
 const pass = (duration: Parameters<typeof TestClock.adjust>[0]) =>
   Effect.andThen(TestClock.adjust(duration), settle)
 
-/** Watches `target` in the background and keeps every feed it is sent. */
 const watching = Effect.gen(function* () {
   const sync = yield* ForgeSync
   const seen: Array<PullRequestFeed> = []
@@ -87,7 +83,6 @@ const watching = Effect.gen(function* () {
   return { seen, fiber }
 })
 
-/** One look at the pull request: the lookup, two for its checks, three for its comments. */
 const ONE_LOOK = 6
 
 const check = (status: PullRequestCheck["status"]): PullRequestCheck => ({
@@ -140,7 +135,6 @@ describe("ForgeSync", () => {
         const second = yield* watching
         assert.lengthOf(requests, ONE_LOOK)
         assert.strictEqual(first.seen.at(-1)?.pullRequest?.number, 7)
-        // The second watcher is told what is already known, without a request.
         assert.deepStrictEqual(second.seen, [first.seen.at(-1)])
 
         yield* pass("59 seconds")
@@ -161,13 +155,11 @@ describe("ForgeSync", () => {
         yield* pass("30 seconds")
         assert.lengthOf(requests, ONE_LOOK)
 
-        // Back within the minute: answered from what is known.
         const again = yield* watching
         assert.strictEqual(again.seen[0]?.pullRequest?.number, 7)
         assert.lengthOf(requests, ONE_LOOK)
         yield* Fiber.interrupt(again.fiber)
 
-        // Gone for ten minutes: nothing was asked meanwhile, and coming back asks once.
         yield* pass("10 minutes")
         assert.lengthOf(requests, ONE_LOOK)
         yield* watching
@@ -209,7 +201,6 @@ describe("ForgeSync", () => {
         assert.strictEqual(seen.at(-1)?.pullRequest?.state, "merged")
         yield* pass("2 hours")
         assert.lengthOf(requests, ONE_LOOK)
-        // The human can still ask.
         yield* sync.refresh(target)
         yield* settle
         assert.lengthOf(requests, ONE_LOOK * 2)
@@ -237,7 +228,6 @@ describe("ForgeSync", () => {
         assert.strictEqual(paused?.pausedUntil, new Date(601_000).toISOString())
         assert.include(paused?.problem, "rate limit")
 
-        // Nothing leaves while the limit holds.
         yield* pass("8 minutes")
         assert.lengthOf(requests, ONE_LOOK + 1)
         yield* pass("70 seconds")
@@ -257,7 +247,6 @@ describe("ForgeSync", () => {
         assert.include(seen.at(-1)?.problem, "boom")
         yield* pass("61 seconds")
         assert.lengthOf(requests, 2)
-        // The second failure doubles the wait.
         yield* pass("61 seconds")
         assert.lengthOf(requests, 2)
         yield* pass("60 seconds")
@@ -283,7 +272,6 @@ describe("ForgeSync", () => {
         assert.lengthOf(requests, 1)
         yield* pass("6 seconds")
         assert.lengthOf(requests, 1 + ONE_LOOK)
-        // A push is followed sooner than a quiet branch, for the checks it starts.
         yield* pass("16 seconds")
         assert.lengthOf(requests, 1 + ONE_LOOK * 2)
       }).pipe(Effect.provide(services(client)))
@@ -300,7 +288,6 @@ describe("ForgeSync", () => {
         yield* sync.changed(target)
         yield* settle
         assert.lengthOf(requests, ONE_LOOK * 2)
-        // A second push right behind it waits for the spacing.
         yield* sync.changed(target)
         yield* settle
         assert.lengthOf(requests, ONE_LOOK * 2)

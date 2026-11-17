@@ -1,10 +1,5 @@
 import { type Option, Schema } from "effect"
 
-/**
- * The parts of the Codex app-server protocol Humanity reads, as the installed
- * CLI describes them (`codex app-server generate-ts`). Only the fields
- * Humanity uses are described; everything else in a message is ignored.
- */
 
 const nullable = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema))
 
@@ -41,7 +36,6 @@ export type ModelListResponse = typeof ModelListResponse.Type
 const RateLimitWindow = Schema.Struct({
   usedPercent: Schema.Number,
   windowDurationMins: nullable(Schema.Number),
-  /** Unix seconds. */
   resetsAt: nullable(Schema.Number),
 })
 export type RateLimitWindow = typeof RateLimitWindow.Type
@@ -90,28 +84,21 @@ export const PatchChange = Schema.Struct({
   diff: Schema.String,
 })
 
-/** A thread item: what the agent said, thought or did. Told apart by `type`. */
 export const ThreadItem = Schema.Struct({
   type: Schema.String,
   id: Schema.String,
-  // agentMessage
   text: Schema.optional(Schema.String),
-  // reasoning
   summary: Schema.optional(Schema.Array(Schema.String)),
-  // commandExecution
   command: Schema.optional(Schema.String),
   cwd: Schema.optional(Schema.String),
   aggregatedOutput: nullable(Schema.String),
   exitCode: nullable(Schema.Number),
-  // fileChange
   changes: Schema.optional(Schema.Array(PatchChange)),
-  // mcpToolCall
   server: Schema.optional(Schema.String),
   tool: Schema.optional(Schema.String),
   arguments: Schema.optional(Schema.Unknown),
   result: nullable(Schema.Struct({ content: Schema.Array(Schema.Unknown) })),
   error: nullable(Schema.Struct({ message: Schema.String })),
-  // webSearch
   query: Schema.optional(Schema.String),
   status: Schema.optional(Schema.String),
 })

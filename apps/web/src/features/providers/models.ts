@@ -1,9 +1,7 @@
 import type { AgentProvider } from "@humanity/contracts"
 
-/** The provider's own choice. Picking it sends no model, so the session follows the provider. */
 export const DEFAULT_MODEL = "default"
 
-/** A model as a provider reports it (`Claude.status`, `Codex.status`). */
 export interface ReportedModel {
   readonly value: string
   readonly displayName: string
@@ -12,11 +10,9 @@ export interface ReportedModel {
 
 export interface PickerModel extends ReportedModel {
   readonly provider: AgentProvider
-  /** An older model, kept behind "Legacy models". */
   readonly legacy: boolean
 }
 
-/** What the picker hands back: the provider a thread runs on and its model, `null` for the default. */
 export interface ModelChoice {
   readonly provider: AgentProvider
   readonly model: string | null
@@ -40,11 +36,6 @@ const DEFAULT_ROW: Record<AgentProvider, ReportedModel> = {
   },
 }
 
-/**
- * The rows a provider shows: its default first, then what it reported, in its
- * order. Claude Code lists its current models by alias (`opus`, `sonnet`, ...)
- * and older ones by their full, pinned id (`claude-sonnet-5`, ...).
- */
 export const pickerModels = (
   provider: AgentProvider,
   reported: ReadonlyArray<ReportedModel>,
@@ -61,11 +52,6 @@ export const pickerModels = (
   }))
 }
 
-/**
- * The providers a thread can be started on: the ones with someone signed in.
- * The one already chosen stays, so its model can still be read and changed;
- * an open thread (`locked`) is offered no other.
- */
 export const offeredProviders = (
   all: ReadonlyArray<AgentProvider>,
   current: AgentProvider,
@@ -74,10 +60,8 @@ export const offeredProviders = (
 ): Array<AgentProvider> =>
   all.filter((provider) => provider === current || (!locked && connected[provider]))
 
-/** One name per row across providers. Claude Code's stay bare, as they were starred before Codex. */
 export const modelKey = (model: Pick<PickerModel, "provider" | "value">): string =>
   model.provider === "claude-code" ? model.value : `${model.provider}:${model.value}`
 
-/** The short name for tight spaces: "Default (recommended)" reads "Default". */
 export const shortModelName = (model: ReportedModel): string =>
   model.displayName.replace(/\s*\(recommended\)$/i, "")

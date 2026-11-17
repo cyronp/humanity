@@ -24,11 +24,6 @@ const bearerToken = (request: HttpServerRequest.HttpServerRequest) => {
   return header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined
 }
 
-/**
- * The RPC WebSocket. Browsers cannot set headers on a WebSocket, so the token
- * travels in the query string and is checked before the upgrade: a connection
- * without a valid token never becomes a socket.
- */
 const RpcRoute = HttpRouter.use(
   Effect.fn(function* (router) {
     const token = yield* AuthToken
@@ -39,7 +34,6 @@ const RpcRoute = HttpRouter.use(
   }),
 ).pipe(Layer.provide(RpcSerialization.layerJson))
 
-/** Lets the web app tell "daemon unreachable" apart from "wrong token" before opening the socket. */
 const AuthCheckRoute = HttpRouter.use(
   Effect.fn(function* (router) {
     const token = yield* AuthToken
@@ -53,11 +47,6 @@ const AuthCheckRoute = HttpRouter.use(
   }),
 )
 
-/**
- * Humanity's MCP server, for the agents of running threads. Each thread's
- * agent holds a token of its own, which is not the daemon's: it opens no
- * socket and reaches nothing but these tools, for that thread only.
- */
 const McpRoute = HttpRouter.use(
   Effect.fn(function* (router) {
     const mcp = yield* HumanityMcp
@@ -79,27 +68,15 @@ const McpRoute = HttpRouter.use(
         Effect.orElseSucceed(() => HttpServerResponse.empty({ status: 400 })),
       )
     })
-    // No stream for the server to speak first on, and no session to end.
     const postOnly = HttpServerResponse.empty({ status: 405, headers: { allow: "POST" } })
     yield* router.add("GET", MCP_PATH, postOnly)
     yield* router.add("DELETE", MCP_PATH, postOnly)
   }),
 )
 
-/**
- * A built file under `assets/` has a hash of its content in its name, and a
- * new build names it anew: the window keeps it, compiled code included, and
- * never asks about it again.
- */
 const ASSETS_CACHE = "public, max-age=31536000, immutable"
-/**
- * Everything else, `index.html` first, is checked on every load (a cheap 304
- * when unchanged): it names the current build's assets, and a stale copy kept
- * after an update would ask for assets that are gone.
- */
 const PAGE_CACHE = "no-cache"
 
-/** The built web app in `webDist`, with each file cached as long as it stays right. */
 export const staticRoutes = (webDist: string) =>
   Layer.mergeAll(
     HttpStaticServer.layer({
@@ -110,7 +87,6 @@ export const staticRoutes = (webDist: string) =>
     HttpStaticServer.layer({ root: webDist, spa: true, cacheControl: PAGE_CACHE }),
   )
 
-/** In production the daemon also serves the built web app. */
 const StaticRoute = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig

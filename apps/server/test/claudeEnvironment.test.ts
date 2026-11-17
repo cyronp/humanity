@@ -36,7 +36,6 @@ describe("claudeConfigDir", () => {
 
 describe("the oldest Claude Code Humanity runs", () => {
   it("is the one the Agent SDK is built for", () => {
-    // The SDK exports no `package.json`; it sits next to its entry point.
     const entry = createRequire(import.meta.url).resolve("@anthropic-ai/claude-agent-sdk")
     const sdk = JSON.parse(readFileSync(join(dirname(entry), "package.json"), "utf8")) as {
       readonly claudeCodeVersion: string

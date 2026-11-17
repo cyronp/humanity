@@ -25,13 +25,11 @@ import {
 export interface CodexProbe {
   readonly cliVersion: string | undefined
   readonly codexHome: string | undefined
-  /** The account Codex would use; `null` when nobody is signed in. */
   readonly account: AccountResponse["account"]
   readonly models: ReadonlyArray<CodexModel>
 }
 
 const PROBE_TIMEOUT = "30 seconds"
-/** More pages than any account has models for; a guard against a cursor that never ends. */
 const MAX_MODEL_PAGES = 10
 
 const decodeAccount = decode(AccountResponse)
@@ -41,7 +39,6 @@ const decodeRateLimits = decode(RateLimitsResponse)
 const FIVE_HOURS = 5 * 60
 const SEVEN_DAYS = 7 * 24 * 60
 
-/** `43200` minutes → `30-day limit` */
 const windowName = (minutes: number): string => {
   const days = minutes / (24 * 60)
   if (Number.isInteger(days)) return `${days}-day limit`
@@ -49,11 +46,6 @@ const windowName = (minutes: number): string => {
   return Number.isInteger(hours) ? `${hours}-hour limit` : `${minutes}-minute limit`
 }
 
-/**
- * Codex's rate-limit windows as Humanity shows a plan's: the five-hour and
- * the weekly one in their places, any other window by its length. `undefined`
- * when Codex reports none (an API key).
- */
 export const codexPlanUsage = (limits: RateLimitsResponse): PlanUsage | undefined => {
   const windows = [limits.rateLimits.primary, limits.rateLimits.secondary].filter(
     (window): window is RateLimitWindow => window !== null && window !== undefined,
@@ -101,34 +93,17 @@ const withTimeout = <A>(effect: Effect.Effect<A, CodexFailed>) =>
     }),
   )
 
-/**
- * The Codex runtime threads run on: the `codex` the human installed, found
- * on the PATH each time it starts, authenticated by the login in its own folder (the
- * human's `codex login`), exactly like their own terminal sessions.
- */
 export class Codex extends Context.Service<
   Codex,
   {
-    /** The executable Humanity runs: the installed `codex`, else the bare command. */
     readonly executable: () => string
-    /** Where the default login lives: `CODEX_HOME`, else `~/.codex`. */
     readonly home: string
-    /**
-     * Starts a Codex app server in `cwd` that lives until the scope closes.
-     * `codexHome` is the folder of the account it runs as; without it, the
-     * default login.
-     */
     readonly connect: (options: {
       readonly cwd: string
       readonly codexHome?: string | undefined
       readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
     }) => Effect.Effect<AppServer, CodexFailed, Scope.Scope>
-    /** Starts Codex just long enough to read an account and its models. Sends nothing to a model. */
     readonly probe: (codexHome?: string) => Effect.Effect<CodexProbe, CodexFailed>
-    /**
-     * Starts Codex just long enough to read the account's rate-limit windows;
-     * `undefined` when the login has none (an API key).
-     */
     readonly planUsage: (codexHome?: string) => Effect.Effect<PlanUsage | undefined, CodexFailed>
   }
 >()("humanity/Codex") {
@@ -137,10 +112,6 @@ export class Codex extends Context.Service<
     Effect.gen(function* () {
       const config = yield* ServerConfig
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-      /**
-       * How to start the installed Codex: its native executable when npm put
-       * one behind the `codex` launcher, else what the PATH has.
-       */
       const launch = () => {
         const found = locateCli(CLI_COMMANDS.codex)
         if (found === undefined) return undefined
@@ -173,14 +144,12 @@ export class Codex extends Context.Service<
           return connectAppServer({
             executable: found.command,
             args: found.args,
-            // An added account is a Codex folder of its own; the default login is whatever Codex finds.
             env: options.codexHome === undefined ? env : { ...env, CODEX_HOME: options.codexHome },
             cwd: options.cwd,
             onRequest: options.onRequest,
           })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
-      /** A Codex in Humanity's own data directory, never the user's repository, to ask one thing. */
       const idle = <A>(
         codexHome: string | undefined,
         ask: (server: AppServer) => Effect.Effect<A, CodexFailed>,
@@ -225,7 +194,6 @@ export class Codex extends Context.Service<
               cliVersion: server.cliVersion,
               codexHome: server.codexHome,
               account: Option.isSome(account) ? account.value.account : null,
-              // A signed-out Codex has no models to offer; asking would only fail.
               models: yield* models(server).pipe(Effect.orElseSucceed(() => [])),
             } satisfies CodexProbe
           }),
