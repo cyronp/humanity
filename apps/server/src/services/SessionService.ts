@@ -10,6 +10,7 @@ import {
   type AttachmentUpload,
   type Autonomy,
   type BranchCommits,
+  type FileEntry,
   BranchNotCheckedOut,
   ChangeId,
   DEFAULT_AUTONOMY,
@@ -88,6 +89,7 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
+import { searchFiles as rankFiles } from "./fileSearch.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
@@ -262,6 +264,11 @@ export class SessionService extends Context.Service<
       sessionId: string,
       options: { readonly removeWorktree: boolean },
     ) => Effect.Effect<Session, SessionNotFound | GitError>
+    /** Files and folders where the session works whose path matches `query`, best first. */
+    readonly searchFiles: (
+      sessionId: string,
+      query: string,
+    ) => Effect.Effect<ReadonlyArray<FileEntry>, SessionNotFound | GitError>
     /** Stops every running agent of a project, before the project is removed. */
     readonly stopProject: (projectId: string) => Effect.Effect<void>
     /** Uncommitted changes where the session works: its worktree or the project's checkout. */
@@ -1234,6 +1241,11 @@ export class SessionService extends Context.Service<
       const diff = (sessionId: string) =>
         Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
 
+      const searchFiles = (sessionId: string, query: string) =>
+        Effect.flatMap(get(sessionId), (session) =>
+          Effect.map(git.listFiles(session.worktreePath), (files) => rankFiles(files, query)),
+        )
+
       const commits = Effect.fn("SessionService.commits")(function* (sessionId: string) {
         const session = yield* get(sessionId)
         const project = yield* projects.get(session.projectId)
@@ -1359,6 +1371,7 @@ export class SessionService extends Context.Service<
         end,
         stopProject,
         diff,
+        searchFiles,
         commits,
         commit,
         subscribe,

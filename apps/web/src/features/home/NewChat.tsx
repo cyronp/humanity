@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { FolderPlus } from "lucide-react"
-import { type FormEvent, type KeyboardEvent, useState } from "react"
+import { type FormEvent, type KeyboardEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { InputGroupTextarea } from "@/components/ui/input-group"
@@ -12,9 +12,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
+import { useFileMention } from "@/features/chat/useFileMention"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { codexStatusAtom } from "@/features/codex/atoms"
-import { branchesAtom } from "@/features/git/atoms"
+import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
@@ -131,6 +133,17 @@ function NewChatForm({
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
+  const searchFiles = useAtomSet(searchProjectFilesAtom, { mode: "promiseExit" })
+  // The checkout as it is now, before a branch picked here is switched to.
+  const mentions = useFileMention({
+    text,
+    setText,
+    textarea,
+    search: (query) => searchFiles({ payload: { projectId: project.id, query } }),
+    disabled: pending,
+  })
+  const idBase = useId()
+  const mentionIds = fileMentionIds(idBase)
 
   const branches = useAtomValue(branchesAtom(project.id))
   const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
@@ -173,6 +186,7 @@ function NewChatForm({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentions.onKeyDown(event)) return
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       void submit()
@@ -185,11 +199,18 @@ function NewChatForm({
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
       <ChatBox className={dropTargetClass} {...(pending ? {} : files.dropProps)}>
+        {mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />}
         <AttachmentTray draft={files} />
         <InputGroupTextarea
           ref={textarea}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          {...mentions.textareaProps}
+          aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
+          aria-activedescendant={
+            mentions.menu === undefined || mentions.menu.highlighted < 0
+              ? undefined
+              : mentionIds.option(mentions.menu.highlighted)
+          }
           onKeyDown={onKeyDown}
           onPaste={pending ? undefined : files.onPaste}
           placeholder="Ask anything."

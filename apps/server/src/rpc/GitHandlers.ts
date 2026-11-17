@@ -1,5 +1,6 @@
 import { GitRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
+import { searchFiles } from "../services/fileSearch.ts"
 import { GitService } from "../services/GitService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 
@@ -23,6 +24,10 @@ export const GitHandlers = GitRpcs.toLayer(
         Effect.flatMap(projects.get(projectId), (project) => git.status(project.localPath)),
       "Git.diff": ({ projectId }) =>
         Effect.flatMap(projects.get(projectId), (project) => git.diff(project.localPath)),
+      "Git.searchFiles": ({ projectId, query }) =>
+        Effect.flatMap(projects.get(projectId), (project) =>
+          Effect.map(git.listFiles(project.localPath), (files) => searchFiles(files, query)),
+        ),
     })
   }),
 )

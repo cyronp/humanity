@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { GitService } from "../src/services/GitService.ts"
 import { git, tempDir, tempRepo } from "./helpers.ts"
@@ -17,6 +17,19 @@ describe("GitService", () => {
       const dir = yield* tempDir()
       const error = yield* withGit((service) => Effect.flip(service.repositoryRoot(dir)))
       assert.strictEqual(error._tag, "GitNotARepository")
+    }),
+  )
+
+  it.live("lists tracked and untracked files, leaving ignored ones out", () =>
+    Effect.gen(function* () {
+      const repo = yield* tempRepo({ "README.md": "# fixture\n", ".gitignore": "dist/\n" })
+      mkdirSync(join(repo, "src"))
+      mkdirSync(join(repo, "dist"))
+      writeFileSync(join(repo, "src", "new file.ts"), "export {}\n")
+      writeFileSync(join(repo, "dist", "out.js"), "\n")
+
+      const files = yield* withGit((service) => service.listFiles(repo))
+      assert.deepStrictEqual([...files].sort(), [".gitignore", "README.md", "src/new file.ts"])
     }),
   )
 

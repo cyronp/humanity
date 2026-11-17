@@ -76,6 +76,9 @@ export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 export const decideChangeAtom = HumanityClient.mutation("Approvals.decideChange")
 export const decideConfirmationAtom = HumanityClient.mutation("Approvals.decideConfirmation")
 
+/** Files and folders where the session works, for `@` in its message box. */
+export const searchSessionFilesAtom = HumanityClient.mutation("Sessions.searchFiles")
+
 export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.query(
     "Sessions.diff",

@@ -5,7 +5,7 @@ import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
 import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
-import { BranchCommits, WorkingTreeDiff } from "../domain/Git.ts"
+import { BranchCommits, FileEntry, WorkingTreeDiff } from "../domain/Git.ts"
 import { SessionEvent, TranscriptPage } from "../domain/SessionEvent.ts"
 import {
   AttachmentNotFound,
@@ -160,6 +160,15 @@ export const SessionsRpcs = RpcGroup.make(
   Rpc.make("Sessions.diff", {
     payload: { sessionId: SessionId },
     success: WorkingTreeDiff,
+    error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
+  }),
+  /**
+   * Files and folders where the session works (worktree or checkout) whose
+   * path matches `query`, best first, for `@` in the message box. Ignored files are left out.
+   */
+  Rpc.make("Sessions.searchFiles", {
+    payload: { sessionId: SessionId, query: Schema.String },
+    success: Schema.Array(FileEntry),
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
   /**

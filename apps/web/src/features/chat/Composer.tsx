@@ -12,11 +12,12 @@ import {
   type KeyboardEvent,
   memo,
   type Ref,
+  useId,
   useImperativeHandle,
   useState,
 } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { InputGroupText, InputGroupTextarea } from "@/components/ui/input-group"
+import { InputGroupTextarea } from "@/components/ui/input-group"
 import type { PromptInsertion } from "@/features/extensions/prompt"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
@@ -24,6 +25,7 @@ import { ModelPicker } from "@/features/providers/ModelPicker"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import {
   interruptAtom,
+  searchSessionFilesAtom,
   sendMessageAtom,
   setAutonomyAtom,
   setEffortAtom,
@@ -33,6 +35,8 @@ import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
 import { AddMenu } from "./AddMenu.tsx"
 import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
+import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
+import { useFileMention } from "./useFileMention.ts"
 
 export interface ComposerHandle {
   /** Writes at the caret and gives the box the focus. */
@@ -87,6 +91,16 @@ export const Composer = memo(function Composer({
   const { textarea, insert } = usePromptInsert(text, setText)
   // No dependencies: `insert` reads the text of the render it was made in.
   useImperativeHandle(ref, () => ({ insert }))
+  const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
+  const mentions = useFileMention({
+    text,
+    setText,
+    textarea,
+    search: (query) => searchFiles({ payload: { sessionId, query } }),
+    disabled,
+  })
+  const idBase = useId()
+  const mentionIds = fileMentionIds(idBase)
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -140,6 +154,7 @@ export const Composer = memo(function Composer({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentions.onKeyDown(event)) return
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       void submit()
@@ -165,11 +180,18 @@ export const Composer = memo(function Composer({
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
       <ChatBox className={dropTargetClass} {...(disabled ? {} : files.dropProps)}>
+        {mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />}
         <AttachmentTray draft={files} />
         <InputGroupTextarea
           ref={textarea}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          {...mentions.textareaProps}
+          aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
+          aria-activedescendant={
+            mentions.menu === undefined || mentions.menu.highlighted < 0
+              ? undefined
+              : mentionIds.option(mentions.menu.highlighted)
+          }
           onKeyDown={onKeyDown}
           onPaste={disabled ? undefined : files.onPaste}
           placeholder={disabled ? "This session has ended." : "Ask anything."}
@@ -186,11 +208,6 @@ export const Composer = memo(function Composer({
             disabled={disabled}
           />
           <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
-          {busy && (
-            <InputGroupText className="px-1.5 text-xs font-normal">
-              Queued until the agent finishes
-            </InputGroupText>
-          )}
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
             <ModelPicker

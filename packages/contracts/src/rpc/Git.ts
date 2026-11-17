@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { Branch, RepoStatus, WorkingTreeDiff } from "../domain/Git.ts"
+import { Branch, FileEntry, RepoStatus, WorkingTreeDiff } from "../domain/Git.ts"
 import { ProjectId } from "../domain/Project.ts"
 import {
   GitBranchExists,
@@ -40,6 +40,15 @@ export const GitRpcs = RpcGroup.make(
   Rpc.make("Git.diff", {
     payload: { projectId: ProjectId },
     success: WorkingTreeDiff,
+    error: Schema.Union(GitFailure),
+  }),
+  /**
+   * Files and folders of the project's checkout whose path matches `query`,
+   * best first, for `@` in a new thread's message box. Ignored files are left out.
+   */
+  Rpc.make("Git.searchFiles", {
+    payload: { projectId: ProjectId, query: Schema.String },
+    success: Schema.Array(FileEntry),
     error: Schema.Union(GitFailure),
   }),
 )

@@ -83,3 +83,11 @@ export const WorkingTreeDiff = Schema.Struct({
   files: Schema.Array(FileDiff),
 })
 export type WorkingTreeDiff = typeof WorkingTreeDiff.Type
+
+/** A file or folder of a working copy, as `@` in the message box offers it. */
+export const FileEntry = Schema.Struct({
+  /** Relative to the working copy, with `/` separators and no trailing slash. */
+  path: Schema.String,
+  kind: Schema.Literals(["file", "directory"]),
+})
+export type FileEntry = typeof FileEntry.Type

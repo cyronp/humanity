@@ -25,6 +25,7 @@ import {
   parseWorktrees,
   type Worktree,
 } from "./gitParsers.ts"
+import { parseFileList } from "./fileSearch.ts"
 
 export type GitError = GitCommandFailed | GitNotARepository | GitNotInstalled
 
@@ -77,6 +78,8 @@ export class GitService extends Context.Service<
       branch: string,
     ) => Effect.Effect<void, GitError | GitInvalidBranchName>
     readonly status: (cwd: string) => Effect.Effect<RepoStatus, GitError>
+    /** Tracked and untracked files of the working copy, ignored ones left out, relative to it. */
+    readonly listFiles: (cwd: string) => Effect.Effect<ReadonlyArray<string>, GitError>
     /** Whether `ref` names a commit in the repository at `cwd`. */
     readonly hasCommit: (cwd: string, ref: string) => Effect.Effect<boolean, GitNotInstalled>
     /**
@@ -288,6 +291,16 @@ export class GitService extends Context.Service<
           "-z",
         ]).pipe(Effect.map(parseStatus))
 
+      const listFiles = (cwd: string) =>
+        exec(cwd, [
+          ...STABLE_OUTPUT,
+          "ls-files",
+          "--cached",
+          "--others",
+          "--exclude-standard",
+          "-z",
+        ]).pipe(Effect.map(parseFileList))
+
       const hasCommit = (cwd: string, ref: string) =>
         requireCommit(cwd, ref).pipe(
           Effect.as(true),
@@ -488,6 +501,7 @@ export class GitService extends Context.Service<
         createBranch,
         checkout,
         status,
+        listFiles,
         hasCommit,
         log,
         diff,
