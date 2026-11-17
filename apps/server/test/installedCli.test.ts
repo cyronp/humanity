@@ -7,7 +7,6 @@ import {
   type LocateOptions,
   locateCli,
   parseCliVersion,
-  runtimeEnvironment,
   searchFolders,
   shimTarget,
 } from "../src/agent/installedCli.ts"
@@ -124,24 +123,6 @@ describe("finding an installed CLI", () => {
   it("never follows a shim into another shim", () => {
     const shim = "C:\\Tools\\loop.cmd"
     expect(launchFor(shim, windows({ [shim]: '"%~dp0\\loop.cmd" %*' }))).toBeUndefined()
-  })
-
-  it("puts the runtime of a script first on the PATH it is started with", () => {
-    const launch = {
-      path: "C:\\npm\\claude.cmd",
-      command: "C:\\npm\\node.exe",
-      args: ["C:\\npm\\cli.js"],
-      script: "C:\\npm\\cli.js",
-    }
-    expect(runtimeEnvironment(launch, { Path: "C:\\Windows", HOME: "x" }, "win32")).toEqual({
-      Path: "C:\\npm;C:\\Windows",
-      HOME: "x",
-    })
-    expect(
-      runtimeEnvironment({ ...launch, command: "node" }, { Path: "C:\\Windows" }, "win32"),
-    ).toEqual({ Path: "C:\\Windows" })
-    const native = { path: "/bin/claude", command: "/bin/claude", args: [], script: undefined }
-    expect(runtimeEnvironment(native, { PATH: "/usr/bin" }, "linux")).toEqual({ PATH: "/usr/bin" })
   })
 
   it("reads the last quoted %dp0% path of a shim", () => {

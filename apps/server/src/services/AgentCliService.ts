@@ -11,13 +11,7 @@ import {
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Semaphore, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import {
-  type CliLaunch,
-  forgetLocatedClis,
-  isOutdated,
-  locateCli,
-  parseCliVersion,
-} from "../agent/installedCli.ts"
+import { type CliLaunch, isOutdated, locateCli, parseCliVersion } from "../agent/installedCli.ts"
 
 const VERSION_TIMEOUT = "15 seconds"
 const UPDATE_TIMEOUT = "10 minutes"
@@ -127,7 +121,6 @@ export class AgentCliService extends Context.Service<
               ),
           }),
         )
-        forgetLocatedClis()
         if (ran.exitCode !== 0) {
           return yield* new CliUpdateFailed({ product, command, output: ran.output })
         }

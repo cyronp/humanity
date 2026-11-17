@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { ServerConfig } from "../ServerConfig.ts"
 import type { ReportedAccount } from "./account.ts"
 import { CLI_COMMANDS, CLI_INSTALL_URLS } from "@humanity/contracts"
-import { type CliLaunch, locateCli, runtimeEnvironment } from "../agent/installedCli.ts"
+import { type CliLaunch, locateCli } from "../agent/installedCli.ts"
 import { claudeConfigDir, claudeEnvironment } from "./environment.ts"
 import { readPlanUsage } from "./planUsage.ts"
 
@@ -56,7 +56,7 @@ const idleSession = <A>(
           prompt: idlePrompt(abortController.signal),
           options: {
             cwd,
-            env: runtimeEnvironment(launch, env),
+            env,
             pathToClaudeCodeExecutable: claudeExecutable(launch),
             abortController,
             permissionMode: "default",

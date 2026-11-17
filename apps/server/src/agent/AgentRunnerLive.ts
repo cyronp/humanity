@@ -14,7 +14,6 @@ import {
 } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode, claudeExecutable, notInstalled } from "../claude/ClaudeCode.ts"
-import { runtimeEnvironment } from "./installedCli.ts"
 import { Codex } from "../codex/Codex.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
@@ -201,11 +200,11 @@ export const AgentRunnerLive = Layer.effect(
               path,
               skipMcpDiscovery: true,
             })),
-            env: runtimeEnvironment(launch, {
+            env: {
               ...claude.environment,
               ...(options.configDir === undefined ? {} : { CLAUDE_CONFIG_DIR: options.configDir }),
               CLAUDE_AGENT_SDK_CLIENT_APP: "humanity/0.1.0",
-            }),
+            },
             stderr: (data) => {
               runPromise(Effect.logDebug("agent stderr", data.trimEnd())).catch(() => {})
             },

@@ -35,14 +35,6 @@ const NODE = "node"
 
 const pathOf = (platform: NodeJS.Platform) => (platform === "win32" ? win32 : posix)
 
-const pathKey = (
-  env: Readonly<Record<string, string | undefined>>,
-  platform: NodeJS.Platform,
-): string =>
-  platform === "win32"
-    ? (Object.keys(env).find((candidate) => candidate.toUpperCase() === "PATH") ?? "Path")
-    : "PATH"
-
 const envValue = (env: LocateOptions["env"], name: string, platform: NodeJS.Platform) => {
   if (platform !== "win32") return env[name]
   const key = Object.keys(env).find((candidate) => candidate.toUpperCase() === name)
@@ -147,38 +139,10 @@ export const findLaunch = (command: string, options: LocateOptions): CliLaunch |
   return undefined
 }
 
-export const LOCATE_CACHE_MS = 5_000
-
-const located = new Map<string, { readonly at: number; readonly launch: CliLaunch | undefined }>()
-
-export const forgetLocatedClis = () => located.clear()
-
-export const locateCli = (command: string, options?: LocateOptions): CliLaunch | undefined => {
-  if (options !== undefined) return findLaunch(command, options)
-  const now = Date.now()
-  const cached = located.get(command)
-  if (cached !== undefined && now - cached.at < LOCATE_CACHE_MS) return cached.launch
-  const launch = findLaunch(command, systemLocateOptions())
-  located.set(command, { at: now, launch })
-  return launch
-}
-
-export const runtimeEnvironment = (
-  launch: CliLaunch,
-  env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform,
-): Record<string, string> => {
-  if (launch.script === undefined || launch.command === NODE) return env
-  const path = pathOf(platform)
-  const key = pathKey(env, platform)
-  const folder = path.dirname(launch.command)
-  const current = env[key]
-  const separator = platform === "win32" ? ";" : ":"
-  return {
-    ...env,
-    [key]: current === undefined || current === "" ? folder : `${folder}${separator}${current}`,
-  }
-}
+export const locateCli = (
+  command: string,
+  options: LocateOptions = systemLocateOptions(),
+): CliLaunch | undefined => findLaunch(command, options)
 
 export const parseCliVersion = (output: string): string | undefined =>
   /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/.exec(output)?.[0]
