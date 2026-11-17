@@ -1,95 +1,59 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { type AuthStatus, checkAuth, readToken, storeToken, tokenFromInput } from "@/lib/token"
-
-type GateState = AuthStatus | "checking"
+import { TokenScreen, UnreachableScreen } from "@/components/connect/ConnectScreens"
+import { type AuthStatus, checkAuth, readToken } from "@/lib/token"
 
 /**
  * Nothing behind this renders until the daemon has accepted the token, so the
  * RPC socket is only ever opened with a token that is known to work.
+ *
+ * A daemon that is down and a token that is missing or wrong are different
+ * problems with different fixes, so each gets a screen of its own: the first
+ * keeps looking for the daemon on its own, the others ask for the token.
  */
 export function AuthGate({ children }: { readonly children: ReactNode }) {
-  const [state, setState] = useState<GateState>("checking")
+  // `undefined` until the first check answers, which shows the splash.
+  const [status, setStatus] = useState<AuthStatus>()
+  const [checking, setChecking] = useState(true)
+  // Checks in a row that found no daemon, which spaces out the next one.
+  const [failures, setFailures] = useState(0)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    void checkAuth(readToken()).then((status) => {
-      if (!cancelled) setState(status)
+    void checkAuth(readToken()).then((next) => {
+      if (cancelled) return
+      setStatus(next)
+      setChecking(false)
+      setFailures((n) => (next === "unreachable" ? n + 1 : 0))
     })
     return () => {
       cancelled = true
     }
   }, [attempt])
 
-  const retry = () => {
-    setState("checking")
+  const check = useCallback(() => {
+    setChecking(true)
     setAttempt((n) => n + 1)
-  }
+  }, [])
 
-  if (state === "ok") return children
-  if (state === "checking") return <Loading />
-  return (
-    <main className="flex min-h-svh items-center justify-center p-6">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>Connect to Humanity</CardTitle>
-          <CardDescription>
-            Open the link the daemon printed when it started, or paste it here.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {state === "unreachable" ? (
-            <Alert variant="destructive">
-              <AlertTitle>The daemon is not answering</AlertTitle>
-              <AlertDescription>
-                Start it with <code>npm run dev</code> (or <code>npm start</code>) and try again.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert>
-              <AlertTitle>A valid token is required</AlertTitle>
-              <AlertDescription>
-                The token is also stored in <code>~/.humanity/auth-token</code>.
-              </AlertDescription>
-            </Alert>
-          )}
-          <TokenForm onSubmit={retry} />
-        </CardContent>
-      </Card>
-    </main>
-  )
-}
+  // Coming back to the window or the network is a good moment to look again.
+  useEffect(() => {
+    if (status !== "unreachable") return
+    window.addEventListener("focus", check)
+    window.addEventListener("online", check)
+    return () => {
+      window.removeEventListener("focus", check)
+      window.removeEventListener("online", check)
+    }
+  }, [status, check])
 
-function TokenForm({ onSubmit }: { readonly onSubmit: () => void }) {
-  const [value, setValue] = useState("")
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
-    if (value.trim() !== "") storeToken(tokenFromInput(value))
-    onSubmit()
-  }
-  return (
-    <form onSubmit={submit}>
-      <Field className="gap-2">
-        <FieldLabel htmlFor="token">Token or link</FieldLabel>
-        <div className="flex gap-2">
-          <Input
-            id="token"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="http://127.0.0.1:7420/?token=…"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <Button type="submit">Connect</Button>
-        </div>
-      </Field>
-    </form>
+  if (status === undefined) return <Loading />
+  if (status === "ok") return children
+  return status === "unreachable" ? (
+    <UnreachableScreen checking={checking} failures={failures} onRetry={check} />
+  ) : (
+    <TokenScreen rejected={status === "rejected"} checking={checking} onSubmit={check} />
   )
 }
 

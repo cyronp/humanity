@@ -15,7 +15,11 @@ const { version } = JSON.parse(readFileSync(fromHere("../desktop/package.json"),
 }
 
 export default defineConfig({
-  define: { __HUMANITY_VERSION__: JSON.stringify(version) },
+  define: {
+    __HUMANITY_VERSION__: JSON.stringify(version),
+    // Named on the connect screen when the daemon behind the dev server is down.
+    __HUMANITY_DEV_DAEMON__: JSON.stringify(`127.0.0.1:${daemonPort}`),
+  },
   plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
   resolve: {
     alias: {
