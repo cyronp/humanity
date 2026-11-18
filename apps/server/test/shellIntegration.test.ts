@@ -282,6 +282,25 @@ describe.skipIf(realShells.length === 0)("shell integration in a real shell", ()
             )
             assert.strictEqual(ended.lastExitCode, 3)
 
+            // What the agent reads is what the screen shows, however the shell drew it.
+            const cursor = yield* terminals.agentCursor(terminal.id)
+            yield* terminals.agentWrite(terminal.id, "echo humanity-check\r")
+            const waited = yield* terminals.agentWait(terminal.id, {
+              for: { _tag: "command" },
+              since: cursor,
+              timeoutMs: 20_000,
+              maxLines: 50,
+            })
+            assert.strictEqual(waited.outcome, "command")
+            assert.strictEqual(waited.exitCode, 0)
+            assert.match(waited.text, /^humanity-check$/m, waited.text)
+            const screen = yield* terminals.agentRead(terminal.id, {
+              view: "screen",
+              since: undefined,
+              maxLines: 50,
+            })
+            assert.include(screen.text, "humanity-check")
+
             yield* terminals.write(terminal.id, "cd ..\r")
             const moved = yield* until(
               owner,

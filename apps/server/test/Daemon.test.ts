@@ -299,7 +299,10 @@ describe("daemon", () => {
 
         const scope = yield* Scope.make()
         const server = yield* mcp
-          .serve({ openThread: () => Effect.die("not called") })
+          .serve({
+            openThread: () => Effect.die("not called"),
+            terminal: () => Effect.die("not called"),
+          })
           .pipe(Scope.provide(scope))
         const authorization = server.type === "http" ? server.headers["Authorization"] : undefined
 
@@ -309,7 +312,15 @@ describe("daemon", () => {
         const body = (yield* listed.json) as { result: { tools: ReadonlyArray<{ name: string }> } }
         assert.deepStrictEqual(
           body.result.tools.map((tool) => tool.name),
-          ["open_thread"],
+          [
+            "open_thread",
+            "terminal_list",
+            "terminal_read",
+            "terminal_send",
+            "terminal_wait",
+            "terminal_open",
+            "terminal_close",
+          ],
         )
         const notified = yield* post(
           authorization,

@@ -109,7 +109,13 @@ const mcpServerConfig = (
     servers[name] = {
       ...(server.type === "stdio"
         ? { command: server.command, args: [...server.args], env: { ...server.env } }
-        : { url: server.url, http_headers: { ...server.headers } }),
+        : {
+            url: server.url,
+            http_headers: { ...server.headers },
+            ...(server.timeoutMs === undefined
+              ? {}
+              : { tool_timeout_sec: server.timeoutMs / 1000 }),
+          }),
       default_tools_approval_mode: "prompt",
       ...(name === HUMANITY_MCP_SERVER ? { tools: humanityAutoTools } : {}),
     }

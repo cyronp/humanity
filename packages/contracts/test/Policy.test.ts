@@ -4,7 +4,9 @@ import {
   AUTO_TOOLS,
   DEFAULT_AUTONOMY,
   formatOpenedThread,
+  isTerminalToolName,
   OPEN_THREAD_TOOL,
+  TERMINAL_TOOLS,
   parseMcpToolName,
   parseThreadHref,
   ProjectId,
@@ -40,6 +42,21 @@ describe("toolMode", () => {
     expect(toolMode("Task")).toBe("confirm")
     expect(toolMode("WebFetch")).toBe("confirm")
     expect(toolMode("mcp__github__create_issue")).toBe("confirm")
+  })
+
+  it("passes the terminal tools through to Humanity, which decides what they type", () => {
+    expect(TERMINAL_TOOLS).toEqual([
+      "mcp__humanity__terminal_list",
+      "mcp__humanity__terminal_read",
+      "mcp__humanity__terminal_send",
+      "mcp__humanity__terminal_wait",
+      "mcp__humanity__terminal_open",
+      "mcp__humanity__terminal_close",
+    ])
+    for (const tool of TERMINAL_TOOLS) expect(toolMode(tool)).toBe("auto")
+    expect(isTerminalToolName("terminal_send")).toBe(true)
+    expect(isTerminalToolName("open_thread")).toBe(false)
+    expect(toolMode("mcp__other__terminal_send")).toBe("confirm")
   })
 
   it("never takes an unknown tool, or a longer name, for one that runs by itself", () => {

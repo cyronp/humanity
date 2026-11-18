@@ -31,6 +31,7 @@ import {
   terminalsAtom,
 } from "./atoms.ts"
 import { cycleTerminal, lastActiveTerminal, pickActive, rememberActiveTerminal } from "./dock.ts"
+import { findTerminal, type ShowTerminalRequest } from "./showTerminal.ts"
 import { shortcutLabel, type TerminalCommand } from "./keys.ts"
 import { ShellIcon } from "./ShellIcon.tsx"
 import { TerminalFind } from "./TerminalFind.tsx"
@@ -57,6 +58,7 @@ export function TerminalDock({
   onHide,
   commandsRef,
   newTerminalRequest,
+  showRequest,
 }: {
   readonly owner: TerminalOwner
   /** Why no terminal can be opened here now (a thread that ended), or nothing when one can. */
@@ -65,6 +67,8 @@ export function TerminalDock({
   readonly commandsRef: { current: DockCommands | null }
   /** Goes up each time the human asks for one more terminal. */
   readonly newTerminalRequest: number
+  /** The terminal a tool call in the chat asked to show. */
+  readonly showRequest?: ShowTerminalRequest | undefined
 }) {
   const ownerKey = terminalOwnerKey(owner)
   const ownerJson = JSON.stringify(owner)
@@ -75,6 +79,14 @@ export function TerminalDock({
     ? preferencesResult.value
     : DEFAULT_TERMINAL_PREFERENCES
   const [wanted, setWanted] = useState(() => lastActiveTerminal(ownerKey))
+  // "Show terminal" from the chat shows the tab it names, once the terminals are known (a view
+  // focuses itself when it becomes the shown one).
+  const [shownRequest, setShownRequest] = useState(0)
+  if (showRequest !== undefined && terminals !== undefined && showRequest.nonce !== shownRequest) {
+    setShownRequest(showRequest.nonce)
+    const found = findTerminal(terminals, showRequest.terminal)
+    if (found !== undefined) setWanted(found.id)
+  }
   const active = terminals === undefined ? undefined : pickActive(terminals, wanted)
   const [error, setError] = useState<string>()
   /** The terminal the find bar searches, while it is open. */

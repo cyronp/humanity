@@ -12,7 +12,13 @@ import { ServerConfig } from "../src/ServerConfig.ts"
 
 const recordingTools = () => {
   const asked: Array<OpenThreadRequest> = []
+  const terminalCalls: Array<{ readonly tool: string; readonly args: unknown }> = []
   const tools: HumanityTools = {
+    terminal: (tool, args) =>
+      Effect.sync(() => {
+        terminalCalls.push({ tool, args })
+        return { text: `${tool} done`, isError: tool === "terminal_close" }
+      }),
     openThread: (request) =>
       request.prompt === "fail"
         ? Effect.fail(new OpenThreadFailed({ reason: "No thread was opened: it failed." }))
@@ -28,7 +34,7 @@ const recordingTools = () => {
             }
           }),
   }
-  return { tools, asked }
+  return { tools, asked, terminalCalls }
 }
 
 const call = (id: number, method: string, params?: unknown) => ({

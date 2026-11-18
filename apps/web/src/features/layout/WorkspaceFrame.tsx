@@ -26,6 +26,7 @@ import {
 } from "@/features/terminal/dock"
 import { terminalsAtom } from "@/features/terminal/atoms"
 import { isMac, shortcutLabel, terminalCommand } from "@/features/terminal/keys"
+import { onShowTerminal, type ShowTerminalRequest } from "@/features/terminal/showTerminal"
 import { type DockCommands, TerminalDock } from "@/features/terminal/TerminalDock"
 import { useStoredWidth } from "@/lib/resize"
 
@@ -80,6 +81,17 @@ export function WorkspaceFrame({
   const terminalArea = useRef<HTMLDivElement>(null)
   const dockCommands = useRef<DockCommands | null>(null)
   const [newTerminalRequest, setNewTerminalRequest] = useState(0)
+  const [showRequest, setShowRequest] = useState<ShowTerminalRequest>()
+
+  // "Show terminal" on an agent's terminal call opens the dock on that terminal.
+  useEffect(
+    () =>
+      onShowTerminal((request) => {
+        setTerminalsOpen(true)
+        setShowRequest(request)
+      }),
+    [setTerminalsOpen],
+  )
 
   // Ctrl+` shows or hides the terminals, Ctrl+Shift+` opens one more, Ctrl+PageUp/PageDown move
   // between them: from anywhere on the page, terminals included (they let these keys through).
@@ -169,6 +181,7 @@ export function WorkspaceFrame({
                 unavailable={terminals.unavailable}
                 commandsRef={dockCommands}
                 newTerminalRequest={newTerminalRequest}
+                showRequest={showRequest}
                 onHide={() => setTerminalsOpen(false)}
               />
             </div>

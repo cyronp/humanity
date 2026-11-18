@@ -2,7 +2,10 @@ import { terminalLabel } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import { cycleTerminal, parseFlag, pickActive } from "@/features/terminal/dock"
 import { type KeyPress, terminalCommand } from "@/features/terminal/keys"
+import { findTerminal } from "@/features/terminal/showTerminal"
 import { PALETTES, rgbaToHex } from "@/features/terminal/theme"
+import { findRenderer } from "@/features/tools/registry"
+import { toolRenderers } from "@/features/tools/renderers"
 
 const press = (key: string, modifiers: Partial<KeyPress> = {}): KeyPress => ({
   type: "keydown",
@@ -110,5 +113,26 @@ describe("terminal colors", () => {
   it("has every ANSI color for both themes", () => {
     expect(Object.keys(PALETTES.light)).toHaveLength(16)
     expect(Object.keys(PALETTES.dark)).toEqual(Object.keys(PALETTES.light))
+  })
+})
+
+describe("the agent's terminal calls in the chat", () => {
+  it("draws Humanity's terminal tools as terminal calls, not as any MCP tool", () => {
+    const rendererFor = (toolName: string) => findRenderer(toolRenderers, toolName, {}).name
+    for (const tool of ["terminal_list", "terminal_send", "terminal_wait", "terminal_close"]) {
+      expect(rendererFor(`mcp__humanity__${tool}`)).toBe("Terminal")
+    }
+    expect(rendererFor("mcp__other__terminal_send")).not.toBe("Terminal")
+  })
+
+  it("finds the terminal a call names, by number or by id", () => {
+    const terminals = [
+      { id: "aaa", ordinal: 1 },
+      { id: "bbb", ordinal: 2 },
+    ]
+    expect(findTerminal(terminals, "2")?.id).toBe("bbb")
+    expect(findTerminal(terminals, "#1")?.id).toBe("aaa")
+    expect(findTerminal(terminals, "bbb")?.ordinal).toBe(2)
+    expect(findTerminal(terminals, "3")).toBeUndefined()
   })
 })

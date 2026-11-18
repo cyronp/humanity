@@ -77,6 +77,7 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
+import { makeTerminalTools } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
@@ -662,15 +663,24 @@ export class SessionService extends Context.Service<
 
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
+            // What the run denied, shared with the terminal tools: they decide as Bash.
+            const denied = new Set<string>()
             const humanity = yield* mcp
-              .serve({ openThread: openThread(session) })
+              .serve({
+                openThread: openThread(session),
+                terminal: makeTerminalTools({
+                  sessionId: session.id,
+                  terminals,
+                  decide: decide(session, { denied }),
+                }),
+              })
               .pipe(Scope.provide(scope))
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
               scope,
               interrupted: false,
               initSeen: false,
-              denied: new Set(),
+              denied,
               usageLock: yield* Semaphore.make(1),
               extensionsVersion: added.version,
               humanity,

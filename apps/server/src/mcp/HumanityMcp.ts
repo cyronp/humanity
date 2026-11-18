@@ -2,17 +2,26 @@ import {
   AgentProvider,
   formatOpenedThread,
   HUMANITY_MCP_SERVER,
+  isTerminalToolName,
   OPEN_THREAD_TOOL_NAME,
   type OpenedThread,
   PROVIDER_NAMES,
   ReasoningEffort,
+  type TerminalToolName,
 } from "@humanity/contracts"
 import { Context, Data, Effect, Layer, Option, Schema, type Scope } from "effect"
 import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 import { ServerConfig } from "../ServerConfig.ts"
+import { TERMINAL_TOOL_DEFINITIONS, type ToolText } from "../terminal/agentTools.ts"
 
 export const MCP_PATH = "/mcp"
+
+/**
+ * How long a provider waits on one of Humanity's tools: a day. A call can wait on the human (who
+ * allows or denies what the agent types) or on a terminal (terminal_wait, up to ten minutes).
+ */
+export const HUMANITY_TOOL_TIMEOUT_MS = 86_400_000
 
 const PROTOCOL_VERSIONS: ReadonlyArray<string> = [
   "2025-11-25",
@@ -37,6 +46,8 @@ export class OpenThreadFailed extends Data.TaggedError("OpenThreadFailed")<{
 
 export interface HumanityTools {
   readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
+  /** The thread's terminal tools; `args` are the call's arguments, not yet checked. */
+  readonly terminal: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
 }
 
 const providers = AgentProvider.literals
@@ -113,6 +124,13 @@ const INVALID_PARAMS = -32602
 
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
+  if (typeof name === "string" && isTerminalToolName(name)) {
+    return Option.some(
+      Effect.map(tools.terminal(name, params["arguments"] ?? {}), (said) =>
+        toolText(said.text, said.isError),
+      ),
+    )
+  }
   if (name !== OPEN_THREAD_TOOL_NAME) return Option.none()
   const request = decodeOpenThread(params["arguments"] ?? {})
   if (Option.isNone(request)) {
@@ -165,7 +183,9 @@ const answer = (tools: HumanityTools, message: unknown): Effect.Effect<unknown> 
     case "ping":
       return Effect.succeed(result(id, {}))
     case "tools/list":
-      return Effect.succeed(result(id, { tools: [OPEN_THREAD_TOOL_DEFINITION] }))
+      return Effect.succeed(
+        result(id, { tools: [OPEN_THREAD_TOOL_DEFINITION, ...TERMINAL_TOOL_DEFINITIONS] }),
+      )
     case "tools/call":
       return Option.match(callTool(tools, params), {
         onNone: () =>
@@ -229,6 +249,7 @@ export class HumanityMcp extends Context.Service<
             type: "http",
             url,
             headers: { Authorization: `${BEARER}${token}` },
+            timeoutMs: HUMANITY_TOOL_TIMEOUT_MS,
           })),
         )
 

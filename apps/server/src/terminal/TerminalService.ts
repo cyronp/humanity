@@ -71,6 +71,8 @@ const CWD_SAVE_MS = 1_000
 
 /** One command the shell ran, between its OSC 133 C and D marks. */
 export interface CommandSpan {
+  /** 1-based, in the order the terminal's commands started. */
+  readonly ordinal: number
   /** The line the command's output starts at, kept as the buffer scrolls. */
   readonly start: Marker
   end: Marker | undefined
@@ -79,6 +81,40 @@ export interface CommandSpan {
 }
 
 type Patch = { -readonly [Key in keyof TerminalInfo]?: TerminalInfo[Key] }
+
+/** How many read positions the agent may hold in a terminal at once; older ones are forgotten. */
+const CURSORS_KEPT = 64
+/** How often a wait looks at the terminal again. */
+const WAIT_POLL = "100 millis"
+
+/** A place in a terminal's output the agent reads on from: a line, and the commands begun by then. */
+interface Cursor {
+  readonly marker: Marker
+  readonly commands: number
+}
+
+/** What the agent reads of a terminal. */
+export interface AgentRead {
+  readonly text: string
+  /** Where to read on from next time. */
+  readonly cursor: string
+  /** The cursor asked for was too old: what scrolled out of the scrollback is gone. */
+  readonly dropped: boolean
+  /** Only the last lines are in `text`. */
+  readonly truncated: boolean
+}
+
+export type WaitFor =
+  | { readonly _tag: "command" }
+  | { readonly _tag: "pattern"; readonly pattern: RegExp }
+  | { readonly _tag: "quiet"; readonly quietMs: number }
+
+export interface AgentWait extends AgentRead {
+  /** What ended the wait. `unsupported`: waiting for a command needs the shell's integration. */
+  readonly outcome: "command" | "pattern" | "quiet" | "timeout" | "exited" | "unsupported"
+  /** The command's exit code, when it was a command that ended. */
+  readonly exitCode: number | null
+}
 
 const TerminalRow = Schema.Struct({
   id: Schema.String,
@@ -130,6 +166,10 @@ interface Live {
   folder: string
   /** The commands the shell reported, oldest first. */
   readonly commands: Array<CommandSpan>
+  /** How many commands started since the shell did. */
+  commandsStarted: number
+  readonly cursors: Map<string, Cursor>
+  nextCursor: number
   cwdTimer: ReturnType<typeof setTimeout> | undefined
 }
 
@@ -191,6 +231,34 @@ export class TerminalService extends Context.Service<
      * showed; one running a command keeps running where it is, marked as left in the checkout.
      */
     readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
+
+    // For the agent's tools: they run as the agent, so a restored terminal starts its shell.
+    readonly info: (terminalId: string) => Effect.Effect<TerminalInfo, TerminalNotFound>
+    /** A cursor where the terminal's output is now, to read on from after typing. */
+    readonly agentCursor: (
+      terminalId: string,
+    ) => Effect.Effect<string, TerminalNotFound | TerminalSpawnFailed>
+    readonly agentRead: (
+      terminalId: string,
+      options: {
+        readonly view: "output" | "screen"
+        readonly since: string | undefined
+        readonly maxLines: number
+      },
+    ) => Effect.Effect<AgentRead, TerminalNotFound | TerminalSpawnFailed>
+    readonly agentWrite: (
+      terminalId: string,
+      data: string,
+    ) => Effect.Effect<void, TerminalNotFound | TerminalSpawnFailed>
+    readonly agentWait: (
+      terminalId: string,
+      options: {
+        readonly for: WaitFor
+        readonly since: string | undefined
+        readonly timeoutMs: number
+        readonly maxLines: number
+      },
+    ) => Effect.Effect<AgentWait, TerminalNotFound | TerminalSpawnFailed>
   }
 >()("humanity/TerminalService") {
   static readonly layer = (locate: () => LocateOptions = shellLocateOptions) =>
@@ -295,8 +363,15 @@ export class TerminalService extends Context.Service<
             case "CommandStart": {
               patch.busy = true
               const start = live.screen.marker()
+              live.commandsStarted++
               if (start !== undefined) {
-                live.commands.push({ start, end: undefined, exitCode: null, done: false })
+                live.commands.push({
+                  ordinal: live.commandsStarted,
+                  start,
+                  end: undefined,
+                  exitCode: null,
+                  done: false,
+                })
               }
               while (live.commands.length > COMMANDS_KEPT) live.commands.shift()?.start.dispose()
               break
@@ -532,6 +607,9 @@ export class TerminalService extends Context.Service<
             scrollback: options.scrollback,
             folder: options.folder,
             commands: [],
+            commandsStarted: 0,
+            cursors: new Map(),
+            nextCursor: 0,
             cwdTimer: undefined,
           }
           // The queries a program sends (cursor position, device attributes…) are answered here,
@@ -886,6 +964,164 @@ export class TerminalService extends Context.Service<
             }
           })
 
+        // The agent's reads -------------------------------------------------------------------
+
+        const ensureStarted = (live: Live) =>
+          live.info.state === "restored"
+            ? Effect.flatMap(folderFor(live), (folder) => startProcess(live, folder))
+            : Effect.void
+
+        /** Once the screen has parsed everything printed so far. */
+        const settled = (live: Live) =>
+          Effect.callback<void>((resume) => {
+            live.screen.write("", () => resume(Effect.void))
+          })
+
+        const buffer = (live: Live) => live.screen.terminal.buffer.active
+        const cursorLine = (live: Live) => buffer(live).baseY + buffer(live).cursorY
+
+        /** Lines `from` to `to` as text: a wrapped line joins the one before it. */
+        const linesText = (live: Live, from: number, to: number) => {
+          const lines: Array<string> = []
+          for (let y = Math.max(0, from); y <= to; y++) {
+            const line = buffer(live).getLine(y)
+            if (line === undefined) continue
+            const text = line.translateToString(true)
+            if (line.isWrapped && lines.length > 0) lines[lines.length - 1] += text
+            else lines.push(text)
+          }
+          while (lines.length > 0 && (lines.at(-1) ?? "").trim() === "") lines.pop()
+          return lines
+        }
+
+        const lastLines = (lines: ReadonlyArray<string>, maxLines: number) => ({
+          text: lines.slice(-maxLines).join("\n"),
+          truncated: lines.length > maxLines,
+        })
+
+        const newCursor = (live: Live): string => {
+          const marker = live.screen.marker()
+          const id = String(++live.nextCursor)
+          if (marker !== undefined) {
+            live.cursors.set(id, { marker, commands: live.commandsStarted })
+          }
+          while (live.cursors.size > CURSORS_KEPT) {
+            const oldest = live.cursors.keys().next().value
+            if (oldest === undefined) break
+            live.cursors.get(oldest)?.marker.dispose()
+            live.cursors.delete(oldest)
+          }
+          return id
+        }
+
+        /** Where a cursor points now; `dropped` when it was forgotten or scrolled away. */
+        const resolveCursor = (live: Live, since: string | undefined) => {
+          if (since === undefined) return undefined
+          const cursor = live.cursors.get(since)
+          return cursor === undefined || cursor.marker.line < 0
+            ? { line: 0, commands: live.commandsStarted, dropped: true }
+            : { line: cursor.marker.line, commands: cursor.commands, dropped: false }
+        }
+
+        const info = (terminalId: string) => Effect.map(find(terminalId), (live) => live.info)
+
+        const agentCursor = (terminalId: string) =>
+          Effect.gen(function* () {
+            const live = yield* find(terminalId)
+            yield* ensureStarted(live)
+            yield* settled(live)
+            return newCursor(live)
+          })
+
+        const agentRead = (
+          terminalId: string,
+          options: {
+            readonly view: "output" | "screen"
+            readonly since: string | undefined
+            readonly maxLines: number
+          },
+        ) =>
+          Effect.gen(function* () {
+            const live = yield* find(terminalId)
+            yield* ensureStarted(live)
+            yield* settled(live)
+            const end = cursorLine(live)
+            if (options.view === "screen") {
+              const top = buffer(live).baseY
+              const shown = lastLines(linesText(live, top, top + live.screen.rows() - 1), Infinity)
+              return { ...shown, cursor: newCursor(live), dropped: false }
+            }
+            const from = resolveCursor(live, options.since)
+            const lines = linesText(live, from?.line ?? end - options.maxLines + 1, end)
+            return {
+              ...lastLines(lines, options.maxLines),
+              cursor: newCursor(live),
+              dropped: from?.dropped ?? false,
+            } satisfies AgentRead
+          })
+
+        const agentWrite = (terminalId: string, data: string) =>
+          Effect.gen(function* () {
+            const live = yield* find(terminalId)
+            yield* ensureStarted(live)
+            live.pty?.write(data)
+          })
+
+        const agentWait = (
+          terminalId: string,
+          options: {
+            readonly for: WaitFor
+            readonly since: string | undefined
+            readonly timeoutMs: number
+            readonly maxLines: number
+          },
+        ) =>
+          Effect.gen(function* () {
+            const live = yield* find(terminalId)
+            yield* ensureStarted(live)
+            yield* settled(live)
+            const start = resolveCursor(live, options.since) ?? {
+              line: cursorLine(live),
+              commands: live.commandsStarted,
+              dropped: false,
+            }
+            const deadline = Date.now() + options.timeoutMs
+            let lastSeq = live.seq
+            let quietSince = Date.now()
+            const finish = (
+              outcome: AgentWait["outcome"],
+              exitCode: number | null = null,
+            ): AgentWait => ({
+              ...lastLines(linesText(live, start.line, cursorLine(live)), options.maxLines),
+              cursor: newCursor(live),
+              dropped: start.dropped,
+              outcome,
+              exitCode,
+            })
+            for (;;) {
+              yield* settled(live)
+              const wanted = options.for
+              if (wanted._tag === "command") {
+                if (!live.info.integration) return finish("unsupported")
+                const ended = live.commands.find(
+                  (command) => command.ordinal > start.commands && command.done,
+                )
+                if (ended !== undefined) return finish("command", ended.exitCode)
+              } else if (wanted._tag === "pattern") {
+                const text = linesText(live, start.line, cursorLine(live)).join("\n")
+                if (wanted.pattern.test(text)) return finish("pattern")
+              } else if (live.seq !== lastSeq) {
+                lastSeq = live.seq
+                quietSince = Date.now()
+              } else if (Date.now() - quietSince >= wanted.quietMs) {
+                return finish("quiet")
+              }
+              if (live.info.state === "exited") return finish("exited", live.info.exitCode)
+              if (Date.now() >= deadline) return finish("timeout")
+              yield* Effect.sleep(WAIT_POLL)
+            }
+          })
+
         return TerminalService.of({
           list,
           watch,
@@ -902,6 +1138,11 @@ export class TerminalService extends Context.Service<
           ),
           closeOwner,
           moveSession,
+          info,
+          agentCursor,
+          agentRead,
+          agentWrite,
+          agentWait,
         })
       }),
     )

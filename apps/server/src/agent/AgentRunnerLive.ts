@@ -144,7 +144,12 @@ const sdkMcpServers = (extensions: AgentExtensions): Record<string, McpServerCon
       name,
       server.type === "stdio"
         ? { type: "stdio", command: server.command, args: [...server.args], env: { ...server.env } }
-        : { type: server.type, url: server.url, headers: { ...server.headers } },
+        : {
+            type: server.type,
+            url: server.url,
+            headers: { ...server.headers },
+            ...(server.timeoutMs === undefined ? {} : { timeout: server.timeoutMs }),
+          },
     ]),
   )
 

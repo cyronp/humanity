@@ -90,6 +90,8 @@ export const makeFakePtyHost = (
   options: {
     /** Runs on each spawn, e.g. to print a prompt or fail. */
     readonly onSpawn?: (pty: FakePty) => void
+    /** Runs on each write, e.g. to play a shell that answers what is typed. */
+    readonly onWrite?: (pty: FakePty, data: string) => void
     readonly fail?: (options: PtySpawnOptions) => string | undefined
   } = {},
 ) => {
@@ -112,7 +114,10 @@ export const makeFakePtyHost = (
             get killed() {
               return exited
             },
-            write: (data) => void pty.written.push(data),
+            write: (data) => {
+              pty.written.push(data)
+              options.onWrite?.(pty, data)
+            },
             resize: (cols, rows) => void pty.sizes.push([cols, rows]),
             kill: () => pty.exit(null),
             onData: (listener) => void dataListeners.push(listener),

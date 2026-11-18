@@ -8,8 +8,32 @@ export const HUMANITY_MCP_SERVER = "humanity"
 
 export const OPEN_THREAD_TOOL_NAME = "open_thread"
 
-export const OPEN_THREAD_TOOL = `mcp__${HUMANITY_MCP_SERVER}__${OPEN_THREAD_TOOL_NAME}`
+/** A tool of Humanity's own MCP server, under the name every provider gives it. */
+export const humanityTool = (name: string) => `mcp__${HUMANITY_MCP_SERVER}__${name}`
 
+export const OPEN_THREAD_TOOL = humanityTool(OPEN_THREAD_TOOL_NAME)
+
+/** The agent's tools for its thread's terminals, on Humanity's MCP server. */
+export const TERMINAL_TOOL_NAMES = [
+  "terminal_list",
+  "terminal_read",
+  "terminal_send",
+  "terminal_wait",
+  "terminal_open",
+  "terminal_close",
+] as const
+export type TerminalToolName = (typeof TERMINAL_TOOL_NAMES)[number]
+
+export const TERMINAL_TOOLS: ReadonlyArray<string> = TERMINAL_TOOL_NAMES.map(humanityTool)
+
+export const isTerminalToolName = (name: string): name is TerminalToolName =>
+  TERMINAL_TOOL_NAMES.some((each) => each === name)
+
+/**
+ * The tools no provider asks about. Reads, and Humanity's own tools: `open_thread`, and the
+ * terminal tools, whose handler decides itself what types into a terminal, as `Bash`, in the
+ * thread's mode (a provider's own question would not show what is typed, on Codex).
+ */
 export const AUTO_TOOLS: ReadonlyArray<string> = [
   "Read",
   "Glob",
@@ -17,6 +41,7 @@ export const AUTO_TOOLS: ReadonlyArray<string> = [
   "TodoWrite",
   "Skill",
   OPEN_THREAD_TOOL,
+  ...TERMINAL_TOOLS,
 ]
 
 export const SHELL_TOOL = "Bash"

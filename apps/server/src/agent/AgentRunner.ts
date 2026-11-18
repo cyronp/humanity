@@ -14,6 +14,7 @@ export interface ToolPermissionRequest {
   readonly toolUseId: string
 }
 
+/** An MCP server given to the agent; `timeoutMs` bounds each tool call where the provider can. */
 export type AgentMcpServer =
   | {
       readonly type: "stdio"
@@ -25,6 +26,7 @@ export type AgentMcpServer =
       readonly type: "http" | "sse"
       readonly url: string
       readonly headers: Readonly<Record<string, string>>
+      readonly timeoutMs?: number | undefined
     }
 
 export interface AgentExtensions {
