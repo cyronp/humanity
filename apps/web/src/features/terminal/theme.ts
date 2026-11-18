@@ -110,5 +110,38 @@ export const terminalTheme = (element: Element, theme: ResolvedTheme): ITheme =>
   }
 }
 
-export const TERMINAL_FONT_FAMILY =
-  'ui-monospace, "Cascadia Mono", "Cascadia Code", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace'
+const NERD_FONTS = [
+  "JetBrainsMono Nerd Font Mono",
+  "JetBrainsMono NFM",
+  "JetBrainsMono Nerd Font",
+  "JetBrainsMono NF",
+  "CaskaydiaMono Nerd Font Mono",
+  "CaskaydiaCove Nerd Font Mono",
+  "CaskaydiaCove Nerd Font",
+  "MesloLGS Nerd Font Mono",
+  "MesloLGS NF",
+  "FiraCode Nerd Font Mono",
+  "FiraCode Nerd Font",
+  "Hack Nerd Font Mono",
+  "Hack Nerd Font",
+]
+
+const SYSTEM_FONTS = [
+  "ui-monospace",
+  "Cascadia Mono",
+  "Cascadia Code",
+  "SFMono-Regular",
+  "Menlo",
+  "Monaco",
+  "Consolas",
+  "Liberation Mono",
+]
+
+export const TERMINAL_FONT_FAMILY = [
+  ...NERD_FONTS,
+  ...SYSTEM_FONTS,
+  "Symbols Nerd Font Mono",
+  "monospace",
+]
+  .map((family) => (family.includes(" ") ? `"${family}"` : family))
+  .join(", ")
