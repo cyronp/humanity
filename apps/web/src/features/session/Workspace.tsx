@@ -106,6 +106,14 @@ export function Workspace({
           browser={browser}
           onToolChange={onToolChange}
           onClose={onClose}
+          onCapture={
+            canReference
+              ? {
+                  block: (text) => composer.current?.insert({ kind: "block", text }),
+                  attach: (files) => composer.current?.attach(files),
+                }
+              : undefined
+          }
           onReference={
             canReference
               ? (reference) => composer.current?.insert({ kind: "reference", reference })

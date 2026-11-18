@@ -1,7 +1,9 @@
 import type { PreviewColorScheme } from "@humanity/contracts"
-import { cn } from "cn"
 import {
   ArrowLeft,
+  Camera,
+  Crosshair,
+  PenLine,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -28,8 +30,13 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ZoomControl } from "./BrowserControls.tsx"
 import { Input } from "@/components/ui/input"
 import type { TabController, TabLive } from "./WebviewTab.tsx"
 
@@ -94,11 +101,17 @@ export function NavigationButtons({
 
 const SCHEME_ICON = { system: SunMoon, light: Sun, dark: Moon } as const
 
-/** Find, appearance, mute, DevTools, and a menu with the rarer actions. */
+/**
+ * The page's rarer tools in one menu, so the address bar keeps its room: zoom, find, appearance,
+ * mute, DevTools, a reload that skips the cache, the human's browser, and clearing the Browser's
+ * data.
+ */
 export function PageTools({
   live,
   control,
   url,
+  zoom,
+  onZoom,
   onFind,
   onClearData,
   onOpenOutside,
@@ -106,88 +119,87 @@ export function PageTools({
   readonly live: TabLive
   readonly control: () => TabController | undefined
   readonly url: string
+  readonly zoom: number
+  readonly onZoom: (zoom: number) => void
   readonly onFind: () => void
   readonly onClearData: () => void
   readonly onOpenOutside: () => void
 }) {
   const SchemeIcon = SCHEME_ICON[live.colorScheme]
+  const changed = live.colorScheme !== "system" || live.muted || zoom !== 1
   return (
-    <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Find in page"
-        title="Find in page (Ctrl+F)"
-        onClick={onFind}
-      >
-        <Search />
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Appearance"
-            title="Light or dark appearance"
-            className={cn(live.colorScheme !== "system" && "text-primary")}
-          >
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="More"
+          title="Zoom, find, appearance, DevTools and more"
+          className="relative"
+        >
+          <Ellipsis />
+          {changed && (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 right-1 size-1.5 rounded-full bg-primary"
+            />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <div className="flex items-center gap-1 px-2 py-1 text-sm">
+          <span className="flex-1">Zoom</span>
+          <ZoomControl zoom={zoom} onChange={onZoom} />
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onFind}>
+          <Search />
+          Find in page
+          <DropdownMenuShortcut>Ctrl+F</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
             <SchemeIcon />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel className="text-xs text-muted-foreground">
-            prefers-color-scheme
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={live.colorScheme}
-            onValueChange={(value) => control()?.setColorScheme(value as PreviewColorScheme)}
-          >
-            <DropdownMenuRadioItem value="system">Like the system</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={live.muted ? "Unmute" : "Mute"}
-        title={live.muted ? "Unmute" : "Mute"}
-        className={cn(live.muted && "text-primary")}
-        onClick={() => control()?.setMuted(!live.muted)}
-      >
-        {live.muted ? <VolumeX /> : <Volume2 />}
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="More" title="More">
-            <Ellipsis />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => control()?.devTools()}>
-            <Code />
-            Open DevTools
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => control()?.reload(true)}>
-            <RotateCw />
-            Reload, ignoring the cache
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onOpenOutside} title={url}>
-            <ExternalLink />
-            Open in my browser
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onClearData}>
-            <Eraser />
-            Clear cookies and cache
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+            Appearance
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              prefers-color-scheme
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={live.colorScheme}
+              onValueChange={(value) => control()?.setColorScheme(value as PreviewColorScheme)}
+            >
+              <DropdownMenuRadioItem value="system">Like the system</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuItem onSelect={() => control()?.setMuted(!live.muted)}>
+          {live.muted ? <VolumeX /> : <Volume2 />}
+          {live.muted ? "Unmute" : "Mute"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => control()?.devTools()}>
+          <Code />
+          Open DevTools
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => control()?.reload(true)}>
+          <RotateCw />
+          Reload, ignoring the cache
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenOutside} title={url}>
+          <ExternalLink />
+          Open in my browser
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onClearData}>
+          <Eraser />
+          Clear cookies and cache
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -255,5 +267,58 @@ export function FindBar({
         <X />
       </Button>
     </div>
+  )
+}
+
+/** Picks an element, or takes a screenshot (to attach, or to annotate first), for the message. */
+export function CaptureTools({
+  picking,
+  busy,
+  onPick,
+  onScreenshot,
+  onAnnotate,
+}: {
+  readonly picking: boolean
+  readonly busy: boolean
+  readonly onPick: () => void
+  readonly onScreenshot: () => void
+  readonly onAnnotate: () => void
+}) {
+  return (
+    <>
+      <Button
+        type="button"
+        variant={picking ? "secondary" : "ghost"}
+        size="icon-sm"
+        aria-label={picking ? "Stop picking" : "Pick an element"}
+        aria-pressed={picking}
+        title={picking ? "Stop picking (Esc in the page)" : "Pick an element for your message"}
+        onClick={onPick}
+      >
+        <Crosshair />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Screenshot"
+        title="Add a screenshot to your message"
+        disabled={busy}
+        onClick={onScreenshot}
+      >
+        <Camera />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Annotate a screenshot"
+        title="Draw on a screenshot, then add it to your message"
+        disabled={busy}
+        onClick={onAnnotate}
+      >
+        <PenLine />
+      </Button>
+    </>
   )
 }

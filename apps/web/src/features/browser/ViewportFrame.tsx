@@ -64,7 +64,9 @@ export function ViewportFrame({
     if (size === undefined) return
     event.preventDefault()
     const handle = event.currentTarget
-    handle.setPointerCapture(event.pointerId)
+    try {
+      handle.setPointerCapture(event.pointerId)
+    } catch {}
     const start = { x: event.clientX, y: event.clientY, ...size }
     const perPixel = zoom / frame.scale
     document.documentElement.dataset.resizing = edge === "bottom" ? "row" : "column"

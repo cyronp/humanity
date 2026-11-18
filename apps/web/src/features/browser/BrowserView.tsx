@@ -53,7 +53,15 @@ import {
   updateTab,
 } from "./browser.ts"
 import { desktopPreview } from "./desktop.ts"
-import { FindBar, NavigationButtons, PageTools } from "./DesktopTools.tsx"
+import { AnnotateDialog } from "./AnnotateDialog.tsx"
+import {
+  CANCEL_PICK_SCRIPT,
+  formatPickedElement,
+  imageFile,
+  PICKER_SCRIPT,
+  type PickedElement,
+} from "./capture.ts"
+import { CaptureTools, FindBar, NavigationButtons, PageTools } from "./DesktopTools.tsx"
 import { ServerList, useLocalServers } from "./ServerList.tsx"
 import type { BrowserState } from "./useBrowser.ts"
 import { ViewportFrame } from "./ViewportFrame.tsx"
@@ -72,16 +80,25 @@ const DOWNLOAD_NOTICE_MS = 6_000
  * tab is a frame of a local address. The Browser stays mounted while another shelf tool shows, so
  * switching tools doesn't reload its pages.
  */
+/** Where the Browser sends what it captures: the thread's composer. */
+export interface CaptureTarget {
+  readonly block: (text: string) => void
+  readonly attach: (files: ReadonlyArray<File>) => void
+}
+
 export function BrowserView({
   browser,
   shown,
   onClose,
   titlebarPadding,
+  onCapture,
 }: {
   readonly browser: BrowserState
   readonly shown: boolean
   readonly onClose: () => void
   readonly titlebarPadding: string
+  /** Absent while the thread takes no message. */
+  readonly onCapture?: CaptureTarget | undefined
 }) {
   const { memory, change, offers, terminalNames, onSeen } = browser
   const bridge = useMemo(() => desktopPreview(), [])
@@ -95,6 +112,9 @@ export function BrowserView({
   const [lives, setLives] = useState<Readonly<Record<string, TabLive>>>({})
   const [finding, setFinding] = useState(false)
   const [download, setDownload] = useState<string>()
+  const [picking, setPicking] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [annotating, setAnnotating] = useState<string>()
   const controllers = useRef(new Map<string, TabController>())
   const probe = useAtomSet(probeAtom, { mode: "promiseExit" })
   const latest = useRef(memory)
@@ -206,6 +226,54 @@ export function BrowserView({
   const control = () => (tabId === undefined ? undefined : controllers.current.get(tabId))
   const pageTabs = memory.tabs.filter((each) => each.url !== null)
 
+  const fail = (cause: unknown) =>
+    setError(cause instanceof Error ? cause.message : "The page could not be captured.")
+
+  const pick = async () => {
+    const page = control()
+    if (page === undefined || onCapture === undefined) return
+    if (picking) {
+      setPicking(false)
+      await page.execute(CANCEL_PICK_SCRIPT).catch(() => undefined)
+      return
+    }
+    setError(undefined)
+    setPicking(true)
+    page.focus()
+    try {
+      const picked = (await page.execute(PICKER_SCRIPT)) as PickedElement | null
+      if (picked !== null) onCapture.block(formatPickedElement(picked))
+    } catch (cause) {
+      fail(cause)
+    } finally {
+      setPicking(false)
+    }
+  }
+
+  const screenshot = async (annotate: boolean) => {
+    const guest = control()?.guestId()
+    if (bridge === undefined || guest === undefined || onCapture === undefined) return
+    setError(undefined)
+    setCapturing(true)
+    try {
+      const png = await bridge.capture(guest)
+      if (annotate) {
+        setAnnotating(URL.createObjectURL(new Blob([png.slice()], { type: "image/png" })))
+      } else {
+        onCapture.attach([await imageFile(png, "screenshot")])
+      }
+    } catch (cause) {
+      fail(cause)
+    } finally {
+      setCapturing(false)
+    }
+  }
+
+  const closeAnnotation = () => {
+    if (annotating !== undefined) URL.revokeObjectURL(annotating)
+    setAnnotating(undefined)
+  }
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (native && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
       event.preventDefault()
@@ -281,15 +349,28 @@ export function BrowserView({
               viewport={tab.viewport}
               onChange={(viewport) => change((memory) => updateTab(memory, tab.id, { viewport }))}
             />
-            <ZoomControl
-              zoom={tab.zoom}
-              onChange={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
-            />
+            {!native && (
+              <ZoomControl
+                zoom={tab.zoom}
+                onChange={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
+              />
+            )}
+            {native && tabUrl !== null && onCapture !== undefined && (
+              <CaptureTools
+                picking={picking}
+                busy={capturing}
+                onPick={() => void pick()}
+                onScreenshot={() => void screenshot(false)}
+                onAnnotate={() => void screenshot(true)}
+              />
+            )}
             {native && tabUrl !== null && (
               <PageTools
                 live={live}
                 control={control}
                 url={tabUrl}
+                zoom={tab.zoom}
+                onZoom={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
                 onFind={() => setFinding(true)}
                 onOpenOutside={() => openOutside(tabUrl)}
                 onClearData={() => {
@@ -300,6 +381,12 @@ export function BrowserView({
           </>
         )}
       </Toolbar>
+      <AnnotateDialog
+        key={annotating ?? "none"}
+        image={annotating}
+        onAttach={(file) => onCapture?.attach([file])}
+        onClose={closeAnnotation}
+      />
       {native && finding && tabUrl !== null && (
         <FindBar key={tab?.id} live={live} control={control} onClose={() => setFinding(false)} />
       )}

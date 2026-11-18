@@ -40,6 +40,8 @@ import { useFileMention } from "./useFileMention.ts"
 
 export interface ComposerHandle {
   readonly insert: (insertion: PromptInsertion) => void
+  /** Adds files to the message, as a drop or a paste does. */
+  readonly attach: (files: ReadonlyArray<File>) => void
 }
 
 export const Composer = memo(function Composer({
@@ -78,7 +80,7 @@ export const Composer = memo(function Composer({
   const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
-  useImperativeHandle(ref, () => ({ insert }))
+  useImperativeHandle(ref, () => ({ insert, attach: (added) => void files.add(added) }))
   const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
   const mentions = useFileMention({
     text,

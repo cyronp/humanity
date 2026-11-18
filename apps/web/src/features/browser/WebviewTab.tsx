@@ -50,6 +50,7 @@ export interface TabController {
   /** The page's id for the desktop bridge, once it is attached. */
   readonly guestId: () => number | undefined
   readonly execute: (code: string) => Promise<unknown>
+  readonly focus: () => void
 }
 
 interface WebviewEvent extends Event {
@@ -223,6 +224,7 @@ export function WebviewTab({
         void bridge.setColorScheme(webview.getWebContentsId(), colorScheme).catch(() => undefined)
       },
       guestId: () => (ready.current ? webview.getWebContentsId() : undefined),
+      focus: () => webview.focus(),
       execute: (code) =>
         ready.current
           ? webview.executeJavaScript(code, true)

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BrowserView } from "@/features/browser/BrowserView"
+import type { CaptureTarget } from "@/features/browser/BrowserView"
 import type { BrowserState } from "@/features/browser/useBrowser"
 import {
   publicationAtom,
@@ -174,6 +175,7 @@ export function ToolPanel({
   onToolChange,
   onClose,
   onReference,
+  onCapture,
 }: {
   readonly session: Session
   readonly activity: number
@@ -182,6 +184,7 @@ export function ToolPanel({
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
+  readonly onCapture?: CaptureTarget | undefined
 }) {
   const [browserMounted, setBrowserMounted] = useState(tool === "browser")
   if (tool === "browser" && !browserMounted) setBrowserMounted(true)
@@ -214,6 +217,7 @@ export function ToolPanel({
           shown={tool === "browser"}
           onClose={onClose}
           titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
+          onCapture={onCapture}
         />
       )}
     </div>
