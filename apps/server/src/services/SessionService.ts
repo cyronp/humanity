@@ -30,6 +30,7 @@ import {
   type PlanUsage,
   PlanUsageUnavailable,
   type Project,
+  ProjectId,
   type ProjectNotFound,
   type ProposedChange,
   PROVIDER_NAMES,
@@ -1121,7 +1122,7 @@ export class SessionService extends Context.Service<
         const session = yield* get(sessionId)
         yield* stopRun(sessionId)
         // Before the worktree goes: a shell still in it would keep Windows from deleting it.
-        yield* terminals.closeSession(sessionId)
+        yield* terminals.closeOwner({ _tag: "Session", sessionId: session.id })
         if (options.removeWorktree && isInsideDir(config.worktreesDir, session.worktreePath)) {
           const project = yield* projects.get(session.projectId).pipe(Effect.option)
           if (Option.isSome(project)) {
@@ -1202,9 +1203,15 @@ export class SessionService extends Context.Service<
           const sessions = yield* repo.listByProject(projectId)
           yield* Effect.forEach(
             sessions,
-            (session) => Effect.andThen(stopRun(session.id), terminals.closeSession(session.id)),
+            (session) =>
+              Effect.andThen(
+                stopRun(session.id),
+                terminals.closeOwner({ _tag: "Session", sessionId: session.id }),
+              ),
             { discard: true },
           )
+          // The project's own terminals, opened outside its threads, go with it.
+          yield* terminals.closeOwner({ _tag: "Project", projectId: ProjectId.make(projectId) })
         })
 
       const subscribe = (sessionId: string) =>

@@ -1,29 +1,44 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { SessionId } from "../domain/Session.ts"
-import { ShellInfo, TerminalAttachEvent, TerminalId, TerminalInfo } from "../domain/Terminal.ts"
-import { SessionEnded, SessionNotFound, TerminalNotFound, TerminalSpawnFailed } from "../Errors.ts"
+import {
+  ShellInfo,
+  TerminalAttachEvent,
+  TerminalId,
+  TerminalInfo,
+  TerminalOwner,
+} from "../domain/Terminal.ts"
+import {
+  ProjectNotFound,
+  SessionEnded,
+  SessionNotFound,
+  TerminalNotFound,
+  TerminalSpawnFailed,
+} from "../Errors.ts"
 
 const Size = { cols: Schema.Int, rows: Schema.Int }
+const OwnerNotFound = Schema.Union([SessionNotFound, ProjectNotFound])
 
 export const TerminalsRpcs = RpcGroup.make(
   Rpc.make("Terminals.list", {
-    payload: { sessionId: SessionId },
+    payload: { owner: TerminalOwner },
     success: Schema.Array(TerminalInfo),
-    error: SessionNotFound,
+    error: OwnerNotFound,
   }),
-  /** The thread's terminals now, then again whenever one opens, closes or changes. */
+  /** The owner's terminals now, then again whenever one opens, closes or changes. */
   Rpc.make("Terminals.watch", {
-    payload: { sessionId: SessionId },
+    payload: { owner: TerminalOwner },
     success: Schema.Array(TerminalInfo),
-    error: SessionNotFound,
+    error: OwnerNotFound,
     stream: true,
   }),
-  /** Opens a terminal in the thread's folder, with `shell` or the one picked in Settings. */
+  /**
+   * Opens a terminal in the owner's folder (the thread's, the project's checkout, or the home
+   * folder), with `shell` or the one picked in Settings.
+   */
   Rpc.make("Terminals.open", {
-    payload: { sessionId: SessionId, shell: Schema.NullOr(Schema.String) },
+    payload: { owner: TerminalOwner, shell: Schema.NullOr(Schema.String) },
     success: TerminalInfo,
-    error: Schema.Union([SessionNotFound, SessionEnded, TerminalSpawnFailed]),
+    error: Schema.Union([SessionNotFound, ProjectNotFound, SessionEnded, TerminalSpawnFailed]),
   }),
   Rpc.make("Terminals.close", {
     payload: { terminalId: TerminalId },

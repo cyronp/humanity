@@ -1,13 +1,18 @@
-import { type SessionId, TerminalId } from "@humanity/contracts"
+import { TerminalId, type TerminalOwner } from "@humanity/contracts"
 import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** A thread's terminals, kept up to date while something looks at them. */
-export const terminalsAtom = Atom.family((sessionId: SessionId) =>
+/**
+ * An owner's terminals, kept up to date while something looks at them. Keyed by the owner as
+ * JSON, so the same owner is the same atom.
+ */
+export const terminalsAtom = Atom.family((owner: string) =>
   HumanityClient.runtime.atom(
     Stream.unwrap(
-      HumanityClient.use((client) => Effect.succeed(client("Terminals.watch", { sessionId }))),
+      HumanityClient.use((client) =>
+        Effect.succeed(client("Terminals.watch", { owner: JSON.parse(owner) as TerminalOwner })),
+      ),
     ).pipe(Stream.retry(Schedule.spaced("1 second"))),
   ),
 )

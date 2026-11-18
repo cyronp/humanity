@@ -1,9 +1,11 @@
 import { assert, describe, it } from "@effect/vitest"
-import type { TerminalAttachEvent } from "@humanity/contracts"
+import type { SessionId, TerminalAttachEvent, TerminalOwner } from "@humanity/contracts"
 import { Effect, Exit, Fiber, Stream } from "effect"
 import { existsSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { ServerConfig } from "../src/ServerConfig.ts"
+import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { terminalEnvironment } from "../src/terminal/environment.ts"
 import { type FakePty, makeFakePtyHost } from "../src/terminal/PtyHost.ts"
@@ -12,6 +14,8 @@ import { addProject, eventually, services, setup, waitForStatus } from "./sessio
 
 const layerFor = (home: string, host = makeFakePtyHost()) =>
   services(home, () => [], undefined, undefined, undefined, undefined, host.layer)
+
+const thread = (sessionId: SessionId): TerminalOwner => ({ _tag: "Session", sessionId })
 
 const startThread = (repo: string) =>
   Effect.gen(function* () {
@@ -59,7 +63,7 @@ describe("TerminalService", () => {
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human" })
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
         assert.strictEqual(terminal.state, "running")
         assert.strictEqual(terminal.cwd, session.worktreePath)
         assert.strictEqual(terminal.ordinal, 1)
@@ -68,9 +72,12 @@ describe("TerminalService", () => {
         assert.isUndefined(pty.options.env["HUMANITY_SECRET_FOR_TEST"])
         assert.strictEqual(pty.options.env["TERM"], "xterm-256color")
 
-        const second = yield* terminals.open(session.id, { opener: "agent", title: "dev server" })
+        const second = yield* terminals.open(thread(session.id), {
+          opener: "agent",
+          title: "dev server",
+        })
         assert.strictEqual(second.ordinal, 2)
-        const listed = yield* terminals.list(session.id)
+        const listed = yield* terminals.list(thread(session.id))
         assert.deepStrictEqual(
           listed.map((info) => [info.ordinal, info.opener, info.title]),
           [
@@ -89,7 +96,7 @@ describe("TerminalService", () => {
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human" })
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
         const pty = lastPty(host.spawned)
         pty.print("before you looked\r\n")
         yield* Effect.sleep("30 millis")
@@ -124,7 +131,7 @@ describe("TerminalService", () => {
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human" })
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
         const pty = lastPty(host.spawned)
         const view = yield* attachTo(terminal.id)
 
@@ -156,7 +163,7 @@ describe("TerminalService", () => {
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human" })
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
         const view = yield* attachTo(terminal.id)
         lastPty(host.spawned).exit(3)
         yield* eventually(
@@ -165,7 +172,7 @@ describe("TerminalService", () => {
             view.events.some((event) => event._tag === "Exited") ? true : undefined,
           ),
         )
-        const [exited] = yield* terminals.list(session.id)
+        const [exited] = yield* terminals.list(thread(session.id))
         assert.strictEqual(exited?.state, "exited")
         assert.strictEqual(exited?.exitCode, 3)
 
@@ -183,7 +190,10 @@ describe("TerminalService", () => {
       const { sessionId, terminalId } = yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human", title: "server" })
+        const terminal = yield* terminals.open(thread(session.id), {
+          opener: "human",
+          title: "server",
+        })
         lastPty(first.spawned).print("worth keeping\r\n")
         yield* Effect.sleep("30 millis")
         return { sessionId: session.id, terminalId: terminal.id }
@@ -193,7 +203,7 @@ describe("TerminalService", () => {
       const second = makeFakePtyHost()
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
-        const [restored] = yield* terminals.list(sessionId)
+        const [restored] = yield* terminals.list(thread(sessionId))
         assert.strictEqual(restored?.id, terminalId)
         assert.strictEqual(restored?.state, "restored")
         assert.strictEqual(restored?.title, "server")
@@ -218,7 +228,7 @@ describe("TerminalService", () => {
           const sessions = yield* SessionService
           const config = yield* ServerConfig
           const session = yield* startThread(repo)
-          const terminal = yield* terminals.open(session.id, { opener: "human" })
+          const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
           const view = yield* attachTo(terminal.id)
           lastPty(host.spawned).print("soon gone")
           yield* Effect.sleep("6 seconds")
@@ -226,10 +236,10 @@ describe("TerminalService", () => {
 
           yield* sessions.end(session.id, { removeWorktree: false })
           assert.isTrue(lastPty(host.spawned).killed)
-          assert.deepStrictEqual(yield* terminals.list(session.id), [])
+          assert.deepStrictEqual(yield* terminals.list(thread(session.id)), [])
           assert.isFalse(existsSync(join(config.terminalsDir, session.id)))
           yield* Fiber.join(view.fiber)
-          const opened = yield* Effect.exit(terminals.open(session.id, { opener: "human" }))
+          const opened = yield* Effect.exit(terminals.open(thread(session.id), { opener: "human" }))
           assert.isTrue(Exit.isFailure(opened), "an ended thread opens no terminal")
         }).pipe(Effect.provide(layerFor(home, host)))
       }),
@@ -243,14 +253,89 @@ describe("TerminalService", () => {
       yield* Effect.gen(function* () {
         const terminals = yield* TerminalService
         const session = yield* startThread(repo)
-        const terminal = yield* terminals.open(session.id, { opener: "human" })
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
         const view = yield* attachTo(terminal.id)
         yield* terminals.close(terminal.id)
         yield* Fiber.join(view.fiber)
         assert.isTrue(lastPty(host.spawned).killed)
-        assert.deepStrictEqual(yield* terminals.list(session.id), [])
+        assert.deepStrictEqual(yield* terminals.list(thread(session.id)), [])
         const again = yield* Effect.exit(terminals.write(terminal.id, "x"))
         assert.isTrue(Exit.isFailure(again))
+      }).pipe(Effect.provide(layerFor(home, host)))
+    }),
+  )
+})
+
+describe("TerminalService outside a thread", () => {
+  it.live("opens a project's terminals in its checkout, apart from its threads'", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const first = makeFakePtyHost()
+      const { owner, terminalId } = yield* Effect.gen(function* () {
+        const terminals = yield* TerminalService
+        const project = yield* addProject(repo)
+        const owner: TerminalOwner = { _tag: "Project", projectId: project.id }
+        const terminal = yield* terminals.open(owner, { opener: "human" })
+        assert.deepStrictEqual(terminal.owner, owner)
+        assert.strictEqual(terminal.cwd, project.localPath)
+        assert.strictEqual(lastPty(first.spawned).options.cwd, project.localPath)
+        lastPty(first.spawned).print("from the checkout\r\n")
+        yield* Effect.sleep("30 millis")
+
+        const sessions = yield* SessionService
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
+        yield* waitForStatus(session.id, "idle")
+        assert.deepStrictEqual(
+          yield* terminals.list(thread(session.id)),
+          [],
+          "a thread starts with none",
+        )
+        const own = yield* terminals.open(thread(session.id), { opener: "human" })
+        assert.strictEqual(own.ordinal, 1)
+        assert.deepStrictEqual(
+          (yield* terminals.list(owner)).map((info) => info.id),
+          [terminal.id],
+          "starting a thread leaves the project's terminals where they are",
+        )
+        return { owner, terminalId: terminal.id }
+      }).pipe(Effect.provide(layerFor(home, first)), Effect.scoped)
+
+      const second = makeFakePtyHost()
+      yield* Effect.gen(function* () {
+        const terminals = yield* TerminalService
+        const sessions = yield* SessionService
+        const projects = yield* ProjectService
+        const [restored] = yield* terminals.list(owner)
+        assert.strictEqual(restored?.id, terminalId)
+        assert.strictEqual(restored?.state, "restored")
+        const view = yield* attachTo(terminalId)
+        assert.include(text(view.events), "from the checkout")
+
+        if (owner._tag !== "Project") return assert.fail("a project's terminal")
+        yield* sessions.stopProject(owner.projectId)
+        yield* projects.remove(owner.projectId)
+        yield* Fiber.join(view.fiber)
+        assert.isTrue(lastPty(second.spawned).killed, "removing the project closes them")
+        const listed = yield* Effect.exit(terminals.list(owner))
+        assert.isTrue(Exit.isFailure(listed), "a removed project has no terminals to list")
+      }).pipe(Effect.provide(layerFor(home, second)))
+    }),
+  )
+
+  it.live("opens the human's own terminals in their home folder before any project", () =>
+    Effect.gen(function* () {
+      const { home } = yield* setup()
+      const host = makeFakePtyHost()
+      yield* Effect.gen(function* () {
+        const terminals = yield* TerminalService
+        const owner: TerminalOwner = { _tag: "Home" }
+        const terminal = yield* terminals.open(owner, { opener: "human" })
+        assert.strictEqual(terminal.cwd, homedir())
+        assert.strictEqual(lastPty(host.spawned).options.cwd, homedir())
+        assert.deepStrictEqual(
+          (yield* terminals.list(owner)).map((info) => info.id),
+          [terminal.id],
+        )
       }).pipe(Effect.provide(layerFor(home, host)))
     }),
   )

@@ -6,10 +6,9 @@ export const TerminalsHandlers = TerminalsRpcs.toLayer(
   Effect.gen(function* () {
     const terminals = yield* TerminalService
     return TerminalsRpcs.of({
-      "Terminals.list": ({ sessionId }) => terminals.list(sessionId),
-      "Terminals.watch": ({ sessionId }) => terminals.watch(sessionId),
-      "Terminals.open": ({ sessionId, shell }) =>
-        terminals.open(sessionId, { opener: "human", shell }),
+      "Terminals.list": ({ owner }) => terminals.list(owner),
+      "Terminals.watch": ({ owner }) => terminals.watch(owner),
+      "Terminals.open": ({ owner, shell }) => terminals.open(owner, { opener: "human", shell }),
       "Terminals.close": ({ terminalId }) => terminals.close(terminalId),
       "Terminals.rename": ({ terminalId, title }) => terminals.rename(terminalId, title),
       "Terminals.restart": ({ terminalId }) => terminals.restart(terminalId),

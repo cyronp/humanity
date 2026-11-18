@@ -1,8 +1,33 @@
 import { Schema } from "effect"
+import { ProjectId } from "./Project.ts"
 import { SessionId } from "./Session.ts"
 
 export const TerminalId = Schema.String.pipe(Schema.brand("TerminalId"))
 export type TerminalId = typeof TerminalId.Type
+
+/**
+ * Whose terminals they are: a thread's, opened in its folder; a project's, opened in its checkout
+ * outside any thread; or, before any project was added, the human's own, opened in their home
+ * folder. Only a thread's terminals are ever its agent's to use.
+ */
+export const TerminalOwner = Schema.TaggedUnion({
+  Session: { sessionId: SessionId },
+  Project: { projectId: ProjectId },
+  Home: {},
+})
+export type TerminalOwner = typeof TerminalOwner.Type
+
+/** One string per owner, the same on both sides: what its terminals are grouped and saved under. */
+export const terminalOwnerKey = (owner: TerminalOwner): string => {
+  switch (owner._tag) {
+    case "Session":
+      return owner.sessionId
+    case "Project":
+      return `project-${owner.projectId}`
+    case "Home":
+      return "home"
+  }
+}
 
 /** Who opened a terminal: the human from the dock, or the agent through Humanity's tools. */
 export const TerminalOpener = Schema.Literals(["human", "agent"])
@@ -21,8 +46,8 @@ export type TerminalLocation = typeof TerminalLocation.Type
 
 export const TerminalInfo = Schema.Struct({
   id: TerminalId,
-  sessionId: SessionId,
-  /** 1-based, in the order the thread's terminals were opened; names an untitled terminal. */
+  owner: TerminalOwner,
+  /** 1-based, in the order its owner's terminals were opened; names an untitled terminal. */
   ordinal: Schema.Number,
   /** A title the human or the agent gave it; `null` shows the folder it is in. */
   title: Schema.NullOr(Schema.String),

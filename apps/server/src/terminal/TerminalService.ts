@@ -1,5 +1,6 @@
 import {
-  type Session,
+  type ProjectId,
+  type ProjectNotFound,
   SessionEnded,
   type SessionId,
   SessionNotFound,
@@ -9,6 +10,8 @@ import {
   type TerminalInfo,
   TerminalNotFound,
   type TerminalOpener,
+  TerminalOwner,
+  terminalOwnerKey,
   TerminalSpawnFailed,
 } from "@humanity/contracts"
 import {
@@ -26,11 +29,13 @@ import {
 } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import type { LocateOptions } from "../agent/installedCli.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { PreferencesService } from "../services/PreferencesService.ts"
+import { ProjectService } from "../services/ProjectService.ts"
 import { terminalEnvironment } from "./environment.ts"
 import { PtyHost, type PtyProcess } from "./PtyHost.ts"
 import { makeScreen, restartMarker, type Screen } from "./screen.ts"
@@ -53,7 +58,8 @@ const SAVE_INTERVAL = "5 seconds"
 
 const TerminalRow = Schema.Struct({
   id: Schema.String,
-  session_id: Schema.String,
+  session_id: Schema.NullOr(Schema.String),
+  project_id: Schema.NullOr(Schema.String),
   ordinal: Schema.Number,
   title: Schema.NullOr(Schema.String),
   opener: Schema.Literals(["human", "agent"]),
@@ -104,19 +110,28 @@ export interface OpenTerminalOptions {
   readonly rows?: number | undefined
 }
 
+type OwnerNotFound = SessionNotFound | ProjectNotFound
+
+const ownerOfRow = (row: TerminalRow): TerminalOwner =>
+  row.session_id !== null
+    ? { _tag: "Session", sessionId: row.session_id as SessionId }
+    : row.project_id !== null
+      ? { _tag: "Project", projectId: row.project_id as ProjectId }
+      : { _tag: "Home" }
+
 export class TerminalService extends Context.Service<
   TerminalService,
   {
     readonly list: (
-      sessionId: string,
-    ) => Effect.Effect<ReadonlyArray<TerminalInfo>, SessionNotFound>
+      owner: TerminalOwner,
+    ) => Effect.Effect<ReadonlyArray<TerminalInfo>, OwnerNotFound>
     readonly watch: (
-      sessionId: string,
-    ) => Stream.Stream<ReadonlyArray<TerminalInfo>, SessionNotFound>
+      owner: TerminalOwner,
+    ) => Stream.Stream<ReadonlyArray<TerminalInfo>, OwnerNotFound>
     readonly open: (
-      sessionId: string,
+      owner: TerminalOwner,
       options: OpenTerminalOptions,
-    ) => Effect.Effect<TerminalInfo, SessionNotFound | SessionEnded | TerminalSpawnFailed>
+    ) => Effect.Effect<TerminalInfo, OwnerNotFound | SessionEnded | TerminalSpawnFailed>
     readonly close: (terminalId: string) => Effect.Effect<void, TerminalNotFound>
     readonly rename: (
       terminalId: string,
@@ -138,8 +153,8 @@ export class TerminalService extends Context.Service<
     ) => Effect.Effect<void, TerminalNotFound>
     readonly ack: (terminalId: string, attachmentId: string, seq: number) => Effect.Effect<void>
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
-    /** Closes every terminal of a thread and deletes what was saved of them. */
-    readonly closeSession: (sessionId: string) => Effect.Effect<void>
+    /** Closes every terminal of a thread or a project and deletes what was saved of them. */
+    readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
   }
 >()("humanity/TerminalService") {
   static readonly layer = (locate: () => LocateOptions = shellLocateOptions) =>
@@ -151,39 +166,82 @@ export class TerminalService extends Context.Service<
         const config = yield* ServerConfig
         const repo = yield* SessionRepo
         const preferences = yield* PreferencesService
+        const projects = yield* ProjectService
         const host = yield* PtyHost
 
         const lives = new Map<string, Live>()
-        const loadedSessions = new Set<string>()
+        /** The owners whose saved terminals were read back since the daemon started. */
+        const loadedOwners = new Set<string>()
+        /** Publishes the key of an owner whose terminals changed. */
         const changes = yield* PubSub.unbounded<string>()
 
-        const folderOf = (sessionId: string) => join(config.terminalsDir, sessionId)
-        const snapshotPath = (info: Pick<TerminalInfo, "sessionId" | "id">) =>
-          join(folderOf(info.sessionId), `${info.id}.snap`)
+        const folderOf = (ownerKey: string) => join(config.terminalsDir, ownerKey)
+        const snapshotPath = (info: Pick<TerminalInfo, "owner" | "id">) =>
+          join(folderOf(terminalOwnerKey(info.owner)), `${info.id}.snap`)
 
         const rowsOf = SqlSchema.findAll({
-          Request: Schema.String,
+          Request: TerminalOwner,
           Result: TerminalRow,
-          execute: (sessionId) =>
-            sql`SELECT * FROM terminals WHERE session_id = ${sessionId} ORDER BY ordinal`,
+          execute: (owner) => {
+            switch (owner._tag) {
+              case "Session":
+                return sql`
+                  SELECT * FROM terminals WHERE session_id = ${owner.sessionId} ORDER BY ordinal
+                `
+              case "Project":
+                return sql`
+                  SELECT * FROM terminals WHERE project_id = ${owner.projectId} ORDER BY ordinal
+                `
+              case "Home":
+                return sql`
+                  SELECT * FROM terminals WHERE session_id IS NULL AND project_id IS NULL
+                  ORDER BY ordinal
+                `
+            }
+          },
         })
 
         const shellsNow = (): ReadonlyArray<Shell> => detectShells(locate())
 
-        const changed = (sessionId: string) => void PubSub.publishUnsafe(changes, sessionId)
+        const changed = (owner: TerminalOwner) =>
+          void PubSub.publishUnsafe(changes, terminalOwnerKey(owner))
 
         const update = (live: Live, patch: Partial<TerminalInfo>) => {
           live.info = { ...live.info, ...patch }
-          changed(live.info.sessionId)
+          changed(live.info.owner)
         }
 
-        const sessionOf = (sessionId: string) =>
-          Effect.flatMap(repo.get(sessionId), (found) =>
-            Option.match(found, {
-              onNone: () => Effect.fail(new SessionNotFound({ sessionId })),
-              onSome: (session) => Effect.succeed(session),
-            }),
-          )
+        const isOwnedBy = (live: Live, ownerKey: string) =>
+          terminalOwnerKey(live.info.owner) === ownerKey
+
+        /**
+         * Where the owner's terminals open: the thread's folder, the project's checkout, or the
+         * home folder; and whether it can open any more (a thread that ended cannot).
+         */
+        const placeOf = (
+          owner: TerminalOwner,
+        ): Effect.Effect<{ readonly folder: string; readonly ended: boolean }, OwnerNotFound> => {
+          switch (owner._tag) {
+            case "Session":
+              return Effect.flatMap(repo.get(owner.sessionId), (found) =>
+                Option.match(found, {
+                  onNone: () => Effect.fail(new SessionNotFound({ sessionId: owner.sessionId })),
+                  onSome: (session) =>
+                    Effect.succeed({
+                      folder: session.worktreePath,
+                      ended: session.status === "ended",
+                    }),
+                }),
+              )
+            case "Project":
+              return Effect.map(projects.get(owner.projectId), (project) => ({
+                folder: project.localPath,
+                ended: false,
+              }))
+            case "Home":
+              return Effect.sync(() => ({ folder: homedir(), ended: false }))
+          }
+        }
 
         // Output -------------------------------------------------------------------------------
 
@@ -345,7 +403,9 @@ export class TerminalService extends Context.Service<
             live.dirty = false
             const path = snapshotPath(live.info)
             const temporary = `${path}.${process.pid}.tmp`
-            yield* fs.makeDirectory(folderOf(live.info.sessionId), { recursive: true })
+            yield* fs.makeDirectory(folderOf(terminalOwnerKey(live.info.owner)), {
+              recursive: true,
+            })
             yield* fs.writeFileString(temporary, live.screen.serialize())
             yield* fs.rename(temporary, path)
           }).pipe(
@@ -361,11 +421,12 @@ export class TerminalService extends Context.Service<
         const readSnapshot = (info: TerminalInfo) =>
           fs.readFileString(snapshotPath(info)).pipe(Effect.orElseSucceed(() => ""))
 
-        const ensureLoaded = (sessionId: string) =>
+        const ensureLoaded = (owner: TerminalOwner) =>
           Effect.gen(function* () {
-            if (loadedSessions.has(sessionId)) return
-            loadedSessions.add(sessionId)
-            const rows = yield* rowsOf(sessionId).pipe(Effect.orDie)
+            const key = terminalOwnerKey(owner)
+            if (loadedOwners.has(key)) return
+            loadedOwners.add(key)
+            const rows = yield* rowsOf(owner).pipe(Effect.orDie)
             if (rows.length === 0) return
             const { scrollback } = yield* preferences.terminal
             const shells = shellsNow()
@@ -383,7 +444,7 @@ export class TerminalService extends Context.Service<
 
         const infoOf = (row: TerminalRow, shells: ReadonlyArray<Shell>): TerminalInfo => ({
           id: TerminalId.make(row.id),
-          sessionId: row.session_id as SessionId,
+          owner: ownerOfRow(row),
           ordinal: row.ordinal,
           title: row.title,
           opener: row.opener,
@@ -408,7 +469,7 @@ export class TerminalService extends Context.Service<
             lives.delete(live.info.id)
             yield* sql`DELETE FROM terminals WHERE id = ${live.info.id}`.pipe(Effect.orDie)
             yield* fs.remove(snapshotPath(live.info), { force: true }).pipe(Effect.ignore)
-            changed(live.info.sessionId)
+            changed(live.info.owner)
           })
 
         yield* Effect.addFinalizer(() =>
@@ -440,38 +501,43 @@ export class TerminalService extends Context.Service<
               : Effect.succeed(live)
           })
 
-        const list = (sessionId: string) =>
+        const list = (owner: TerminalOwner) =>
           Effect.gen(function* () {
-            yield* sessionOf(sessionId)
-            yield* ensureLoaded(sessionId)
+            yield* placeOf(owner)
+            yield* ensureLoaded(owner)
+            const key = terminalOwnerKey(owner)
             return [...lives.values()]
-              .filter((live) => live.info.sessionId === sessionId)
+              .filter((live) => isOwnedBy(live, key))
               .map((live) => live.info)
               .sort((a, b) => a.ordinal - b.ordinal)
           })
 
-        const watch = (sessionId: string) =>
+        const watch = (owner: TerminalOwner) =>
           Stream.unwrap(
             Effect.gen(function* () {
               const subscription = yield* PubSub.subscribe(changes)
-              const first = yield* list(sessionId)
+              const first = yield* list(owner)
+              const key = terminalOwnerKey(owner)
               return Stream.concat(
                 Stream.make(first),
                 Stream.fromSubscription(subscription).pipe(
-                  Stream.filter((changedSession) => changedSession === sessionId),
-                  Stream.mapEffect(() => list(sessionId)),
+                  Stream.filter((changedOwner) => changedOwner === key),
+                  Stream.mapEffect(() => list(owner)),
                 ),
               )
             }),
           )
 
         const open = Effect.fn("TerminalService.open")(function* (
-          sessionId: string,
+          owner: TerminalOwner,
           options: OpenTerminalOptions,
         ) {
-          const session: Session = yield* sessionOf(sessionId)
-          if (session.status === "ended") return yield* new SessionEnded({ sessionId })
-          yield* ensureLoaded(sessionId)
+          const place = yield* placeOf(owner)
+          if (place.ended && owner._tag === "Session") {
+            return yield* new SessionEnded({ sessionId: owner.sessionId })
+          }
+          yield* ensureLoaded(owner)
+          const key = terminalOwnerKey(owner)
           const preferred = yield* preferences.terminal
           const shells = shellsNow()
           const shell = pickShell(shells, options.shell ?? preferred.shell)
@@ -485,18 +551,18 @@ export class TerminalService extends Context.Service<
             Math.max(
               0,
               ...[...lives.values()]
-                .filter((live) => live.info.sessionId === sessionId)
+                .filter((live) => isOwnedBy(live, key))
                 .map((live) => live.info.ordinal),
             ) + 1
           const info: TerminalInfo = {
             id: TerminalId.make(randomUUID()),
-            sessionId: session.id,
+            owner,
             ordinal,
             title: options.title ?? null,
             opener: options.opener,
             shell: shell.id,
             shellName: shell.name,
-            cwd: session.worktreePath,
+            cwd: place.folder,
             location: "folder",
             state: "starting",
             exitCode: null,
@@ -509,16 +575,19 @@ export class TerminalService extends Context.Service<
             cols: options.cols ?? DEFAULT_COLS,
             rows: options.rows ?? DEFAULT_ROWS,
           })
-          yield* startProcess(live, session.worktreePath).pipe(
+          yield* startProcess(live, place.folder).pipe(
             Effect.tapError(() => Effect.sync(() => live.screen.dispose())),
           )
           lives.set(info.id, live)
           yield* sql`
-            INSERT INTO terminals (id, session_id, ordinal, title, opener, shell, cwd, created_at)
-            VALUES (${info.id}, ${info.sessionId}, ${info.ordinal}, ${info.title}, ${info.opener},
-              ${live.info.shell}, ${live.info.cwd}, ${info.createdAt})
+            INSERT INTO terminals
+              (id, session_id, project_id, ordinal, title, opener, shell, cwd, created_at)
+            VALUES (${info.id}, ${owner._tag === "Session" ? owner.sessionId : null},
+              ${owner._tag === "Project" ? owner.projectId : null}, ${info.ordinal},
+              ${info.title}, ${info.opener}, ${live.info.shell}, ${live.info.cwd},
+              ${info.createdAt})
           `.pipe(Effect.orDie)
-          changed(sessionId)
+          changed(owner)
           return live.info
         })
 
@@ -536,9 +605,10 @@ export class TerminalService extends Context.Service<
             return live.info
           })
 
+        /** Where a shell starts again when the folder it was last in is gone. */
         const folderFor = (live: Live) =>
-          Effect.map(repo.get(live.info.sessionId), (found) =>
-            Option.match(found, { onNone: () => live.info.cwd, onSome: (s) => s.worktreePath }),
+          Effect.map(Effect.option(placeOf(live.info.owner)), (place) =>
+            Option.match(place, { onNone: () => live.info.cwd, onSome: ({ folder }) => folder }),
           )
 
         const restart = (terminalId: string) =>
@@ -611,16 +681,17 @@ export class TerminalService extends Context.Service<
             }
           })
 
-        const closeSession = (sessionId: string) =>
+        const closeOwner = (owner: TerminalOwner) =>
           Effect.gen(function* () {
+            const key = terminalOwnerKey(owner)
             for (const live of [...lives.values()]) {
-              if (live.info.sessionId === sessionId) yield* remove(live)
+              if (isOwnedBy(live, key)) yield* remove(live)
             }
-            yield* sql`DELETE FROM terminals WHERE session_id = ${sessionId}`.pipe(Effect.orDie)
-            yield* fs
-              .remove(folderOf(sessionId), { recursive: true, force: true })
-              .pipe(Effect.ignore)
-            loadedSessions.delete(sessionId)
+            yield* Effect.forEach(yield* rowsOf(owner).pipe(Effect.orDie), (row) =>
+              sql`DELETE FROM terminals WHERE id = ${row.id}`.pipe(Effect.orDie),
+            )
+            yield* fs.remove(folderOf(key), { recursive: true, force: true }).pipe(Effect.ignore)
+            loadedOwners.delete(key)
           })
 
         return TerminalService.of({
@@ -637,7 +708,7 @@ export class TerminalService extends Context.Service<
           shells: Effect.sync(() =>
             shellsNow().map(({ id, name, path }): ShellInfo => ({ id, name, path })),
           ),
-          closeSession,
+          closeOwner,
         })
       }),
     )

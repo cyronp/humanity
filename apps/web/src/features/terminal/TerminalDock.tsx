@@ -1,9 +1,10 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import {
   DEFAULT_TERMINAL_PREFERENCES,
-  type Session,
   type TerminalInfo,
   terminalLabel,
+  type TerminalOwner,
+  terminalOwnerKey,
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { Cause, Exit } from "effect"
@@ -56,28 +57,33 @@ export interface DockCommands {
 }
 
 /**
- * The thread's terminals, as tabs, under the chat. Opening the dock on a thread that has none
- * opens one.
+ * The owner's terminals (a thread's, or a project's outside any thread), as tabs, under the
+ * chat. Opening the dock on an owner that has none opens one.
  */
 export function TerminalDock({
-  session,
+  owner,
+  unavailable,
   onHide,
   commandsRef,
   newTerminalRequest,
 }: {
-  readonly session: Session
+  readonly owner: TerminalOwner
+  /** Why no terminal can be opened here now (a thread that ended), or nothing when one can. */
+  readonly unavailable?: string | undefined
   readonly onHide: () => void
   readonly commandsRef: { current: DockCommands | null }
   /** Goes up each time the human asks for one more terminal. */
   readonly newTerminalRequest: number
 }) {
-  const result = useAtomValue(terminalsAtom(session.id))
+  const ownerKey = terminalOwnerKey(owner)
+  const ownerJson = JSON.stringify(owner)
+  const result = useAtomValue(terminalsAtom(ownerJson))
   const terminals = AsyncResult.isSuccess(result) ? result.value : undefined
   const preferencesResult = useAtomValue(terminalPreferencesAtom)
   const preferences = AsyncResult.isSuccess(preferencesResult)
     ? preferencesResult.value
     : DEFAULT_TERMINAL_PREFERENCES
-  const [wanted, setWanted] = useState(() => lastActiveTerminal(session.id))
+  const [wanted, setWanted] = useState(() => lastActiveTerminal(ownerKey))
   const active = terminals === undefined ? undefined : pickActive(terminals, wanted)
   const [error, setError] = useState<string>()
   /** The terminal the find bar searches, while it is open. */
@@ -90,7 +96,7 @@ export function TerminalDock({
     readonly view: TerminalViewHandle | undefined
   }>()
   const views = useRef(new Map<string, TerminalViewHandle>())
-  const canOpen = session.status !== "ended"
+  const canOpen = unavailable === undefined
 
   const open = useAtomSet(openTerminalAtom, { mode: "promiseExit" })
   const close = useAtomSet(closeTerminalAtom, { mode: "promiseExit" })
@@ -101,9 +107,9 @@ export function TerminalDock({
     (terminalId: string | undefined) => {
       if (terminalId === undefined) return
       setWanted(terminalId)
-      rememberActiveTerminal(session.id, terminalId)
+      rememberActiveTerminal(ownerKey, terminalId)
     },
-    [session.id],
+    [ownerKey],
   )
 
   const opening = useRef(false)
@@ -112,12 +118,12 @@ export function TerminalDock({
       if (opening.current) return
       opening.current = true
       setError(undefined)
-      const exit = await open({ payload: { sessionId: session.id, shell } })
+      const exit = await open({ payload: { owner: JSON.parse(ownerJson) as TerminalOwner, shell } })
       opening.current = false
       if (Exit.isSuccess(exit)) show(exit.value.id)
       else setError(failureMessage(exit))
     },
-    [open, session.id, show],
+    [open, ownerJson, show],
   )
 
   // A dock opened on a thread with no terminal starts one, once; Ctrl+Shift+` asks for one more.
@@ -151,7 +157,7 @@ export function TerminalDock({
     if (terminals !== undefined && terminals.length <= 1) onHide()
   }
 
-  /** Closes every terminal of the thread, stopping what runs in them, and the dock with them. */
+  /** Closes every terminal here, stopping what runs in them, and the dock with them. */
   const closeAll = async () => {
     setError(undefined)
     const exits = await Promise.all(
@@ -264,7 +270,7 @@ export function TerminalDock({
         ))}
         {terminals !== undefined && terminals.length === 0 && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {canOpen ? "Opening a terminal…" : "This thread has ended."}
+            {unavailable ?? "Opening a terminal…"}
           </div>
         )}
         {current?.state === "exited" && (

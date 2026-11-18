@@ -74,44 +74,80 @@ export function ToolRail({
   )
 
   return (
+    <RailFrame>
+      {SHELF_TOOLS.map((tool) => {
+        const active = shelf.open && shelf.tool === tool
+        const badge = badges[tool]
+        return (
+          <Tooltip key={tool}>
+            <TooltipTrigger asChild>
+              <Button
+                variant={active ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label={SHELF_LABELS[tool]}
+                aria-pressed={active}
+                onClick={() => onSelect(tool)}
+                className={cn("relative", !active && "text-muted-foreground")}
+              >
+                {ICONS[tool]}
+                {badge !== undefined && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {badge === undefined
+                ? SHELF_LABELS[tool]
+                : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
+            </TooltipContent>
+          </Tooltip>
+        )
+      })}
+    </RailFrame>
+  )
+}
+
+/**
+ * The rail where there is no thread (the new-thread page): every tool works on a thread's branch
+ * and folder, so each is shown, and disabled.
+ */
+export function IdleToolRail() {
+  return (
+    <RailFrame>
+      {SHELF_TOOLS.map((tool) => (
+        <Tooltip key={tool}>
+          <TooltipTrigger asChild>
+            {/* A disabled button gets no pointer events: its wrapper shows the tooltip. */}
+            <span tabIndex={0} className="rounded-md">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={SHELF_LABELS[tool]}
+                disabled
+                className="text-muted-foreground"
+              >
+                {ICONS[tool]}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="left">{`${SHELF_LABELS[tool]}: start a thread to use it`}</TooltipContent>
+        </Tooltip>
+      ))}
+    </RailFrame>
+  )
+}
+
+function RailFrame({ children }: { readonly children: ReactNode }) {
+  return (
     <nav
       aria-label="Tools"
       className="flex min-h-0 shrink-0 flex-col items-center border-l"
       style={{ width: RAIL_WIDTH }}
     >
       <div aria-hidden="true" className="titlebar h-(--titlebar-height) w-full shrink-0" />
-      <div className="flex flex-col items-center gap-1 py-2">
-        {SHELF_TOOLS.map((tool) => {
-          const active = shelf.open && shelf.tool === tool
-          const badge = badges[tool]
-          return (
-            <Tooltip key={tool}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={active ? "secondary" : "ghost"}
-                  size="icon-sm"
-                  aria-label={SHELF_LABELS[tool]}
-                  aria-pressed={active}
-                  onClick={() => onSelect(tool)}
-                  className={cn("relative", !active && "text-muted-foreground")}
-                >
-                  {ICONS[tool]}
-                  {badge !== undefined && (
-                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">
-                      {badge > 99 ? "99+" : badge}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                {badge === undefined
-                  ? SHELF_LABELS[tool]
-                  : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
-              </TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
+      <div className="flex flex-col items-center gap-1 py-2">{children}</div>
     </nav>
   )
 }

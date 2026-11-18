@@ -42,14 +42,14 @@ export const CHAT_MIN_HEIGHT = 200
 export const DOCK_DEFAULT_HEIGHT = 280
 
 /**
- * Which terminal each thread showed last, for this page's life: going back to a thread shows
- * the same tab.
+ * Which terminal each owner (a thread, a project) showed last, for this page's life: going back
+ * to it shows the same tab. Keyed by `terminalOwnerKey`.
  */
 const activeTerminals = new Map<string, string>()
 
-export const lastActiveTerminal = (sessionId: string) => activeTerminals.get(sessionId)
-export const rememberActiveTerminal = (sessionId: string, terminalId: string) =>
-  void activeTerminals.set(sessionId, terminalId)
+export const lastActiveTerminal = (ownerKey: string) => activeTerminals.get(ownerKey)
+export const rememberActiveTerminal = (ownerKey: string, terminalId: string) =>
+  void activeTerminals.set(ownerKey, terminalId)
 
 /** The tab to show: the one asked for while it exists, else the last one. */
 export const pickActive = (
