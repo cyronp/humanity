@@ -20,6 +20,7 @@ import {
   shellsAtom,
   terminalPreferencesAtom,
 } from "@/features/terminal/atoms"
+import { ShellIcon } from "@/features/terminal/ShellIcon"
 import { keys } from "@/lib/rpc"
 import {
   SettingsFrame,
@@ -106,6 +107,7 @@ function ShellSetting({
           </SelectItem>
           {shells.map((shell) => (
             <SelectItem key={shell.id} value={shell.id} title={shell.path}>
+              <ShellIcon shell={shell.id} className="size-4" />
               {shell.name}
             </SelectItem>
           ))}

@@ -9,17 +9,7 @@ import {
 import { cn } from "cn"
 import { Cause, Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import {
-  Bot,
-  ChevronDown,
-  Eraser,
-  Minus,
-  Plus,
-  RotateCcw,
-  Search,
-  SquareTerminal,
-  X,
-} from "lucide-react"
+import { Bot, ChevronDown, Eraser, Minus, Plus, RotateCcw, Search, X } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,6 +32,7 @@ import {
 } from "./atoms.ts"
 import { cycleTerminal, lastActiveTerminal, pickActive, rememberActiveTerminal } from "./dock.ts"
 import { shortcutLabel, type TerminalCommand } from "./keys.ts"
+import { ShellIcon } from "./ShellIcon.tsx"
 import { TerminalFind } from "./TerminalFind.tsx"
 import { TerminalView, type TerminalViewHandle } from "./TerminalView.tsx"
 
@@ -402,12 +393,11 @@ function TerminalTab({
           onDoubleClick={onRenameStart}
           className="flex min-w-0 items-center gap-1.5 outline-none focus-visible:underline"
         >
-          {terminal.opener === "agent" ? (
-            <Bot className="size-3.5 shrink-0" aria-label="Opened by the agent" />
-          ) : (
-            <SquareTerminal className="size-3.5 shrink-0" aria-hidden="true" />
-          )}
+          <ShellIcon shell={terminal.shell} />
           <span className="truncate">{label}</span>
+          {terminal.opener === "agent" && (
+            <Bot className="size-3 shrink-0" aria-label="Opened by the agent" />
+          )}
           {terminal.busy === true && (
             <span
               className="size-1.5 shrink-0 rounded-full bg-info"
@@ -477,7 +467,7 @@ function NewTerminalButtons({
             <ChevronDown className="size-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="w-56">
           {menuOpen && <ShellItems onOpen={onOpen} />}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -502,6 +492,7 @@ function ShellItems({ onOpen }: { readonly onOpen: (shell: string | null) => voi
       <DropdownMenuLabel>New terminal with</DropdownMenuLabel>
       {result.value.map((shell) => (
         <DropdownMenuItem key={shell.id} title={shell.path} onSelect={() => onOpen(shell.id)}>
+          <ShellIcon shell={shell.id} className="size-4" />
           {shell.name}
         </DropdownMenuItem>
       ))}
