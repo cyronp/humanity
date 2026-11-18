@@ -78,11 +78,7 @@ export const PullRequestCheck = Schema.Struct({
 })
 export type PullRequestCheck = typeof PullRequestCheck.Type
 
-export const PullRequestCommentKind = Schema.Literals([
-  "comment",
-  "review",
-  "inline",
-])
+export const PullRequestCommentKind = Schema.Literals(["comment", "review", "inline"])
 export type PullRequestCommentKind = typeof PullRequestCommentKind.Type
 
 export const PullRequestComment = Schema.Struct({

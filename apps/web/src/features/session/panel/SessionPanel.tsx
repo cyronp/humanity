@@ -213,6 +213,7 @@ export function ToolPanel({
           remembered={browser.remembered}
           shown={tool === "browser"}
           offers={browser.offers}
+          terminalNames={browser.terminalNames}
           onLoad={browser.onLoad}
           onSeen={browser.onSeen}
           onClose={onClose}

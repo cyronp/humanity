@@ -1,6 +1,5 @@
 import type { ToolCall } from "@humanity/contracts"
 
-
 export const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

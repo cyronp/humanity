@@ -3,6 +3,7 @@ import { computeHunks, countChanges } from "@humanity/diff"
 import { cn } from "cn"
 import { useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
+import { OpenInBrowserButton } from "@/features/browser/OpenInBrowserButton"
 import { ChangeCount } from "@/features/diff/FileDiffView"
 import { HunkView } from "@/features/diff/HunkView"
 import { languageForPath } from "@/features/diff/highlighter"
@@ -13,6 +14,14 @@ import { OutputText, Path } from "./common.tsx"
 
 const filePath = (props: ToolCallProps) =>
   shortPath(stringField(props.input, "file_path") ?? "", props.worktreePath)
+
+/** "Open in the Browser" for an HTML or PDF file the call read or wrote, once it ran. */
+function OpenFile(props: ToolCallProps) {
+  const path = stringField(props.input, "file_path")
+  const call = props.call
+  if (path === undefined || call?.output == null || call.output.isError) return null
+  return <OpenInBrowserButton sessionId={call.sessionId} path={path} labeled />
+}
 
 export const readRenderer: ToolRenderer = {
   name: "Read",
@@ -33,13 +42,16 @@ export const readRenderer: ToolRenderer = {
     if (output.isError) return <OutputText text={output.content} error />
     const { firstLine, lines } = parseReadOutput(output.content)
     return (
-      <CodeBlock
-        code={lines.join("\n")}
-        language={languageForPath(filePath(props))}
-        firstLine={firstLine}
-        maxLines={200}
-        className="max-h-96"
-      />
+      <div className="flex flex-col items-start gap-2">
+        <OpenFile {...props} />
+        <CodeBlock
+          code={lines.join("\n")}
+          language={languageForPath(filePath(props))}
+          firstLine={firstLine}
+          maxLines={200}
+          className="max-h-96 w-full"
+        />
+      </div>
     )
   },
 }
@@ -86,17 +98,21 @@ export const editRenderer: ToolRenderer = {
     const path = filePath(props)
     if (hunks === undefined) {
       return (
-        <CodeBlock
-          code={stringField(props.input, "content") ?? ""}
-          language={languageForPath(path)}
-          firstLine={1}
-          maxLines={200}
-          className="max-h-96"
-        />
+        <div className="flex flex-col items-start gap-2">
+          <OpenFile {...props} />
+          <CodeBlock
+            code={stringField(props.input, "content") ?? ""}
+            language={languageForPath(path)}
+            firstLine={1}
+            maxLines={200}
+            className="max-h-96 w-full"
+          />
+        </div>
       )
     }
     return (
       <div className="flex flex-col gap-2">
+        <OpenFile {...props} />
         {!exact && (
           <p className="text-muted-foreground">
             The replaced snippet only; line numbers are relative to it.

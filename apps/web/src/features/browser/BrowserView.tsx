@@ -1,6 +1,13 @@
-import { type OfferedUrl, previewTarget } from "@humanity/contracts"
+import {
+  type LocalServer,
+  type OfferedUrl,
+  type PreviewProbe,
+  previewTarget,
+} from "@humanity/contracts"
 import { cn } from "cn"
-import { ExternalLink, Globe, PanelRightClose, RotateCw } from "lucide-react"
+import { useAtomSet } from "@effect/atom-react"
+import { Exit } from "effect"
+import { ExternalLink, Globe, PanelRightClose, RotateCw, TriangleAlert } from "lucide-react"
 import { type FormEvent, useEffect, useEffectEvent, useId, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,7 +20,9 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { daemonAddress } from "@/lib/connection"
+import { probeAtom } from "./atoms.ts"
 import { onPreviewRequest, refusedPorts, takePreviewRequest } from "./browser.ts"
+import { ServerList, useLocalServers } from "./ServerList.tsx"
 
 const SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
@@ -28,6 +37,7 @@ export function BrowserView({
   remembered,
   shown,
   offers,
+  terminalNames,
   onLoad,
   onSeen,
   onClose,
@@ -36,6 +46,7 @@ export function BrowserView({
   readonly remembered: string | null
   readonly shown: boolean
   readonly offers: ReadonlyArray<OfferedUrl>
+  readonly terminalNames: ReadonlyMap<string, string>
   readonly onLoad: (url: string) => void
   readonly onSeen: () => void
   readonly onClose: () => void
@@ -51,6 +62,16 @@ export function BrowserView({
   const [error, setError] = useState<string>()
   const [reloads, setReloads] = useState(0)
   const listId = useId()
+  const servers = useLocalServers(shown)
+  const suggestions = [
+    ...new Set([...servers.map((server) => server.url), ...offers.map((offer) => offer.url)]),
+  ]
+  const probe = useAtomSet(probeAtom, { mode: "promiseExit" })
+  const [notice, setNotice] = useState<PreviewProbe>()
+  const checkFrame = async (loaded: string) => {
+    const exit = await probe({ payload: { url: loaded, embedder: window.location.origin } })
+    setNotice(Exit.isSuccess(exit) && exit.value._tag !== "Ok" ? exit.value : undefined)
+  }
 
   const load = (input: string) => {
     const target = previewTarget(input, refused)
@@ -60,6 +81,7 @@ export function BrowserView({
       return
     }
     setError(undefined)
+    setNotice(undefined)
     setDraft(target.url)
     setUrl(target.url)
     setReloads((count) => count + 1)
@@ -106,8 +128,8 @@ export function BrowserView({
             className="h-7 font-mono text-xs md:text-xs"
           />
           <datalist id={listId}>
-            {offers.map((offer) => (
-              <option key={offer.url} value={offer.url} />
+            {suggestions.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
             ))}
           </datalist>
         </form>
@@ -115,7 +137,11 @@ export function BrowserView({
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => (url === null ? load(draft) : setReloads((count) => count + 1))}
+            onClick={() => {
+              if (url === null) return load(draft)
+              setNotice(undefined)
+              setReloads((count) => count + 1)
+            }}
             aria-label="Reload"
             title="Reload"
           >
@@ -148,7 +174,7 @@ export function BrowserView({
         </p>
       )}
       {url === null ? (
-        <Offers offers={offers} onOpen={load} />
+        <Offers offers={offers} servers={servers} terminalNames={terminalNames} onOpen={load} />
       ) : (
         <>
           <iframe
@@ -156,19 +182,39 @@ export function BrowserView({
             src={url}
             title={`Preview of ${url}`}
             sandbox={SANDBOX}
+            onLoad={() => void checkFrame(url)}
             className="min-h-0 w-full flex-1 border-0 bg-white"
           />
-          <p className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
-            Blank or refusing?{" "}
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => openOutside(url)}
+          {notice !== undefined && notice._tag !== "Ok" ? (
+            <p
+              role="status"
+              className="flex shrink-0 items-start gap-2 border-t bg-warning/10 px-3 py-1.5 text-xs"
             >
-              Open in my browser
-            </button>
-            .
-          </p>
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+              <span>
+                {notice.reason}{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-foreground"
+                  onClick={() => openOutside(url)}
+                >
+                  Open in my browser
+                </button>
+              </span>
+            </p>
+          ) : (
+            <p className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
+              Blank or refusing?{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => openOutside(url)}
+              >
+                Open in my browser
+              </button>
+              .
+            </p>
+          )}
         </>
       )}
     </div>
@@ -177,9 +223,13 @@ export function BrowserView({
 
 function Offers({
   offers,
+  servers,
+  terminalNames,
   onOpen,
 }: {
   readonly offers: ReadonlyArray<OfferedUrl>
+  readonly servers: ReadonlyArray<LocalServer>
+  readonly terminalNames: ReadonlyMap<string, string>
   readonly onOpen: (url: string) => void
 }) {
   return (
@@ -190,13 +240,19 @@ function Offers({
         </EmptyMedia>
         <EmptyTitle>Preview a local app</EmptyTitle>
         <EmptyDescription>
-          {offers.length === 0
-            ? "Type an address above, such as localhost:3000. Addresses the terminals or the agent's commands print show up here."
-            : "Addresses the terminals and the agent's commands printed:"}
+          {offers.length === 0 && servers.length === 0
+            ? "Type an address above, such as localhost:3000. Servers your terminals start, and addresses the agent's commands print, show up here."
+            : "Pick a running server or an address the terminals and the agent's commands printed."}
         </EmptyDescription>
       </EmptyHeader>
+      <EmptyContent className="max-w-md">
+        <ServerList servers={servers} terminalNames={terminalNames} onOpen={onOpen} />
+      </EmptyContent>
       {offers.length > 0 && (
-        <EmptyContent>
+        <EmptyContent className="max-w-md">
+          <h3 className="w-full text-left text-xs font-medium text-muted-foreground">
+            Printed addresses
+          </h3>
           <ul className="flex w-full flex-col gap-1">
             {offers.map((offer) => (
               <li key={offer.url}>

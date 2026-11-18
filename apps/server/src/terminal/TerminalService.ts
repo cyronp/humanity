@@ -193,6 +193,8 @@ export class TerminalService extends Context.Service<
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
     readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
     readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
+    /** The process id of each running terminal's shell. */
+    readonly processIds: Effect.Effect<ReadonlyMap<number, TerminalId>>
 
     readonly info: (terminalId: string) => Effect.Effect<TerminalInfo, TerminalNotFound>
     readonly agentCursor: (
@@ -1081,6 +1083,13 @@ export class TerminalService extends Context.Service<
           ),
           closeOwner,
           moveSession,
+          processIds: Effect.sync(() => {
+            const ids = new Map<number, TerminalId>()
+            for (const live of lives.values()) {
+              if (live.pty !== undefined) ids.set(live.pty.pid, live.info.id)
+            }
+            return ids
+          }),
           info,
           agentCursor,
           agentRead,

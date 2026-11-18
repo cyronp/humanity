@@ -1,4 +1,6 @@
+import { Schema } from "effect"
 import { trimTrailing } from "../text.ts"
+import { TerminalId } from "./Terminal.ts"
 
 /** An address the Browser offers: a local URL a terminal or a `Bash` call printed, and when. */
 export interface OfferedUrl {
@@ -113,3 +115,24 @@ export const mergeOffers = (
     .map(([url, seenAt]) => ({ url, seenAt }))
     .sort((a, b) => (a.seenAt < b.seenAt ? 1 : a.seenAt > b.seenAt ? -1 : 0))
 }
+
+/** A server listening on this machine that answers HTTP, and the terminal that started it. */
+export const LocalServer = Schema.Struct({
+  port: Schema.Int,
+  url: Schema.String,
+  pid: Schema.Int,
+  processName: Schema.NullOr(Schema.String),
+  terminalId: Schema.NullOr(TerminalId),
+})
+export type LocalServer = typeof LocalServer.Type
+
+/** What the daemon found when it loaded a framed address itself. */
+export const PreviewProbe = Schema.TaggedUnion({
+  Ok: { status: Schema.Int },
+  Unreachable: { reason: Schema.String },
+  Refuses: { reason: Schema.String },
+})
+export type PreviewProbe = typeof PreviewProbe.Type
+
+/** Files the Browser shows from a thread's folder. */
+export const isPreviewFile = (path: string): boolean => /\.(?:html?|pdf)$/i.test(path)
