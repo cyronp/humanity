@@ -60,9 +60,15 @@ describe("Humanity's MCP server", () => {
   it.effect("lists the terminal tools after open_thread", () =>
     Effect.gen(function* () {
       const listed = yield* answerMcp(tools, { jsonrpc: "2.0", id: 1, method: "tools/list" })
-      const names = (
-        listed.body as { result: { tools: ReadonlyArray<{ name: string }> } }
-      ).result.tools.map((tool) => tool.name)
+      const listedTools = (
+        listed.body as {
+          result: { tools: ReadonlyArray<{ name: string; _meta?: Record<string, unknown> }> }
+        }
+      ).result.tools
+      const names = listedTools.map((tool) => tool.name)
+      for (const tool of listedTools) {
+        assert.isTrue(tool._meta?.["anthropic/alwaysLoad"], `${tool.name} is always loaded`)
+      }
       assert.deepStrictEqual(names, [
         "open_thread",
         "terminal_list",

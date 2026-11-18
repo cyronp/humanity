@@ -40,6 +40,17 @@ const maxLinesArgument = {
   description: `At most this many lines, the last ones (default ${DEFAULT_MAX_LINES}).`,
 }
 
+/**
+ * Claude Code defers an MCP server's tools behind its tool search unless told otherwise: the agent
+ * would see only their names, and run a dev server in its shell's background instead of a
+ * terminal the human sees. Their descriptions are in its prompt from the start.
+ */
+const ALWAYS_LOAD = { "anthropic/alwaysLoad": true } as const
+
+/** What Humanity's MCP server tells the agent of every thread, beside its tools' descriptions. */
+export const HUMANITY_INSTRUCTIONS =
+  "This thread has terminals shared with the human, shown in a dock under the chat. Run dev servers, watchers and anything else that keeps running there, with terminal_open (then terminal_wait for its ready line), not in your shell's background, so the human sees them and can use them too; use your shell for one-off commands. terminal_list shows the terminals already open, which the human may have started."
+
 /** The terminal tools as Humanity's MCP server lists them. */
 export const TERMINAL_TOOL_DEFINITIONS = [
   {
@@ -49,6 +60,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       "Lists this thread's terminals: the ones the human sees in the dock under the chat, which you share with them. For each: its number, title, shell, folder, whether a command runs and the last command's exit code. Use a terminal for what keeps running (dev servers, watchers) or takes input; use your shell tool for one-off commands.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
   {
     name: "terminal_read",
@@ -67,6 +79,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
   {
     name: "terminal_send",
@@ -92,6 +105,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
   {
     name: "terminal_wait",
@@ -112,6 +126,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
   {
     name: "terminal_open",
@@ -127,6 +142,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
   {
     name: "terminal_close",
@@ -140,6 +156,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    _meta: ALWAYS_LOAD,
   },
 ] as const
 

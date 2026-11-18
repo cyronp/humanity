@@ -13,7 +13,11 @@ import { Context, Data, Effect, Layer, Option, Schema, type Scope } from "effect
 import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 import { ServerConfig } from "../ServerConfig.ts"
-import { TERMINAL_TOOL_DEFINITIONS, type ToolText } from "../terminal/agentTools.ts"
+import {
+  HUMANITY_INSTRUCTIONS,
+  TERMINAL_TOOL_DEFINITIONS,
+  type ToolText,
+} from "../terminal/agentTools.ts"
 
 export const MCP_PATH = "/mcp"
 
@@ -177,6 +181,7 @@ const answer = (tools: HumanityTools, message: unknown): Effect.Effect<unknown> 
           protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: HUMANITY_MCP_SERVER, title: "Humanity", version: "0.1.0" },
+          instructions: HUMANITY_INSTRUCTIONS,
         }),
       )
     }

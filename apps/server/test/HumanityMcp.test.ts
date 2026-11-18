@@ -9,6 +9,7 @@ import {
   type OpenThreadRequest,
 } from "../src/mcp/HumanityMcp.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
+import { HUMANITY_INSTRUCTIONS } from "../src/terminal/agentTools.ts"
 
 const recordingTools = () => {
   const asked: Array<OpenThreadRequest> = []
@@ -63,6 +64,7 @@ describe("Humanity's MCP server", () => {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "humanity", title: "Humanity", version: "0.1.0" },
+          instructions: HUMANITY_INSTRUCTIONS,
         },
       })
       const newer = yield* answerMcp(
