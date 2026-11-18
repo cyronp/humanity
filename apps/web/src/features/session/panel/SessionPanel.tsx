@@ -164,12 +164,11 @@ function RailFrame({ children }: { readonly children: ReactNode }) {
 
 /**
  * The open tool's panel, between the chat and the rail. The Browser, once opened, stays mounted
- * while another tool shows or the panel is closed, so its page isn't reloaded.
+ * while another tool shows, so switching tools doesn't reload its page; closing the panel stops it.
  */
 export function ToolPanel({
   session,
   activity,
-  shown,
   tool,
   browser,
   onToolChange,
@@ -178,16 +177,15 @@ export function ToolPanel({
 }: {
   readonly session: Session
   readonly activity: number
-  readonly shown: boolean
   readonly tool: ShelfTool
   readonly browser: BrowserState
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
 }) {
-  const [browserMounted, setBrowserMounted] = useState(shown && tool === "browser")
-  if (shown && tool === "browser" && !browserMounted) setBrowserMounted(true)
-  const gitShown = shown && tool !== "browser"
+  const [browserMounted, setBrowserMounted] = useState(tool === "browser")
+  if (tool === "browser" && !browserMounted) setBrowserMounted(true)
+  const gitShown = tool !== "browser"
   const [openFiles, setOpenFiles] = useState<ReadonlySet<string>>(new Set())
   const setFileOpen = (key: string, open: boolean) =>
     setOpenFiles((current) => {
@@ -213,7 +211,7 @@ export function ToolPanel({
       {browserMounted && (
         <BrowserView
           remembered={browser.remembered}
-          shown={shown && tool === "browser"}
+          shown={tool === "browser"}
           offers={browser.offers}
           onLoad={browser.onLoad}
           onSeen={browser.onSeen}

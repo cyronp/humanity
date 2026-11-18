@@ -36,8 +36,6 @@ const PANEL_MIN_WIDTH = 320
 const CHAT_MIN_WIDTH = 360
 
 export interface PanelProps {
-  /** False while the panel is closed: it stays mounted, hidden, once it was opened. */
-  readonly shown: boolean
   readonly tool: ShelfTool
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
@@ -67,8 +65,6 @@ export function WorkspaceFrame({
   }
   const [railShown, setRailShown] = useStoredFlag(RAIL_SHOWN_KEY, true)
   const panelOpen = shelf.open && railShown && panel !== undefined
-  const [panelMounted, setPanelMounted] = useState(panelOpen)
-  if (panelOpen && !panelMounted) setPanelMounted(true)
   const [terminalsOpen, setTerminalsOpen] = useStoredFlag(DOCK_OPEN_KEY, false)
   const [terminalHeight, setTerminalHeight] = useStoredWidth(DOCK_HEIGHT_KEY)
   const terminalArea = useRef<HTMLDivElement>(null)
@@ -189,7 +185,7 @@ export function WorkspaceFrame({
             </div>
           )}
         </div>
-        {panel !== undefined && panelMounted && (
+        {panelOpen && (
           <aside
             ref={panelElement}
             className={cn(
@@ -198,7 +194,6 @@ export function WorkspaceFrame({
                 ? "lg:w-[55%] lg:max-w-4xl"
                 : "lg:w-(--panel-width) lg:max-w-[calc(100%-25.5rem)]",
               !chatShown && "pt-12",
-              !panelOpen && "hidden",
             )}
             style={
               panelWidth === null
@@ -206,7 +201,7 @@ export function WorkspaceFrame({
                 : ({ "--panel-width": `${panelWidth}px` } as CSSProperties)
             }
           >
-            {chatShown && panelOpen && (
+            {chatShown && (
               <ResizeHandle
                 edge="start"
                 label="Resize the panel"
@@ -219,7 +214,6 @@ export function WorkspaceFrame({
               />
             )}
             {panel({
-              shown: panelOpen,
               tool: shelf.tool,
               onToolChange: (tool) => setShelf({ open: true, tool }),
               onClose: () => setShelf({ ...shelf, open: false }),

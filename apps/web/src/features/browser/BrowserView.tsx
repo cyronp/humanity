@@ -22,7 +22,7 @@ const openOutside = (url: string) => void window.open(url, "_blank", "noopener,n
 
 /**
  * The Browser tool: a preview of a local address in a frame, with its own bar. It stays mounted
- * while hidden, so switching tools or closing the panel doesn't reload the previewed app.
+ * while another shelf tool shows, so switching tools doesn't reload the previewed app.
  */
 export function BrowserView({
   remembered,

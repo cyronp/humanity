@@ -97,12 +97,11 @@ export function Workspace({
           onSelect={onSelect}
         />
       )}
-      panel={({ shown, tool, onToolChange, onClose }) => (
+      panel={({ tool, onToolChange, onClose }) => (
         <ToolPanel
           key={session.id}
           session={session}
           activity={activity}
-          shown={shown}
           tool={tool}
           browser={browser}
           onToolChange={onToolChange}
