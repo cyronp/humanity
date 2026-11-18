@@ -103,7 +103,7 @@ export const terminalTheme = (element: Element, theme: ResolvedTheme): ITheme =>
   const style = getComputedStyle(element)
   const variable = (name: string, fallback: string) =>
     cssColorToHex(style.getPropertyValue(name), fallback)
-  const background = variable("--background", theme === "dark" ? "#0a0a0a" : "#ffffff")
+  const background = variable("--background", theme === "dark" ? "#030303" : "#ffffff")
   const foreground = variable("--foreground", theme === "dark" ? "#fafafa" : "#0a0a0a")
   return {
     ...PALETTES[theme],
