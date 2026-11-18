@@ -8,7 +8,17 @@ import {
 import { cn } from "cn"
 import { Cause, Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { Bot, ChevronDown, Eraser, Plus, RotateCcw, Search, SquareTerminal, X } from "lucide-react"
+import {
+  Bot,
+  ChevronDown,
+  Eraser,
+  Minus,
+  Plus,
+  RotateCcw,
+  Search,
+  SquareTerminal,
+  X,
+} from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -141,6 +151,17 @@ export function TerminalDock({
     if (terminals !== undefined && terminals.length <= 1) onHide()
   }
 
+  /** Closes every terminal of the thread, stopping what runs in them, and the dock with them. */
+  const closeAll = async () => {
+    setError(undefined)
+    const exits = await Promise.all(
+      (terminals ?? []).map((terminal) => close({ payload: { terminalId: terminal.id } })),
+    )
+    const failed = exits.map(failureMessage).find((message) => message !== undefined)
+    if (failed !== undefined) setError(failed)
+    else onHide()
+  }
+
   const restartTerminal = async (terminal: TerminalInfo) => {
     setError(undefined)
     setError(failureMessage(await restart({ payload: { terminalId: terminal.id } })))
@@ -204,7 +225,15 @@ export function TerminalDock({
         >
           <RotateCcw />
         </DockAction>
-        <DockAction label="Hide terminals" shortcut="Ctrl+`" onClick={onHide}>
+        <DockAction label="Hide the terminals" shortcut="Ctrl+`" onClick={onHide}>
+          <Minus />
+        </DockAction>
+        <DockAction
+          label="Close the terminals"
+          detail="Stops what runs in them"
+          onClick={() => void closeAll()}
+          disabled={terminals === undefined || terminals.length === 0}
+        >
           <X />
         </DockAction>
       </div>
@@ -282,12 +311,15 @@ export function TerminalDock({
 function DockAction({
   label,
   shortcut,
+  detail,
   onClick,
   disabled = false,
   children,
 }: {
   readonly label: string
   readonly shortcut?: string
+  /** A second line in the tooltip. */
+  readonly detail?: string
   readonly onClick: () => void
   readonly disabled?: boolean
   readonly children: ReactNode
@@ -308,6 +340,7 @@ function DockAction({
       </TooltipTrigger>
       <TooltipContent side="top">
         {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}
+        {detail !== undefined && <span className="block opacity-70">{detail}</span>}
       </TooltipContent>
     </Tooltip>
   )
