@@ -95,6 +95,31 @@ The terminal grows from one per thread into tabs in a dock under the chat, model
 - **The agent's terminal tools,** on Humanity's MCP server, on every provider: `terminal_list`, `terminal_read` (what a terminal printed since a cursor, or its screen), `terminal_send` (text and keys), `terminal_wait` (for the command to finish, for a pattern, or for quiet), `terminal_open` (a new tab, optionally running a command) and `terminal_close`. Reading and waiting are reads. Sending, opening with a command and closing a terminal the agent did not open are commands: Humanity's own handler decides them as `Bash`, with the command the agent typed, in the thread's mode, before anything reaches the terminal. The providers pass these six tools through to that handler (Codex asks about an MCP call without its name or arguments, so the human could not see what would be typed); "Always allow" of `Bash` in a thread covers them too. A terminal is read as its screen shows it, not as the bytes its program printed, so a shell that redraws (ConPTY) reads right; a cursor is a line of the terminal's buffer, followed as it scrolls. A call to Humanity's tools can wait on the human or on a terminal, so the providers that take a time limit per MCP server (Claude Code, Codex) are given a day. The terminal tools are always loaded, never deferred behind Claude Code's tool search, and Humanity's server tells the agent, in its instructions, to run what keeps running (dev servers, watchers) in a terminal rather than in its shell's background, so the human sees it.
 - **Packaging:** `node-pty` 1.1 is built on Node-API and ships prebuilt binaries for Windows and macOS, which load on Electron's Node as they are; the desktop app copies the binaries of its own platform beside the bundled daemon, without rebuilding them. This supersedes "rebuilt for Electron's Node" above.
 
+## Amendment: a full browser in the desktop app (2026-11-18)
+
+The Browser on the shelf grows from a localhost preview into a browser, modelled on t3code's. Where this section and the two amendments above disagree, this section wins. It adds no library to the stack of section 3.
+
+- **The desktop app shows pages in a `<webview>`.** This supersedes "no preload" and "no logic of its own" in "Desktop app", for the Browser only. The window gets `webviewTag` and a preload that exposes a narrow bridge (`window.humanityDesktop.preview`) through `contextBridge`. Every call that names a page checks that the page belongs to the window that asks. Each webview is attached with the shell's own settings: sandboxed, context-isolated, no Node, no preload, and a partition of its own (`persist:humanity-preview`, kept under `~/.humanity/desktop/`), so a page never reaches the app's storage or token. Humanity's own origin and ports are refused when a webview attaches, navigates or opens a window. In the desktop app the Browser shows any http(s) address; the address bar does not search.
+- **A browser tab keeps the iframe** of the localhost preview, with every feature an iframe allows, and says which features need the desktop app.
+- **Features of both:**
+  - Tabs.
+  - Device sizes (presets, rotation, a free size) and zoom.
+  - The local servers running on the machine. They are found by a port scan, which supersedes "no port scan", and tied to the terminal that started them; **Stop server** stops one the scan lists.
+  - Why a framed page stays blank (nothing listening, or a page that refuses frames).
+  - HTML and PDF files of the thread's folder, served by a second listener of the daemon on `127.0.0.1`, under a token per thread, never on the daemon's own port.
+  - A setting for where local links open; a middle click opens the human's browser.
+- **Features of the desktop app only:**
+  - Back and forward, the page's own address, title and favicon, stop, hard reload.
+  - Find in page, DevTools, mute, light or dark appearance, clearing the Browser's cookies and cache.
+  - Windows a page opens become tabs.
+  - A crashed page reloads.
+  - Picking an element into the composer (selector, HTML, styles, React component and source).
+  - A screenshot or an annotated screenshot as an attachment.
+  - A recording of the page, saved under `~/.humanity/recordings/`.
+  - Picture-in-picture.
+- **Downloads never write to disk:** a page's download is cancelled and its address opens in the human's browser, because nothing of Humanity's writes outside `~/.humanity/` or the session's folder.
+- **Not yet:** the agent's browser tools, importing cookies from other browsers, browser profiles, voice notes, Humanity as the default browser.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
