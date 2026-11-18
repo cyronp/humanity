@@ -1000,6 +1000,7 @@ export class SessionService extends Context.Service<
 
         yield* stopRun(sessionId)
         yield* repo.update(sessionId, { worktree: { branch, path }, updatedAt: session.updatedAt })
+        yield* terminals.moveSession(session.id, path)
         if (session.sdkSessionId !== null) {
           relocated.set(sessionId, { from: session.worktreePath, to: path })
         }

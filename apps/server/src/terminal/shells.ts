@@ -129,24 +129,6 @@ export const pickShell = (
     ? undefined
     : shells.find((shell) => shell.id === wanted)) ?? shells[0]
 
-/** How a shell is started for the human: interactive, and a login shell where that exists. */
-export const shellArgs = (shell: Shell, platform: NodeJS.Platform): ReadonlyArray<string> => {
-  switch (shell.kind) {
-    case "pwsh":
-    case "powershell":
-      return ["-NoLogo"]
-    case "cmd":
-    case "wsl":
-      return []
-    case "bash":
-      return platform === "win32" ? ["--login", "-i"] : ["-l"]
-    case "zsh":
-    case "fish":
-    case "sh":
-      return ["-l"]
-  }
-}
-
 export const isWindowsPath = (path: string) =>
   /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\")
 

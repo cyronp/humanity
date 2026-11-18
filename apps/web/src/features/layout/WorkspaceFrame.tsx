@@ -1,5 +1,7 @@
+import { useAtomValue } from "@effect/atom-react"
 import { type TerminalOwner, terminalOwnerKey } from "@humanity/contracts"
 import { cn } from "cn"
+import { AsyncResult } from "effect/reactivity"
 import { PanelBottom, PanelRight } from "lucide-react"
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react"
 import { ResizeHandle } from "@/components/ResizeHandle"
@@ -22,6 +24,7 @@ import {
   RAIL_SHOWN_KEY,
   useStoredFlag,
 } from "@/features/terminal/dock"
+import { terminalsAtom } from "@/features/terminal/atoms"
 import { isMac, shortcutLabel, terminalCommand } from "@/features/terminal/keys"
 import { type DockCommands, TerminalDock } from "@/features/terminal/TerminalDock"
 import { useStoredWidth } from "@/lib/resize"
@@ -131,6 +134,7 @@ export function WorkspaceFrame({
     <div className="flex min-h-0 flex-1 flex-col">
       {header(
         <LayoutButtons
+          terminalsOwner={terminals?.owner}
           terminalsOpen={terminalsOpen}
           railShown={railShown}
           onToggleTerminals={() => setTerminalsOpen(!terminalsOpen)}
@@ -216,13 +220,32 @@ export function WorkspaceFrame({
   )
 }
 
+/** How many of the owner's terminals run a command, on the terminal button. */
+function BusyBadge({ owner }: { readonly owner: TerminalOwner }) {
+  const result = useAtomValue(terminalsAtom(JSON.stringify(owner)))
+  const busy = AsyncResult.isSuccess(result)
+    ? result.value.filter((terminal) => terminal.busy === true).length
+    : 0
+  if (busy === 0) return null
+  return (
+    <span
+      aria-label={busy === 1 ? "A command runs" : `${busy} commands run`}
+      className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-0.5 text-[9px] leading-none font-medium text-white tabular-nums"
+    >
+      {busy}
+    </span>
+  )
+}
+
 /** The two buttons always at the top right of a page with a chat: the terminals, and the tools' rail. */
 function LayoutButtons({
+  terminalsOwner,
   terminalsOpen,
   railShown,
   onToggleTerminals,
   onToggleRail,
 }: {
+  readonly terminalsOwner: TerminalOwner | undefined
   readonly terminalsOpen: boolean
   readonly railShown: boolean
   readonly onToggleTerminals: () => void
@@ -238,9 +261,10 @@ function LayoutButtons({
             aria-label="Terminal"
             aria-pressed={terminalsOpen}
             onClick={onToggleTerminals}
-            className={cn(!terminalsOpen && "text-muted-foreground")}
+            className={cn("relative", !terminalsOpen && "text-muted-foreground")}
           >
             <PanelBottom />
+            {terminalsOwner !== undefined && <BusyBadge owner={terminalsOwner} />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">

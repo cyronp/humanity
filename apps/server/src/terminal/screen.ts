@@ -4,6 +4,9 @@ import headless from "@xterm/headless"
 
 export type HeadlessTerminal = InstanceType<typeof headless.Terminal>
 
+/** A line of the buffer, followed as the buffer scrolls; `line` is -1 once it scrolled away. */
+export type Marker = NonNullable<ReturnType<HeadlessTerminal["registerMarker"]>>
+
 /**
  * A terminal's screen as the daemon keeps it: every byte the process printed goes through a
  * headless xterm, so the screen can be handed to a browser that attaches and read by the agent.
@@ -19,6 +22,10 @@ export interface Screen {
   readonly rows: () => number
   /** What the terminal answers to the program's queries (cursor position, device attributes). */
   readonly onReply: (listener: (data: string) => void) => void
+  /** Calls `listener` with the payload of each OSC `ident` sequence, as it is parsed. */
+  readonly onOsc: (ident: number, listener: (data: string) => void) => void
+  /** A marker on the cursor's line, as parsed so far. */
+  readonly marker: () => Marker | undefined
   readonly dispose: () => void
 }
 
@@ -47,6 +54,13 @@ export const makeScreen = (options: {
     cols: () => terminal.cols,
     rows: () => terminal.rows,
     onReply: (listener) => void terminal.onData(listener),
+    onOsc: (ident, listener) =>
+      void terminal.parser.registerOscHandler(ident, (data) => {
+        listener(data)
+        // Not handled here: xterm goes on with the sequence as it would without us.
+        return false
+      }),
+    marker: () => terminal.registerMarker(0),
     dispose: () => terminal.dispose(),
   }
 }

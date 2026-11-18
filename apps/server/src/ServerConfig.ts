@@ -22,6 +22,8 @@ export interface ServerConfigShape {
   readonly pluginDir: string
   /** The saved screens of terminals, one folder per thread. */
   readonly terminalsDir: string
+  /** The scripts that integrate the shells Humanity starts (bash, zsh, fish). */
+  readonly shellIntegrationDir: string
   readonly webDist: string | undefined
   readonly webOrigin: string
 }
@@ -51,6 +53,7 @@ const make = (options: {
     mcpConfigPath: join(home, "mcp.json"),
     pluginDir: join(home, "plugin"),
     terminalsDir: join(home, "terminals"),
+    shellIntegrationDir: join(home, "shell-integration"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }

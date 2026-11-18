@@ -57,9 +57,12 @@ export const TerminalInfo = Schema.Struct({
   cwd: Schema.String,
   location: TerminalLocation,
   state: TerminalState,
+  /** The exit code of the terminal's process, once it exited. */
   exitCode: Schema.NullOr(Schema.Number),
   /** Whether a command runs; `null` when the shell has no integration to tell. */
   busy: Schema.NullOr(Schema.Boolean),
+  /** The exit code of the last command the shell ran, when its integration reports it. */
+  lastExitCode: Schema.NullOr(Schema.Number),
   /** Whether the shell reports its commands and folder (OSC 133 and OSC 7). */
   integration: Schema.Boolean,
   createdAt: Schema.String,

@@ -48,8 +48,8 @@ The browser comes after the terminal and builds on it: links in terminals and in
 | 1 | Daemon: PTYs, screen model, RPC, persistence | ✅ `264c4b4`, `7be384e` |
 | 2 | Web: the dock, the two top-right buttons, Settings → Terminal | ✅ `58d42ce`, `2efa5cb`, `2ab1b77`, `14b96bc` |
 | — | Terminals outside a thread (project, home), shell icons | ✅ `ef8294c`, `426175e` |
-| 3 | Shell integration | ⏳ next |
-| 4 | The agent's terminal tools | ⏳ |
+| 3 | Shell integration | ✅ checked on real PowerShell 7, Windows PowerShell and Git Bash |
+| 4 | The agent's terminal tools | ⏳ next |
 | 5 | Desktop packaging | ⏳ |
 | 6 | Browser (localhost preview) | ⏳ |
 

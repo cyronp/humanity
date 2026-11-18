@@ -30,16 +30,18 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import type { LocateOptions } from "../agent/installedCli.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { PreferencesService } from "../services/PreferencesService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 import { terminalEnvironment } from "./environment.ts"
+import { INTEGRATION_FILES, shellLaunch } from "./integration.ts"
+import { folderFromOsc7, isInsideFolder, parseCommandMark } from "./osc.ts"
 import { PtyHost, type PtyProcess } from "./PtyHost.ts"
-import { makeScreen, restartMarker, type Screen } from "./screen.ts"
-import { detectShells, pickShell, type Shell, shellArgs, shellLocateOptions } from "./shells.ts"
+import { makeScreen, type Marker, restartMarker, type Screen } from "./screen.ts"
+import { detectShells, pickShell, type Shell, shellLocateOptions } from "./shells.ts"
 
 /** The size of a terminal nobody has looked at yet. */
 export const DEFAULT_COLS = 120
@@ -55,6 +57,28 @@ const FLUSH_CHARS = 16_384
 export const ATTACH_WINDOW = 512 * 1024
 
 const SAVE_INTERVAL = "5 seconds"
+
+/**
+ * How long a stopped process is waited for. On Windows a shell that was told to stop can hold its
+ * folder a moment longer, and a worktree removed meanwhile would fail to delete.
+ */
+const EXIT_WAIT = "5 seconds"
+
+/** How many of a terminal's last commands it remembers the output span of. */
+const COMMANDS_KEPT = 200
+/** A terminal's folder is saved this long after the shell last reported a new one. */
+const CWD_SAVE_MS = 1_000
+
+/** One command the shell ran, between its OSC 133 C and D marks. */
+export interface CommandSpan {
+  /** The line the command's output starts at, kept as the buffer scrolls. */
+  readonly start: Marker
+  end: Marker | undefined
+  exitCode: number | null
+  done: boolean
+}
+
+type Patch = { -readonly [Key in keyof TerminalInfo]?: TerminalInfo[Key] }
 
 const TerminalRow = Schema.Struct({
   id: Schema.String,
@@ -84,6 +108,8 @@ interface Live {
   info: TerminalInfo
   readonly screen: Screen
   pty: PtyProcess | undefined
+  /** Settles once the current process has exited. */
+  exited: Promise<void>
   /** Bumped whenever the process is replaced, so a killed process's last events are ignored. */
   generation: number
   /** Characters printed so far. */
@@ -100,6 +126,11 @@ interface Live {
   /** Printed something since its screen was last saved. */
   dirty: boolean
   readonly scrollback: number
+  /** Where its owner's terminals open: the thread's folder, the project's checkout, the home. */
+  folder: string
+  /** The commands the shell reported, oldest first. */
+  readonly commands: Array<CommandSpan>
+  cwdTimer: ReturnType<typeof setTimeout> | undefined
 }
 
 export interface OpenTerminalOptions {
@@ -155,6 +186,11 @@ export class TerminalService extends Context.Service<
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
     /** Closes every terminal of a thread or a project and deletes what was saved of them. */
     readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
+    /**
+     * A thread moved to its worktree: its idle terminals start again there, keeping what they
+     * showed; one running a command keeps running where it is, marked as left in the checkout.
+     */
+    readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
   }
 >()("humanity/TerminalService") {
   static readonly layer = (locate: () => LocateOptions = shellLocateOptions) =>
@@ -209,6 +245,89 @@ export class TerminalService extends Context.Service<
         const update = (live: Live, patch: Partial<TerminalInfo>) => {
           live.info = { ...live.info, ...patch }
           changed(live.info.owner)
+        }
+
+        /** Applies only what differs, so a shell repeating itself publishes nothing. */
+        const updateIfChanged = (live: Live, patch: Patch) => {
+          const keys = Object.keys(patch) as Array<keyof TerminalInfo>
+          if (keys.some((key) => live.info[key] !== patch[key])) update(live, patch)
+        }
+
+        // Shell integration ----------------------------------------------------------------------
+
+        const writeIntegration = Effect.forEach(
+          Object.entries(INTEGRATION_FILES),
+          ([name, text]) =>
+            Effect.gen(function* () {
+              const path = join(config.shellIntegrationDir, name)
+              const current = yield* fs.readFileString(path).pipe(Effect.orElseSucceed(() => ""))
+              if (current === text) return
+              yield* fs.makeDirectory(dirname(path), { recursive: true })
+              yield* fs.writeFileString(path, text)
+            }),
+          { discard: true },
+        ).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not write the shell integration scripts", error.message),
+          ),
+        )
+        yield* writeIntegration
+
+        const saveCwd = (live: Live) => {
+          clearTimeout(live.cwdTimer)
+          live.cwdTimer = setTimeout(() => {
+            live.cwdTimer = undefined
+            const { id, cwd } = live.info
+            Effect.runFork(
+              sql`UPDATE terminals SET cwd = ${cwd} WHERE id = ${id}`.pipe(Effect.ignore),
+            )
+          }, CWD_SAVE_MS)
+        }
+
+        const onCommandMark = (live: Live, data: string) => {
+          const mark = parseCommandMark(data)
+          if (mark === undefined) return
+          const patch: Patch = { integration: true }
+          switch (mark._tag) {
+            case "PromptStart":
+              patch.busy = false
+              break
+            case "CommandStart": {
+              patch.busy = true
+              const start = live.screen.marker()
+              if (start !== undefined) {
+                live.commands.push({ start, end: undefined, exitCode: null, done: false })
+              }
+              while (live.commands.length > COMMANDS_KEPT) live.commands.shift()?.start.dispose()
+              break
+            }
+            case "CommandEnd": {
+              patch.busy = false
+              patch.lastExitCode = mark.exitCode
+              const last = live.commands.at(-1)
+              if (last !== undefined && !last.done) {
+                last.done = true
+                last.exitCode = mark.exitCode
+                last.end = live.screen.marker()
+              }
+              break
+            }
+          }
+          updateIfChanged(live, patch)
+        }
+
+        const onFolderMark = (live: Live, data: string) => {
+          const cwd = folderFromOsc7(data, process.platform)
+          if (cwd === undefined || cwd === live.info.cwd) return
+          const patch: Patch = { cwd }
+          if (
+            live.info.location === "checkout" &&
+            isInsideFolder(live.folder, cwd, process.platform)
+          ) {
+            patch.location = "folder"
+          }
+          update(live, patch)
+          saveCwd(live)
         }
 
         const isOwnedBy = (live: Live, ownerKey: string) =>
@@ -306,11 +425,20 @@ export class TerminalService extends Context.Service<
 
         // Processes ----------------------------------------------------------------------------
 
-        const stopProcess = (live: Live) => {
+        /** Stops the process, without waiting for it. */
+        const killProcess = (live: Live) => {
           live.generation++
           live.pty?.kill()
           live.pty = undefined
         }
+
+        /** Stops the process and waits for it to be gone (for a while: a stuck one is left). */
+        const stopProcess = (live: Live) =>
+          Effect.suspend(() => {
+            const exited = live.exited
+            killProcess(live)
+            return Effect.promise(() => exited).pipe(Effect.timeout(EXIT_WAIT), Effect.ignore)
+          })
 
         const startProcess = (live: Live, fallbackFolder: string) =>
           Effect.gen(function* () {
@@ -332,12 +460,17 @@ export class TerminalService extends Context.Service<
               feed(live, `${"\r\n".repeat(live.screen.rows())}\x1b[H`)
             }
             const generation = ++live.generation
+            const launch = shellLaunch(shell, {
+              platform: process.platform,
+              folder: config.shellIntegrationDir,
+              env: process.env,
+            })
             const pty = yield* host
               .spawn({
                 file: shell.path,
-                args: shellArgs(shell, process.platform),
+                args: launch.args,
                 cwd,
-                env: terminalEnvironment(process.env, process.platform),
+                env: { ...terminalEnvironment(process.env, process.platform), ...launch.env },
                 cols: live.screen.cols(),
                 rows: live.screen.rows(),
               })
@@ -347,6 +480,7 @@ export class TerminalService extends Context.Service<
                 ),
               )
             live.pty = pty
+            live.exited = new Promise((resolve) => pty.onExit(() => resolve()))
             pty.onData((data) => {
               if (live.generation === generation) feed(live, data)
             })
@@ -359,9 +493,13 @@ export class TerminalService extends Context.Service<
                 offer(attachment, { _tag: "Exited", exitCode })
               }
             })
+            // A fresh shell: whether it integrates is known from its first mark.
             update(live, {
               state: "running",
               exitCode: null,
+              busy: null,
+              lastExitCode: null,
+              integration: false,
               shell: shell.id,
               shellName: shell.name,
               cwd,
@@ -370,12 +508,18 @@ export class TerminalService extends Context.Service<
 
         const makeLive = (
           info: TerminalInfo,
-          options: { readonly scrollback: number; readonly cols: number; readonly rows: number },
+          options: {
+            readonly scrollback: number
+            readonly cols: number
+            readonly rows: number
+            readonly folder: string
+          },
         ): Live => {
           const live: Live = {
             info,
             screen: makeScreen(options),
             pty: undefined,
+            exited: Promise.resolve(),
             generation: 0,
             seq: 0,
             parsed: 0,
@@ -386,12 +530,17 @@ export class TerminalService extends Context.Service<
             attachments: new Map(),
             dirty: false,
             scrollback: options.scrollback,
+            folder: options.folder,
+            commands: [],
+            cwdTimer: undefined,
           }
           // The queries a program sends (cursor position, device attributes…) are answered here,
           // from the same bytes the views draw: at once, whether or not a view is open (ConPTY
           // waits for one before it starts the shell), and once however many views are open.
           // The views stay silent on them.
           live.screen.onReply((reply) => live.pty?.write(reply))
+          live.screen.onOsc(133, (data) => onCommandMark(live, data))
+          live.screen.onOsc(7, (data) => onFolderMark(live, data))
           return live
         }
 
@@ -430,10 +579,16 @@ export class TerminalService extends Context.Service<
             if (rows.length === 0) return
             const { scrollback } = yield* preferences.terminal
             const shells = shellsNow()
+            const place = yield* Effect.option(placeOf(owner))
             for (const row of rows) {
               if (lives.has(row.id)) continue
               const info = infoOf(row, shells)
-              const live = makeLive(info, { scrollback, cols: DEFAULT_COLS, rows: DEFAULT_ROWS })
+              const live = makeLive(info, {
+                scrollback,
+                cols: DEFAULT_COLS,
+                rows: DEFAULT_ROWS,
+                folder: Option.match(place, { onNone: () => row.cwd, onSome: (p) => p.folder }),
+              })
               const saved = yield* readSnapshot(info)
               feed(live, saved)
               feed(live, restartMarker(new Date(), "Humanity restarted; this is a new shell"))
@@ -455,14 +610,16 @@ export class TerminalService extends Context.Service<
           state: "restored",
           exitCode: null,
           busy: null,
+          lastExitCode: null,
           integration: false,
           createdAt: row.created_at,
         })
 
         const remove = (live: Live) =>
           Effect.gen(function* () {
-            stopProcess(live)
+            yield* stopProcess(live)
             flush(live)
+            clearTimeout(live.cwdTimer)
             for (const attachment of live.attachments.values()) Queue.endUnsafe(attachment.queue)
             live.attachments.clear()
             live.screen.dispose()
@@ -474,8 +631,11 @@ export class TerminalService extends Context.Service<
 
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
+            yield* Effect.forEach([...lives.values()], stopProcess, {
+              concurrency: "unbounded",
+              discard: true,
+            })
             for (const live of lives.values()) {
-              stopProcess(live)
               flush(live)
               for (const attachment of live.attachments.values()) Queue.endUnsafe(attachment.queue)
             }
@@ -567,6 +727,7 @@ export class TerminalService extends Context.Service<
             state: "starting",
             exitCode: null,
             busy: null,
+            lastExitCode: null,
             integration: false,
             createdAt: DateTime.formatIso(yield* DateTime.now),
           }
@@ -574,6 +735,7 @@ export class TerminalService extends Context.Service<
             scrollback: preferred.scrollback,
             cols: options.cols ?? DEFAULT_COLS,
             rows: options.rows ?? DEFAULT_ROWS,
+            folder: place.folder,
           })
           yield* startProcess(live, place.folder).pipe(
             Effect.tapError(() => Effect.sync(() => live.screen.dispose())),
@@ -614,7 +776,7 @@ export class TerminalService extends Context.Service<
         const restart = (terminalId: string) =>
           Effect.gen(function* () {
             const live = yield* find(terminalId)
-            stopProcess(live)
+            yield* stopProcess(live)
             feed(live, restartMarker(new Date(), "Restarted"))
             yield* startProcess(live, yield* folderFor(live))
             return live.info
@@ -694,6 +856,36 @@ export class TerminalService extends Context.Service<
             loadedOwners.delete(key)
           })
 
+        const moveSession = (sessionId: SessionId, folder: string) =>
+          Effect.gen(function* () {
+            const owner: TerminalOwner = { _tag: "Session", sessionId }
+            yield* ensureLoaded(owner)
+            const key = terminalOwnerKey(owner)
+            for (const live of [...lives.values()]) {
+              if (!isOwnedBy(live, key)) continue
+              live.folder = folder
+              const { state, integration, busy } = live.info
+              if (state === "restored" || state === "exited") {
+                // No shell runs: the next one starts in the worktree.
+                update(live, { cwd: folder, location: "folder" })
+                saveCwd(live)
+              } else if (integration && busy === false) {
+                yield* stopProcess(live)
+                feed(live, restartMarker(new Date(), "Moved to the thread's worktree"))
+                update(live, { cwd: folder, location: "folder" })
+                saveCwd(live)
+                yield* startProcess(live, folder).pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(`Could not restart terminal ${live.info.id}`, error.message),
+                  ),
+                )
+              } else {
+                // Running something, or no way to tell: it stays where it is, and says so.
+                update(live, { location: "checkout" })
+              }
+            }
+          })
+
         return TerminalService.of({
           list,
           watch,
@@ -709,6 +901,7 @@ export class TerminalService extends Context.Service<
             shellsNow().map(({ id, name, path }): ShellInfo => ({ id, name, path })),
           ),
           closeOwner,
+          moveSession,
         })
       }),
     )

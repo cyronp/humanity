@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest"
 import type { LocateOptions } from "../src/agent/installedCli.ts"
-import { detectShells, pickShell, shellArgs } from "../src/terminal/shells.ts"
+import { detectShells, pickShell } from "../src/terminal/shells.ts"
 
 const machine = (
   platform: NodeJS.Platform,
@@ -77,12 +77,5 @@ describe("pickShell", () => {
     assert.strictEqual(pickShell(shells, null)?.id, "bash")
     assert.strictEqual(pickShell(shells, "pwsh")?.id, "bash")
     assert.isUndefined(pickShell([], null))
-  })
-
-  it("starts login shells, and Git Bash interactive", () => {
-    const bash = pickShell(shells, "bash")
-    if (bash === undefined) return assert.fail("bash")
-    assert.deepStrictEqual(shellArgs(bash, "linux"), ["-l"])
-    assert.deepStrictEqual(shellArgs(bash, "win32"), ["--login", "-i"])
   })
 })

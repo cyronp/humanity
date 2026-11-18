@@ -361,6 +361,9 @@ function TerminalTab({
     terminal.cwd,
     terminal.opener === "agent" ? "opened by the agent" : undefined,
     terminal.location === "checkout" ? "still in the project's checkout" : undefined,
+    terminal.lastExitCode !== null && terminal.lastExitCode !== 0
+      ? `the last command exited with ${terminal.lastExitCode}`
+      : undefined,
   ].filter((detail) => detail !== undefined)
 
   return (
