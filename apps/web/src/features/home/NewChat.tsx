@@ -123,7 +123,8 @@ function NewChatForm({
     text,
     setText,
     textarea,
-    search: (query) => searchFiles({ payload: { projectId: project.id, query } }),
+    search: (query, recent) => searchFiles({ payload: { projectId: project.id, query, recent } }),
+    recentScope: project.id,
     disabled: pending,
   })
   const idBase = useId()
@@ -162,7 +163,7 @@ function NewChatForm({
       return
     }
     setText("")
-    mentions.forgetPicked()
+    mentions.sent()
     files.clear()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",

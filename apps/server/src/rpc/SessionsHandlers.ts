@@ -24,7 +24,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),
       "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),
-      "Sessions.searchFiles": ({ sessionId, query }) => sessions.searchFiles(sessionId, query),
+      "Sessions.searchFiles": ({ sessionId, query, recent }) =>
+        sessions.searchFiles(sessionId, query, recent),
       "Sessions.commits": ({ sessionId }) => sessions.commits(sessionId),
       "Sessions.commit": ({ sessionId, message, paths }) =>
         sessions.commit(sessionId, message, paths),

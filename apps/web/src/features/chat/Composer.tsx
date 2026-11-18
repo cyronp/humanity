@@ -84,7 +84,8 @@ export const Composer = memo(function Composer({
     text,
     setText,
     textarea,
-    search: (query) => searchFiles({ payload: { sessionId, query } }),
+    search: (query, recent) => searchFiles({ payload: { sessionId, query, recent } }),
+    recentScope: projectId,
     disabled,
   })
   const idBase = useId()
@@ -107,7 +108,7 @@ export const Composer = memo(function Composer({
     setPending(false)
     if (Exit.isSuccess(exit)) {
       setText("")
-      mentions.forgetPicked()
+      mentions.sent()
       files.clear()
     } else setError(describeCause(exit.cause))
   }

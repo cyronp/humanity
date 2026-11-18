@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 
 export const MENTION_LIMIT = 100
+export const RECENT_MENTION_LIMIT = 50
 
 export const FileMentions = Schema.Array(Schema.String)
 export type FileMentions = typeof FileMentions.Type

@@ -40,7 +40,11 @@ export const GitRpcs = RpcGroup.make(
     error: Schema.Union(GitFailure),
   }),
   Rpc.make("Git.searchFiles", {
-    payload: { projectId: ProjectId, query: Schema.String },
+    payload: {
+      projectId: ProjectId,
+      query: Schema.String,
+      recent: Schema.optional(Schema.Array(Schema.String)),
+    },
     success: Schema.Array(FileEntry),
     error: Schema.Union(GitFailure),
   }),

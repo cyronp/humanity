@@ -66,6 +66,30 @@ describe("searchFiles", () => {
     ])
   })
 
+  it("prefers initials at word, folder and camelCase starts over scattered letters", () => {
+    const files = [
+      "docs/forge-api-rate-limits.md",
+      "src/features/chat/FileMentionMenu.tsx",
+      "src/features/chat/useFileMention.ts",
+      "src/features/kiro/summary.ts",
+    ]
+    expect(searchFiles(files, "fmm", 1)[0]?.path).toBe("src/features/chat/FileMentionMenu.tsx")
+    expect(searchFiles(files, "usefm", 1)[0]?.path).toBe("src/features/chat/useFileMention.ts")
+  })
+
+  it("treats -, _ and space as one separator, and as optional", () => {
+    const files = ["src/session-service.ts", "src/SessionService.ts", "src/server.ts"]
+    const found = (query: string) => searchFiles(files, query).map((entry) => entry.path)
+    expect(found("session_service")).toEqual(["src/session-service.ts", "src/SessionService.ts"])
+    expect(found("session service")).toEqual(["src/session-service.ts", "src/SessionService.ts"])
+    expect(found("sesserv")[0]).toBe("src/SessionService.ts")
+  })
+
+  it("matches names written in decomposed Unicode", () => {
+    const decomposed = "docs/Résumé.md"
+    expect(searchFiles([decomposed], "résumé").map((entry) => entry.path)).toEqual([decomposed])
+  })
+
   it("returns nothing when nothing matches, and at most `limit` entries", () => {
     expect(paths("zzz")).toEqual([])
     expect(paths("s", 2)).toHaveLength(2)
@@ -84,6 +108,26 @@ describe("searchIndex", () => {
       expect(searchIndex(index, query, 30)).toEqual(all.slice(0, 30))
       expect(searchFiles(files, query, 5)).toEqual(all.slice(0, 5))
     }
+  })
+
+  it("lists recent mentions first for an empty query, most recent first", () => {
+    const recent = ["test/button.test.ts", "src/features/", "src/components/Button.tsx"]
+    expect(
+      searchIndex(indexFiles(FILES), "", 3, recent).map((entry) =>
+        entry.kind === "directory" ? `${entry.path}/` : entry.path,
+      ),
+    ).toEqual(recent)
+  })
+
+  it("lifts a recent mention among similar matches, but not over an exact name", () => {
+    const index = indexFiles(FILES)
+    const recent = ["src/components/ButtonGroup.tsx"]
+    expect(searchIndex(index, "button", 1, recent)[0]?.path).toBe("src/components/ButtonGroup.tsx")
+    expect(searchIndex(index, "button.tsx", 1, recent)[0]?.path).toBe("src/components/Button.tsx")
+  })
+
+  it("ignores recent paths that are not in the index", () => {
+    expect(searchIndex(indexFiles(FILES), "", 1, ["gone.ts"])[0]?.path).toBe("src")
   })
 
   it("returns nothing for a limit of zero", () => {

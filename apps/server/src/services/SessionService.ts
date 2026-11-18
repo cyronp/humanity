@@ -227,6 +227,7 @@ export class SessionService extends Context.Service<
     readonly searchFiles: (
       sessionId: string,
       query: string,
+      recent?: ReadonlyArray<string>,
     ) => Effect.Effect<ReadonlyArray<FileEntry>, SessionNotFound | GitError>
     readonly stopProject: (projectId: string) => Effect.Effect<void>
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
@@ -1109,8 +1110,10 @@ export class SessionService extends Context.Service<
       const diff = (sessionId: string) =>
         Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
 
-      const searchFiles = (sessionId: string, query: string) =>
-        Effect.flatMap(get(sessionId), (session) => fileSearch.search(session.worktreePath, query))
+      const searchFiles = (sessionId: string, query: string, recent?: ReadonlyArray<string>) =>
+        Effect.flatMap(get(sessionId), (session) =>
+          fileSearch.search(session.worktreePath, query, recent),
+        )
 
       const commits = Effect.fn("SessionService.commits")(function* (sessionId: string) {
         const session = yield* get(sessionId)

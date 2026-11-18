@@ -13,8 +13,12 @@ import {
 } from "react"
 import { describeCause } from "@/lib/errors"
 import { completeMention, findMention } from "./fileMention.ts"
+import { readRecentMentions, rememberMentions } from "./recentMentions.ts"
 
-export type FileSearch = (query: string) => Promise<Exit.Exit<ReadonlyArray<FileEntry>, unknown>>
+export type FileSearch = (
+  query: string,
+  recent: ReadonlyArray<string>,
+) => Promise<Exit.Exit<ReadonlyArray<FileEntry>, unknown>>
 
 const SEARCH_DELAY_MS = 150
 
@@ -32,12 +36,14 @@ export function useFileMention({
   setText,
   textarea,
   search,
+  recentScope,
   disabled = false,
 }: {
   readonly text: string
   readonly setText: Dispatch<SetStateAction<string>>
   readonly textarea: RefObject<HTMLTextAreaElement | null>
   readonly search: FileSearch
+  readonly recentScope: string
   readonly disabled?: boolean
 }) {
   const [caret, setCaret] = useState(0)
@@ -45,6 +51,11 @@ export function useFileMention({
   const [dismissed, setDismissed] = useState<number>()
   const [highlightState, setHighlight] = useState({ query: "", index: 0 })
   const [chosen, setChosen] = useState<ReadonlyArray<string>>([])
+  const [recent, setRecent] = useState(() => ({
+    scope: recentScope,
+    paths: readRecentMentions(recentScope),
+  }))
+  const recentPaths = recent.scope === recentScope ? recent.paths : readRecentMentions(recentScope)
   const picked = useMemo(() => mentionedPaths(text, chosen), [text, chosen])
   const [results, setResults] = useState<{
     readonly query: string
@@ -56,7 +67,7 @@ export function useFileMention({
   const mention = found !== undefined && found.start !== dismissed ? found : undefined
   const query = mention?.query
 
-  const runSearch = useEffectEvent(search)
+  const runSearch = useEffectEvent((query: string) => search(query, recentPaths))
   useEffect(() => {
     if (query === undefined) return
     let current = true
@@ -154,5 +165,10 @@ export function useFileMention({
           highlight,
         }
 
-  return { menu, onKeyDown, textareaProps, picked, forgetPicked: () => setChosen([]) }
+  const sent = () => {
+    setRecent({ scope: recentScope, paths: rememberMentions(recentScope, picked) })
+    setChosen([])
+  }
+
+  return { menu, onKeyDown, textareaProps, picked, sent }
 }

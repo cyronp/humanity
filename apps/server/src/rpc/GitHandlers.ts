@@ -21,9 +21,9 @@ export const GitHandlers = GitRpcs.toLayer(
         Effect.flatMap(projects.get(projectId), (project) => git.status(project.localPath)),
       "Git.diff": ({ projectId }) =>
         Effect.flatMap(projects.get(projectId), (project) => git.diff(project.localPath)),
-      "Git.searchFiles": ({ projectId, query }) =>
+      "Git.searchFiles": ({ projectId, query, recent }) =>
         Effect.flatMap(projects.get(projectId), (project) =>
-          files.search(project.localPath, query),
+          files.search(project.localPath, query, recent),
         ),
     })
   }),

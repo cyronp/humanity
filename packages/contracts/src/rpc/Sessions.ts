@@ -126,7 +126,11 @@ export const SessionsRpcs = RpcGroup.make(
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
   Rpc.make("Sessions.searchFiles", {
-    payload: { sessionId: SessionId, query: Schema.String },
+    payload: {
+      sessionId: SessionId,
+      query: Schema.String,
+      recent: Schema.optional(Schema.Array(Schema.String)),
+    },
     success: Schema.Array(FileEntry),
     error: Schema.Union([SessionNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed]),
   }),
