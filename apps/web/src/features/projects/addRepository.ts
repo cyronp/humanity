@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-
 let open = false
 const listeners = new Set<() => void>()
 

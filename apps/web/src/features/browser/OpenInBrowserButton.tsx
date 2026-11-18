@@ -29,7 +29,8 @@ export function OpenInBrowserButton({
       setError(describeCause(exit.cause))
       return
     }
-    if (!requestPreview(exit.value)) window.open(exit.value, "_blank", "noopener,noreferrer")
+    if (!requestPreview(exit.value, { explicit: true }))
+      window.open(exit.value, "_blank", "noopener,noreferrer")
   }
 
   if (labeled) {

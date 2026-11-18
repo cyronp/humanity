@@ -1,6 +1,6 @@
 import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
-import { HumanityClient } from "@/lib/rpc"
+import { HumanityClient, keys } from "@/lib/rpc"
 
 /** The local servers on this machine, scanned every 2 s while `fast`, else every 10 s. */
 export const localServersAtom = Atom.family((fast: boolean) =>
@@ -14,3 +14,8 @@ export const localServersAtom = Atom.family((fast: boolean) =>
 export const stopServerAtom = HumanityClient.mutation("Preview.stopServer")
 export const probeAtom = HumanityClient.mutation("Preview.probe")
 export const fileUrlAtom = HumanityClient.mutation("Preview.fileUrl")
+
+export const browserPreferencesAtom = HumanityClient.query("Preferences.getBrowser", undefined, {
+  reactivityKeys: [keys.preferences],
+})
+export const setBrowserPreferencesAtom = HumanityClient.mutation("Preferences.setBrowser")

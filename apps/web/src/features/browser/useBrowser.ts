@@ -27,9 +27,10 @@ export interface BrowserState {
   readonly offers: ReadonlyArray<OfferedUrl>
   /** The name of each of the thread's terminals, by id. */
   readonly terminalNames: ReadonlyMap<string, string>
-  readonly remembered: string | null
+  readonly memory: BrowserMemory
   readonly unseen: boolean
-  readonly onLoad: (url: string) => void
+  /** Changes the remembered tabs; the change is stored at once. */
+  readonly change: (next: (memory: BrowserMemory) => BrowserMemory) => void
   readonly onSeen: () => void
 }
 
@@ -90,10 +91,6 @@ export const useBrowser = (
     [sessionId],
   )
 
-  const onLoad = useCallback(
-    (url: string) => change((current) => (current.url === url ? current : { ...current, url })),
-    [change],
-  )
   const onSeen = useCallback(
     () => change((current) => markSeen(current, watched)),
     [change, watched],
@@ -103,9 +100,9 @@ export const useBrowser = (
     sessionId,
     offers,
     terminalNames,
-    remembered: memory.url,
+    memory,
     unseen: hasUnseen(memory, watched),
-    onLoad,
+    change,
     onSeen,
   }
 }

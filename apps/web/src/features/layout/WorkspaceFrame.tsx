@@ -7,7 +7,8 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { onPreviewRequest } from "@/features/browser/browser"
+import { browserPreferencesAtom } from "@/features/browser/atoms"
+import { onPreviewOpen, setLinkTarget } from "@/features/browser/browser"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
@@ -81,10 +82,16 @@ export function WorkspaceFrame({
     [setTerminalsOpen],
   )
 
+  const browserPreferences = useAtomValue(browserPreferencesAtom)
+  const linkTarget = AsyncResult.isSuccess(browserPreferences)
+    ? browserPreferences.value.linkTarget
+    : "browser"
+  useEffect(() => setLinkTarget(linkTarget), [linkTarget])
+
   const hasPanel = panel !== undefined
   useEffect(() => {
     if (!hasPanel) return
-    return onPreviewRequest(() => {
+    return onPreviewOpen(() => {
       setRailShown(true)
       setShelfState((current) => {
         const next = { open: true, tool: "browser" as const }

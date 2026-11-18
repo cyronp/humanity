@@ -10,7 +10,6 @@ import { SkillsSettings } from "@/features/extensions/SkillsSettings"
 import { projectsAtom } from "@/features/projects/atoms"
 import { SettingsFrame, SettingsPane } from "./SettingsLayout.tsx"
 
-
 export function McpSettings() {
   return (
     <ExtensionsFrame

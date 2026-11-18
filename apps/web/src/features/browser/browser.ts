@@ -1,9 +1,14 @@
 import {
+  type BrowserLinkTarget,
   DEFAULT_DAEMON_PORT,
   DEFAULT_DESKTOP_PORT,
   localUrlRanges,
   localUrls,
+  FILL_VIEWPORT,
   type OfferedUrl,
+  parseViewport,
+  parseZoom,
+  type PreviewViewport,
   type ToolCall,
 } from "@humanity/contracts"
 import { bashOutput } from "@/features/tools/inputs"
@@ -40,29 +45,67 @@ export const bashOffers = (toolCalls: Iterable<ToolCall>): ReadonlyArray<Offered
   return offers
 }
 
-/** What the Browser remembers of a thread: the address it showed, and the offers already seen. */
-export interface BrowserMemory {
+/** One tab of a thread's Browser. A tab with no address shows what it can open. */
+export interface BrowserTab {
+  readonly id: string
   readonly url: string | null
+  readonly title: string | null
+  readonly viewport: PreviewViewport
+  readonly zoom: number
+}
+
+/** What the Browser remembers of a thread: its tabs, the one shown, and the offers already seen. */
+export interface BrowserMemory {
+  readonly tabs: ReadonlyArray<BrowserTab>
+  readonly active: string | null
   readonly seen: ReadonlyArray<string>
 }
 
 const SEEN_KEPT = 50
+const TABS_KEPT = 20
 
-export const EMPTY_MEMORY: BrowserMemory = { url: null, seen: [] }
+export const EMPTY_MEMORY: BrowserMemory = { tabs: [], active: null, seen: [] }
 
 export const browserKey = (sessionId: string) => `humanity.browser.${sessionId}`
+
+export const makeTab = (url: string | null = null): BrowserTab => ({
+  id: crypto.randomUUID(),
+  url,
+  title: null,
+  viewport: FILL_VIEWPORT,
+  zoom: 1,
+})
+
+const parseTab = (value: unknown): BrowserTab | undefined => {
+  if (typeof value !== "object" || value === null) return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record["id"] !== "string") return undefined
+  return {
+    id: record["id"],
+    url: typeof record["url"] === "string" ? record["url"] : null,
+    title: typeof record["title"] === "string" ? record["title"] : null,
+    viewport: parseViewport(record["viewport"]),
+    zoom: parseZoom(record["zoom"]),
+  }
+}
 
 export const parseMemory = (raw: string | null): BrowserMemory => {
   try {
     const parsed: unknown = JSON.parse(raw ?? "null")
     if (typeof parsed !== "object" || parsed === null) return EMPTY_MEMORY
-    const { url, seen } = parsed as Record<string, unknown>
-    return {
-      url: typeof url === "string" ? url : null,
-      seen: Array.isArray(seen)
-        ? seen.filter((each): each is string => typeof each === "string").slice(-SEEN_KEPT)
-        : [],
-    }
+    const record = parsed as Record<string, unknown>
+    const seen = Array.isArray(record["seen"])
+      ? record["seen"].filter((each): each is string => typeof each === "string").slice(-SEEN_KEPT)
+      : []
+    const tabs = Array.isArray(record["tabs"])
+      ? record["tabs"].flatMap((each) => parseTab(each) ?? []).slice(0, TABS_KEPT)
+      : typeof record["url"] === "string"
+        ? [makeTab(record["url"])]
+        : []
+    const active = tabs.some((tab) => tab.id === record["active"])
+      ? (record["active"] as string)
+      : (tabs[0]?.id ?? null)
+    return { tabs, active, seen }
   } catch {
     return EMPTY_MEMORY
   }
@@ -81,6 +124,60 @@ export const storeMemory = (sessionId: string, memory: BrowserMemory) => {
     localStorage.setItem(browserKey(sessionId), JSON.stringify(memory))
   } catch {
     // Storage can be unavailable (private windows, blocked site data); the Browser still works.
+  }
+}
+
+export const activeTab = (memory: BrowserMemory): BrowserTab | undefined =>
+  memory.tabs.find((tab) => tab.id === memory.active)
+
+/**
+ * Shows `url`: in the tab that already shows it, else in the shown tab while it is empty, else in a
+ * new tab.
+ */
+export const openUrl = (memory: BrowserMemory, url: string): BrowserMemory => {
+  const showing = memory.tabs.find((tab) => tab.url === url)
+  if (showing !== undefined) return { ...memory, active: showing.id }
+  const current = activeTab(memory)
+  if (current !== undefined && current.url === null) {
+    return updateTab(memory, current.id, { url, title: null })
+  }
+  return openTab(memory, url)
+}
+
+export const openTab = (memory: BrowserMemory, url: string | null = null): BrowserMemory => {
+  const tab = makeTab(url)
+  return { ...memory, tabs: [...memory.tabs, tab].slice(-TABS_KEPT), active: tab.id }
+}
+
+/** Closes a tab; the one after it shows, else the one before. */
+export const closeTab = (memory: BrowserMemory, id: string): BrowserMemory => {
+  const index = memory.tabs.findIndex((tab) => tab.id === id)
+  if (index < 0) return memory
+  const tabs = memory.tabs.filter((tab) => tab.id !== id)
+  const active =
+    memory.active === id ? (tabs[index]?.id ?? tabs[index - 1]?.id ?? null) : memory.active
+  return { ...memory, tabs, active }
+}
+
+export const updateTab = (
+  memory: BrowserMemory,
+  id: string,
+  patch: Partial<Omit<BrowserTab, "id">>,
+): BrowserMemory => ({
+  ...memory,
+  tabs: memory.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)),
+})
+
+/** What a tab is called: its page's title, else its address without the scheme. */
+export const tabLabel = (tab: BrowserTab): string => {
+  if (tab.title !== null && tab.title.trim() !== "") return tab.title
+  if (tab.url === null) return "New tab"
+  try {
+    const url = new URL(tab.url)
+    const path = url.pathname === "/" ? "" : url.pathname
+    return `${url.host}${path}`
+  } catch {
+    return tab.url
   }
 }
 
@@ -149,23 +246,42 @@ export interface PreviewRequest {
 
 let pending: PreviewRequest | undefined
 let nonce = 0
-const listeners = new Set<(request: PreviewRequest) => void>()
+let linkTarget: BrowserLinkTarget = "browser"
+const openers = new Set<() => void>()
+const takers = new Set<() => void>()
+
+/** Follows Settings → Browser: where clicked local links open. */
+export const setLinkTarget = (target: BrowserLinkTarget) => {
+  linkTarget = target
+}
 
 /**
- * Asks the open thread's Browser to show `url`. Returns false when the page has no Browser, so the
- * caller can open it elsewhere.
+ * Asks the open thread's Browser to show `url`. Returns false when the page has no Browser, or when
+ * links open in the human's browser and this one was only clicked (not `explicit`), so the caller
+ * opens it elsewhere.
  */
-export const requestPreview = (url: string): boolean => {
-  if (listeners.size === 0) return false
-  const request = { url, nonce: ++nonce }
-  pending = request
-  for (const listener of listeners) listener(request)
+export const requestPreview = (
+  url: string,
+  options: { readonly explicit?: boolean } = {},
+): boolean => {
+  if (options.explicit !== true && linkTarget === "system") return false
+  if (openers.size === 0) return false
+  pending = { url, nonce: ++nonce }
+  for (const opener of openers) opener()
+  for (const taker of takers) taker()
   return true
 }
 
-export const onPreviewRequest = (listener: (request: PreviewRequest) => void) => {
-  listeners.add(listener)
-  return () => void listeners.delete(listener)
+/** Registers what opens the Browser's panel for a request: the page that has a Browser. */
+export const onPreviewOpen = (listener: () => void) => {
+  openers.add(listener)
+  return () => void openers.delete(listener)
+}
+
+/** Registers a mounted Browser, which takes each request. */
+export const onPreviewPending = (listener: () => void) => {
+  takers.add(listener)
+  return () => void takers.delete(listener)
 }
 
 /** The request no Browser took yet, taken: a Browser that opens for it shows it. */

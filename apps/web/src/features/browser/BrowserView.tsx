@@ -1,3 +1,4 @@
+import { useAtomSet } from "@effect/atom-react"
 import {
   type LocalServer,
   type OfferedUrl,
@@ -5,10 +6,19 @@ import {
   previewTarget,
 } from "@humanity/contracts"
 import { cn } from "cn"
-import { useAtomSet } from "@effect/atom-react"
 import { Exit } from "effect"
 import { ExternalLink, Globe, PanelRightClose, RotateCw, TriangleAlert } from "lucide-react"
-import { type FormEvent, useEffect, useEffectEvent, useId, useMemo, useState } from "react"
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -21,8 +31,20 @@ import {
 import { Input } from "@/components/ui/input"
 import { daemonAddress } from "@/lib/connection"
 import { probeAtom } from "./atoms.ts"
-import { onPreviewRequest, refusedPorts, takePreviewRequest } from "./browser.ts"
+import { DeviceMenu, TabStrip, ZoomControl } from "./BrowserControls.tsx"
+import {
+  activeTab,
+  closeTab,
+  onPreviewPending,
+  openTab,
+  openUrl,
+  refusedPorts,
+  takePreviewRequest,
+  updateTab,
+} from "./browser.ts"
 import { ServerList, useLocalServers } from "./ServerList.tsx"
+import type { BrowserState } from "./useBrowser.ts"
+import { ViewportFrame } from "./ViewportFrame.tsx"
 
 const SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
@@ -30,194 +52,274 @@ const SANDBOX =
 const openOutside = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
 /**
- * The Browser tool: a preview of a local address in a frame, with its own bar. It stays mounted
- * while another shelf tool shows, so switching tools doesn't reload the previewed app.
+ * The Browser tool: tabs of local pages in frames, each at the panel's size or a device's. It stays
+ * mounted while another shelf tool shows, so switching tools doesn't reload the previewed app.
  */
 export function BrowserView({
-  remembered,
+  browser,
   shown,
-  offers,
-  terminalNames,
-  onLoad,
-  onSeen,
   onClose,
   titlebarPadding,
 }: {
-  readonly remembered: string | null
+  readonly browser: BrowserState
   readonly shown: boolean
-  readonly offers: ReadonlyArray<OfferedUrl>
-  readonly terminalNames: ReadonlyMap<string, string>
-  readonly onLoad: (url: string) => void
-  readonly onSeen: () => void
   readonly onClose: () => void
   readonly titlebarPadding: string
 }) {
+  const { memory, change, offers, terminalNames, onSeen } = browser
   const refused = useMemo(() => refusedPorts(window.location, daemonAddress()), [])
-  const [url, setUrl] = useState<string | null>(() => {
-    if (remembered === null) return null
-    const target = previewTarget(remembered, refused)
-    return target._tag === "Url" ? target.url : null
-  })
-  const [draft, setDraft] = useState(url ?? "")
-  const [error, setError] = useState<string>()
-  const [reloads, setReloads] = useState(0)
-  const listId = useId()
+  const tab = activeTab(memory)
   const servers = useLocalServers(shown)
-  const suggestions = [
-    ...new Set([...servers.map((server) => server.url), ...offers.map((offer) => offer.url)]),
-  ]
+  const [error, setError] = useState<string>()
+  const [reloads, setReloads] = useState<Readonly<Record<string, number>>>({})
+  const [notices, setNotices] = useState<Readonly<Record<string, PreviewProbe | undefined>>>({})
   const probe = useAtomSet(probeAtom, { mode: "promiseExit" })
-  const [notice, setNotice] = useState<PreviewProbe>()
-  const checkFrame = async (loaded: string) => {
-    const exit = await probe({ payload: { url: loaded, embedder: window.location.origin } })
-    setNotice(Exit.isSuccess(exit) && exit.value._tag !== "Ok" ? exit.value : undefined)
+  const latest = useRef(memory)
+  useLayoutEffect(() => {
+    latest.current = memory
+  })
+
+  const reload = (id: string) => {
+    setNotices((current) => ({ ...current, [id]: undefined }))
+    setReloads((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }))
   }
 
-  const load = (input: string) => {
+  /** Loads what the human typed into the shown tab, or into a new one. */
+  const navigate = (input: string) => {
     const target = previewTarget(input, refused)
     if (target._tag === "Refused") {
-      setDraft(input)
       setError(target.reason)
       return
     }
     setError(undefined)
-    setNotice(undefined)
-    setDraft(target.url)
-    setUrl(target.url)
-    setReloads((count) => count + 1)
-    onLoad(target.url)
+    const current = activeTab(latest.current)
+    if (current === undefined) {
+      change((memory) => openTab(memory, target.url))
+      return
+    }
+    change((memory) => updateTab(memory, current.id, { url: target.url, title: null }))
+    reload(current.id)
   }
-  const loadRequested = useEffectEvent(load)
+
+  /** Shows an address a link or a button asked for, reloading a tab that already shows it. */
+  const show = (input: string) => {
+    const target = previewTarget(input, refused)
+    if (target._tag === "Refused") {
+      setError(target.reason)
+      return
+    }
+    setError(undefined)
+    const showing = latest.current.tabs.find((each) => each.url === target.url)
+    change((memory) => openUrl(memory, target.url))
+    if (showing !== undefined) reload(showing.id)
+  }
+  const showRequested = useEffectEvent(show)
 
   useEffect(() => {
     const take = () => {
       const request = takePreviewRequest()
-      if (request !== undefined) loadRequested(request.url)
+      if (request !== undefined) showRequested(request.url)
     }
     take()
-    return onPreviewRequest(take)
+    return onPreviewPending(take)
   }, [])
 
   useEffect(() => {
     if (shown) onSeen()
-  }, [shown, offers, onSeen])
+  }, [shown, onSeen])
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
-    load(draft)
+  const checkFrame = async (id: string, loaded: string) => {
+    const exit = await probe({ payload: { url: loaded, embedder: window.location.origin } })
+    const notice = Exit.isSuccess(exit) && exit.value._tag !== "Ok" ? exit.value : undefined
+    setNotices((current) => ({ ...current, [id]: notice }))
   }
+
+  const notice = tab === undefined ? undefined : notices[tab.id]
+  const tabUrl = tab?.url ?? null
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", !shown && "hidden")}>
       <div
-        className="titlebar flex h-12 shrink-0 items-center gap-2 border-b px-3"
+        className="titlebar flex h-12 shrink-0 items-center gap-1 border-b px-2"
         style={{ paddingRight: titlebarPadding }}
       >
         <h2 className="sr-only">Browser</h2>
-        <form onSubmit={submit} className="min-w-0 flex-1">
-          <Input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onFocus={(event) => event.target.select()}
-            list={listId}
-            placeholder="localhost:3000"
-            aria-label="Address"
-            aria-invalid={error !== undefined}
-            spellCheck={false}
-            autoComplete="off"
-            className="h-7 font-mono text-xs md:text-xs"
-          />
-          <datalist id={listId}>
-            {suggestions.map((suggestion) => (
-              <option key={suggestion} value={suggestion} />
-            ))}
-          </datalist>
-        </form>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => {
-              if (url === null) return load(draft)
-              setNotice(undefined)
-              setReloads((count) => count + 1)
-            }}
-            aria-label="Reload"
-            title="Reload"
-          >
-            <RotateCw />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={url === null}
-            onClick={() => url !== null && openOutside(url)}
-            aria-label="Open in my browser"
-            title="Open in my browser"
-          >
-            <ExternalLink />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            aria-label="Close the panel"
-            title="Close the panel"
-          >
-            <PanelRightClose />
-          </Button>
-        </div>
+        <TabStrip
+          tabs={memory.tabs}
+          active={memory.active}
+          onSelect={(id) => change((memory) => ({ ...memory, active: id }))}
+          onClose={(id) => change((memory) => closeTab(memory, id))}
+          onNew={() =>
+            change((memory) => {
+              const blank = memory.tabs.find((each) => each.url === null)
+              return blank === undefined ? openTab(memory) : { ...memory, active: blank.id }
+            })
+          }
+        />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label="Close the panel"
+          title="Close the panel"
+        >
+          <PanelRightClose />
+        </Button>
       </div>
+      <Toolbar
+        key={`${tab?.id}:${tabUrl}`}
+        url={tabUrl}
+        suggestions={[
+          ...new Set([...servers.map((server) => server.url), ...offers.map((offer) => offer.url)]),
+        ]}
+        error={error !== undefined}
+        onSubmit={navigate}
+        onReload={() => tab !== undefined && reload(tab.id)}
+      >
+        {tab !== undefined && (
+          <>
+            <DeviceMenu
+              viewport={tab.viewport}
+              onChange={(viewport) => change((memory) => updateTab(memory, tab.id, { viewport }))}
+            />
+            <ZoomControl
+              zoom={tab.zoom}
+              onChange={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
+            />
+          </>
+        )}
+      </Toolbar>
       {error !== undefined && (
         <p role="alert" className="border-b px-3 py-2 text-xs text-destructive">
           {error}
         </p>
       )}
-      {url === null ? (
-        <Offers offers={offers} servers={servers} terminalNames={terminalNames} onOpen={load} />
+      {tab === undefined || tabUrl === null ? (
+        <Offers offers={offers} servers={servers} terminalNames={terminalNames} onOpen={show} />
       ) : (
         <>
-          <iframe
-            key={reloads}
-            src={url}
-            title={`Preview of ${url}`}
-            sandbox={SANDBOX}
-            onLoad={() => void checkFrame(url)}
-            className="min-h-0 w-full flex-1 border-0 bg-white"
-          />
-          {notice !== undefined && notice._tag !== "Ok" ? (
-            <p
-              role="status"
-              className="flex shrink-0 items-start gap-2 border-t bg-warning/10 px-3 py-1.5 text-xs"
-            >
-              <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
-              <span>
-                {notice.reason}{" "}
-                <button
-                  type="button"
-                  className="underline underline-offset-2 hover:text-foreground"
-                  onClick={() => openOutside(url)}
-                >
-                  Open in my browser
-                </button>
-              </span>
-            </p>
-          ) : (
-            <p className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
-              Blank or refusing?{" "}
-              <button
-                type="button"
-                className="underline underline-offset-2 hover:text-foreground"
-                onClick={() => openOutside(url)}
-              >
-                Open in my browser
-              </button>
-              .
-            </p>
-          )}
+          <ViewportFrame
+            viewport={tab.viewport}
+            zoom={tab.zoom}
+            onViewportChange={(viewport) =>
+              change((memory) => updateTab(memory, tab.id, { viewport }))
+            }
+          >
+            <iframe
+              key={`${tab.id}:${reloads[tab.id] ?? 0}`}
+              src={tabUrl}
+              title={`Preview of ${tabUrl}`}
+              sandbox={SANDBOX}
+              onLoad={() => void checkFrame(tab.id, tabUrl)}
+              className="h-full w-full border-0 bg-white"
+            />
+          </ViewportFrame>
+          <FrameFooter url={tabUrl} notice={notice} />
         </>
       )}
     </div>
+  )
+}
+
+function Toolbar({
+  url,
+  suggestions,
+  error,
+  onSubmit,
+  onReload,
+  children,
+}: {
+  readonly url: string | null
+  readonly suggestions: ReadonlyArray<string>
+  readonly error: boolean
+  readonly onSubmit: (input: string) => void
+  readonly onReload: () => void
+  readonly children?: ReactNode
+}) {
+  const [draft, setDraft] = useState(url ?? "")
+  const listId = useId()
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    onSubmit(draft)
+  }
+  return (
+    <form onSubmit={submit} className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => (url === null ? onSubmit(draft) : onReload())}
+        aria-label="Reload"
+        title="Reload"
+      >
+        <RotateCw />
+      </Button>
+      <Input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        list={listId}
+        placeholder="localhost:3000"
+        aria-label="Address"
+        aria-invalid={error}
+        spellCheck={false}
+        autoComplete="off"
+        className="h-7 min-w-0 flex-1 font-mono text-xs md:text-xs"
+      />
+      <datalist id={listId}>
+        {suggestions.map((suggestion) => (
+          <option key={suggestion} value={suggestion} />
+        ))}
+      </datalist>
+      {children}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={url === null}
+        onClick={() => url !== null && openOutside(url)}
+        aria-label="Open in my browser"
+        title="Open in my browser"
+      >
+        <ExternalLink />
+      </Button>
+    </form>
+  )
+}
+
+function FrameFooter({
+  url,
+  notice,
+}: {
+  readonly url: string
+  readonly notice: PreviewProbe | undefined
+}) {
+  const open = (
+    <button
+      type="button"
+      className="underline underline-offset-2 hover:text-foreground"
+      onClick={() => openOutside(url)}
+    >
+      Open in my browser
+    </button>
+  )
+  if (notice !== undefined && notice._tag !== "Ok") {
+    return (
+      <p
+        role="status"
+        className="flex shrink-0 items-start gap-2 border-t bg-warning/10 px-3 py-1.5 text-xs"
+      >
+        <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+        <span>
+          {notice.reason} {open}
+        </span>
+      </p>
+    )
+  }
+  return (
+    <p className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
+      Blank or refusing? {open}.
+    </p>
   )
 }
 
@@ -233,7 +335,7 @@ function Offers({
   readonly onOpen: (url: string) => void
 }) {
   return (
-    <Empty className="min-h-0 flex-1">
+    <Empty className="min-h-0 flex-1 overflow-y-auto">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Globe />

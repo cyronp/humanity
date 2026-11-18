@@ -5,11 +5,19 @@ import {
   EMPTY_MEMORY,
   hasUnseen,
   linkLocalUrls,
+  activeTab,
+  closeTab,
+  makeTab,
   markSeen,
-  onPreviewRequest,
+  onPreviewOpen,
+  onPreviewPending,
+  openTab,
+  openUrl,
   parseMemory,
   refusedPorts,
   requestPreview,
+  setLinkTarget,
+  tabLabel,
   takePreviewRequest,
 } from "@/features/browser/browser"
 
@@ -58,12 +66,65 @@ describe("bashOffers", () => {
 
 describe("browser memory", () => {
   it("reads what it stored, and falls back on anything else", () => {
-    expect(parseMemory(JSON.stringify({ url: "http://localhost:3000/", seen: ["a", 1] }))).toEqual({
-      url: "http://localhost:3000/",
-      seen: ["a"],
+    const stored = {
+      tabs: [
+        {
+          id: "a",
+          url: "http://localhost:3000/",
+          title: null,
+          viewport: { _tag: "device", id: "iphone-se", landscape: true },
+          zoom: 1.25,
+        },
+        { id: "b", url: 7, viewport: { _tag: "device", id: "nope" }, zoom: 1.3 },
+      ],
+      active: "b",
+      seen: ["x", 1],
+    }
+    expect(parseMemory(JSON.stringify(stored))).toEqual({
+      tabs: [
+        stored.tabs[0],
+        { id: "b", url: null, title: null, viewport: { _tag: "fill" }, zoom: 1 },
+      ],
+      active: "b",
+      seen: ["x"],
     })
     expect(parseMemory("{nope")).toEqual(EMPTY_MEMORY)
     expect(parseMemory(null)).toEqual(EMPTY_MEMORY)
+  })
+
+  it("turns the address an older version kept into a tab", () => {
+    const memory = parseMemory(JSON.stringify({ url: "http://localhost:3000/", seen: [] }))
+    expect(memory.tabs.map((tab) => tab.url)).toEqual(["http://localhost:3000/"])
+    expect(memory.active).toBe(memory.tabs[0]?.id)
+  })
+
+  it("opens an address in the tab showing it, the empty shown tab, or a new tab", () => {
+    let memory = openTab(EMPTY_MEMORY)
+    const first = memory.active
+    memory = openUrl(memory, "http://localhost:3000/")
+    expect(memory.tabs).toHaveLength(1)
+    expect(activeTab(memory)?.url).toBe("http://localhost:3000/")
+    memory = openUrl(memory, "http://localhost:5173/")
+    expect(memory.tabs).toHaveLength(2)
+    memory = openUrl(memory, "http://localhost:3000/")
+    expect(memory.active).toBe(first)
+    expect(memory.tabs).toHaveLength(2)
+  })
+
+  it("shows the next tab, else the previous one, when the shown one closes", () => {
+    let memory = openTab(openTab(openTab(EMPTY_MEMORY, "a"), "b"), "c")
+    const [a, b, c] = memory.tabs.map((tab) => tab.id)
+    memory = closeTab({ ...memory, active: b ?? null }, b ?? "")
+    expect(memory.active).toBe(c)
+    memory = closeTab(memory, c ?? "")
+    expect(memory.active).toBe(a)
+    expect(closeTab(memory, a ?? "").active).toBeNull()
+  })
+
+  it("names a tab by its title, else its address", () => {
+    expect(tabLabel(makeTab(null))).toBe("New tab")
+    expect(tabLabel(makeTab("http://localhost:5173/app?x=1"))).toBe("localhost:5173/app")
+    expect(tabLabel({ ...makeTab("http://localhost:5173/"), title: "Vite App" })).toBe("Vite App")
   })
 
   it("knows which offered addresses are new, until they are seen", () => {
@@ -103,15 +164,29 @@ describe("linkLocalUrls", () => {
 })
 
 describe("requestPreview", () => {
-  it("says no when no Browser listens, and hands a request to the one that opens", () => {
+  it("says no when the page has no Browser, and hands a request to the one that opens", () => {
     expect(requestPreview("http://localhost:3000/")).toBe(false)
-    const heard: Array<string> = []
-    const stop = onPreviewRequest((request) => heard.push(request.url))
+    let opened = 0
+    let pending = 0
+    const stopOpening = onPreviewOpen(() => opened++)
+    const stopTaking = onPreviewPending(() => pending++)
     expect(requestPreview("http://localhost:3000/")).toBe(true)
-    expect(heard).toEqual(["http://localhost:3000/"])
+    expect([opened, pending]).toEqual([1, 1])
     expect(takePreviewRequest()?.url).toBe("http://localhost:3000/")
     expect(takePreviewRequest()).toBeUndefined()
-    stop()
+    stopOpening()
+    stopTaking()
     expect(requestPreview("http://localhost:3000/")).toBe(false)
+  })
+
+  it("leaves clicked links to the human's browser when they ask for it, but not explicit opens", () => {
+    const stop = onPreviewOpen(() => undefined)
+    setLinkTarget("system")
+    expect(requestPreview("http://localhost:3000/")).toBe(false)
+    expect(requestPreview("http://localhost:3000/", { explicit: true })).toBe(true)
+    setLinkTarget("browser")
+    expect(requestPreview("http://localhost:3000/")).toBe(true)
+    takePreviewRequest()
+    stop()
   })
 })

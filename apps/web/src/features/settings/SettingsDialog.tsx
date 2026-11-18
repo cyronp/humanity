@@ -3,6 +3,7 @@ import {
   Blocks,
   FolderCog,
   FolderGit2,
+  Globe,
   Info,
   Plug,
   RefreshCw,
@@ -24,6 +25,7 @@ import { ProjectsSettings } from "./ProjectsSettings.tsx"
 import { ProvidersSettings } from "./ProvidersSettings.tsx"
 import { RepositoriesSettings } from "./RepositoriesSettings.tsx"
 import { TerminalSettings } from "./TerminalSettings.tsx"
+import { BrowserSettings } from "./BrowserSettings.tsx"
 import { ToolsSettings } from "./ToolsSettings.tsx"
 import {
   closeSettings,
@@ -45,6 +47,7 @@ const SECTION_VIEWS: Record<
 > = {
   general: { icon: SlidersHorizontal, View: GeneralSettings },
   terminal: { icon: SquareTerminal, View: TerminalSettings },
+  browser: { icon: Globe, View: BrowserSettings },
   providers: { icon: Plug, View: ProvidersSettings },
   tools: { icon: Wrench, View: ToolsSettings },
   repositories: { icon: FolderGit2, View: RepositoriesSettings },

@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-
 const STORAGE_KEY = "humanity.onboarding.completed"
 
 const DEBUG_PARAM = "onboarding"
@@ -34,8 +33,7 @@ export const hasCompletedOnboarding = (): boolean => {
 export const completeOnboarding = (): void => {
   try {
     window.localStorage.setItem(STORAGE_KEY, new Date().toISOString())
-  } catch {
-  }
+  } catch {}
 }
 
 interface OnboardingState {
@@ -56,8 +54,7 @@ const initialState = (): OnboardingState => {
   if (debug === "reset") {
     try {
       window.localStorage.removeItem(STORAGE_KEY)
-    } catch {
-    }
+    } catch {}
   }
   if (debug !== null) return { open: true, step: parseStep(debug) ?? "welcome" }
   return { open: !hasCompletedOnboarding(), step: "welcome" }

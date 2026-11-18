@@ -53,8 +53,7 @@ const useFavoriteModels = () => {
         : [...current, value]
       try {
         localStorage.setItem(FAVORITES_KEY, JSON.stringify(next))
-      } catch {
-      }
+      } catch {}
       return next
     })
   return [favorites, toggle] as const

@@ -32,8 +32,8 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 |---|---|---|
 | 7 | Spec amendment and this plan | ✅ |
 | 8 | Daemon: running servers, Stop server, blank-page probe, HTML/PDF files | ✅ |
-| 9 | Panel: tabs, device sizes, zoom, link setting | ⏳ next |
-| 10 | Desktop: the webview, the preload bridge, navigation, find, DevTools, appearance, mute, clear data, popups, downloads, crash recovery | |
+| 9 | Panel: tabs, device sizes, zoom, link setting | ✅ checked in headless Edge |
+| 10 | Desktop: the webview, the preload bridge, navigation, find, DevTools, appearance, mute, clear data, popups, downloads, crash recovery | ⏳ next |
 | 11 | Capture: pick element, screenshot and annotate into the composer | |
 | 12 | Recording and picture-in-picture | |
 

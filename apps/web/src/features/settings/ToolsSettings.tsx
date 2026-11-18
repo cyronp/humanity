@@ -63,9 +63,9 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
           labelId={terminalsId}
           detail={
             <>
-              Agent uses the terminals below the chat: read what's on screen, type commands,
-              and run dev servers where you can see them. When it's off, the agent can't see your
-              terminals at all.
+              Agent uses the terminals below the chat: read what's on screen, type commands, and run
+              dev servers where you can see them. When it's off, the agent can't see your terminals
+              at all.
               <TokenCost tool="terminals" />
             </>
           }
@@ -81,8 +81,7 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
           labelId={openThreadId}
           detail={
             <>
-              Agent starts another thread in the same project when you ask it to, on any
-              provider.
+              Agent starts another thread in the same project when you ask it to, on any provider.
               <TokenCost tool="openThread" />
             </>
           }

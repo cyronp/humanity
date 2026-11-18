@@ -105,6 +105,5 @@ export const readStoredFilter = (): ThreadFilter => {
 export const storeFilter = (filter: ThreadFilter) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filter))
-  } catch {
-  }
+  } catch {}
 }

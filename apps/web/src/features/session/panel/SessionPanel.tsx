@@ -210,12 +210,8 @@ export function ToolPanel({
       )}
       {browserMounted && (
         <BrowserView
-          remembered={browser.remembered}
+          browser={browser}
           shown={tool === "browser"}
-          offers={browser.offers}
-          terminalNames={browser.terminalNames}
-          onLoad={browser.onLoad}
-          onSeen={browser.onSeen}
           onClose={onClose}
           titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
         />

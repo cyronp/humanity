@@ -136,3 +136,133 @@ export type PreviewProbe = typeof PreviewProbe.Type
 
 /** Files the Browser shows from a thread's folder. */
 export const isPreviewFile = (path: string): boolean => /\.(?:html?|pdf)$/i.test(path)
+
+export interface PreviewDevice {
+  readonly id: string
+  readonly label: string
+  readonly category: "Phone" | "Tablet" | "Desktop"
+  readonly width: number
+  readonly height: number
+}
+
+/** Chrome DevTools' devices, in its order, with their CSS viewport sizes (portrait). */
+export const PREVIEW_DEVICES: ReadonlyArray<PreviewDevice> = [
+  { id: "iphone-se", label: "iPhone SE", category: "Phone", width: 375, height: 667 },
+  { id: "iphone-xr", label: "iPhone XR", category: "Phone", width: 414, height: 896 },
+  { id: "iphone-12-pro", label: "iPhone 12 Pro", category: "Phone", width: 390, height: 844 },
+  {
+    id: "iphone-14-pro-max",
+    label: "iPhone 14 Pro Max",
+    category: "Phone",
+    width: 430,
+    height: 932,
+  },
+  { id: "pixel-7", label: "Pixel 7", category: "Phone", width: 412, height: 915 },
+  { id: "galaxy-s8-plus", label: "Samsung Galaxy S8+", category: "Phone", width: 360, height: 740 },
+  {
+    id: "galaxy-s20-ultra",
+    label: "Samsung Galaxy S20 Ultra",
+    category: "Phone",
+    width: 412,
+    height: 915,
+  },
+  { id: "galaxy-a51", label: "Samsung Galaxy A51/71", category: "Phone", width: 412, height: 914 },
+  { id: "galaxy-z-fold-5", label: "Galaxy Z Fold 5", category: "Phone", width: 344, height: 882 },
+  { id: "surface-duo", label: "Surface Duo", category: "Tablet", width: 540, height: 720 },
+  { id: "ipad-mini", label: "iPad Mini", category: "Tablet", width: 768, height: 1024 },
+  { id: "ipad-air", label: "iPad Air", category: "Tablet", width: 820, height: 1180 },
+  { id: "ipad-pro", label: "iPad Pro", category: "Tablet", width: 1024, height: 1366 },
+  { id: "surface-pro-7", label: "Surface Pro 7", category: "Tablet", width: 912, height: 1368 },
+  { id: "zenbook-fold", label: "Asus Zenbook Fold", category: "Tablet", width: 853, height: 1280 },
+  { id: "nest-hub", label: "Nest Hub", category: "Desktop", width: 1024, height: 600 },
+  { id: "nest-hub-max", label: "Nest Hub Max", category: "Desktop", width: 1280, height: 800 },
+  { id: "laptop", label: "Laptop", category: "Desktop", width: 1366, height: 768 },
+  { id: "desktop-hd", label: "Desktop HD", category: "Desktop", width: 1920, height: 1080 },
+]
+
+export const VIEWPORT_LIMITS = { min: 240, max: 3840 } as const
+
+/** How a Browser tab sizes its page: the panel's size, a device's, or a free size. */
+export type PreviewViewport =
+  | { readonly _tag: "fill" }
+  | { readonly _tag: "device"; readonly id: string; readonly landscape: boolean }
+  | { readonly _tag: "free"; readonly width: number; readonly height: number }
+
+export const FILL_VIEWPORT: PreviewViewport = { _tag: "fill" }
+
+const clampDimension = (value: number) =>
+  Math.round(Math.min(VIEWPORT_LIMITS.max, Math.max(VIEWPORT_LIMITS.min, value)))
+
+/** A free size within the limits. */
+export const freeViewport = (width: number, height: number): PreviewViewport => ({
+  _tag: "free",
+  width: clampDimension(width),
+  height: clampDimension(height),
+})
+
+/** The CSS size a viewport gives its page, or undefined when it fills the panel. */
+export const viewportSize = (
+  viewport: PreviewViewport,
+): { readonly width: number; readonly height: number } | undefined => {
+  switch (viewport._tag) {
+    case "fill":
+      return undefined
+    case "free":
+      return { width: viewport.width, height: viewport.height }
+    case "device": {
+      const device = PREVIEW_DEVICES.find((each) => each.id === viewport.id)
+      if (device === undefined) return undefined
+      return viewport.landscape
+        ? { width: device.height, height: device.width }
+        : { width: device.width, height: device.height }
+    }
+  }
+}
+
+/** Reads a stored viewport, falling back to filling the panel. */
+export const parseViewport = (value: unknown): PreviewViewport => {
+  if (typeof value !== "object" || value === null) return FILL_VIEWPORT
+  const record = value as Record<string, unknown>
+  if (record["_tag"] === "device" && PREVIEW_DEVICES.some((device) => device.id === record["id"])) {
+    return { _tag: "device", id: String(record["id"]), landscape: record["landscape"] === true }
+  }
+  if (
+    record["_tag"] === "free" &&
+    typeof record["width"] === "number" &&
+    typeof record["height"] === "number"
+  ) {
+    return freeViewport(record["width"], record["height"])
+  }
+  return FILL_VIEWPORT
+}
+
+/** Chromium's zoom steps, up to 300 %. */
+export const ZOOM_LEVELS = [
+  0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3,
+] as const
+
+/** The next zoom step in a direction, from any zoom. */
+export const stepZoom = (zoom: number, direction: 1 | -1): number => {
+  if (direction > 0) return ZOOM_LEVELS.find((level) => level > zoom + 0.001) ?? zoom
+  return [...ZOOM_LEVELS].reverse().find((level) => level < zoom - 0.001) ?? zoom
+}
+
+export const parseZoom = (value: unknown): number =>
+  typeof value === "number" && ZOOM_LEVELS.some((level) => level === value) ? value : 1
+
+/**
+ * How a page of `size` CSS pixels at `zoom` is shown in `available` pixels: the frame's CSS size
+ * and the scale it is drawn at. A page that fills the panel takes its size; a fixed size is scaled
+ * down, never up, to fit.
+ */
+export const fitViewport = (
+  size: { readonly width: number; readonly height: number } | undefined,
+  available: { readonly width: number; readonly height: number },
+  zoom: number,
+): { readonly width: number; readonly height: number; readonly scale: number } => {
+  if (size === undefined) {
+    return { width: available.width / zoom, height: available.height / zoom, scale: zoom }
+  }
+  const fit = Math.min(1, available.width / size.width, available.height / size.height)
+  return { width: size.width / zoom, height: size.height / zoom, scale: zoom * Math.max(fit, 0.05) }
+}

@@ -144,8 +144,9 @@ export function TerminalView({
     silenceQueries(terminal)
     terminal.loadAddon(
       new WebLinksAddon((event, uri) => {
-        if (event.ctrlKey || event.metaKey) window.open(uri, "_blank", "noopener,noreferrer")
-        else if (localUrls(uri).length > 0) requestPreview(uri)
+        const outside = () => void window.open(uri, "_blank", "noopener,noreferrer")
+        if (event.ctrlKey || event.metaKey || event.button === 1) outside()
+        else if (localUrls(uri).length > 0 && !requestPreview(uri)) outside()
       }),
     )
     terminal.open(element)

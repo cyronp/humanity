@@ -2,7 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { LocalServer } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { Square, SquareTerminal } from "lucide-react"
+import { ChevronRight, CircleStop, SquareTerminal } from "lucide-react"
 import { useMemo, useState } from "react"
 import {
   AlertDialog,
@@ -85,13 +85,15 @@ export function ServerList({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="sm"
           disabled={stopping === server.port}
           aria-label={`Stop the server on port ${server.port}`}
           title="Stop server"
+          className="text-muted-foreground hover:text-destructive"
           onClick={() => (server.terminalId === null ? setAsking(server) : void stopNow(server))}
         >
-          <Square />
+          <CircleStop />
+          Stop
         </Button>
       </li>
     )
@@ -107,12 +109,16 @@ export function ServerList({
         </section>
       )}
       {others.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            Other servers on this machine
-          </h3>
-          <ul className="flex flex-col gap-1">{others.map(row)}</ul>
-        </section>
+        <details
+          className="group/others flex flex-col gap-1"
+          open={ours.length === 0 && others.length <= 3}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+            <ChevronRight className="size-3.5 transition-transform group-open/others:rotate-90" />
+            Other servers on this machine ({others.length})
+          </summary>
+          <ul className="mt-1 flex flex-col gap-1">{others.map(row)}</ul>
+        </details>
       )}
       {error !== undefined && <p className="text-xs text-destructive">{error}</p>}
       <AlertDialog

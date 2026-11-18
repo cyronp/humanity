@@ -75,10 +75,7 @@ describe("the MCP server form", () => {
       name: " fs ",
       command: " npx ",
       args: "-y\n\n  @mcp/server-fs  \nC:\\My Folder\n",
-      env: [
-        { ...blankEntry(), name: "TOKEN", value: "abc" },
-        blankEntry(),
-      ],
+      env: [{ ...blankEntry(), name: "TOKEN", value: "abc" }, blankEntry()],
     })
     expect(result).toEqual({
       ok: {

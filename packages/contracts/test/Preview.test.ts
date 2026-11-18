@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { localUrlRanges, localUrls, mergeOffers, previewTarget } from "../src/domain/Preview.ts"
+import {
+  fitViewport,
+  freeViewport,
+  localUrlRanges,
+  localUrls,
+  mergeOffers,
+  parseViewport,
+  parseZoom,
+  previewTarget,
+  stepZoom,
+  viewportSize,
+} from "../src/domain/Preview.ts"
 
 describe("localUrls", () => {
   it("finds a dev server's local address through its colors, and not its LAN one", () => {
@@ -94,5 +105,53 @@ describe("mergeOffers", () => {
       { url: "http://localhost:3000/", seenAt: "2026-11-18T10:10:00.000Z" },
       { url: "http://localhost:5173/", seenAt: "2026-11-18T10:05:00.000Z" },
     ])
+  })
+})
+
+describe("viewports", () => {
+  it("sizes a device, rotated or not, and a free size within the limits", () => {
+    expect(viewportSize({ _tag: "fill" })).toBeUndefined()
+    expect(viewportSize({ _tag: "device", id: "iphone-se", landscape: false })).toEqual({
+      width: 375,
+      height: 667,
+    })
+    expect(viewportSize({ _tag: "device", id: "iphone-se", landscape: true })).toEqual({
+      width: 667,
+      height: 375,
+    })
+    expect(freeViewport(10, 99_999)).toEqual({ _tag: "free", width: 240, height: 3840 })
+    expect(parseViewport({ _tag: "device", id: "nope" })).toEqual({ _tag: "fill" })
+    expect(parseViewport({ _tag: "free", width: 800.4, height: 600 })).toEqual({
+      _tag: "free",
+      width: 800,
+      height: 600,
+    })
+  })
+
+  it("fills the area, or scales a fixed size down to fit, never up", () => {
+    expect(fitViewport(undefined, { width: 800, height: 600 }, 2)).toEqual({
+      width: 400,
+      height: 300,
+      scale: 2,
+    })
+    expect(fitViewport({ width: 400, height: 300 }, { width: 800, height: 600 }, 1)).toEqual({
+      width: 400,
+      height: 300,
+      scale: 1,
+    })
+    expect(fitViewport({ width: 1600, height: 600 }, { width: 800, height: 600 }, 1)).toEqual({
+      width: 1600,
+      height: 600,
+      scale: 0.5,
+    })
+  })
+
+  it("steps the zoom through Chromium's levels", () => {
+    expect(stepZoom(1, 1)).toBe(1.1)
+    expect(stepZoom(1, -1)).toBe(0.9)
+    expect(stepZoom(3, 1)).toBe(3)
+    expect(stepZoom(0.25, -1)).toBe(0.25)
+    expect(stepZoom(1.05, 1)).toBe(1.1)
+    expect(parseZoom(1.3)).toBe(1)
   })
 })
