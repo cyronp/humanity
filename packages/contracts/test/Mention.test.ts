@@ -14,6 +14,15 @@ describe("mentionedPaths", () => {
     ])
   })
 
+  it("reads a path with an @ inside, and a quoted path with escaped quotes", () => {
+    expect(
+      mentionedPaths('@node/@types/a.ts and @"say \\"hi\\".md".', [
+        "node/@types/a.ts",
+        'say "hi".md',
+      ]),
+    ).toEqual(["node/@types/a.ts", 'say "hi".md'])
+  })
+
   it("keeps at most MENTION_LIMIT paths", () => {
     const paths = Array.from({ length: MENTION_LIMIT + 5 }, (_, index) => `f${index}.ts`)
     expect(mentionedPaths(paths.map((path) => `@${path}`).join(" "), paths)).toHaveLength(

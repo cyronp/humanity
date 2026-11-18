@@ -24,7 +24,7 @@ export function FileReferenceText({
           tight
           className="mr-[0.3em] ml-[0.05em] inline-block size-[0.85em] align-[-0.1em]"
         />
-        {segment.text.replace(/^@"?|"$/g, "")}
+        {segment.path}
       </span>
     ),
   )

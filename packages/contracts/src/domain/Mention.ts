@@ -12,17 +12,19 @@ export interface MentionToken {
   readonly path: string
 }
 
-const MENTION = /(^|\s)@(?:"([^"\n]+)"|([^\s@"]+))/g
+const MENTION = /(^|\s)@(?:"((?:\\"|[^"\n])+)"|([^\s"]\S*))/g
 const TRAILING = /[.,;:!?)\]}'"]+$/
+
+export const unescapeQuoted = (quoted: string): string => quoted.replaceAll('\\"', '"')
 
 export const mentionTokens = (text: string, mentions: ReadonlySet<string>): Array<MentionToken> => {
   const tokens: Array<MentionToken> = []
   if (mentions.size === 0) return tokens
   for (const match of text.matchAll(MENTION)) {
     const start = match.index + (match[1] ?? "").length
-    const quoted = match[2]
-    if (quoted !== undefined) {
-      if (mentions.has(quoted)) tokens.push({ start, end: start + 3 + quoted.length, path: quoted })
+    if (match[2] !== undefined) {
+      const path = unescapeQuoted(match[2])
+      if (mentions.has(path)) tokens.push({ start, end: match.index + match[0].length, path })
       continue
     }
     const raw = match[3] ?? ""

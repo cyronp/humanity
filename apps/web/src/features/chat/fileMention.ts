@@ -1,22 +1,31 @@
-import { type FileEntry, mentionTokens } from "@humanity/contracts"
+import { type FileEntry, mentionTokens, unescapeQuoted } from "@humanity/contracts"
 import type { PromptEdit } from "@/features/extensions/prompt"
 
 export interface ActiveMention {
   readonly start: number
   readonly query: string
+  readonly quoted: boolean
 }
+
+const QUOTED_MENTION = /(^|\s)@"((?:\\"|[^"\n])*)$/
+const BARE_MENTION = /(^|\s)@(\S*)$/
 
 export const findMention = (text: string, caret: number): ActiveMention | undefined => {
   const before = text.slice(0, Math.max(0, Math.min(caret, text.length)))
-  const match = /(^|\s)@([^\s@]*)$/.exec(before)
-  if (match === null) return undefined
-  const query = match[2] ?? ""
-  return { start: before.length - query.length - 1, query }
+  const quoted = QUOTED_MENTION.exec(before)
+  if (quoted !== null) {
+    const raw = quoted[2] ?? ""
+    return { start: before.length - raw.length - 2, query: unescapeQuoted(raw), quoted: true }
+  }
+  const bare = BARE_MENTION.exec(before)
+  if (bare === null) return undefined
+  const query = bare[2] ?? ""
+  return { start: before.length - query.length - 1, query, quoted: false }
 }
 
 export const mentionOf = (entry: FileEntry): string => {
   const path = entry.kind === "directory" ? `${entry.path}/` : entry.path
-  return /\s/.test(path) ? `@"${path}"` : `@${path}`
+  return /\s/.test(path) || path.startsWith('"') ? `@"${path.replaceAll('"', '\\"')}"` : `@${path}`
 }
 
 export const completeMention = (
@@ -26,11 +35,16 @@ export const completeMention = (
   entry: FileEntry,
 ): PromptEdit => {
   const token = mentionOf(entry)
-  const after = text.slice(caret)
-  const open = entry.kind === "directory" && !token.endsWith('"')
+  const rest = text.slice(caret)
+  const after = mention.quoted && rest.startsWith('"') ? rest.slice(1) : rest
+  const open = entry.kind === "directory"
   const trail = open || /^\s/.test(after) ? "" : " "
   const head = `${text.slice(0, mention.start)}${token}${trail}`
-  const caretAt = open || trail !== "" ? head.length : head.length + 1
+  const caretAt = open
+    ? head.length - (token.endsWith('"') ? 1 : 0)
+    : trail !== ""
+      ? head.length
+      : head.length + 1
   return { text: `${head}${after}`, caret: caretAt }
 }
 
