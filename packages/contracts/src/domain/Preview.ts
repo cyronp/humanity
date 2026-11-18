@@ -73,13 +73,35 @@ export const portOf = (url: URL): number =>
  * become `http://localhost:3000/`. Only `localhost`, `127.0.0.1` and `[::1]` over http and https are
  * previewed, and never Humanity's own ports, so a framed page can never be Humanity itself.
  */
-export const previewTarget = (input: string, refusedPorts: ReadonlySet<number>): PreviewTarget => {
+export const previewTarget = (
+  input: string,
+  refusedPorts: ReadonlySet<number>,
+  options: {
+    /** The desktop app's Browser shows any site; a browser tab's only local ones. */
+    readonly anyHost?: boolean
+  } = {},
+): PreviewTarget => {
+  const anyHost = options.anyHost === true
   const trimmed = input.trim()
-  if (trimmed === "") return refused("Type a local address, such as localhost:3000.")
+  if (trimmed === "") {
+    return refused(
+      anyHost
+        ? "Type an address, such as localhost:3000."
+        : "Type a local address, such as localhost:3000.",
+    )
+  }
   const withHost = /^:?\d{1,5}(?:[/?#].*)?$/.test(trimmed)
     ? `localhost${trimmed.startsWith(":") ? "" : ":"}${trimmed}`
     : trimmed
-  const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(withHost) ? withHost : `http://${withHost}`
+  const hasScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(withHost)
+  const hostPart = withHost.split(/[/?#]/, 1)[0] ?? ""
+  if (!hasScheme && (/\s/.test(withHost) || !/[.:]|^localhost$/i.test(hostPart))) {
+    return refused(`"${trimmed}" is not an address. The address bar doesn't search.`)
+  }
+  const looksLocal = /^(?:localhost|127\.|\[::1\]|0\.0\.0\.0)/i.test(hostPart)
+  const withScheme = hasScheme
+    ? withHost
+    : `${anyHost && !looksLocal ? "https" : "http"}://${withHost}`
   let url: URL
   try {
     url = new URL(withScheme)
@@ -89,11 +111,12 @@ export const previewTarget = (input: string, refusedPorts: ReadonlySet<number>):
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return refused("Only http and https addresses can be previewed.")
   }
-  if (!LOCAL_HOSTS.has(url.hostname)) {
+  const local = LOCAL_HOSTS.has(url.hostname) || url.hostname.startsWith("127.")
+  if (!local && !anyHost) {
     return refused("Only localhost, 127.0.0.1 and [::1] can be previewed here.")
   }
   if (url.hostname === "0.0.0.0") url.hostname = "localhost"
-  if (refusedPorts.has(portOf(url))) {
+  if (local && refusedPorts.has(portOf(url))) {
     return refused(`Port ${portOf(url)} is Humanity's own, so it can't be previewed here.`)
   }
   return { _tag: "Url", url: url.href }

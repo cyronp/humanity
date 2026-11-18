@@ -155,3 +155,30 @@ describe("viewports", () => {
     expect(parseZoom(1.3)).toBe(1)
   })
 })
+
+describe("previewTarget in the desktop app", () => {
+  const refused = new Set([7420, 7421])
+  const any = { anyHost: true }
+
+  it("takes any site, over https unless it names a local host", () => {
+    expect(previewTarget("example.com/docs", refused, any)).toEqual({
+      _tag: "Url",
+      url: "https://example.com/docs",
+    })
+    expect(previewTarget("localhost:5173", refused, any)).toEqual({
+      _tag: "Url",
+      url: "http://localhost:5173/",
+    })
+    expect(previewTarget("http://example.com", refused, any)).toEqual({
+      _tag: "Url",
+      url: "http://example.com/",
+    })
+  })
+
+  it("doesn't search, and still refuses Humanity's own ports", () => {
+    expect(previewTarget("how to center a div", refused, any)._tag).toBe("Refused")
+    expect(previewTarget("react", refused, any)._tag).toBe("Refused")
+    expect(previewTarget("127.0.0.1:7421", refused, any)._tag).toBe("Refused")
+    expect(previewTarget("example.com:7420", refused, any)._tag).toBe("Url")
+  })
+})

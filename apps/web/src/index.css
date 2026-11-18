@@ -219,3 +219,12 @@
 .dark .shiki-token {
   color: var(--shiki-dark);
 }
+/* The Browser's loading bar, while a desktop page loads. */
+@keyframes browser-loading {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}

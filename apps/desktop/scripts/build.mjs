@@ -34,6 +34,16 @@ await build({
   loader: { ".svg": "text" },
 })
 
+// The window's preload: sandboxed, so it is one file that needs nothing but Electron.
+await build({
+  ...shared,
+  platform: "browser",
+  entryPoints: [join(desktop, "src", "preload.ts")],
+  outfile: join(desktop, "dist", "preload.cjs"),
+  format: "cjs",
+  external: ["electron"],
+})
+
 if (!process.argv.includes("--main-only")) {
   if (!existsSync(join(webDist, "index.html"))) {
     throw new Error(`The web app is not built: ${webDist} is missing. Run "npm run build" first.`)

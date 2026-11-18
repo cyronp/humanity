@@ -29,7 +29,12 @@ export function ViewportFrame({
   readonly viewport: PreviewViewport
   readonly zoom: number
   readonly onViewportChange: (viewport: PreviewViewport) => void
-  readonly children: ReactNode
+  /**
+   * The page. A frame is drawn scaled with a CSS transform; a function child (a `<webview>`, which
+   * draws unscaled whatever its box's transform) gets the box at the shown size and the scale to
+   * zoom the page by instead.
+   */
+  readonly children: ReactNode | ((scale: number) => ReactNode)
 }) {
   const area = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -123,16 +128,20 @@ export function ViewportFrame({
         )}
         style={{ width: shownWidth, height: shownHeight }}
       >
-        <div
-          className="absolute top-0 left-0 origin-top-left"
-          style={{
-            width: frame.width,
-            height: frame.height,
-            transform: frame.scale === 1 ? undefined : `scale(${frame.scale})`,
-          }}
-        >
-          {children}
-        </div>
+        {typeof children === "function" ? (
+          <div className="absolute inset-0">{children(frame.scale)}</div>
+        ) : (
+          <div
+            className="absolute top-0 left-0 origin-top-left"
+            style={{
+              width: frame.width,
+              height: frame.height,
+              transform: frame.scale === 1 ? undefined : `scale(${frame.scale})`,
+            }}
+          >
+            {children}
+          </div>
+        )}
         {size !== undefined && (
           <>
             <div

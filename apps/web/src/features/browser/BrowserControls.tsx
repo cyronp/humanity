@@ -11,6 +11,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -201,11 +202,7 @@ export function TabStrip({
               }}
               className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {icon === undefined ? (
-                <Globe className="size-3.5 shrink-0" />
-              ) : (
-                <img src={icon} alt="" className="size-3.5 shrink-0" />
-              )}
+              <TabIcon key={icon} src={icon} />
               <span className="truncate">{tabLabel(tab)}</span>
             </button>
             <button
@@ -227,4 +224,11 @@ export function TabStrip({
       </Button>
     </div>
   )
+}
+
+/** A page's favicon, or a globe while it has none or it doesn't load. */
+function TabIcon({ src }: { readonly src: string | undefined }) {
+  const [failed, setFailed] = useState(false)
+  if (src === undefined || failed) return <Globe className="size-3.5 shrink-0" />
+  return <img src={src} alt="" className="size-3.5 shrink-0" onError={() => setFailed(true)} />
 }

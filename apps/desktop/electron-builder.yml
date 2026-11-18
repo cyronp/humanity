@@ -6,6 +6,7 @@ icon: build/icon.png
 # The main process is one bundled file: nothing from node_modules goes into the app.
 files:
   - dist/main.cjs
+  - dist/preload.cjs
   - package.json
 # The daemon runs as a child process with the Agent SDK beside it, which needs
 # real paths on disk: it ships next to the archive, not inside it. No agent
