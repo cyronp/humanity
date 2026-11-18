@@ -198,6 +198,14 @@
   transition: none !important;
   user-select: none !important;
 }
+:root[data-resizing="row"],
+:root[data-resizing="row"] * {
+  cursor: row-resize !important;
+}
+/* A frame or a terminal under the pointer would take it from the handle being dragged. */
+:root[data-resizing] :is(iframe, .xterm) {
+  pointer-events: none;
+}
 .titlebar :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]),
 [role="dialog"],
 [role="menu"],

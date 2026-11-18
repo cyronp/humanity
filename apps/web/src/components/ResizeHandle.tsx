@@ -1,10 +1,16 @@
 import { cn } from "cn"
 import { type KeyboardEvent, type PointerEvent, useRef } from "react"
-import { clampWidth, dragWidth, KEYBOARD_STEP, type ResizeEdge } from "@/lib/resize"
+import { clampWidth, dragWidth, isVerticalEdge, KEYBOARD_STEP, type ResizeEdge } from "@/lib/resize"
+
+const KEYS: Readonly<Record<ResizeEdge, { readonly grow: string; readonly shrink: string }>> = {
+  start: { grow: "ArrowLeft", shrink: "ArrowRight" },
+  end: { grow: "ArrowRight", shrink: "ArrowLeft" },
+  top: { grow: "ArrowUp", shrink: "ArrowDown" },
+}
 
 /**
- * A thin vertical handle on one edge of an element, dragged (or moved with the arrow keys) to
- * change its width. Double-click resets the width to the layout's default.
+ * A thin handle on one edge of an element, dragged (or moved with the arrow keys) to change its
+ * width, or its height on the top edge. Double-click resets it to the layout's default.
  */
 export function ResizeHandle({
   edge,
@@ -19,31 +25,34 @@ export function ResizeHandle({
 }: {
   readonly edge: ResizeEdge
   readonly label: string
-  /** The width the human set, if any, for assistive technology. */
+  /** The size the human set, if any, for assistive technology. */
   readonly value?: number | undefined
   readonly min: number
-  /** The widest the element may be right now, which can depend on the window. */
+  /** The largest the element may be right now, which can depend on the window. */
   readonly max: () => number
-  /** The element's width as it is rendered now. */
+  /** The element's size as it is rendered now. */
   readonly measure: () => number
-  readonly onResize: (width: number) => void
+  readonly onResize: (size: number) => void
   readonly onReset: () => void
   readonly className?: string
 }) {
-  const drag = useRef<{ readonly x: number; readonly width: number; readonly max: number }>(null)
+  const vertical = isVerticalEdge(edge)
+  const drag = useRef<{ readonly at: number; readonly size: number; readonly max: number }>(null)
+  const pointerAt = (event: PointerEvent<HTMLDivElement>) =>
+    vertical ? event.clientY : event.clientX
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { x: event.clientX, width: measure(), max: max() }
-    document.documentElement.dataset.resizing = ""
+    drag.current = { at: pointerAt(event), size: measure(), max: max() }
+    document.documentElement.dataset.resizing = vertical ? "row" : "column"
   }
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const start = drag.current
     if (start === null) return
-    onResize(dragWidth(start.width, event.clientX - start.x, edge, min, start.max))
+    onResize(dragWidth(start.size, pointerAt(event) - start.at, edge, min, start.max))
   }
 
   const stop = (event: PointerEvent<HTMLDivElement>) => {
@@ -56,14 +65,13 @@ export function ResizeHandle({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const grow = edge === "end" ? "ArrowRight" : "ArrowLeft"
-    const shrink = edge === "end" ? "ArrowLeft" : "ArrowRight"
-    const width = measure()
+    const { grow, shrink } = KEYS[edge]
+    const size = measure()
     const next =
       event.key === grow
-        ? width + KEYBOARD_STEP
+        ? size + KEYBOARD_STEP
         : event.key === shrink
-          ? width - KEYBOARD_STEP
+          ? size - KEYBOARD_STEP
           : event.key === "Home"
             ? min
             : event.key === "End"
@@ -80,7 +88,7 @@ export function ResizeHandle({
   return (
     <div
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={vertical ? "horizontal" : "vertical"}
       aria-label={label}
       aria-valuemin={min}
       aria-valuenow={value}
@@ -95,10 +103,13 @@ export function ResizeHandle({
       onKeyDown={onKeyDown}
       className={cn(
         // no-drag: where it crosses a title bar, the desktop app must not move the window instead.
-        "absolute inset-y-0 z-20 w-2 cursor-col-resize touch-none outline-none [app-region:no-drag]",
-        "after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:transition-colors",
-        "hover:after:bg-ring/60 focus-visible:after:bg-ring",
-        edge === "end" ? "-right-1" : "-left-1",
+        "absolute z-20 touch-none outline-none [app-region:no-drag]",
+        "after:absolute after:transition-colors hover:after:bg-ring/60 focus-visible:after:bg-ring",
+        vertical
+          ? "inset-x-0 -top-1 h-2 cursor-row-resize after:inset-x-0 after:top-1/2 after:h-0.5 after:-translate-y-1/2"
+          : "inset-y-0 w-2 cursor-col-resize after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2",
+        edge === "end" && "-right-1",
+        edge === "start" && "-left-1",
         className,
       )}
     />

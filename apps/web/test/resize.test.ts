@@ -17,6 +17,8 @@ describe("resize", () => {
     expect(dragWidth(320, -40, "end", 240, 520)).toBe(280)
     expect(dragWidth(500, -40, "start", 320, 900)).toBe(540)
     expect(dragWidth(500, 400, "start", 320, 900)).toBe(320)
+    expect(dragWidth(240, -60, "top", 120, 600)).toBe(300)
+    expect(dragWidth(240, 200, "top", 120, 600)).toBe(120)
   })
 
   it("reads only a positive number back from storage", () => {
