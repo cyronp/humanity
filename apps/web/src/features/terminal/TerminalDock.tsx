@@ -229,8 +229,7 @@ export function TerminalDock({
           <Minus />
         </DockAction>
         <DockAction
-          label="Close the terminals"
-          detail="Stops what runs in them"
+          label="Close terminal"
           onClick={() => void closeAll()}
           disabled={terminals === undefined || terminals.length === 0}
         >
@@ -311,15 +310,12 @@ export function TerminalDock({
 function DockAction({
   label,
   shortcut,
-  detail,
   onClick,
   disabled = false,
   children,
 }: {
   readonly label: string
   readonly shortcut?: string
-  /** A second line in the tooltip. */
-  readonly detail?: string
   readonly onClick: () => void
   readonly disabled?: boolean
   readonly children: ReactNode
@@ -339,9 +335,7 @@ function DockAction({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
-        {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}
-        {detail !== undefined && <span className="block opacity-70">{detail}</span>}
-      </TooltipContent>
+        {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}      </TooltipContent>
     </Tooltip>
   )
 }
