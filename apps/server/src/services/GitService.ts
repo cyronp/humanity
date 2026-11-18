@@ -95,6 +95,29 @@ export class GitService extends Context.Service<
       target: string,
       env?: Readonly<Record<string, string>>,
     ) => Stream.Stream<string, GitError>
+    readonly fetch: (
+      cwd: string,
+      env?: Readonly<Record<string, string>>,
+    ) => Effect.Effect<void, GitError>
+    readonly revParse: (cwd: string, ref: string) => Effect.Effect<string | undefined, GitError>
+    /** Commits only in `ref` (ahead) and only in `target` (behind). */
+    readonly aheadBehind: (
+      cwd: string,
+      ref: string,
+      target: string,
+    ) => Effect.Effect<{ readonly ahead: number; readonly behind: number }, GitError>
+    /** Fails, touching nothing, when uncommitted changes would be overwritten. */
+    readonly fastForward: (cwd: string, target: string) => Effect.Effect<void, GitError>
+    /**
+     * Replays the checked-out branch onto `target`. On a conflict it aborts, leaving the branch
+     * as it was, and returns the conflicted paths; an empty list means it was rebased.
+     */
+    readonly rebase: (cwd: string, target: string) => Effect.Effect<ReadonlyArray<string>, GitError>
+    readonly changedFiles: (
+      cwd: string,
+      from: string,
+      to: string,
+    ) => Effect.Effect<ReadonlyArray<string>, GitError>
   }
 >()("humanity/GitService") {
   static readonly layer = Layer.effect(
@@ -438,7 +461,95 @@ export class GitService extends Context.Service<
           ),
         )
 
+      const fetch = Effect.fn("GitService.fetch")(function* (
+        cwd: string,
+        env: Readonly<Record<string, string>> = {},
+      ) {
+        yield* exec(cwd, ["fetch", "--quiet", "--prune", "--no-recurse-submodules", "origin"], env)
+      })
+
+      const revParse = (cwd: string, ref: string) =>
+        execResult(cwd, [
+          "rev-parse",
+          "--verify",
+          "--quiet",
+          "--end-of-options",
+          `${ref}^{commit}`,
+        ]).pipe(
+          Effect.map((result) =>
+            ref.startsWith("-") || result.exitCode !== 0 ? undefined : result.stdout.trim(),
+          ),
+        )
+
+      const aheadBehind = (cwd: string, ref: string, target: string) =>
+        exec(cwd, [
+          "rev-list",
+          "--left-right",
+          "--count",
+          "--end-of-options",
+          `${ref}...${target}`,
+        ]).pipe(
+          Effect.map((out) => {
+            const [ahead = 0, behind = 0] = out.trim().split(/\s+/).map(Number)
+            return { ahead, behind }
+          }),
+        )
+
+      const fastForward = Effect.fn("GitService.fastForward")(function* (
+        cwd: string,
+        target: string,
+      ) {
+        yield* exec(cwd, ["merge", "--ff-only", "--quiet", "--no-stat", "--end-of-options", target])
+      })
+
+      const rebase = Effect.fn("GitService.rebase")(function* (cwd: string, target: string) {
+        const args = [
+          "-c",
+          "rebase.autoStash=false",
+          "rebase",
+          "--quiet",
+          "--end-of-options",
+          target,
+        ]
+        const result = yield* execResult(cwd, args)
+        if (result.exitCode === 0) return []
+        const conflicts = (yield* execResult(cwd, [
+          ...STABLE_OUTPUT,
+          "diff",
+          "--name-only",
+          "--diff-filter=U",
+          "-z",
+        ])).stdout
+          .split("\0")
+          .filter((path) => path !== "")
+        yield* execResult(cwd, ["rebase", "--abort"])
+        if (conflicts.length > 0) return conflicts
+        return yield* new GitCommandFailed({
+          args,
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        })
+      })
+
+      const changedFiles = (cwd: string, from: string, to: string) =>
+        exec(cwd, [
+          ...STABLE_OUTPUT,
+          "diff",
+          "--name-only",
+          "--no-renames",
+          "-z",
+          from,
+          to,
+          "--",
+        ]).pipe(Effect.map((out) => out.split("\0").filter((path) => path !== "")))
+
       return GitService.of({
+        fetch,
+        revParse,
+        aheadBehind,
+        fastForward,
+        rebase,
+        changedFiles,
         exec,
         execResult,
         repositoryRoot,

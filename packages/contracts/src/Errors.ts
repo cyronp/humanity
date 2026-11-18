@@ -244,6 +244,14 @@ export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavai
   }
 }
 
+export class SyncUnavailable extends Schema.TaggedError<SyncUnavailable>()("SyncUnavailable", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}
+
 export class AccountNotFound extends Schema.TaggedError<AccountNotFound>()(
   "AccountNotFound",
   { accountId: Schema.String },

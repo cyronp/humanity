@@ -243,6 +243,14 @@ export class SessionService extends Context.Service<
       string,
       SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
     >
+    /**
+     * Shows `notice` in the thread and, when the agent has a conversation to resume, puts `agent`
+     * in front of the human's next message so the agent hears about it before it acts.
+     */
+    readonly tell: (
+      sessionId: string,
+      message: { readonly notice: string; readonly agent?: string | undefined },
+    ) => Effect.Effect<void, SessionNotFound>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     readonly earlierMessages: (
       sessionId: string,
@@ -282,6 +290,7 @@ export class SessionService extends Context.Service<
           accountsOf(session.provider).configDirFor(accountId),
         )
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
+      const agentNotes = new Map<string, Array<string>>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -771,10 +780,17 @@ export class SessionService extends Context.Service<
         Effect.gen(function* () {
           const moved = relocated.get(session.id)
           relocated.delete(session.id)
-          const forAgent =
-            moved === undefined
-              ? text
-              : `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.\n\n${text}`
+          const notes = agentNotes.get(session.id) ?? []
+          agentNotes.delete(session.id)
+          const forAgent = [
+            ...(moved === undefined
+              ? []
+              : [
+                  `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.`,
+                ]),
+            ...notes,
+            text,
+          ].join("\n\n")
           const stored = yield* storeAttachments(session.id, files)
           const mentioned = mentionedPaths(text, mentions)
           yield* addMessage(session.id, {
@@ -1165,6 +1181,18 @@ export class SessionService extends Context.Service<
         return hash
       })
 
+      const tell = Effect.fn("SessionService.tell")(function* (
+        sessionId: string,
+        message: { readonly notice: string; readonly agent?: string | undefined },
+      ) {
+        const session = yield* get(sessionId)
+        yield* addMessage(sessionId, { _tag: "notice", level: "info", text: message.notice })
+        if (message.agent === undefined || session.sdkSessionId === null) return
+        const notes = agentNotes.get(sessionId) ?? []
+        notes.push(message.agent)
+        agentNotes.set(sessionId, notes)
+      })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
@@ -1241,6 +1269,7 @@ export class SessionService extends Context.Service<
         searchFiles,
         commits,
         commit,
+        tell,
         subscribe,
         earlierMessages,
         watchAll,

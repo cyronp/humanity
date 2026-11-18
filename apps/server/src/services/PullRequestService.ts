@@ -11,8 +11,11 @@ import {
   type RepoStatus,
   type Session,
   type SessionNotFound,
+  type SyncResult,
+  type SyncStatus,
+  SyncUnavailable,
 } from "@humanity/contracts"
-import { Context, Effect, Layer, Option, Stream } from "effect"
+import { Context, Effect, Layer, Option, Semaphore, Stream } from "effect"
 import { EMPTY_FEED, ForgeSync, type ForgeTarget } from "./ForgeSync.ts"
 import { credentialEnv } from "./gitCredentials.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
@@ -37,6 +40,43 @@ interface Tracking {
   readonly ahead: number
   readonly behind: number
 }
+
+/** A fetch younger than this answers a background status check without fetching again. */
+const FETCH_FRESH_MS = 60_000
+
+const AGENT_FILE_LIST_LIMIT = 20
+
+interface Fetched {
+  readonly at: string
+  readonly ms: number
+  readonly error: string | null
+}
+
+const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+
+const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
+
+const gitProblem = (error: GitError) =>
+  error._tag === "GitCommandFailed"
+    ? error.stderr
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== "")
+        .join(" ") || error.message
+    : error.message
+
+/** The paths git lists, one per tab-indented line, when it refuses to overwrite them. */
+const overwrittenPaths = (stderr: string) =>
+  stderr
+    .split("\n")
+    .filter((line) => line.startsWith("\t"))
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+
+const listPaths = (paths: ReadonlyArray<string>, limit: number) =>
+  paths.length <= limit
+    ? paths.join(", ")
+    : `${paths.slice(0, limit).join(", ")} and ${paths.length - limit} more`
 
 const isBusy = (session: Session) =>
   session.status === "running" || session.status === "waiting_for_human"
@@ -63,6 +103,14 @@ export class PullRequestService extends Context.Service<
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
+    /** With `fetch`, fetches origin first unless that was done in the last minute. */
+    readonly syncStatus: (sessionId: string, fetch: boolean) => Effect.Effect<SyncStatus, Base>
+    /**
+     * Fetches origin, brings the thread's branch up to date with its sync target (fast-forward,
+     * else a rebase of its own commits when the folder is clean), then pushes to an upstream of
+     * the same name. Anything it cannot do safely fails before the folder is changed.
+     */
+    readonly sync: (sessionId: string) => Effect.Effect<SyncResult, Base | SyncUnavailable>
   }
 >()("humanity/PullRequestService") {
   static readonly layer = Layer.effect(
@@ -301,7 +349,235 @@ export class PullRequestService extends Context.Service<
         if (target !== null) yield* sync.refresh(target)
       })
 
-      return PullRequestService.of({ publication, push, create, watch, refresh })
+      const fetched = new Map<string, Fetched>()
+      const network = yield* Semaphore.make(1)
+
+      const fetchOrigin = (project: Project, remote: Remote | null, force: boolean) =>
+        network.withPermits(1)(
+          Effect.gen(function* () {
+            const last = fetched.get(project.localPath)
+            if (!force && last !== undefined && Date.now() - last.ms < FETCH_FRESH_MS) return last
+            // Only a click may open a credential helper's sign-in window; a background fetch fails.
+            const quiet = force ? {} : { GCM_INTERACTIVE: "never" }
+            const env = { ...(yield* pushEnv(remote)), ...quiet }
+            const error = yield* git.fetch(project.localPath, env).pipe(
+              Effect.as(null),
+              Effect.catch((failure) => Effect.succeed(gitProblem(failure))),
+            )
+            const entry: Fetched = { at: new Date().toISOString(), ms: Date.now(), error }
+            fetched.set(project.localPath, entry)
+            return entry
+          }),
+        )
+
+      const syncTarget = (
+        cwd: string,
+        project: Project,
+        branch: string | null,
+        tracking: Tracking,
+      ) =>
+        Effect.gen(function* () {
+          if (tracking.upstream !== null) {
+            const resolves = (yield* git.revParse(cwd, tracking.upstream)) !== undefined
+            return resolves
+              ? {
+                  target: tracking.upstream,
+                  pushes: branch !== null && tracking.upstream === `origin/${branch}`,
+                }
+              : { target: null, pushes: false }
+          }
+          const fallback = `origin/${project.defaultBranch}`
+          const resolves = (yield* git.revParse(cwd, fallback)) !== undefined
+          return { target: resolves ? fallback : null, pushes: false }
+        })
+
+      const describeSync = (
+        loaded: Effect.Success<ReturnType<typeof load>>,
+        hasRemote: boolean,
+        entry: Fetched | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const { session, project, branch, tracking } = loaded
+          const cwd = session.worktreePath
+          const { target, pushes } = yield* syncTarget(cwd, project, branch, tracking)
+          const counts =
+            target === null
+              ? { ahead: 0, behind: 0 }
+              : yield* git.aheadBehind(
+                  cwd,
+                  branch === null ? "HEAD" : `refs/heads/${branch}`,
+                  target,
+                )
+          return {
+            branch,
+            hasRemote,
+            target,
+            pushes,
+            ahead: counts.ahead,
+            behind: counts.behind,
+            fetchedAt: entry?.at ?? null,
+            fetchError: entry?.error ?? null,
+          } satisfies SyncStatus
+        })
+
+      const syncStatus = Effect.fn("PullRequestService.syncStatus")(function* (
+        sessionId: string,
+        fetch: boolean,
+      ) {
+        const session = yield* sessions.get(sessionId)
+        const project = yield* projects.get(session.projectId)
+        const hasRemote = (yield* git.originUrl(project.localPath)) !== undefined
+        const entry =
+          hasRemote && fetch
+            ? yield* fetchOrigin(project, yield* remoteOf(project), false)
+            : fetched.get(project.localPath)
+        return yield* describeSync(yield* load(sessionId), hasRemote, entry)
+      })
+
+      const unavailable = (reason: string) => Effect.fail(new SyncUnavailable({ reason }))
+
+      const syncBranch = Effect.fn("PullRequestService.sync")(function* (sessionId: string) {
+        const session = yield* sessions.get(sessionId)
+        const project = yield* projects.get(session.projectId)
+        const cwd = session.worktreePath
+        const sharing = (yield* sessions.list(project.id)).filter(
+          (each) => each.id !== session.id && each.worktreePath === cwd && each.status !== "ended",
+        )
+        const busy = isBusy(session) ? session : sharing.find(isBusy)
+        if (busy !== undefined) {
+          return yield* unavailable(
+            busy.id === session.id
+              ? "The agent is still working. Wait until it is idle, or interrupt it, before syncing."
+              : `"${busy.title}" works in the same folder and is still running. Wait until it is idle, or interrupt it, before syncing.`,
+          )
+        }
+        const branch = threadBranch(session)
+        if (branch === null) {
+          return yield* unavailable(
+            "This thread started on a detached HEAD, so it has no branch to sync. Check out a branch first.",
+          )
+        }
+        if ((yield* git.originUrl(project.localPath)) === undefined) {
+          return yield* unavailable("This project has no origin remote to sync with.")
+        }
+        const remote = yield* remoteOf(project)
+        const entry = yield* fetchOrigin(project, remote, true)
+        if (entry.error !== null) {
+          return yield* unavailable(`Could not fetch from origin: ${entry.error}`)
+        }
+
+        const loaded = yield* load(sessionId)
+        if (loaded.status.branch !== branch) {
+          return yield* unavailable(
+            `This thread works on ${branch}, but the checkout is on ${loaded.status.branch ?? "a detached HEAD"} now. Check out ${branch} again to sync it.`,
+          )
+        }
+        if (loaded.status.entries.some((each) => each.kind === "conflicted")) {
+          return yield* unavailable(
+            "This folder has unresolved merge conflicts. Resolve them, or ask the agent to, before syncing.",
+          )
+        }
+        const before = yield* describeSync(loaded, true, entry)
+        const target = before.target
+        if (target === null) {
+          return yield* unavailable(
+            `${branch} has no upstream, and origin has no ${project.defaultBranch} to update it from.`,
+          )
+        }
+
+        const head = (yield* git.revParse(cwd, "HEAD")) ?? "HEAD"
+        let rebased = false
+        if (before.behind > 0 && before.ahead === 0) {
+          yield* git.fastForward(cwd, target).pipe(
+            Effect.catchTag("GitCommandFailed", (failure) => {
+              const paths = overwrittenPaths(failure.stderr)
+              return unavailable(
+                paths.length === 0
+                  ? `Could not bring in ${target}: ${gitProblem(failure)}`
+                  : `Nothing was changed: ${target} changes files that have uncommitted changes here (${listPaths(paths, 10)}). Commit them in Commit and push, then sync again.`,
+              )
+            }),
+          )
+        } else if (before.behind > 0) {
+          const uncommitted = loaded.status.entries.filter((each) => each.kind !== "untracked")
+          if (uncommitted.length > 0) {
+            return yield* unavailable(
+              `${branch} has ${commits(before.ahead)} of its own and ${target} has ${commits(before.behind)} it lacks, so its commits must be replayed on top, which needs a clean folder. Commit the ${files(uncommitted.length)} with changes in Commit and push, then sync again.`,
+            )
+          }
+          const conflicts = yield* git
+            .rebase(cwd, target)
+            .pipe(
+              Effect.catchTag("GitCommandFailed", (failure) =>
+                unavailable(`Could not replay ${branch} onto ${target}: ${gitProblem(failure)}`),
+              ),
+            )
+          if (conflicts.length > 0) {
+            return yield* unavailable(
+              `Nothing was changed: replaying ${branch}'s ${commits(before.ahead)} onto ${target} conflicts in ${listPaths(conflicts, 10)}. Ask the agent to rebase onto ${target} and resolve the conflicts, then sync again.`,
+            )
+          }
+          rebased = true
+        }
+        const pulled = before.behind
+        const changed = pulled > 0 ? yield* git.changedFiles(cwd, head, "HEAD") : []
+
+        let pushed = 0
+        const integrated = yield* describeSync(yield* load(sessionId), true, entry)
+        if (integrated.pushes && integrated.ahead > 0) {
+          yield* git.push(cwd, branch, yield* pushEnv(remote))
+          pushed = integrated.ahead
+        }
+
+        const after = yield* load(sessionId)
+        lastSeen.set(sessionId, {
+          branch,
+          upstream: after.tracking.upstream,
+          ahead: after.tracking.ahead,
+        })
+        if (pushed > 0) {
+          const forgeTarget = targetOf(remote, branch)
+          if (forgeTarget !== null) yield* sync.changed(forgeTarget)
+        }
+
+        if (pulled > 0) {
+          const parts = [`${commits(pulled)} came in, changing ${files(changed.length)}`]
+          if (rebased) parts.push(`${branch}'s ${commits(before.ahead)} were replayed on top`)
+          if (pushed > 0) parts.push(`${commits(pushed)} pushed`)
+          const notice = `Synced ${branch} with ${target}: ${parts.join("; ")}.`
+          const agent = `[Humanity] The human synced ${branch} with ${target}: ${commits(pulled)} from the remote are now in ${cwd}${rebased ? `, and ${branch}'s own commits were rebased on top of them` : ""}. ${
+            changed.length === 0
+              ? "No file changed on disk."
+              : `These files changed on disk: ${listPaths(changed, AGENT_FILE_LIST_LIMIT)}. What you read from them before is out of date: read them again before you rely on them or edit them.`
+          }`
+          yield* Effect.forEach(
+            [session, ...sharing],
+            (each) => sessions.tell(each.id, { notice, agent }),
+            { discard: true },
+          )
+        } else if (pushed > 0) {
+          yield* sessions.tell(session.id, {
+            notice: `Pushed ${commits(pushed)} of ${branch} to ${target}.`,
+          })
+        }
+
+        return {
+          status: yield* describeSync(after, true, entry),
+          pulled,
+          pushed,
+          files: changed,
+        } satisfies SyncResult
+      })
+
+      return PullRequestService.of({
+        publication,
+        push,
+        create,
+        watch,
+        refresh,
+        syncStatus,
+        sync: syncBranch,
+      })
     }),
   )
 }

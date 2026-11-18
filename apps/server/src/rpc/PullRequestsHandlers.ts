@@ -12,6 +12,9 @@ export const PullRequestsHandlers = PullRequestsRpcs.toLayer(
         pullRequests.create(sessionId, pullRequest),
       "PullRequests.watch": ({ sessionId }) => pullRequests.watch(sessionId),
       "PullRequests.refresh": ({ sessionId }) => pullRequests.refresh(sessionId),
+      "PullRequests.syncStatus": ({ sessionId, fetch }) =>
+        pullRequests.syncStatus(sessionId, fetch),
+      "PullRequests.sync": ({ sessionId }) => pullRequests.sync(sessionId),
     })
   }),
 )

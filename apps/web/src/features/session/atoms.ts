@@ -105,6 +105,19 @@ export const pullRequestFeedAtom = Atom.family((key: string) => {
 
 export const refreshPullRequestAtom = HumanityClient.mutation("PullRequests.refresh")
 
+export const syncStatusAtom = Atom.family((sessionId: SessionId) =>
+  HumanityClient.query(
+    "PullRequests.syncStatus",
+    { sessionId, fetch: false },
+    { reactivityKeys: [keys.sync(sessionId), keys.publication(sessionId)] },
+  ),
+)
+
+/** `PullRequests.syncStatus` with `fetch: true`: fetches origin unless it did a minute ago. */
+export const fetchOriginAtom = HumanityClient.mutation("PullRequests.syncStatus")
+
+export const syncAtom = HumanityClient.mutation("PullRequests.sync")
+
 export const pushAtom = HumanityClient.mutation("PullRequests.push")
 export const createPullRequestAtom = HumanityClient.mutation("PullRequests.create")
 

@@ -5,6 +5,8 @@ import {
   NewPullRequest,
   PullRequest,
   PullRequestFeed,
+  SyncResult,
+  SyncStatus,
 } from "../domain/PullRequest.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
@@ -20,6 +22,7 @@ import {
   ProjectNotFound,
   PullRequestUnavailable,
   SessionNotFound,
+  SyncUnavailable,
 } from "../Errors.ts"
 
 const Base = [
@@ -63,5 +66,17 @@ export const PullRequestsRpcs = RpcGroup.make(
   Rpc.make("PullRequests.refresh", {
     payload: { sessionId: SessionId },
     error: Schema.Union(Base),
+  }),
+  /** With `fetch`, fetches origin first unless that was done in the last minute. */
+  Rpc.make("PullRequests.syncStatus", {
+    payload: { sessionId: SessionId, fetch: Schema.Boolean },
+    success: SyncStatus,
+    error: Schema.Union(Base),
+  }),
+  /** Fetches, brings the branch up to date with its sync target, then pushes what is left. */
+  Rpc.make("PullRequests.sync", {
+    payload: { sessionId: SessionId },
+    success: SyncResult,
+    error: Schema.Union([...Base, SyncUnavailable]),
   }),
 )
