@@ -1,5 +1,7 @@
+import { trimTrailing } from "@humanity/contracts"
+
 export const vscodeUrl = (root: string, filePath: string, line?: number): string => {
-  const path = `${root.replace(/[\\/]+$/, "")}/${filePath}`.replaceAll("\\", "/")
+  const path = `${trimTrailing(root, "\\/")}/${filePath}`.replaceAll("\\", "/")
   const encoded = path
     .split("/")
     .map((segment) => encodeURIComponent(segment).replace(/%3A/gi, ":"))

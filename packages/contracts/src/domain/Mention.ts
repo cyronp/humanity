@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { trimTrailing } from "../text.ts"
 
 export const MENTION_LIMIT = 100
 export const RECENT_MENTION_LIMIT = 50
@@ -13,13 +14,7 @@ export interface MentionToken {
 }
 
 const MENTION = /(^|\s)@(?:"((?:\\"|[^"\n])+)"|([^\s"]\S*))/g
-const TRAILING = new Set(".,;:!?)]}'\"")
-
-const withoutTrailing = (raw: string) => {
-  let end = raw.length
-  while (end > 0 && TRAILING.has(raw[end - 1]!)) end--
-  return raw.slice(0, end)
-}
+const TRAILING = ".,;:!?)]}'\""
 
 export const unescapeQuoted = (quoted: string): string => quoted.replaceAll('\\"', '"')
 
@@ -34,7 +29,7 @@ export const mentionTokens = (text: string, mentions: ReadonlySet<string>): Arra
       continue
     }
     const raw = match[3] ?? ""
-    const path = mentions.has(raw) ? raw : withoutTrailing(raw)
+    const path = mentions.has(raw) ? raw : trimTrailing(raw, TRAILING)
     if (path !== "" && mentions.has(path)) {
       tokens.push({ start, end: start + 1 + path.length, path })
     }

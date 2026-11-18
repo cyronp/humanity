@@ -47,6 +47,8 @@ import {
   NothingToCommit,
   newThreadAutonomy,
   toolMode,
+  trimCharacters,
+  trimTrailing,
   type WorkingTreeDiff,
   type ToolCall,
 } from "@humanity/contracts"
@@ -111,26 +113,25 @@ const withHumanity = (added: AgentExtensions, humanity: AgentMcpServer): AgentEx
   plugins: added.plugins,
 })
 
-export const slugify = (title: string): string =>
-  title
+export const slugify = (title: string): string => {
+  const words = title
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "") || "session"
+  return trimTrailing(trimCharacters(words, "-").slice(0, 40), "-") || "session"
+}
 
 export const sessionBranchName = (sessionId: string, title: string): string =>
   `humanity/${sessionId.slice(0, 8)}-${slugify(title)}`
 
-const modelKey = (name: string): string =>
-  name
+const modelKey = (name: string): string => {
+  const words = name
     .toLowerCase()
     .replace(/\(.*?\)/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/^claude-/, "")
+  return trimCharacters(words, "-").replace(/^claude-/, "")
+}
 
 interface OfferedModel {
   readonly value: string

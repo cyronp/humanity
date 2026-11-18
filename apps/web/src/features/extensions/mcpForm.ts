@@ -1,5 +1,9 @@
-import type { McpServer, McpTransportInput } from "@humanity/contracts"
-
+import {
+  type McpServer,
+  type McpTransportInput,
+  trimCharacters,
+  trimTrailing,
+} from "@humanity/contracts"
 
 export interface EntryDraft {
   readonly id: number
@@ -126,15 +130,14 @@ export const buildMcpInput = (
 
 const SKILL_NAME = /^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-export const skillSlug = (text: string) =>
-  text
+export const skillSlug = (text: string) => {
+  const words = text
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64)
-    .replace(/-+$/, "")
+  return trimTrailing(trimCharacters(words, "-").slice(0, 64), "-")
+}
 
 export const checkSkill = (draft: {
   readonly name: string

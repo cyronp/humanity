@@ -1,4 +1,4 @@
-import { type FileEntry, RECENT_MENTION_LIMIT } from "@humanity/contracts"
+import { type FileEntry, RECENT_MENTION_LIMIT, trimTrailing } from "@humanity/contracts"
 
 export const FILE_SEARCH_LIMIT = 30
 
@@ -162,9 +162,7 @@ interface Query {
 
 const parseQuery = (query: string): Query => {
   const needle = compose(query.trim().replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase())
-  let end = needle.length
-  while (end > 0 && needle[end - 1] === "/") end--
-  const bare = needle.slice(0, end)
+  const bare = trimTrailing(needle, "/")
   const joined = bare.replace(/[-_ ]/g, "")
   return {
     bare,
