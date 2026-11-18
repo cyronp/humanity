@@ -50,8 +50,8 @@ The browser comes after the terminal and builds on it: links in terminals and in
 | — | Terminals outside a thread (project, home), shell icons | ✅ `ef8294c`, `426175e` |
 | 3 | Shell integration | ✅ checked on real PowerShell 7, Windows PowerShell and Git Bash |
 | 4 | The agent's terminal tools | ✅ reads and waits checked on real PowerShell 7, Windows PowerShell and Git Bash |
-| 5 | Desktop packaging | ⏳ next |
-| 6 | Browser (localhost preview) | ⏳ |
+| 5 | Desktop packaging | ✅ node-pty ships as 2.6 MB of its Windows files; checked on the packaged daemon, on Electron's Node |
+| 6 | Browser (localhost preview) | ⏳ next |
 
 ### What is built (phases 0–2)
 
