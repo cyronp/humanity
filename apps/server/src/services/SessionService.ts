@@ -108,13 +108,19 @@ interface ActiveRun {
   readonly denied: Set<string>
   readonly usageLock: Semaphore.Semaphore
   extensionsVersion: number
-  readonly humanity: AgentMcpServer
+  readonly humanity: AgentMcpServer | undefined
 }
 
-const withHumanity = (added: AgentExtensions, humanity: AgentMcpServer): AgentExtensions => ({
-  mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
-  plugins: added.plugins,
-})
+const withHumanity = (
+  added: AgentExtensions,
+  humanity: AgentMcpServer | undefined,
+): AgentExtensions =>
+  humanity === undefined
+    ? added
+    : {
+        mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
+        plugins: added.plugins,
+      }
 
 export const slugify = (title: string): string => {
   const words = title
@@ -664,16 +670,24 @@ export class SessionService extends Context.Service<
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
             const denied = new Set<string>()
-            const humanity = yield* mcp
-              .serve({
-                openThread: openThread(session),
-                terminal: makeTerminalTools({
-                  sessionId: session.id,
-                  terminals,
-                  decide: decide(session, { denied }),
-                }),
-              })
-              .pipe(Scope.provide(scope))
+            const offered = yield* preferences.tools
+            const humanity =
+              offered.openThread || offered.terminals
+                ? yield* mcp
+                    .serve({
+                      ...(offered.openThread ? { openThread: openThread(session) } : {}),
+                      ...(offered.terminals
+                        ? {
+                            terminal: makeTerminalTools({
+                              sessionId: session.id,
+                              terminals,
+                              decide: decide(session, { denied }),
+                            }),
+                          }
+                        : {}),
+                    })
+                    .pipe(Scope.provide(scope))
+                : undefined
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
               scope,
@@ -694,6 +708,7 @@ export class SessionService extends Context.Service<
                 effort: session.effort ?? undefined,
                 extensions: withHumanity(added, humanity),
                 allowedTools: AUTO_TOOLS,
+                offersOpenThread: offered.openThread,
                 canUseTool: decide(session, state),
               })
               .pipe(Scope.provide(scope))

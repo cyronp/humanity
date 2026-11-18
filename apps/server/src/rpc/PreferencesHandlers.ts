@@ -17,6 +17,8 @@ export const PreferencesHandlers = PreferencesRpcs.toLayer(
         ),
       "Preferences.getTerminal": () => preferences.terminal,
       "Preferences.setTerminal": ({ terminal }) => preferences.setTerminal(terminal),
+      "Preferences.getTools": () => preferences.tools,
+      "Preferences.setTools": ({ tools }) => preferences.setTools(tools),
     })
   }),
 )

@@ -30,3 +30,16 @@ export const HistoryPreferences = Schema.Struct({
 export type HistoryPreferences = typeof HistoryPreferences.Type
 
 export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = { importFromCli: true }
+
+export const ToolsPreferences = Schema.Struct({
+  terminals: Schema.Boolean,
+  openThread: Schema.Boolean,
+})
+export type ToolsPreferences = typeof ToolsPreferences.Type
+
+export const DEFAULT_TOOLS_PREFERENCES: ToolsPreferences = { terminals: true, openThread: true }
+
+export const HUMANITY_TOOL_TOKENS: Readonly<Record<keyof ToolsPreferences, number>> = {
+  terminals: 1_400,
+  openThread: 600,
+}

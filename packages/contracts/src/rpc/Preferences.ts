@@ -1,5 +1,5 @@
 import { Rpc, RpcGroup } from "effect/rpc"
-import { HistoryPreferences, PinnedDefaults } from "../domain/Preferences.ts"
+import { HistoryPreferences, PinnedDefaults, ToolsPreferences } from "../domain/Preferences.ts"
 import { TerminalPreferences } from "../domain/Terminal.ts"
 
 export const PreferencesRpcs = RpcGroup.make(
@@ -23,5 +23,12 @@ export const PreferencesRpcs = RpcGroup.make(
   Rpc.make("Preferences.setTerminal", {
     payload: { terminal: TerminalPreferences },
     success: TerminalPreferences,
+  }),
+  Rpc.make("Preferences.getTools", {
+    success: ToolsPreferences,
+  }),
+  Rpc.make("Preferences.setTools", {
+    payload: { tools: ToolsPreferences },
+    success: ToolsPreferences,
   }),
 )

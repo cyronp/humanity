@@ -11,11 +11,13 @@ import { SqlClient } from "effect/sql"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
+import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
+import { PreferencesService } from "../src/services/PreferencesService.ts"
 import { PullRequestService } from "../src/services/PullRequestService.ts"
 import {
   matchModel,
@@ -458,6 +460,41 @@ describe("SessionService", () => {
           assert.lengthOf(yield* Ref.get(log.runs), 1)
         }).pipe(Effect.provide(services(home, () => [])))
       }),
+  )
+
+  it.live("gives a new thread only the Humanity tools turned on in Settings", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const preferences = yield* PreferencesService
+        const mcp = yield* HumanityMcp
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+
+        yield* preferences.setTools({ terminals: true, openThread: false })
+        const terminalsOnly = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(terminalsOnly.id, "idle")
+        const [first] = yield* Ref.get(log.runs)
+        assert.isFalse(first?.offersOpenThread)
+        const server = first?.extensions.mcpServers["humanity"]
+        const tools = mcp.toolsFor(server?.type === "http" ? server.headers["Authorization"] : "")
+        assert.isDefined(tools)
+        const listed = yield* answerMcp(tools!, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+        const names = (
+          listed.body as { result: { tools: ReadonlyArray<{ name: string }> } }
+        ).result.tools.map((tool) => tool.name)
+        assert.notInclude(names, "open_thread")
+        assert.include(names, "terminal_read")
+
+        yield* preferences.setTools({ terminals: false, openThread: false })
+        const neither = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(neither.id, "idle")
+        const second = (yield* Ref.get(log.runs))[1]
+        assert.isFalse(second?.offersOpenThread)
+        assert.notProperty(second?.extensions.mcpServers ?? {}, "humanity")
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
   )
 
   it.live(

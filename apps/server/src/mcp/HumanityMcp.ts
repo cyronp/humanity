@@ -45,8 +45,10 @@ export class OpenThreadFailed extends Data.TaggedError("OpenThreadFailed")<{
 }> {}
 
 export interface HumanityTools {
-  readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
-  readonly terminal: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
+  readonly openThread?: (
+    request: OpenThreadRequest,
+  ) => Effect.Effect<OpenedThread, OpenThreadFailed>
+  readonly terminal?: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
 }
 
 const providers = AgentProvider.literals
@@ -57,7 +59,7 @@ const OPEN_THREAD_DESCRIPTION = `Opens a new thread in Humanity, in the same pro
 The new thread is a separate conversation with its own agent: it sees nothing of this one, so the prompt must stand on its own (the problem, the files involved, what done looks like). It starts in the project's checkout, which this thread may also be working in. You are not told when it finishes or what it did.
 The result gives you a markdown link to the new thread. Use it inline in your reply, where you mention the thread: the human sees it as the project's icon and the thread's title, and clicks it to go there.`
 
-const OPEN_THREAD_TOOL_DEFINITION = {
+export const OPEN_THREAD_TOOL_DEFINITION = {
   name: OPEN_THREAD_TOOL_NAME,
   title: "Open a thread",
   description: OPEN_THREAD_DESCRIPTION,
@@ -95,6 +97,11 @@ const OPEN_THREAD_TOOL_DEFINITION = {
   _meta: { "anthropic/alwaysLoad": true },
 }
 
+const listTools = (tools: HumanityTools): ReadonlyArray<unknown> => [
+  ...(tools.openThread === undefined ? [] : [OPEN_THREAD_TOOL_DEFINITION]),
+  ...(tools.terminal === undefined ? [] : TERMINAL_TOOL_DEFINITIONS),
+]
+
 export interface McpReply {
   readonly status: number
   readonly body?: unknown
@@ -123,14 +130,16 @@ const INVALID_PARAMS = -32602
 
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
+  const { terminal, openThread } = tools
   if (typeof name === "string" && isTerminalToolName(name)) {
+    if (terminal === undefined) return Option.none()
     return Option.some(
-      Effect.map(tools.terminal(name, params["arguments"] ?? {}), (said) =>
+      Effect.map(terminal(name, params["arguments"] ?? {}), (said) =>
         toolText(said.text, said.isError),
       ),
     )
   }
-  if (name !== OPEN_THREAD_TOOL_NAME) return Option.none()
+  if (name !== OPEN_THREAD_TOOL_NAME || openThread === undefined) return Option.none()
   const request = decodeOpenThread(params["arguments"] ?? {})
   if (Option.isNone(request)) {
     return Option.some(
@@ -143,7 +152,7 @@ const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
     )
   }
   return Option.some(
-    tools.openThread(request.value).pipe(
+    openThread(request.value).pipe(
       Effect.match({
         onSuccess: (thread) => toolText(formatOpenedThread(thread)),
         onFailure: (failed) => toolText(failed.reason, true),
@@ -176,16 +185,14 @@ const answer = (tools: HumanityTools, message: unknown): Effect.Effect<unknown> 
           protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: HUMANITY_MCP_SERVER, title: "Humanity", version: "0.1.0" },
-          instructions: HUMANITY_INSTRUCTIONS,
+          ...(tools.terminal === undefined ? {} : { instructions: HUMANITY_INSTRUCTIONS }),
         }),
       )
     }
     case "ping":
       return Effect.succeed(result(id, {}))
     case "tools/list":
-      return Effect.succeed(
-        result(id, { tools: [OPEN_THREAD_TOOL_DEFINITION, ...TERMINAL_TOOL_DEFINITIONS] }),
-      )
+      return Effect.succeed(result(id, { tools: listTools(tools) }))
     case "tools/call":
       return Option.match(callTool(tools, params), {
         onNone: () =>

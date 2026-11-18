@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react"
 
-
 export const SETTINGS_SECTIONS = [
   "general",
   "terminal",
   "providers",
+  "tools",
   "mcp",
   "skills",
   "projects",
@@ -19,7 +19,7 @@ export const SECTION_GROUPS: ReadonlyArray<{
   readonly sections: ReadonlyArray<SettingsSection>
 }> = [
   { sections: ["general", "terminal"] },
-  { label: "Agent", sections: ["providers", "mcp", "skills"] },
+  { label: "Agent", sections: ["providers", "tools", "mcp", "skills"] },
   { label: "Source Control", sections: ["projects", "repositories"] },
   { sections: ["updates", "about"] },
 ]
@@ -52,6 +52,10 @@ export const SECTION_INFO: Record<
       "plan",
       "api key",
     ],
+  },
+  tools: {
+    label: "Tools",
+    keywords: ["humanity tools", "terminals", "open thread", "tokens", "context", "mcp"],
   },
   repositories: {
     label: "Repositories",

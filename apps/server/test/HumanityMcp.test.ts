@@ -1,15 +1,17 @@
 import { assert, describe, it } from "@effect/vitest"
-import { ProjectId, SessionId } from "@humanity/contracts"
+import { HUMANITY_TOOL_TOKENS, ProjectId, SessionId } from "@humanity/contracts"
 import { Effect, Exit, Layer, Scope } from "effect"
 import {
   answerMcp,
   HumanityMcp,
+  OPEN_THREAD_TOOL_DEFINITION,
   type HumanityTools,
   OpenThreadFailed,
   type OpenThreadRequest,
 } from "../src/mcp/HumanityMcp.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
-import { HUMANITY_INSTRUCTIONS } from "../src/terminal/agentTools.ts"
+import { systemPromptAppend } from "../src/agent/AgentRunnerLive.ts"
+import { HUMANITY_INSTRUCTIONS, TERMINAL_TOOL_DEFINITIONS } from "../src/terminal/agentTools.ts"
 
 const recordingTools = () => {
   const asked: Array<OpenThreadRequest> = []
@@ -138,6 +140,68 @@ describe("Humanity's MCP server", () => {
       ])
     }),
   )
+
+  it.effect("lists, describes and answers only the tools it was given", () =>
+    Effect.gen(function* () {
+      const { tools } = recordingTools()
+      const names = (reply: { readonly body?: unknown }) =>
+        (reply.body as { result: { tools: ReadonlyArray<{ name: string }> } }).result.tools.map(
+          (tool) => tool.name,
+        )
+      const instructions = (reply: { readonly body?: unknown }) =>
+        (reply.body as { result: { instructions?: string } }).result.instructions
+
+      const terminalsOnly: HumanityTools = { terminal: tools.terminal! }
+      const listed = names(yield* answerMcp(terminalsOnly, call(1, "tools/list")))
+      assert.notInclude(listed, "open_thread")
+      assert.include(listed, "terminal_list")
+      assert.strictEqual(
+        instructions(yield* answerMcp(terminalsOnly, call(2, "initialize"))),
+        HUMANITY_INSTRUCTIONS,
+      )
+      const refused = yield* answerMcp(terminalsOnly, openThread({ prompt: "hi" }))
+      assert.strictEqual((refused.body as { error: { code: number } }).error.code, -32602)
+
+      const openThreadOnly: HumanityTools = { openThread: tools.openThread! }
+      assert.deepStrictEqual(names(yield* answerMcp(openThreadOnly, call(4, "tools/list"))), [
+        "open_thread",
+      ])
+      assert.isUndefined(instructions(yield* answerMcp(openThreadOnly, call(5, "initialize"))))
+      const noTerminal = yield* answerMcp(
+        openThreadOnly,
+        call(6, "tools/call", { name: "terminal_list", arguments: {} }),
+      )
+      assert.strictEqual((noTerminal.body as { error: { code: number } }).error.code, -32602)
+    }),
+  )
+
+  it("costs about as many tokens as Settings says", () => {
+    const sent = (tool: {
+      readonly name: string
+      readonly description: string
+      readonly inputSchema: unknown
+    }) =>
+      JSON.stringify({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      })
+    const estimate = (text: string) => text.length / 3.6
+    const terminals = TERMINAL_TOOL_DEFINITIONS.map(sent).join("") + HUMANITY_INSTRUCTIONS
+    const openThread =
+      sent(OPEN_THREAD_TOOL_DEFINITION) +
+      systemPromptAppend(true).slice(systemPromptAppend(false).length)
+    for (const [tool, text] of [
+      ["terminals", terminals],
+      ["openThread", openThread],
+    ] as const) {
+      const ratio = estimate(text) / HUMANITY_TOOL_TOKENS[tool]
+      assert.isTrue(
+        ratio > 0.8 && ratio < 1.2,
+        `${tool}: about ${Math.round(estimate(text))} tokens now, Settings says ${HUMANITY_TOOL_TOKENS[tool]}`,
+      )
+    }
+  })
 
   it.effect("opens a thread on the provider, model and effort asked for", () =>
     Effect.gen(function* () {

@@ -42,6 +42,7 @@ export interface AgentRunOptions {
   readonly effort: ReasoningEffort | undefined
   readonly extensions: AgentExtensions
   readonly allowedTools: ReadonlyArray<string>
+  readonly offersOpenThread: boolean
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
 }
 
