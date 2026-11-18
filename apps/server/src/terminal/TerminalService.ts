@@ -27,14 +27,14 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql"
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
-import { type LocateOptions, systemLocateOptions } from "../agent/installedCli.ts"
+import type { LocateOptions } from "../agent/installedCli.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { PreferencesService } from "../services/PreferencesService.ts"
 import { terminalEnvironment } from "./environment.ts"
 import { PtyHost, type PtyProcess } from "./PtyHost.ts"
 import { makeScreen, restartMarker, type Screen } from "./screen.ts"
-import { detectShells, pickShell, type Shell, shellArgs } from "./shells.ts"
+import { detectShells, pickShell, type Shell, shellArgs, shellLocateOptions } from "./shells.ts"
 
 /** The size of a terminal nobody has looked at yet. */
 export const DEFAULT_COLS = 120
@@ -142,7 +142,7 @@ export class TerminalService extends Context.Service<
     readonly closeSession: (sessionId: string) => Effect.Effect<void>
   }
 >()("humanity/TerminalService") {
-  static readonly layer = (locate: () => LocateOptions = systemLocateOptions) =>
+  static readonly layer = (locate: () => LocateOptions = shellLocateOptions) =>
     Layer.effect(
       TerminalService,
       Effect.gen(function* () {
@@ -268,13 +268,18 @@ export class TerminalService extends Context.Service<
               .exists(live.info.cwd)
               .pipe(Effect.orElseSucceed(() => false))
             const cwd = cwdExists ? live.info.cwd : fallbackFolder
+            // ConPTY draws as if it started at the top of an empty screen: a shell started again
+            // on a screen with something on it gets that screen scrolled up into the scrollback.
+            if (process.platform === "win32" && live.seq > 0) {
+              feed(live, `${"\r\n".repeat(live.screen.rows())}\x1b[H`)
+            }
             const generation = ++live.generation
             const pty = yield* host
               .spawn({
                 file: shell.path,
                 args: shellArgs(shell, process.platform),
                 cwd,
-                env: terminalEnvironment(process.env),
+                env: terminalEnvironment(process.env, process.platform),
                 cols: live.screen.cols(),
                 rows: live.screen.rows(),
               })
@@ -324,11 +329,11 @@ export class TerminalService extends Context.Service<
             dirty: false,
             scrollback: options.scrollback,
           }
-          // Queries a program sends are answered here only while no browser is attached to answer
-          // them (ConPTY, for one, waits for an answer before it starts the shell).
-          live.screen.onReply((reply) => {
-            if (live.attachments.size === 0) live.pty?.write(reply)
-          })
+          // The queries a program sends (cursor position, device attributes…) are answered here,
+          // from the same bytes the views draw: at once, whether or not a view is open (ConPTY
+          // waits for one before it starts the shell), and once however many views are open.
+          // The views stay silent on them.
+          live.screen.onReply((reply) => live.pty?.write(reply))
           return live
         }
 

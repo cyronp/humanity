@@ -1,6 +1,7 @@
 import type { ShellInfo } from "@humanity/contracts"
+import { existsSync, lstatSync } from "node:fs"
 import { posix, win32 } from "node:path"
-import { findCommand, type LocateOptions } from "../agent/installedCli.ts"
+import { findCommand, type LocateOptions, systemLocateOptions } from "../agent/installedCli.ts"
 
 /** The shells Humanity knows how to start, and later to integrate with. */
 export type ShellKind = "pwsh" | "powershell" | "cmd" | "bash" | "zsh" | "fish" | "sh" | "wsl"
@@ -92,6 +93,26 @@ const unixShells = (options: LocateOptions, etcShells: string | undefined): Arra
   }
   return shells
 }
+
+/**
+ * A Store app's command (PowerShell 7 from the Microsoft Store, for one) is an app execution alias
+ * that cannot be stat'ed, only lstat'ed; it still starts like any executable.
+ */
+const existsOrAlias = (path: string) => {
+  if (existsSync(path)) return true
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Where shells are looked for: like the agents' CLIs, with Store app aliases too. */
+export const shellLocateOptions = (): LocateOptions => ({
+  ...systemLocateOptions(),
+  exists: existsOrAlias,
+})
 
 /** Every shell found on this machine, the system's default first. */
 export const detectShells = (options: LocateOptions): ReadonlyArray<Shell> =>

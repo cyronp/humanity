@@ -257,6 +257,12 @@ describe("TerminalService", () => {
 })
 
 describe("terminalEnvironment", () => {
+  it("drops PowerShell's module path on Windows, so each PowerShell builds its own", () => {
+    const inherited = { PSModulePath: "C:/Users/me/Documents/PowerShell/Modules" }
+    assert.isUndefined(terminalEnvironment(inherited, "win32")["PSModulePath"])
+    assert.isDefined(terminalEnvironment(inherited, "linux")["PSModulePath"])
+  })
+
   it("drops Humanity's variables and npm's, and says what the terminal can do", () => {
     const env = terminalEnvironment({
       PATH: "/usr/bin",

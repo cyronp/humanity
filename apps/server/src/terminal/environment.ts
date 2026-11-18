@@ -22,10 +22,15 @@ const isDropped = (key: string) =>
  */
 export const terminalEnvironment = (
   env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform = process.platform,
 ): Record<string, string> => {
   const result: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined && !isDropped(key)) result[key] = value
+    if (value === undefined || isDropped(key)) continue
+    // A PowerShell that started the daemon leaves its own module folders here, and the other
+    // PowerShell then loads modules it cannot run (PSReadLine). Each one builds its own.
+    if (platform === "win32" && key.toUpperCase() === "PSMODULEPATH") continue
+    result[key] = value
   }
   result["TERM"] = "xterm-256color"
   result["COLORTERM"] = "truecolor"
