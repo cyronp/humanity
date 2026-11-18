@@ -91,16 +91,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run package:desktop
-      # The daemon cannot run an agent without the Agent SDK and Codex beside it.
+      # The daemon needs the Agent SDK's JavaScript beside it, and no agent
+      # ships: threads run on the CLIs the human installed.
       - name: Check the packaged daemon
         shell: bash
         run: |
-          test -f apps/desktop/release/win-unpacked/resources/daemon/main.mjs
-          test -f apps/desktop/release/win-unpacked/resources/daemon/web/index.html
-          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs
-          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe
-          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@openai/codex/package.json
-          test -f apps/desktop/release/win-unpacked/resources/daemon/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe
+          daemon=apps/desktop/release/win-unpacked/resources/daemon
+          test -f "$daemon/main.mjs"
+          test -f "$daemon/web/index.html"
+          test -f "$daemon/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs"
+          test ! -e "$daemon/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64"
+          test ! -e "$daemon/node_modules/@openai"
       - uses: actions/upload-artifact@v4
         with:
           name: humanity-desktop-windows
