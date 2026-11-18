@@ -10,9 +10,10 @@ import { MessageList } from "@/features/chat/MessageList"
 import { QuestionPanel } from "@/features/questions/QuestionPanel"
 import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
-import { SessionPanel } from "./panel/SessionPanel.tsx"
+import { SessionShelf } from "./panel/SessionPanel.tsx"
+import { readStoredShelf, type ShelfState, storeShelf } from "./panel/shelf.ts"
 import { SessionHeader } from "./SessionHeader.tsx"
-import { SourceControlButton } from "./SourceControlButton.tsx"
+import { SyncButton } from "./SyncButton.tsx"
 import {
   approvalsByToolUse,
   isBusy,
@@ -46,7 +47,14 @@ export function Workspace({
   const questions = asked === undefined ? undefined : parseQuestions(asked.input)
   const cards =
     questions === undefined ? confirmations : confirmations.filter((each) => each !== asked)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [shelf, setShelfState] = useState<ShelfState>(() =>
+    readStoredShelf(window.matchMedia("(min-width: 1024px)").matches),
+  )
+  const setShelf = (next: ShelfState) => {
+    setShelfState(next)
+    storeShelf(next)
+  }
+  const panelOpen = shelf.open
   const activity = Object.keys(view.toolCalls).length + view.approvals.length
   const composer = useRef<ComposerHandle>(null)
   const canReference = acceptsMessages(session) && questions === undefined
@@ -73,7 +81,7 @@ export function Workspace({
     observer.observe(row)
     return () => observer.disconnect()
   }, [panel])
-  const panelWidth = panel === null ? 0 : measuredWidth
+  const panelWidth = panel === null || !panelOpen ? 0 : measuredWidth
   useAppHeaderInsetEnd(panelWidth)
 
   useEffect(() => {
@@ -92,13 +100,7 @@ export function Workspace({
       <SessionHeader
         project={project}
         session={session}
-        actions={
-          <SourceControlButton
-            session={session}
-            open={panelOpen}
-            onToggle={() => setPanelOpen((open) => !open)}
-          />
-        }
+        actions={<SyncButton session={session} />}
       />
       <div className="flex min-h-0 flex-1">
         <div className={cn("relative flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
@@ -177,25 +179,26 @@ export function Workspace({
             </div>
           </div>
         </div>
-        {panelOpen && (
-          <aside
-            ref={setPanel}
-            className={cn(
-              "flex min-h-0 w-full flex-col border-l lg:w-[55%] lg:max-w-4xl",
-              panelWidth === 0 && "pt-12",
-            )}
-          >
-            <SessionPanel
-              session={session}
-              activity={activity}
-              onReference={
-                canReference
-                  ? (reference) => composer.current?.insert({ kind: "reference", reference })
-                  : undefined
-              }
-            />
-          </aside>
-        )}
+        <aside
+          ref={setPanel}
+          className={cn(
+            "flex min-h-0 flex-col border-l",
+            panelOpen ? "w-full lg:w-[55%] lg:max-w-4xl" : "w-12 shrink-0",
+            panelWidth === 0 && "pt-12",
+          )}
+        >
+          <SessionShelf
+            session={session}
+            activity={activity}
+            shelf={shelf}
+            onShelfChange={setShelf}
+            onReference={
+              canReference
+                ? (reference) => composer.current?.insert({ kind: "reference", reference })
+                : undefined
+            }
+          />
+        </aside>
       </div>
     </div>
   )
