@@ -191,6 +191,13 @@
 .titlebar {
   app-region: drag;
 }
+/* While a resize handle is dragged, layout follows the pointer at once and nothing gets selected. */
+:root[data-resizing],
+:root[data-resizing] * {
+  cursor: col-resize !important;
+  transition: none !important;
+  user-select: none !important;
+}
 .titlebar :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]),
 [role="dialog"],
 [role="menu"],

@@ -17,7 +17,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuSkeleton,
-  SidebarRail,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
@@ -39,8 +38,8 @@ import {
   type ThreadFilter,
 } from "./threadFilter.ts"
 
-export function AppSidebar() {
-  const { setOpenFloating } = useSidebar()
+export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode }) {
+  const { setOpenFloating, isFloating, state } = useSidebar()
   const close = () => setOpenFloating(false)
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
@@ -121,7 +120,7 @@ export function AppSidebar() {
           <TooltipContent>Settings</TooltipContent>
         </Tooltip>
       </SidebarFooter>
-      <SidebarRail />
+      {!isFloating && state === "expanded" && resizeHandle}
     </Sidebar>
   )
 }

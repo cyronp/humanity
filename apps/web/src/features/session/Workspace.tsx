@@ -1,10 +1,12 @@
 import { acceptsMessages, parseQuestions, type Project, QUESTION_TOOL } from "@humanity/contracts"
 import { cn } from "cn"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
+import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
+import { useStoredWidth } from "@/lib/resize"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { QuestionPanel } from "@/features/questions/QuestionPanel"
@@ -22,6 +24,10 @@ import {
 } from "./state.ts"
 import { UsageMeters } from "./UsageMeters.tsx"
 import { useTranscript } from "./useTranscript.ts"
+
+const PANEL_MIN_WIDTH = 320
+/** The chat keeps at least this much room beside an open panel. */
+const CHAT_MIN_WIDTH = 360
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
@@ -84,6 +90,8 @@ export function Workspace({
     return () => observer.disconnect()
   }, [chat])
   const chatShown = chatWidth === null || chatWidth > 0
+  const [panelWidth, setPanelWidth] = useStoredWidth("humanity.panelWidth")
+  const panel = useRef<HTMLElement>(null)
   useAppHeaderInsetEnd(chatShown && chatWidth !== null ? rowWidth - chatWidth : RAIL_WIDTH)
 
   useEffect(() => {
@@ -182,11 +190,32 @@ export function Workspace({
         </div>
         {panelOpen && (
           <aside
+            ref={panel}
             className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col border-l lg:w-[55%] lg:max-w-4xl lg:flex-none",
+              "relative flex min-h-0 min-w-0 flex-1 flex-col border-l lg:min-w-80 lg:flex-none",
+              panelWidth === null
+                ? "lg:w-[55%] lg:max-w-4xl"
+                : "lg:w-(--panel-width) lg:max-w-[calc(100%-25.5rem)]",
               !chatShown && "pt-12",
             )}
+            style={
+              panelWidth === null
+                ? undefined
+                : ({ "--panel-width": `${panelWidth}px` } as CSSProperties)
+            }
           >
+            {chatShown && (
+              <ResizeHandle
+                edge="start"
+                label="Resize the panel"
+                value={panelWidth ?? undefined}
+                min={PANEL_MIN_WIDTH}
+                max={() => rowWidth - RAIL_WIDTH - CHAT_MIN_WIDTH}
+                measure={() => panel.current?.offsetWidth ?? PANEL_MIN_WIDTH}
+                onResize={setPanelWidth}
+                onReset={() => setPanelWidth(null)}
+              />
+            )}
             <ToolPanel
               session={session}
               activity={activity}
