@@ -59,6 +59,7 @@ export type AgentAttachment =
 export interface AgentUserMessage {
   readonly text: string
   readonly attachments: ReadonlyArray<AgentAttachment>
+  readonly mentions?: ReadonlyArray<string>
 }
 
 export interface AgentRun {

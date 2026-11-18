@@ -1,8 +1,17 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Deferred, Effect, Fiber, Stream } from "effect"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { basename, join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { AcpFailed, type AgentMessage } from "../src/acp/Connection.ts"
 import type { InitializeResponse } from "../src/acp/protocol.ts"
-import { type AcpConnect, type AcpProfile, acpPrompt, startAcpRun } from "../src/agent/AcpRunner.ts"
+import {
+  type AcpConnect,
+  type AcpProfile,
+  acpFileLinks,
+  acpPrompt,
+  startAcpRun,
+} from "../src/agent/AcpRunner.ts"
 import type {
   AgentRunOptions,
   PermissionDecision,
@@ -18,6 +27,7 @@ import {
   ACP_TURN_COMPLETED,
   type AcpEvent,
 } from "../src/agent/normalizeAcp.ts"
+import { tempDir } from "./helpers.ts"
 import { eventually } from "./sessionHelpers.ts"
 
 interface Call {
@@ -788,4 +798,46 @@ describe("acpPrompt", () => {
       text: "Look\n\n[The image a.png was attached, but this agent cannot read images.]",
     })
   })
+
+  it("links mentioned files after the text", () => {
+    const links = [{ uri: "file:///repo/src/a.ts", name: "src/a.ts" }]
+    assert.deepStrictEqual(
+      acpPrompt({ text: "Look at @src/a.ts", attachments: [] }, { images: true, links }),
+      [
+        { type: "text", text: "Look at @src/a.ts" },
+        { type: "resource_link", uri: "file:///repo/src/a.ts", name: "src/a.ts" },
+      ],
+    )
+  })
+})
+
+describe("acpFileLinks", () => {
+  it.effect("links existing files inside the folder, once each, and nothing else", () =>
+    Effect.gen(function* () {
+      const outside = yield* tempDir()
+      const root = yield* tempDir()
+      mkdirSync(join(root, "src"))
+      writeFileSync(join(root, "src", "a.ts"), "a")
+      writeFileSync(join(outside, "secret.txt"), "s")
+      const links = yield* acpFileLinks(root, [
+        "src/a.ts",
+        "./src/a.ts",
+        "src/",
+        "src",
+        "missing.ts",
+        `../${basename(outside)}/secret.txt`,
+        join(outside, "secret.txt"),
+      ])
+      assert.deepStrictEqual(links, [
+        { uri: pathToFileURL(join(root, "src", "a.ts")).href, name: "src/a.ts" },
+      ])
+    }),
+  )
+
+  it.effect("links nothing when the folder is gone", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDir()
+      assert.deepStrictEqual(yield* acpFileLinks(join(root, "gone"), ["a.ts"]), [])
+    }),
+  )
 })

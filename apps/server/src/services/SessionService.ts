@@ -786,7 +786,11 @@ export class SessionService extends Context.Service<
           state.interrupted = false
           yield* syncExtensions(session.id, state)
           yield* setStatus(session.id, "running")
-          yield* state.run.send({ text: forAgent, attachments: files.map(toAgentAttachment) })
+          yield* state.run.send({
+            text: forAgent,
+            attachments: files.map(toAgentAttachment),
+            ...(mentioned.length === 0 ? {} : { mentions: mentioned }),
+          })
         })
 
       const sendMessage = Effect.fn("SessionService.sendMessage")(function* (

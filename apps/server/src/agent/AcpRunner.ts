@@ -11,6 +11,9 @@ import {
   Scope,
   Stream,
 } from "effect"
+import { realpath, stat } from "node:fs/promises"
+import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 import { type AcpConnection, AcpFailed, type AgentMessage } from "../acp/Connection.ts"
 import {
   ChunkUpdate,
@@ -25,6 +28,7 @@ import {
   ToolCallFields,
   UsageUpdate,
 } from "../acp/protocol.ts"
+import { isInsideDir } from "../paths.ts"
 import {
   type AgentExtensions,
   type AgentRun,
@@ -132,9 +136,40 @@ export const acpMcpServers = (
   return servers
 }
 
+export interface AcpFileLink {
+  readonly uri: string
+  readonly name: string
+}
+
+export const acpFileLinks = (
+  cwd: string,
+  mentions: ReadonlyArray<string>,
+): Effect.Effect<ReadonlyArray<AcpFileLink>> =>
+  Effect.promise(async () => {
+    if (mentions.length === 0) return []
+    const root = await realpath(cwd).catch(() => undefined)
+    if (root === undefined) return []
+    const links = new Map<string, AcpFileLink>()
+    for (const name of mentions) {
+      if (name.endsWith("/")) continue
+      const target = await realpath(resolve(root, name)).catch(() => undefined)
+      if (target === undefined || links.has(target) || !isInsideDir(root, target)) continue
+      const file = await stat(target).then(
+        (info) => info.isFile(),
+        () => false,
+      )
+      if (file) links.set(target, { uri: pathToFileURL(target).href, name })
+    }
+    return [...links.values()]
+  })
+
 export const acpPrompt = (
   message: AgentUserMessage,
-  options: { readonly images: boolean; readonly notes?: ReadonlyArray<string> },
+  options: {
+    readonly images: boolean
+    readonly notes?: ReadonlyArray<string>
+    readonly links?: ReadonlyArray<AcpFileLink>
+  },
 ): ReadonlyArray<unknown> => {
   const images: Array<unknown> = []
   let text = message.text
@@ -159,7 +194,8 @@ export const acpPrompt = (
   if (notes.length > 0) {
     text = `[About calls that were declined in your last turn]\n${notes.join("\n")}\n\n${text}`
   }
-  return [...images, { type: "text", text }]
+  const links = (options.links ?? []).map((link) => ({ type: "resource_link", ...link }))
+  return [...images, { type: "text", text }, ...links]
 }
 
 export const acpOptionValues = (option: ConfigOption): ReadonlyArray<string> | undefined => {
@@ -543,6 +579,7 @@ export const startAcpRun =
               yield* holdSettings(connected, session)
               const modelWritten = yield* chooseModel(connected, session)
               yield* Effect.ignore(chooseEffort(connected, session, modelWritten))
+              const links = yield* acpFileLinks(options.cwd, message.mentions ?? [])
               if (yield* Deferred.isDone(current.cancelled)) return { stopReason: "cancelled" }
               current.prompted = true
               return yield* connected.request("session/prompt", {
@@ -550,6 +587,7 @@ export const startAcpRun =
                 prompt: acpPrompt(message, {
                   images: connected.agent.agentCapabilities?.promptCapabilities?.image === true,
                   notes: told,
+                  links,
                 }),
               })
             }),
