@@ -10,10 +10,9 @@ import { MessageList } from "@/features/chat/MessageList"
 import { QuestionPanel } from "@/features/questions/QuestionPanel"
 import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
-import { SessionShelf } from "./panel/SessionPanel.tsx"
-import { readStoredShelf, type ShelfState, storeShelf } from "./panel/shelf.ts"
+import { RAIL_WIDTH, ToolPanel, ToolRail } from "./panel/SessionPanel.tsx"
+import { readStoredShelf, type ShelfState, storeShelf, toggleTool } from "./panel/shelf.ts"
 import { SessionHeader } from "./SessionHeader.tsx"
-import { SyncButton } from "./SyncButton.tsx"
 import {
   approvalsByToolUse,
   isBusy,
@@ -68,21 +67,24 @@ export function Workspace({
     return () => observer.disconnect()
   }, [dock])
 
-  const [panel, setPanel] = useState<HTMLElement | null>(null)
-  const [measuredWidth, setMeasuredWidth] = useState(0)
+  // The header runs over the chat only: the panel and the rail have their own space, full height.
+  // On a narrow window the open panel takes the chat's place, under the header.
+  const [chat, setChat] = useState<HTMLDivElement | null>(null)
+  const [chatWidth, setChatWidth] = useState<number | null>(null)
+  const [rowWidth, setRowWidth] = useState(0)
   useEffect(() => {
-    const row = panel?.parentElement
-    if (panel === null || row === null || row === undefined) return
+    const row = chat?.parentElement
+    if (chat === null || row === null || row === undefined) return
     const observer = new ResizeObserver(() => {
-      const width = panel.offsetWidth
-      setMeasuredWidth(width < row.clientWidth ? width : 0)
+      setChatWidth(chat.offsetWidth)
+      setRowWidth(row.clientWidth)
     })
-    observer.observe(panel)
+    observer.observe(chat)
     observer.observe(row)
     return () => observer.disconnect()
-  }, [panel])
-  const panelWidth = panel === null || !panelOpen ? 0 : measuredWidth
-  useAppHeaderInsetEnd(panelWidth)
+  }, [chat])
+  const chatShown = chatWidth === null || chatWidth > 0
+  useAppHeaderInsetEnd(chatShown && chatWidth !== null ? rowWidth - chatWidth : RAIL_WIDTH)
 
   useEffect(() => {
     const previous = document.title
@@ -97,13 +99,12 @@ export function Workspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SessionHeader
-        project={project}
-        session={session}
-        actions={<SyncButton session={session} />}
-      />
+      <SessionHeader project={project} session={session} />
       <div className="flex min-h-0 flex-1">
-        <div className={cn("relative flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}>
+        <div
+          ref={setChat}
+          className={cn("relative flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}
+        >
           <div className="min-h-0 flex-1">
             <MessageList
               bottomInset={dockHeight}
@@ -179,26 +180,32 @@ export function Workspace({
             </div>
           </div>
         </div>
-        <aside
-          ref={setPanel}
-          className={cn(
-            "flex min-h-0 flex-col border-l",
-            panelOpen ? "w-full lg:w-[55%] lg:max-w-4xl" : "w-12 shrink-0",
-            panelWidth === 0 && "pt-12",
-          )}
-        >
-          <SessionShelf
-            session={session}
-            activity={activity}
-            shelf={shelf}
-            onShelfChange={setShelf}
-            onReference={
-              canReference
-                ? (reference) => composer.current?.insert({ kind: "reference", reference })
-                : undefined
-            }
-          />
-        </aside>
+        {panelOpen && (
+          <aside
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col border-l lg:w-[55%] lg:max-w-4xl lg:flex-none",
+              !chatShown && "pt-12",
+            )}
+          >
+            <ToolPanel
+              session={session}
+              activity={activity}
+              tool={shelf.tool}
+              onToolChange={(tool) => setShelf({ open: true, tool })}
+              onClose={() => setShelf({ ...shelf, open: false })}
+              onReference={
+                canReference
+                  ? (reference) => composer.current?.insert({ kind: "reference", reference })
+                  : undefined
+              }
+            />
+          </aside>
+        )}
+        <ToolRail
+          session={session}
+          shelf={shelf}
+          onSelect={(tool) => setShelf(toggleTool(shelf, tool))}
+        />
       </div>
     </div>
   )
