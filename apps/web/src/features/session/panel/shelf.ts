@@ -1,7 +1,7 @@
 import type { BranchPublication, WorkingTreeDiff } from "@humanity/contracts"
 
 /** The tools of the shelf on the right of a thread, in the order of its rail. */
-export const SHELF_TOOLS = ["changes", "commits", "commit", "pull-request"] as const
+export const SHELF_TOOLS = ["changes", "commits", "commit", "pull-request", "browser"] as const
 export type ShelfTool = (typeof SHELF_TOOLS)[number]
 
 export const SHELF_LABELS: Readonly<Record<ShelfTool, string>> = {
@@ -9,6 +9,7 @@ export const SHELF_LABELS: Readonly<Record<ShelfTool, string>> = {
   commits: "Commits",
   commit: "Commit and push",
   "pull-request": "Pull request",
+  browser: "Browser",
 }
 
 export interface ShelfState {

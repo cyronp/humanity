@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { useBrowser } from "@/features/browser/useBrowser"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
@@ -59,6 +60,8 @@ export function Workspace({
     [session.id],
   )
 
+  const browser = useBrowser(session.id, view.toolCalls)
+
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [dockHeight, setDockHeight] = useState(0)
   useEffect(() => {
@@ -86,12 +89,22 @@ export function Workspace({
         unavailable: session.status === "ended" ? "This thread has ended." : undefined,
       }}
       header={(actions) => <SessionHeader project={project} session={session} actions={actions} />}
-      rail={(shelf, onSelect) => <ToolRail session={session} shelf={shelf} onSelect={onSelect} />}
-      panel={({ tool, onToolChange, onClose }) => (
+      rail={(shelf, onSelect) => (
+        <ToolRail
+          session={session}
+          shelf={shelf}
+          browserUnseen={browser.unseen}
+          onSelect={onSelect}
+        />
+      )}
+      panel={({ shown, tool, onToolChange, onClose }) => (
         <ToolPanel
+          key={session.id}
           session={session}
           activity={activity}
+          shown={shown}
           tool={tool}
+          browser={browser}
           onToolChange={onToolChange}
           onClose={onClose}
           onReference={

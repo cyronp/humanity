@@ -47,6 +47,8 @@ export const TerminalInfo = Schema.Struct({
   busy: Schema.NullOr(Schema.Boolean),
   lastExitCode: Schema.NullOr(Schema.Number),
   integration: Schema.Boolean,
+  /** The local addresses this terminal's programs printed lately, oldest first. */
+  urls: Schema.Array(Schema.Struct({ url: Schema.String, seenAt: Schema.String })),
   createdAt: Schema.String,
 })
 export type TerminalInfo = typeof TerminalInfo.Type

@@ -7,6 +7,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { onPreviewRequest } from "@/features/browser/browser"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
@@ -35,6 +36,8 @@ const PANEL_MIN_WIDTH = 320
 const CHAT_MIN_WIDTH = 360
 
 export interface PanelProps {
+  /** False while the panel is closed: it stays mounted, hidden, once it was opened. */
+  readonly shown: boolean
   readonly tool: ShelfTool
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
@@ -64,6 +67,8 @@ export function WorkspaceFrame({
   }
   const [railShown, setRailShown] = useStoredFlag(RAIL_SHOWN_KEY, true)
   const panelOpen = shelf.open && railShown && panel !== undefined
+  const [panelMounted, setPanelMounted] = useState(panelOpen)
+  if (panelOpen && !panelMounted) setPanelMounted(true)
   const [terminalsOpen, setTerminalsOpen] = useStoredFlag(DOCK_OPEN_KEY, false)
   const [terminalHeight, setTerminalHeight] = useStoredWidth(DOCK_HEIGHT_KEY)
   const terminalArea = useRef<HTMLDivElement>(null)
@@ -79,6 +84,19 @@ export function WorkspaceFrame({
       }),
     [setTerminalsOpen],
   )
+
+  const hasPanel = panel !== undefined
+  useEffect(() => {
+    if (!hasPanel) return
+    return onPreviewRequest(() => {
+      setRailShown(true)
+      setShelfState((current) => {
+        const next = { open: true, tool: "browser" as const }
+        storeShelf(next)
+        return current.open && current.tool === "browser" ? current : next
+      })
+    })
+  }, [hasPanel, setRailShown])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -171,7 +189,7 @@ export function WorkspaceFrame({
             </div>
           )}
         </div>
-        {panelOpen && (
+        {panel !== undefined && panelMounted && (
           <aside
             ref={panelElement}
             className={cn(
@@ -180,6 +198,7 @@ export function WorkspaceFrame({
                 ? "lg:w-[55%] lg:max-w-4xl"
                 : "lg:w-(--panel-width) lg:max-w-[calc(100%-25.5rem)]",
               !chatShown && "pt-12",
+              !panelOpen && "hidden",
             )}
             style={
               panelWidth === null
@@ -187,7 +206,7 @@ export function WorkspaceFrame({
                 : ({ "--panel-width": `${panelWidth}px` } as CSSProperties)
             }
           >
-            {chatShown && (
+            {chatShown && panelOpen && (
               <ResizeHandle
                 edge="start"
                 label="Resize the panel"
@@ -200,6 +219,7 @@ export function WorkspaceFrame({
               />
             )}
             {panel({
+              shown: panelOpen,
               tool: shelf.tool,
               onToolChange: (tool) => setShelf({ open: true, tool }),
               onClose: () => setShelf({ ...shelf, open: false }),

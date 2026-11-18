@@ -1,5 +1,10 @@
 import { useAtomSet, useAtomSubscribe } from "@effect/atom-react"
-import type { TerminalAttachEvent, TerminalId, TerminalInfo } from "@humanity/contracts"
+import {
+  localUrls,
+  type TerminalAttachEvent,
+  type TerminalId,
+  type TerminalInfo,
+} from "@humanity/contracts"
 import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { Unicode11Addon } from "@xterm/addon-unicode11"
@@ -9,6 +14,7 @@ import { Terminal } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
+import { requestPreview } from "@/features/browser/browser"
 import {
   type Ref,
   useCallback,
@@ -139,6 +145,7 @@ export function TerminalView({
     terminal.loadAddon(
       new WebLinksAddon((event, uri) => {
         if (event.ctrlKey || event.metaKey) window.open(uri, "_blank", "noopener,noreferrer")
+        else if (localUrls(uri).length > 0) requestPreview(uri)
       }),
     )
     terminal.open(element)

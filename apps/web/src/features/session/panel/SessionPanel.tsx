@@ -6,6 +6,7 @@ import {
   FileDiff,
   GitCommitHorizontal,
   GitPullRequest,
+  Globe,
   History,
   PanelRightClose,
   RefreshCw,
@@ -14,6 +15,8 @@ import { type ReactNode, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { BrowserView } from "@/features/browser/BrowserView"
+import type { BrowserState } from "@/features/browser/useBrowser"
 import {
   publicationAtom,
   refreshPullRequestAtom,
@@ -36,6 +39,7 @@ const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
   commits: <History />,
   commit: <GitCommitHorizontal />,
   "pull-request": <GitPullRequest />,
+  browser: <Globe />,
 }
 
 /**
@@ -52,10 +56,12 @@ export const titlebarPaddingEnd = (covered: number) =>
 export function ToolRail({
   session,
   shelf,
+  browserUnseen,
   onSelect,
 }: {
   readonly session: Session
   readonly shelf: ShelfState
+  readonly browserUnseen: boolean
   readonly onSelect: (tool: ShelfTool) => void
 }) {
   const diff = useAtomValue(sessionDiffAtom(session.id))
@@ -78,6 +84,7 @@ export function ToolRail({
       {SHELF_TOOLS.map((tool) => {
         const active = shelf.open && shelf.tool === tool
         const badge = badges[tool]
+        const dot = tool === "browser" && browserUnseen
         return (
           <Tooltip key={tool}>
             <TooltipTrigger asChild>
@@ -95,12 +102,20 @@ export function ToolRail({
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
+                {dot && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
+                  />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
-              {badge === undefined
-                ? SHELF_LABELS[tool]
-                : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
+              {dot
+                ? `${SHELF_LABELS[tool]} (a new address)`
+                : badge === undefined
+                  ? SHELF_LABELS[tool]
+                  : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
             </TooltipContent>
           </Tooltip>
         )
@@ -147,22 +162,32 @@ function RailFrame({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/** The open tool's panel, between the chat and the rail. */
+/**
+ * The open tool's panel, between the chat and the rail. The Browser, once opened, stays mounted
+ * while another tool shows or the panel is closed, so its page isn't reloaded.
+ */
 export function ToolPanel({
   session,
   activity,
+  shown,
   tool,
+  browser,
   onToolChange,
   onClose,
   onReference,
 }: {
   readonly session: Session
   readonly activity: number
+  readonly shown: boolean
   readonly tool: ShelfTool
+  readonly browser: BrowserState
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
 }) {
+  const [browserMounted, setBrowserMounted] = useState(shown && tool === "browser")
+  if (shown && tool === "browser" && !browserMounted) setBrowserMounted(true)
+  const gitShown = shown && tool !== "browser"
   const [openFiles, setOpenFiles] = useState<ReadonlySet<string>>(new Set())
   const setFileOpen = (key: string, open: boolean) =>
     setOpenFiles((current) => {
@@ -171,6 +196,54 @@ export function ToolPanel({
       else next.delete(key)
       return next
     })
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {gitShown && (
+        <GitPanel
+          session={session}
+          activity={activity}
+          tool={tool}
+          onToolChange={onToolChange}
+          onClose={onClose}
+          onReference={onReference}
+          openFiles={openFiles}
+          onFileOpenChange={setFileOpen}
+        />
+      )}
+      {browserMounted && (
+        <BrowserView
+          remembered={browser.remembered}
+          shown={shown && tool === "browser"}
+          offers={browser.offers}
+          onLoad={browser.onLoad}
+          onSeen={browser.onSeen}
+          onClose={onClose}
+          titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
+        />
+      )}
+    </div>
+  )
+}
+
+function GitPanel({
+  session,
+  activity,
+  tool,
+  onToolChange,
+  onClose,
+  onReference,
+  openFiles,
+  onFileOpenChange,
+}: {
+  readonly session: Session
+  readonly activity: number
+  readonly tool: ShelfTool
+  readonly onToolChange: (tool: ShelfTool) => void
+  readonly onClose: () => void
+  readonly onReference?: ((reference: string) => void) | undefined
+  readonly openFiles: ReadonlySet<string>
+  readonly onFileOpenChange: (key: string, open: boolean) => void
+}) {
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
   const refreshCommits = useAtomRefresh(sessionCommitsAtom(session.id))
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
@@ -190,7 +263,7 @@ export function ToolPanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <>
       <div
         className="titlebar flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3"
         style={{ paddingRight: titlebarPaddingEnd(RAIL_WIDTH) }}
@@ -226,7 +299,7 @@ export function ToolPanel({
               session={session}
               onReference={onReference}
               open={openFiles}
-              onOpenChange={setFileOpen}
+              onOpenChange={onFileOpenChange}
             />
           )}
           {tool === "commits" && <CommitsTab session={session} />}
@@ -238,6 +311,6 @@ export function ToolPanel({
           )}
         </div>
       </ScrollArea>
-    </div>
+    </>
   )
 }

@@ -1,4 +1,5 @@
 import {
+  localUrls,
   type ProjectId,
   type ProjectNotFound,
   SessionEnded,
@@ -55,6 +56,8 @@ const SAVE_INTERVAL = "5 seconds"
 const EXIT_WAIT = "5 seconds"
 
 const COMMANDS_KEPT = 200
+const URLS_KEPT = 5
+const URL_CARRY = 4_096
 const CWD_SAVE_MS = 1_000
 
 export interface CommandSpan {
@@ -134,6 +137,7 @@ interface Live {
   readonly cursors: Map<string, Cursor>
   nextCursor: number
   cwdTimer: ReturnType<typeof setTimeout> | undefined
+  urlCarry: string
 }
 
 export interface OpenTerminalOptions {
@@ -441,6 +445,18 @@ export class TerminalService extends Context.Service<
           else live.flushTimer ??= setTimeout(() => flush(live), FLUSH_MS)
         }
 
+        const scanUrls = (live: Live, data: string) => {
+          const found = scanLocalUrls(live.urlCarry, data)
+          live.urlCarry = found.carry
+          if (found.urls.length === 0) return
+          const seenAt = new Date().toISOString()
+          const urls = [
+            ...live.info.urls.filter((offer) => !found.urls.includes(offer.url)),
+            ...found.urls.map((url) => ({ url, seenAt })),
+          ].slice(-URLS_KEPT)
+          update(live, { urls })
+        }
+
         const killProcess = (live: Live) => {
           live.generation++
           live.pty?.kill()
@@ -492,9 +508,12 @@ export class TerminalService extends Context.Service<
                 ),
               )
             live.pty = pty
+            live.urlCarry = ""
             live.exited = new Promise((resolve) => pty.onExit(() => resolve()))
             pty.onData((data) => {
-              if (live.generation === generation) feed(live, data)
+              if (live.generation !== generation) return
+              feed(live, data)
+              scanUrls(live, data)
             })
             pty.onExit((exitCode) => {
               if (live.generation !== generation) return
@@ -511,6 +530,7 @@ export class TerminalService extends Context.Service<
               busy: null,
               lastExitCode: null,
               integration: false,
+              urls: [],
               shell: shell.id,
               shellName: shell.name,
               cwd,
@@ -547,6 +567,7 @@ export class TerminalService extends Context.Service<
             cursors: new Map(),
             nextCursor: 0,
             cwdTimer: undefined,
+            urlCarry: "",
           }
           live.screen.onReply((reply) => live.pty?.write(reply))
           live.screen.onOsc(133, (data) => onCommandMark(live, data))
@@ -620,6 +641,7 @@ export class TerminalService extends Context.Service<
           busy: null,
           lastExitCode: null,
           integration: false,
+          urls: [],
           createdAt: row.created_at,
         })
 
@@ -735,6 +757,7 @@ export class TerminalService extends Context.Service<
             busy: null,
             lastExitCode: null,
             integration: false,
+            urls: [],
             createdAt: DateTime.formatIso(yield* DateTime.now),
           }
           const live = makeLive(info, {
@@ -1066,4 +1089,28 @@ export class TerminalService extends Context.Service<
         })
       }),
     )
+}
+
+/**
+ * The local URLs in the complete part of `carry + data`, up to its last whitespace, and what is
+ * left to carry into the next chunk: a URL never holds whitespace, so one split across chunks is
+ * whole by the time it is scanned. The carry is capped, so a program that never prints whitespace
+ * costs nothing.
+ */
+export const scanLocalUrls = (
+  carry: string,
+  data: string,
+): { readonly urls: ReadonlyArray<string>; readonly carry: string } => {
+  const text = carry + data
+  const cut = Math.max(
+    text.lastIndexOf(" "),
+    text.lastIndexOf("\n"),
+    text.lastIndexOf("\r"),
+    text.lastIndexOf("\t"),
+  )
+  const rest = text.slice(cut + 1)
+  return {
+    urls: cut < 0 ? [] : localUrls(text.slice(0, cut + 1)),
+    carry: rest.length > URL_CARRY ? "" : rest,
+  }
 }

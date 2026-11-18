@@ -9,7 +9,7 @@ import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { terminalEnvironment } from "../src/terminal/environment.ts"
 import { type FakePty, makeFakePtyHost } from "../src/terminal/PtyHost.ts"
-import { ATTACH_WINDOW, TerminalService } from "../src/terminal/TerminalService.ts"
+import { ATTACH_WINDOW, scanLocalUrls, TerminalService } from "../src/terminal/TerminalService.ts"
 import { addProject, eventually, services, setup, waitForStatus } from "./sessionHelpers.ts"
 
 const layerFor = (home: string, host = makeFakePtyHost()) =>
@@ -151,6 +151,36 @@ describe("TerminalService", () => {
             view.events.slice(before).some((event) => event._tag === "Snapshot") ? true : undefined,
           ),
         )
+      }).pipe(Effect.provide(layerFor(home, host)))
+    }),
+  )
+
+  it.live("offers the local addresses its programs print, even split across chunks", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const host = makeFakePtyHost()
+      yield* Effect.gen(function* () {
+        const terminals = yield* TerminalService
+        const session = yield* startThread(repo)
+        const terminal = yield* terminals.open(thread(session.id), { opener: "human" })
+        const pty = lastPty(host.spawned)
+        pty.print("  Local:   http://local")
+        pty.print("host:\x1b[1m5173\x1b[22m/\r\n  Network: http://192.168.1.5:5173/\r\n")
+        const urlsOf = Effect.map(terminals.info(terminal.id), (info) =>
+          info.urls.map((offer) => offer.url),
+        )
+        yield* eventually(
+          "the address",
+          Effect.map(urlsOf, (urls) => (urls.length > 0 ? urls : undefined)),
+        )
+        assert.deepStrictEqual(yield* urlsOf, ["http://localhost:5173/"])
+
+        pty.print("ready on http://0.0.0.0:3000\r\nagain http://localhost:5173/\r\n")
+        yield* eventually(
+          "the second address",
+          Effect.map(urlsOf, (urls) => (urls.length === 2 ? urls : undefined)),
+        )
+        assert.deepStrictEqual(yield* urlsOf, ["http://localhost:3000/", "http://localhost:5173/"])
       }).pipe(Effect.provide(layerFor(home, host)))
     }),
   )
@@ -338,6 +368,19 @@ describe("TerminalService outside a thread", () => {
       }).pipe(Effect.provide(layerFor(home, host)))
     }),
   )
+})
+
+describe("scanLocalUrls", () => {
+  it("scans up to the last whitespace and carries the rest", () => {
+    const first = scanLocalUrls("", "open http://localhost:30")
+    assert.deepStrictEqual(first, { urls: [], carry: "http://localhost:30" })
+    const second = scanLocalUrls(first.carry, "00/app now\n")
+    assert.deepStrictEqual(second, { urls: ["http://localhost:3000/app"], carry: "" })
+  })
+
+  it("drops a carry that grows past its cap", () => {
+    assert.strictEqual(scanLocalUrls("", "x".repeat(10_000)).carry, "")
+  })
 })
 
 describe("terminalEnvironment", () => {
