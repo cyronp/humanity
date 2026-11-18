@@ -346,3 +346,20 @@ export class CliUpdateFailed extends Schema.TaggedError<CliUpdateFailed>()("CliU
     return `\`${this.command}\` did not update ${this.product}.${output === "" ? "" : `\n${output}`}`
   }
 }
+
+export class TerminalNotFound extends Schema.TaggedError<TerminalNotFound>()("TerminalNotFound", {
+  terminalId: Schema.String,
+}) {
+  override get message() {
+    return "This terminal was closed."
+  }
+}
+
+export class TerminalSpawnFailed extends Schema.TaggedError<TerminalSpawnFailed>()(
+  "TerminalSpawnFailed",
+  { shell: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return `${this.shell} could not be started: ${this.reason}`
+  }
+}

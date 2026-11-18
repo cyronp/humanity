@@ -1,9 +1,11 @@
 import {
   DEFAULT_HISTORY_PREFERENCES,
+  DEFAULT_TERMINAL_PREFERENCES,
   DEFAULT_UPDATE_PREFERENCES,
   HistoryPreferences,
   NO_PINS,
   PinnedDefaults,
+  TerminalPreferences,
   UpdatePreferences,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
@@ -12,12 +14,14 @@ import { SqlClient, SqlSchema } from "effect/sql"
 const PINNED_DEFAULTS_KEY = "pinned_defaults"
 const UPDATES_KEY = "updates"
 const HISTORY_KEY = "history"
+const TERMINAL_KEY = "terminal"
 
 const PreferenceRow = Schema.Struct({ value_json: Schema.String })
 
 const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
 const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
 const HistoryPreferencesJson = Schema.fromJsonString(HistoryPreferences)
+const TerminalPreferencesJson = Schema.fromJsonString(TerminalPreferences)
 
 export class PreferencesService extends Context.Service<
   PreferencesService,
@@ -28,6 +32,8 @@ export class PreferencesService extends Context.Service<
     readonly setUpdates: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
     readonly history: Effect.Effect<HistoryPreferences>
     readonly setHistory: (preferences: HistoryPreferences) => Effect.Effect<HistoryPreferences>
+    readonly terminal: Effect.Effect<TerminalPreferences>
+    readonly setTerminal: (preferences: TerminalPreferences) => Effect.Effect<TerminalPreferences>
   }
 >()("humanity/PreferencesService") {
   static readonly layer = Layer.effect(
@@ -119,6 +125,32 @@ export class PreferencesService extends Context.Service<
         return preferences
       })
 
+      const terminal = Effect.gen(function* () {
+        const row = yield* selectByKey(TERMINAL_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_TERMINAL_PREFERENCES
+        return yield* Schema.decodeEffect(TerminalPreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable terminal preferences", error.message),
+              DEFAULT_TERMINAL_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.terminal"))
+
+      const setTerminal = Effect.fn("PreferencesService.setTerminal")(function* (
+        preferences: TerminalPreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(TerminalPreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${TERMINAL_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
       return PreferencesService.of({
         pinnedDefaults,
         setPinnedDefaults,
@@ -126,6 +158,8 @@ export class PreferencesService extends Context.Service<
         setUpdates,
         history,
         setHistory,
+        terminal,
+        setTerminal,
       })
     }),
   )

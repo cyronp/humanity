@@ -20,6 +20,8 @@ export interface ServerConfigShape {
   readonly gitlabHostPath: string
   readonly mcpConfigPath: string
   readonly pluginDir: string
+  /** The saved screens of terminals, one folder per thread. */
+  readonly terminalsDir: string
   readonly webDist: string | undefined
   readonly webOrigin: string
 }
@@ -48,6 +50,7 @@ const make = (options: {
     gitlabHostPath: join(home, "gitlab-host"),
     mcpConfigPath: join(home, "mcp.json"),
     pluginDir: join(home, "plugin"),
+    terminalsDir: join(home, "terminals"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,
   }

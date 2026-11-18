@@ -11,6 +11,7 @@ import { PreferencesRpcs } from "./rpc/Preferences.ts"
 import { ProjectsRpcs } from "./rpc/Projects.ts"
 import { PullRequestsRpcs } from "./rpc/PullRequests.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
+import { TerminalsRpcs } from "./rpc/Terminals.ts"
 import { UpdatesRpcs } from "./rpc/Updates.ts"
 
 export const HumanityRpcs = ProjectsRpcs.merge(
@@ -27,6 +28,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   PullRequestsRpcs,
   UpdatesRpcs,
   AgentClisRpcs,
+  TerminalsRpcs,
 )
 
 export const RPC_PATH = "/rpc"

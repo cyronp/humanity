@@ -76,6 +76,7 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
+import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
@@ -267,6 +268,7 @@ export class SessionService extends Context.Service<
       const runner = yield* AgentRunner
       const projects = yield* ProjectService
       const git = yield* GitService
+      const terminals = yield* TerminalService
       const fileSearch = yield* FileSearchService
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
@@ -1118,6 +1120,8 @@ export class SessionService extends Context.Service<
       ) {
         const session = yield* get(sessionId)
         yield* stopRun(sessionId)
+        // Before the worktree goes: a shell still in it would keep Windows from deleting it.
+        yield* terminals.closeSession(sessionId)
         if (options.removeWorktree && isInsideDir(config.worktreesDir, session.worktreePath)) {
           const project = yield* projects.get(session.projectId).pipe(Effect.option)
           if (Option.isSome(project)) {
@@ -1196,7 +1200,11 @@ export class SessionService extends Context.Service<
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
-          yield* Effect.forEach(sessions, (session) => stopRun(session.id), { discard: true })
+          yield* Effect.forEach(
+            sessions,
+            (session) => Effect.andThen(stopRun(session.id), terminals.closeSession(session.id)),
+            { discard: true },
+          )
         })
 
       const subscribe = (sessionId: string) =>

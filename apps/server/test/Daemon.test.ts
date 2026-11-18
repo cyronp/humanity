@@ -13,6 +13,7 @@ import { Codex } from "../src/codex/Codex.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { App } from "../src/Daemon.ts"
+import { makeFakePtyHost } from "../src/terminal/PtyHost.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
 const ScriptedClaude = ClaudeCode.layerTest(
@@ -31,6 +32,7 @@ const daemon = (home: string, script: FakeScript = () => []) =>
     Layer.provide(ClaudeHistory.layerTest()),
     Layer.provideMerge(AuthToken.layer),
     Layer.provide(AgentRunnerFake(script)),
+    Layer.provide(makeFakePtyHost().layer),
     Layer.provideMerge(HumanityMcp.layer),
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(baseLayer(home)),

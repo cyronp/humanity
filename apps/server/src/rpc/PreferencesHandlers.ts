@@ -15,6 +15,8 @@ export const PreferencesHandlers = PreferencesRpcs.toLayer(
         Effect.tap(preferences.setHistory(history), (saved) =>
           saved.importFromCli ? imports.syncAllInBackground : Effect.void,
         ),
+      "Preferences.getTerminal": () => preferences.terminal,
+      "Preferences.setTerminal": ({ terminal }) => preferences.setTerminal(terminal),
     })
   }),
 )

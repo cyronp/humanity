@@ -34,5 +34,8 @@
     "turbo": "2.11.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true
   }
 }
