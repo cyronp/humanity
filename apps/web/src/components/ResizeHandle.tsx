@@ -8,10 +8,6 @@ const KEYS: Readonly<Record<ResizeEdge, { readonly grow: string; readonly shrink
   top: { grow: "ArrowUp", shrink: "ArrowDown" },
 }
 
-/**
- * A thin handle on one edge of an element, dragged (or moved with the arrow keys) to change its
- * width, or its height on the top edge. Double-click resets it to the layout's default.
- */
 export function ResizeHandle({
   edge,
   label,
@@ -25,12 +21,9 @@ export function ResizeHandle({
 }: {
   readonly edge: ResizeEdge
   readonly label: string
-  /** The size the human set, if any, for assistive technology. */
   readonly value?: number | undefined
   readonly min: number
-  /** The largest the element may be right now, which can depend on the window. */
   readonly max: () => number
-  /** The element's size as it is rendered now. */
   readonly measure: () => number
   readonly onResize: (size: number) => void
   readonly onReset: () => void

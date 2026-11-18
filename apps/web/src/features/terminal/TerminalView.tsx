@@ -28,7 +28,6 @@ import {
 import { isMac, type TerminalCommand, terminalCommand } from "./keys.ts"
 import { TERMINAL_FONT_FAMILY, terminalTheme, useResolvedTheme } from "./theme.ts"
 
-/** Output is acknowledged at most this often, once xterm has drawn it. */
 const ACK_DELAY_MS = 40
 
 export interface TerminalViewHandle {
@@ -40,11 +39,6 @@ export interface TerminalViewHandle {
   readonly search: SearchAddon | undefined
 }
 
-/**
- * The daemon answers the queries programs send (device attributes, cursor position, modes,
- * version, colors) from its own copy of the screen, so a view never does: an answer from each
- * open view would reach the program once per view.
- */
 const silenceQueries = (terminal: Terminal) => {
   const handled = () => true
   const { parser } = terminal
@@ -59,12 +53,10 @@ const silenceQueries = (terminal: Terminal) => {
   parser.registerCsiHandler({ prefix: "?", final: "u" }, handled)
   parser.registerDcsHandler({ intermediates: "$", final: "q" }, handled)
   for (const color of [4, 10, 11, 12]) {
-    // Only the queries: a program setting a color still sets it.
     parser.registerOscHandler(color, (data) => data.includes("?"))
   }
 }
 
-/** Options changed after the terminal was made (theme, font size). */
 const setOptions = (terminal: Terminal, options: Partial<Terminal["options"]>) => {
   Object.assign(terminal.options, options)
 }
@@ -75,10 +67,6 @@ interface Mounted {
   readonly search: SearchAddon
 }
 
-/**
- * One terminal of the thread, drawn by xterm. It stays mounted while the thread is open, hidden
- * when another tab is shown, so switching tabs keeps its scroll position and selection.
- */
 export function TerminalView({
   info,
   active,
@@ -109,7 +97,6 @@ export function TerminalView({
   const resize = useAtomSet(resizeTerminalAtom, { mode: "promiseExit" })
   const terminalId = info.id
 
-  // Keystrokes go out one request at a time, in order; what is typed meanwhile goes in the next.
   const outbox = useRef({ pending: "", sending: false })
   const send = useCallback(
     (data: string) => {
@@ -159,9 +146,7 @@ export function TerminalView({
       const webgl = new WebglAddon()
       webgl.onContextLoss(() => webgl.dispose())
       terminal.loadAddon(webgl)
-    } catch {
-      // No WebGL here: xterm draws with the DOM instead.
-    }
+    } catch {}
     const mac = isMac()
     terminal.attachCustomKeyEventHandler((event) => {
       const command = terminalCommand(event, { mac, hasSelection: terminal.hasSelection() })
@@ -169,7 +154,6 @@ export function TerminalView({
       if (event.type !== "keydown") return false
       switch (command) {
         case "paste":
-          // The browser's own paste follows, which xterm sends as a bracketed paste.
           return false
         case "copy":
           event.preventDefault()
@@ -184,7 +168,6 @@ export function TerminalView({
           onCommandRef.current("find")
           return false
         default:
-          // Dock commands: the keydown bubbles to the workspace, which handles them.
           return false
       }
     })
@@ -202,12 +185,9 @@ export function TerminalView({
       setMounted(null)
       terminal.dispose()
     }
-    // The terminal is made once per view; options that change later are applied below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId])
 
-  // A replayed screen may hold queries (cursor position…) that the program asked long ago:
-  // while one is being written, what xterm answers is not sent.
   const replaying = useRef(false)
 
   useEffect(() => {
@@ -239,7 +219,6 @@ export function TerminalView({
     if (container.current !== null && container.current.offsetWidth > 0) mounted.fit.fit()
   }, [mounted, fontSize])
 
-  // Fit to the space the dock gives, whenever it changes and the view is shown.
   useEffect(() => {
     const element = container.current
     if (mounted === null || element === null || !active) return
@@ -299,7 +278,6 @@ export function TerminalView({
   )
 }
 
-/** Feeds what the daemon sends into xterm, and acknowledges it once drawn. */
 function Attachment({
   attachment,
   terminal,
@@ -341,7 +319,6 @@ function Attachment({
       const event = result.value
       switch (event._tag) {
         case "Snapshot":
-          // Drawn at this view's own size, which the daemon took when this view attached.
           replayingRef.current = true
           terminal.reset()
           terminal.write(event.data, () => {

@@ -20,9 +20,7 @@ export interface ServerConfigShape {
   readonly gitlabHostPath: string
   readonly mcpConfigPath: string
   readonly pluginDir: string
-  /** The saved screens of terminals, one folder per thread. */
   readonly terminalsDir: string
-  /** The scripts that integrate the shells Humanity starts (bash, zsh, fish). */
   readonly shellIntegrationDir: string
   readonly webDist: string | undefined
   readonly webOrigin: string

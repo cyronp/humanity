@@ -10,7 +10,6 @@ const server = here("../../server")
 const webDist = here("../../web/dist")
 const daemonDir = join(desktop, "dist", "daemon")
 
-/** The folder of an installed package: the nearest one above its entry with a package.json. */
 const packageDir = (require, name) => {
   let dir = dirname(require.resolve(name))
   while (!existsSync(join(dir, "package.json"))) dir = dirname(dir)
@@ -59,8 +58,6 @@ if (!process.argv.includes("--main-only")) {
   const sdkDir = packageDir(require, sdk)
   cpSync(sdkDir, join(daemonDir, "node_modules", sdk), { recursive: true, dereference: true })
 
-  // node-pty is native: its JavaScript, and the binaries of this platform only. They are
-  // Node-API, so they load on Electron's Node as they are. Without its debug symbols (.pdb).
   const ptyDir = packageDir(require, pty)
   const ptyTarget = join(daemonDir, "node_modules", pty)
   const binaries = ["build/Release", `prebuilds/${process.platform}-${process.arch}`]

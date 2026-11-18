@@ -10,7 +10,6 @@ import { randomUUID } from "node:crypto"
 import type { PermissionDecision, ToolPermissionRequest } from "../agent/AgentRunner.ts"
 import type { AgentRead, AgentWait, TerminalService, WaitFor } from "./TerminalService.ts"
 
-/** What a terminal tool answers the agent. */
 export interface ToolText {
   readonly text: string
   readonly isError: boolean
@@ -21,7 +20,6 @@ const MAX_LINES = 2_000
 const DEFAULT_WAIT_MS = 30_000
 const MAX_WAIT_MS = 600_000
 const DEFAULT_QUIET_MS = 2_000
-/** How long a new terminal is given to show its first prompt before its command is typed. */
 const OPEN_READY_MS = 10_000
 
 const terminalArgument = {
@@ -40,18 +38,11 @@ const maxLinesArgument = {
   description: `At most this many lines, the last ones (default ${DEFAULT_MAX_LINES}).`,
 }
 
-/**
- * Claude Code defers an MCP server's tools behind its tool search unless told otherwise: the agent
- * would see only their names, and run a dev server in its shell's background instead of a
- * terminal the human sees. Their descriptions are in its prompt from the start.
- */
 const ALWAYS_LOAD = { "anthropic/alwaysLoad": true } as const
 
-/** What Humanity's MCP server tells the agent of every thread, beside its tools' descriptions. */
 export const HUMANITY_INSTRUCTIONS =
   "This thread has terminals shared with the human, shown in a dock under the chat. Run dev servers, watchers and anything else that keeps running there, with terminal_open (then terminal_wait for its ready line), not in your shell's background, so the human sees them and can use them too; use your shell for one-off commands. terminal_list shows the terminals already open, which the human may have started."
 
-/** The terminal tools as Humanity's MCP server lists them. */
 export const TERMINAL_TOOL_DEFINITIONS = [
   {
     name: "terminal_list",
@@ -160,8 +151,6 @@ export const TERMINAL_TOOL_DEFINITIONS = [
   },
 ] as const
 
-// Arguments ------------------------------------------------------------------------------------
-
 const Terminal = Schema.String.check(Schema.isMinLength(1))
 const Lines = Schema.optional(
   Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_LINES })),
@@ -196,8 +185,6 @@ const OpenArgs = Schema.Struct({
 })
 const CloseArgs = Schema.Struct({ terminal: Terminal })
 
-// Keys -----------------------------------------------------------------------------------------
-
 const KEYS: Readonly<Record<string, string>> = {
   enter: "\r",
   return: "\r",
@@ -217,7 +204,6 @@ const KEYS: Readonly<Record<string, string>> = {
   space: " ",
 }
 
-/** A named key as the terminal receives it, or `undefined` for one it does not know. */
 export const keySequence = (key: string): string | undefined => {
   const name = key.trim().toLowerCase().replaceAll(" ", "")
   const known = KEYS[name]
@@ -229,13 +215,10 @@ export const keySequence = (key: string): string | undefined => {
     : String.fromCharCode(letter.toUpperCase().charCodeAt(0) & 0x1f)
 }
 
-/** How what the agent types reads on the human's confirmation card. */
 export const typedCommand = (text: string, keys: ReadonlyArray<string>) =>
   [text, ...keys.map((key) => `[${key.trim().toLowerCase()}]`)]
     .filter((part) => part !== "")
     .join(" ")
-
-// Formatting -----------------------------------------------------------------------------------
 
 const describe = (terminal: TerminalInfo): string => {
   const state =
@@ -291,16 +274,12 @@ const waitHeading = (wait: AgentWait, timeoutMs: number): string => {
 const ok = (text: string): ToolText => ({ text, isError: false })
 const fail = (text: string): ToolText => ({ text, isError: true })
 
-// The tools ------------------------------------------------------------------------------------
-
 export interface TerminalToolsDeps {
   readonly sessionId: SessionId
   readonly terminals: TerminalService["Service"]
-  /** The thread's permission check, which decides as `Bash` what the agent types. */
   readonly decide: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
 }
 
-/** The agent's terminal tools for one thread: only its own terminals, never anyone else's. */
 export const makeTerminalTools = (deps: TerminalToolsDeps) => {
   const { terminals, sessionId } = deps
   const owner = { _tag: "Session", sessionId } as const
@@ -308,7 +287,6 @@ export const makeTerminalTools = (deps: TerminalToolsDeps) => {
   const decode = <S extends Schema.Top>(schema: S, args: unknown) =>
     Schema.decodeUnknownOption(schema as never)(args) as Option.Option<S["Type"]>
 
-  /** The thread's terminal a reference names: its number or its id. */
   const resolve = (reference: string) =>
     Effect.gen(function* () {
       const listed = yield* terminals.list(owner).pipe(Effect.orElseSucceed(() => []))
@@ -430,7 +408,6 @@ export const makeTerminalTools = (deps: TerminalToolsDeps) => {
         const cursor = yield* terminals.agentCursor(opened.id)
         return ok(`Opened terminal #${opened.ordinal}. [cursor: ${cursor}]`)
       }
-      // The command is typed once the shell shows its prompt, or after a while without one.
       const deadline = Date.now() + OPEN_READY_MS
       while (Date.now() < deadline) {
         const info = yield* terminals.info(opened.id)

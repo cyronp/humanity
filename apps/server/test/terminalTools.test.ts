@@ -93,14 +93,10 @@ describe("Humanity's MCP server", () => {
   )
 })
 
-// The tools in a thread ------------------------------------------------------------------------
-
 const osc = (payload: string) => `\x1b]${payload}\x07`
 
-/** A pretend shell: a prompt with its marks, and `echo <text>` / `fail` as commands. */
 const fakeShell = () =>
   makeFakePtyHost({
-    // Once the daemon listens to it, as a real shell prints after it started.
     onSpawn: (pty) => void setTimeout(() => pty.print(`${osc("133;A")}$ `), 0),
     onWrite: (pty, data) => {
       if (!data.endsWith("\r")) return
@@ -268,7 +264,6 @@ describe("the agent's terminal tools", () => {
         const sessions = yield* SessionService
         const { project, session } = yield* startThread(repo, "hello", "ask")
         yield* waitForStatus(session.id, "idle")
-        // The project's own terminal, on the new-thread page: no agent ever sees it.
         yield* terminals.open(
           { _tag: "Project", projectId: ProjectId.make(project.id) },
           {

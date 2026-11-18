@@ -7,10 +7,9 @@ icon: build/icon.png
 files:
   - dist/main.cjs
   - package.json
-# The daemon runs as a child process with the Agent SDK and node-pty (the
-# terminals' native module, Node-API, its Windows binaries only) beside it,
-# which need real paths on disk: they ship next to the archive, not inside it.
-# No agent ships: threads run on the CLIs the human installed.
+# The daemon runs as a child process with the Agent SDK beside it, which needs
+# real paths on disk: it ships next to the archive, not inside it. No agent
+# ships: threads run on the CLIs the human installed.
 extraResources:
   - from: dist/daemon
     to: daemon

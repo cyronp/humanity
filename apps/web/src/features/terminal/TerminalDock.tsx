@@ -43,15 +43,10 @@ const failureMessage = (exit: Exit.Exit<unknown, unknown>): string | undefined =
   return error instanceof Error ? error.message : String(error)
 }
 
-/** What the workspace's keyboard shortcuts ask of the dock. */
 export interface DockCommands {
   readonly cycle: (step: 1 | -1) => void
 }
 
-/**
- * The owner's terminals (a thread's, or a project's outside any thread), as tabs, under the
- * chat. Opening the dock on an owner that has none opens one.
- */
 export function TerminalDock({
   owner,
   unavailable,
@@ -61,13 +56,10 @@ export function TerminalDock({
   showRequest,
 }: {
   readonly owner: TerminalOwner
-  /** Why no terminal can be opened here now (a thread that ended), or nothing when one can. */
   readonly unavailable?: string | undefined
   readonly onHide: () => void
   readonly commandsRef: { current: DockCommands | null }
-  /** Goes up each time the human asks for one more terminal. */
   readonly newTerminalRequest: number
-  /** The terminal a tool call in the chat asked to show. */
   readonly showRequest?: ShowTerminalRequest | undefined
 }) {
   const ownerKey = terminalOwnerKey(owner)
@@ -79,8 +71,6 @@ export function TerminalDock({
     ? preferencesResult.value
     : DEFAULT_TERMINAL_PREFERENCES
   const [wanted, setWanted] = useState(() => lastActiveTerminal(ownerKey))
-  // "Show terminal" from the chat shows the tab it names, once the terminals are known (a view
-  // focuses itself when it becomes the shown one).
   const [shownRequest, setShownRequest] = useState(0)
   if (showRequest !== undefined && terminals !== undefined && showRequest.nonce !== shownRequest) {
     setShownRequest(showRequest.nonce)
@@ -89,7 +79,6 @@ export function TerminalDock({
   }
   const active = terminals === undefined ? undefined : pickActive(terminals, wanted)
   const [error, setError] = useState<string>()
-  /** The terminal the find bar searches, while it is open. */
   const [finding, setFinding] = useState<TerminalViewHandle>()
   const [renaming, setRenaming] = useState<string>()
   const [menu, setMenu] = useState<{
@@ -129,7 +118,6 @@ export function TerminalDock({
     [open, ownerJson, show],
   )
 
-  // A dock opened on a thread with no terminal starts one, once; Ctrl+Shift+` asks for one more.
   const autoStarted = useRef(false)
   const handledRequest = useRef(newTerminalRequest)
   useEffect(() => {
@@ -160,7 +148,6 @@ export function TerminalDock({
     if (terminals !== undefined && terminals.length <= 1) onHide()
   }
 
-  /** Closes every terminal here, stopping what runs in them, and the dock with them. */
   const closeAll = async () => {
     setError(undefined)
     const exits = await Promise.all(
@@ -515,7 +502,6 @@ function ShellItems({ onOpen }: { readonly onOpen: (shell: string | null) => voi
   )
 }
 
-/** The menu a right-click in a terminal opens, where the pointer is. */
 function TerminalMenu({
   at,
   view,

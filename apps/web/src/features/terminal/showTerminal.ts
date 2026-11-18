@@ -1,11 +1,5 @@
-/**
- * "Show terminal" from a tool call in the chat: opens the dock on that terminal. The page's
- * frame listens; the dock picks the tab. A terminal is named as the agent named it: its number in
- * the thread (`2`, `#2`) or its id.
- */
 export interface ShowTerminalRequest {
   readonly terminal: string
-  /** Tells two requests for the same terminal apart. */
   readonly nonce: number
 }
 
@@ -22,7 +16,6 @@ export const onShowTerminal = (listener: (request: ShowTerminalRequest) => void)
   return () => void listeners.delete(listener)
 }
 
-/** The terminal a reference names among `terminals`: by number, else by id. */
 export const findTerminal = <T extends { readonly id: string; readonly ordinal: number }>(
   terminals: ReadonlyArray<T>,
   reference: string,

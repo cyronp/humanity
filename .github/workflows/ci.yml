@@ -102,8 +102,6 @@ jobs:
           test -f "$daemon/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs"
           test ! -e "$daemon/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64"
           test ! -e "$daemon/node_modules/@openai"
-          # The terminals: node-pty's JavaScript and its Windows binaries, with the
-          # ConPTY it brings, and none of its debug symbols.
           pty="$daemon/node_modules/node-pty"
           test -f "$pty/lib/index.js"
           test -f "$pty/prebuilds/win32-x64/pty.node"

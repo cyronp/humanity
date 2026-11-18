@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react"
 
-/** Which edge of the resized element the handle sits on; on the top edge it resizes the height. */
 export type ResizeEdge = "start" | "end" | "top"
 
 export const isVerticalEdge = (edge: ResizeEdge) => edge === "top"
@@ -11,11 +10,6 @@ export const KEYBOARD_STEP = 16
 export const clampWidth = (width: number, min: number, max: number) =>
   Math.round(Math.min(Math.max(width, min), Math.max(min, max)))
 
-/**
- * The size after the pointer moved `dx` pixels (down, for the top edge) from where the drag
- * started. A handle on the end edge grows the element when dragged right; one on the start edge,
- * when dragged left; one on the top edge, when dragged up.
- */
 export const dragWidth = (start: number, dx: number, edge: ResizeEdge, min: number, max: number) =>
   clampWidth(start + (edge === "end" ? dx : -dx), min, max)
 

@@ -1,11 +1,6 @@
 import { Effect } from "effect"
 import { SqlClient } from "effect/sql"
 
-/**
- * A terminal belongs to a thread, to a project (opened outside any thread, in its checkout), or to
- * neither (the home folder, before any project was added). SQLite cannot drop `NOT NULL` from a
- * column, so the table is made again.
- */
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   yield* sql`

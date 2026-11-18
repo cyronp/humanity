@@ -21,10 +21,6 @@ import {
 
 export const MCP_PATH = "/mcp"
 
-/**
- * How long a provider waits on one of Humanity's tools: a day. A call can wait on the human (who
- * allows or denies what the agent types) or on a terminal (terminal_wait, up to ten minutes).
- */
 export const HUMANITY_TOOL_TIMEOUT_MS = 86_400_000
 
 const PROTOCOL_VERSIONS: ReadonlyArray<string> = [
@@ -50,7 +46,6 @@ export class OpenThreadFailed extends Data.TaggedError("OpenThreadFailed")<{
 
 export interface HumanityTools {
   readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
-  /** The thread's terminal tools; `args` are the call's arguments, not yet checked. */
   readonly terminal: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
 }
 

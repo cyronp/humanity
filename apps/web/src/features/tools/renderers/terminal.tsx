@@ -21,7 +21,6 @@ const keysOf = (input: unknown): ReadonlyArray<string> => {
   return Array.isArray(keys) ? keys.filter((key): key is string => typeof key === "string") : []
 }
 
-/** The terminal a call names, or the one it opened (its result names it: "terminal #2"). */
 const terminalOf = ({ toolName, input, call }: ToolCallProps): string | undefined =>
   stringField(input, "terminal") ??
   (toolOf(toolName) === "terminal_open"
@@ -31,13 +30,11 @@ const terminalOf = ({ toolName, input, call }: ToolCallProps): string | undefine
 const label = (terminal: string | undefined) =>
   terminal === undefined ? "a terminal" : `#${terminal.replace(/^#/, "")}`
 
-/** What was typed, as a line: the text, then the keys pressed. */
 const typed = (input: unknown) =>
   [stringField(input, "text") ?? "", ...keysOf(input).map((key) => `[${key}]`)]
     .filter((part) => part !== "")
     .join(" ")
 
-/** The first line of the result, where the tools say how a wait ended. */
 const headline = (props: ToolCallProps) => props.call?.output?.content.split("\n")[0]
 
 function Line({ verb, children }: { readonly verb: string; readonly children?: ReactNode }) {
@@ -152,7 +149,6 @@ function Detail(props: ToolCallProps) {
   )
 }
 
-/** The agent's terminal tools, on Humanity's MCP server. */
 export const terminalRenderer: ToolRenderer = {
   name: "Terminal",
   match: (toolName) => toolOf(toolName) !== undefined,

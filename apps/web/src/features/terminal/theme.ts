@@ -12,7 +12,6 @@ const subscribe = (listener: () => void) => {
 const current = (): ResolvedTheme =>
   document.documentElement.classList.contains("dark") ? "dark" : "light"
 
-/** The theme the page shows now, following the human's choice and the system's. */
 export const useResolvedTheme = (): ResolvedTheme => useSyncExternalStore(subscribe, current)
 
 type Palette = Pick<
@@ -35,7 +34,6 @@ type Palette = Pick<
   | "brightWhite"
 >
 
-/** ANSI colors readable on the page's own light and dark backgrounds. */
 export const PALETTES: Readonly<Record<ResolvedTheme, Palette>> = {
   light: {
     black: "#000000",
@@ -77,16 +75,11 @@ export const PALETTES: Readonly<Record<ResolvedTheme, Palette>> = {
 
 const hex = (value: number) => value.toString(16).padStart(2, "0")
 
-/** `#rrggbb` for four bytes of RGBA, with the alpha kept only when it is not opaque. */
 export const rgbaToHex = (r: number, g: number, b: number, a = 255) =>
   `#${hex(r)}${hex(g)}${hex(b)}${a === 255 ? "" : hex(a)}`
 
 let probe: CanvasRenderingContext2D | null | undefined
 
-/**
- * Any CSS color (the page's are oklch) as `#rrggbb`, which xterm needs; painted on a one-pixel
- * canvas and read back, since a computed style may keep the color in the space it was written in.
- */
 export const cssColorToHex = (color: string, fallback: string): string => {
   probe ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true })
   if (probe === null || color.trim() === "") return fallback
@@ -98,7 +91,6 @@ export const cssColorToHex = (color: string, fallback: string): string => {
   return rgbaToHex(r, g, b, a)
 }
 
-/** xterm's colors for the page's theme, read from the CSS variables where the terminal sits. */
 export const terminalTheme = (element: Element, theme: ResolvedTheme): ITheme => {
   const style = getComputedStyle(element)
   const variable = (name: string, fallback: string) =>

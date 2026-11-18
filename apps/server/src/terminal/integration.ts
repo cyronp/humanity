@@ -1,17 +1,6 @@
 import { posix, win32 } from "node:path"
 import type { Shell } from "./shells.ts"
 
-/*
- * Shell integration: each shell Humanity starts runs a script of its own, after the human's own
- * startup files, that marks where each command starts and ends (OSC 133 C and D, with the exit
- * code), where the prompt starts (OSC 133 A) and the folder the shell is in (OSC 7). The daemon
- * reads those marks from the terminal's output (`osc.ts`); they draw nothing.
- *
- * The scripts are kept here as text, so the bundled daemon carries them, and written under
- * `~/.humanity/shell-integration/` where the shells read them. PowerShell's is passed inline.
- */
-
-/** PowerShell (5.1 and 7). Its own prompt is wrapped, whatever the profile made of it. */
 export const POWERSHELL_SCRIPT = `
 if ($global:__HumanityIntegration) { return }
 $global:__HumanityIntegration = $true
@@ -58,10 +47,6 @@ if (Test-Path Function:\\PSConsoleHostReadLine) {
 }
 `
 
-/**
- * bash and Git Bash, started with `--rcfile`: loads what a login shell would, then marks commands
- * with a DEBUG trap and PROMPT_COMMAND (or with bash-preexec's hooks when the human uses it).
- */
 export const BASH_SCRIPT = `
 if [ -n "\${HUMANITY_SHELL_LOGIN-}" ]; then
   unset HUMANITY_SHELL_LOGIN
@@ -88,7 +73,6 @@ if [ -z "\${__humanity_integration-}" ]; then
     if [ "$__humanity_running" = 1 ]; then __humanity_osc "133;D;$status"; fi
     __humanity_running=0
     if [ -n "\${MSYSTEM-}" ]; then
-      # Git Bash: $PWD can be a mount (/tmp) with no drive letter; pwd -W says the Windows path.
       __humanity_osc "7;file://\${HOSTNAME-}/$(pwd -W 2>/dev/null)"
     else
       __humanity_osc "7;file://\${HOSTNAME-}$PWD"
@@ -114,7 +98,6 @@ if [ -z "\${__humanity_integration-}" ]; then
 fi
 `
 
-/** zsh's hooks, added by the wrapper's .zshrc once the human's own .zshrc ran. */
 const ZSH_HOOKS = `
 if [[ -z "\${__humanity_integration-}" ]]; then
   __humanity_integration=1
@@ -136,11 +119,6 @@ if [[ -z "\${__humanity_integration-}" ]]; then
 fi
 `
 
-/**
- * zsh reads its startup files from ZDOTDIR, which points at Humanity's folder: each of its files
- * reads the human's own (from their ZDOTDIR, else their home), then hands back to ours, and the
- * last one leaves ZDOTDIR as the human had it.
- */
 const zshFile = (name: string, after = "") => `
 __humanity_zdotdir="$ZDOTDIR"
 ZDOTDIR="\${HUMANITY_USER_ZDOTDIR:-$HOME}"
@@ -163,7 +141,6 @@ export const ZSH_FILES: Readonly<Record<string, string>> = {
   ".zlogin": zshFile(".zlogin", ZSH_RESTORE),
 }
 
-/** fish, read with --init-command once its own configuration ran. */
 export const FISH_SCRIPT = `
 if not set -q __humanity_integration
   set -g __humanity_integration 1
@@ -183,7 +160,6 @@ if not set -q __humanity_integration
 end
 `
 
-/** The files to write under the integration folder, by path relative to it. */
 export const INTEGRATION_FILES: Readonly<Record<string, string>> = {
   "humanity.bash": BASH_SCRIPT,
   "humanity.fish": FISH_SCRIPT,
@@ -192,32 +168,23 @@ export const INTEGRATION_FILES: Readonly<Record<string, string>> = {
 
 export interface ShellLaunch {
   readonly args: ReadonlyArray<string>
-  /** Variables to add to the terminal's environment; the scripts unset the ones they consume. */
   readonly env: Readonly<Record<string, string>>
-  /** Whether the shell marks its commands and folder. */
   readonly integrated: boolean
 }
 
-/** PowerShell's -EncodedCommand: the script as UTF-16LE, in base64. */
 export const encodePowerShell = (script: string) =>
   Buffer.from(script, "utf16le").toString("base64")
 
-/**
- * How a shell starts for the human: interactive, a login shell where that exists, and with
- * Humanity's integration where Humanity has one for it.
- */
 export const shellLaunch = (
   shell: Shell,
   options: {
     readonly platform: NodeJS.Platform
-    /** The folder the integration files were written to. */
     readonly folder: string
     readonly env: Readonly<Record<string, string | undefined>>
   },
 ): ShellLaunch => {
   const { platform, folder, env } = options
   const path = platform === "win32" ? win32 : posix
-  // Git Bash reads Windows paths written with forward slashes.
   const file = (name: string) => path.join(folder, name).replaceAll("\\", "/")
   switch (shell.kind) {
     case "pwsh":
@@ -230,7 +197,6 @@ export const shellLaunch = (
     case "bash":
       return {
         args: ["--rcfile", file("humanity.bash"), "-i"],
-        // Git for Windows' /etc/profile would otherwise move to the home folder.
         env:
           platform === "win32"
             ? { HUMANITY_SHELL_LOGIN: "1", CHERE_INVOKING: "1" }

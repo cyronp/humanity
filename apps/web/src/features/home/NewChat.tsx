@@ -64,8 +64,6 @@ export function NewChat({ projectId }: { readonly projectId: ProjectId | undefin
     project,
   )
 
-  // Outside a thread the terminals are the project's own, in its checkout; before any project
-  // was added, the human's, in their home folder. Nothing opens until the projects are known.
   const loaded = AsyncResult.isSuccess(projects)
   const projectKey = project?.id
   const terminalOwner = useMemo(

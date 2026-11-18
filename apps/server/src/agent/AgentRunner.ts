@@ -14,7 +14,6 @@ export interface ToolPermissionRequest {
   readonly toolUseId: string
 }
 
-/** An MCP server given to the agent; `timeoutMs` bounds each tool call where the provider can. */
 export type AgentMcpServer =
   | {
       readonly type: "stdio"

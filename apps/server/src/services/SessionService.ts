@@ -663,7 +663,6 @@ export class SessionService extends Context.Service<
 
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
-            // What the run denied, shared with the terminal tools: they decide as Bash.
             const denied = new Set<string>()
             const humanity = yield* mcp
               .serve({
@@ -1132,7 +1131,6 @@ export class SessionService extends Context.Service<
       ) {
         const session = yield* get(sessionId)
         yield* stopRun(sessionId)
-        // Before the worktree goes: a shell still in it would keep Windows from deleting it.
         yield* terminals.closeOwner({ _tag: "Session", sessionId: session.id })
         if (options.removeWorktree && isInsideDir(config.worktreesDir, session.worktreePath)) {
           const project = yield* projects.get(session.projectId).pipe(Effect.option)
@@ -1221,7 +1219,6 @@ export class SessionService extends Context.Service<
               ),
             { discard: true },
           )
-          // The project's own terminals, opened outside its threads, go with it.
           yield* terminals.closeOwner({ _tag: "Project", projectId: ProjectId.make(projectId) })
         })
 

@@ -34,19 +34,12 @@ const PANEL_MIN_WIDTH = 320
 /** The chat keeps at least this much room beside an open panel. */
 const CHAT_MIN_WIDTH = 360
 
-/** What the open tool's panel is given to draw itself. */
 export interface PanelProps {
   readonly tool: ShelfTool
   readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
 }
 
-/**
- * The frame of every page with a chat, a thread's or the new-thread page: the terminal dock under
- * the chat, the tools' rail along the right edge with the open tool's panel beside it, and the two
- * buttons at the top right that show and hide them. Without a thread the rail's tools are disabled
- * and the terminals are the project's own.
- */
 export function WorkspaceFrame({
   terminals,
   header,
@@ -54,17 +47,12 @@ export function WorkspaceFrame({
   panel,
   children,
 }: {
-  /** Whose terminals the dock shows, or nothing while that is not known yet. */
   readonly terminals:
     { readonly owner: TerminalOwner; readonly unavailable?: string | undefined } | undefined
-  /** The page's header, given the layout buttons to show at its right end. */
   readonly header: (actions: ReactNode) => ReactNode
-  /** The thread's rail; without one the rail shows every tool disabled. */
   readonly rail?:
     ((shelf: ShelfState, onSelect: (tool: ShelfTool) => void) => ReactNode) | undefined
-  /** The open tool's panel; without one no panel opens. */
   readonly panel?: ((props: PanelProps) => ReactNode) | undefined
-  /** The chat's column: it fills the space above the dock. */
   readonly children: ReactNode
 }) {
   const [shelf, setShelfState] = useState<ShelfState>(() =>
@@ -83,7 +71,6 @@ export function WorkspaceFrame({
   const [newTerminalRequest, setNewTerminalRequest] = useState(0)
   const [showRequest, setShowRequest] = useState<ShowTerminalRequest>()
 
-  // "Show terminal" on an agent's terminal call opens the dock on that terminal.
   useEffect(
     () =>
       onShowTerminal((request) => {
@@ -93,8 +80,6 @@ export function WorkspaceFrame({
     [setTerminalsOpen],
   )
 
-  // Ctrl+` shows or hides the terminals, Ctrl+Shift+` opens one more, Ctrl+PageUp/PageDown move
-  // between them: from anywhere on the page, terminals included (they let these keys through).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const command = terminalCommand(event, { mac: isMac(), hasSelection: false })
@@ -103,7 +88,6 @@ export function WorkspaceFrame({
         setTerminalsOpen(!terminalsOpen)
       } else if (command === "new-terminal") {
         event.preventDefault()
-        // A closed dock opens on the terminals already there (or a first one); an open one adds one.
         if (terminalsOpen) setNewTerminalRequest((request) => request + 1)
         else setTerminalsOpen(true)
       } else if (
@@ -233,7 +217,6 @@ export function WorkspaceFrame({
   )
 }
 
-/** How many of the owner's terminals run a command, on the terminal button. */
 function BusyBadge({ owner }: { readonly owner: TerminalOwner }) {
   const result = useAtomValue(terminalsAtom(JSON.stringify(owner)))
   const busy = AsyncResult.isSuccess(result)
@@ -250,7 +233,6 @@ function BusyBadge({ owner }: { readonly owner: TerminalOwner }) {
   )
 }
 
-/** The two buttons always at the top right of a page with a chat: the terminals, and the tools' rail. */
 function LayoutButtons({
   terminalsOwner,
   terminalsOpen,

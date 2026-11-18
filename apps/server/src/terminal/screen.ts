@@ -4,27 +4,17 @@ import headless from "@xterm/headless"
 
 export type HeadlessTerminal = InstanceType<typeof headless.Terminal>
 
-/** A line of the buffer, followed as the buffer scrolls; `line` is -1 once it scrolled away. */
 export type Marker = NonNullable<ReturnType<HeadlessTerminal["registerMarker"]>>
 
-/**
- * A terminal's screen as the daemon keeps it: every byte the process printed goes through a
- * headless xterm, so the screen can be handed to a browser that attaches and read by the agent.
- */
 export interface Screen {
   readonly terminal: HeadlessTerminal
-  /** `done` runs once xterm has parsed `data`, and the screen shows it. */
   readonly write: (data: string, done?: () => void) => void
-  /** Everything on screen and in the scrollback, as the sequences that redraw it. */
   readonly serialize: () => string
   readonly resize: (cols: number, rows: number) => void
   readonly cols: () => number
   readonly rows: () => number
-  /** What the terminal answers to the program's queries (cursor position, device attributes). */
   readonly onReply: (listener: (data: string) => void) => void
-  /** Calls `listener` with the payload of each OSC `ident` sequence, as it is parsed. */
   readonly onOsc: (ident: number, listener: (data: string) => void) => void
-  /** A marker on the cursor's line, as parsed so far. */
   readonly marker: () => Marker | undefined
   readonly dispose: () => void
 }
@@ -57,7 +47,6 @@ export const makeScreen = (options: {
     onOsc: (ident, listener) =>
       void terminal.parser.registerOscHandler(ident, (data) => {
         listener(data)
-        // Not handled here: xterm goes on with the sequence as it would without us.
         return false
       }),
     marker: () => terminal.registerMarker(0),
@@ -65,6 +54,5 @@ export const makeScreen = (options: {
   }
 }
 
-/** A dim line that marks where a terminal's shell was started again. */
 export const restartMarker = (when: Date, reason: string) =>
   `\r\n\x1b[0m\x1b[2m── ${reason} · ${when.toLocaleString()} ──\x1b[0m\r\n`

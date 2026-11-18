@@ -43,37 +43,22 @@ import { PtyHost, type PtyProcess } from "./PtyHost.ts"
 import { makeScreen, type Marker, restartMarker, type Screen } from "./screen.ts"
 import { detectShells, pickShell, type Shell, shellLocateOptions } from "./shells.ts"
 
-/** The size of a terminal nobody has looked at yet. */
 export const DEFAULT_COLS = 120
 export const DEFAULT_ROWS = 30
 
-/** Output is sent to browsers in batches: after this long, or once this much has piled up. */
 const FLUSH_MS = 8
 const FLUSH_CHARS = 16_384
-/**
- * How far a browser may fall behind (in characters sent but not yet shown) before it is sent
- * nothing more; once it catches up it gets the screen as it is instead of what it missed.
- */
 export const ATTACH_WINDOW = 512 * 1024
 
 const SAVE_INTERVAL = "5 seconds"
 
-/**
- * How long a stopped process is waited for. On Windows a shell that was told to stop can hold its
- * folder a moment longer, and a worktree removed meanwhile would fail to delete.
- */
 const EXIT_WAIT = "5 seconds"
 
-/** How many of a terminal's last commands it remembers the output span of. */
 const COMMANDS_KEPT = 200
-/** A terminal's folder is saved this long after the shell last reported a new one. */
 const CWD_SAVE_MS = 1_000
 
-/** One command the shell ran, between its OSC 133 C and D marks. */
 export interface CommandSpan {
-  /** 1-based, in the order the terminal's commands started. */
   readonly ordinal: number
-  /** The line the command's output starts at, kept as the buffer scrolls. */
   readonly start: Marker
   end: Marker | undefined
   exitCode: number | null
@@ -82,25 +67,18 @@ export interface CommandSpan {
 
 type Patch = { -readonly [Key in keyof TerminalInfo]?: TerminalInfo[Key] }
 
-/** How many read positions the agent may hold in a terminal at once; older ones are forgotten. */
 const CURSORS_KEPT = 64
-/** How often a wait looks at the terminal again. */
 const WAIT_POLL = "100 millis"
 
-/** A place in a terminal's output the agent reads on from: a line, and the commands begun by then. */
 interface Cursor {
   readonly marker: Marker
   readonly commands: number
 }
 
-/** What the agent reads of a terminal. */
 export interface AgentRead {
   readonly text: string
-  /** Where to read on from next time. */
   readonly cursor: string
-  /** The cursor asked for was too old: what scrolled out of the scrollback is gone. */
   readonly dropped: boolean
-  /** Only the last lines are in `text`. */
   readonly truncated: boolean
 }
 
@@ -110,9 +88,7 @@ export type WaitFor =
   | { readonly _tag: "quiet"; readonly quietMs: number }
 
 export interface AgentWait extends AgentRead {
-  /** What ended the wait. `unsupported`: waiting for a command needs the shell's integration. */
   readonly outcome: "command" | "pattern" | "quiet" | "timeout" | "exited" | "unsupported"
-  /** The command's exit code, when it was a command that ended. */
   readonly exitCode: number | null
 }
 
@@ -132,11 +108,8 @@ type TerminalRow = typeof TerminalRow.Type
 interface Attachment {
   readonly id: string
   readonly queue: Queue.Queue<TerminalAttachEvent, Cause.Done>
-  /** The terminal's `seq` up to which this view was sent output. */
   sent: number
-  /** The `seq` up to which this view has shown it. */
   acked: number
-  /** Too far behind: sent nothing until it catches up, then a fresh snapshot. */
   stale: boolean
 }
 
@@ -144,29 +117,19 @@ interface Live {
   info: TerminalInfo
   readonly screen: Screen
   pty: PtyProcess | undefined
-  /** Settles once the current process has exited. */
   exited: Promise<void>
-  /** Bumped whenever the process is replaced, so a killed process's last events are ignored. */
   generation: number
-  /** Characters printed so far. */
   seq: number
-  /** Characters the screen has parsed, so a snapshot shows exactly this much. */
   parsed: number
-  /** Printed but not yet parsed by the screen, in order. */
   readonly tail: Array<{ readonly data: string; readonly end: number }>
-  /** Printed but not yet sent to browsers, starting at `pendingFrom`. */
   pending: string
   pendingFrom: number
   flushTimer: ReturnType<typeof setTimeout> | undefined
   readonly attachments: Map<string, Attachment>
-  /** Printed something since its screen was last saved. */
   dirty: boolean
   readonly scrollback: number
-  /** Where its owner's terminals open: the thread's folder, the project's checkout, the home. */
   folder: string
-  /** The commands the shell reported, oldest first. */
   readonly commands: Array<CommandSpan>
-  /** How many commands started since the shell did. */
   commandsStarted: number
   readonly cursors: Map<string, Cursor>
   nextCursor: number
@@ -224,17 +187,10 @@ export class TerminalService extends Context.Service<
     ) => Effect.Effect<void, TerminalNotFound>
     readonly ack: (terminalId: string, attachmentId: string, seq: number) => Effect.Effect<void>
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
-    /** Closes every terminal of a thread or a project and deletes what was saved of them. */
     readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
-    /**
-     * A thread moved to its worktree: its idle terminals start again there, keeping what they
-     * showed; one running a command keeps running where it is, marked as left in the checkout.
-     */
     readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
 
-    // For the agent's tools: they run as the agent, so a restored terminal starts its shell.
     readonly info: (terminalId: string) => Effect.Effect<TerminalInfo, TerminalNotFound>
-    /** A cursor where the terminal's output is now, to read on from after typing. */
     readonly agentCursor: (
       terminalId: string,
     ) => Effect.Effect<string, TerminalNotFound | TerminalSpawnFailed>
@@ -274,9 +230,7 @@ export class TerminalService extends Context.Service<
         const host = yield* PtyHost
 
         const lives = new Map<string, Live>()
-        /** The owners whose saved terminals were read back since the daemon started. */
         const loadedOwners = new Set<string>()
-        /** Publishes the key of an owner whose terminals changed. */
         const changes = yield* PubSub.unbounded<string>()
 
         const folderOf = (ownerKey: string) => join(config.terminalsDir, ownerKey)
@@ -315,13 +269,10 @@ export class TerminalService extends Context.Service<
           changed(live.info.owner)
         }
 
-        /** Applies only what differs, so a shell repeating itself publishes nothing. */
         const updateIfChanged = (live: Live, patch: Patch) => {
           const keys = Object.keys(patch) as Array<keyof TerminalInfo>
           if (keys.some((key) => live.info[key] !== patch[key])) update(live, patch)
         }
-
-        // Shell integration ----------------------------------------------------------------------
 
         const writeIntegration = Effect.forEach(
           Object.entries(INTEGRATION_FILES),
@@ -408,10 +359,6 @@ export class TerminalService extends Context.Service<
         const isOwnedBy = (live: Live, ownerKey: string) =>
           terminalOwnerKey(live.info.owner) === ownerKey
 
-        /**
-         * Where the owner's terminals open: the thread's folder, the project's checkout, or the
-         * home folder; and whether it can open any more (a thread that ended cannot).
-         */
         const placeOf = (
           owner: TerminalOwner,
         ): Effect.Effect<{ readonly folder: string; readonly ended: boolean }, OwnerNotFound> => {
@@ -437,12 +384,9 @@ export class TerminalService extends Context.Service<
           }
         }
 
-        // Output -------------------------------------------------------------------------------
-
         const offer = (attachment: Attachment, event: TerminalAttachEvent) =>
           void Queue.offerUnsafe(attachment.queue, event)
 
-        /** The screen as it is, then what was printed but not yet parsed. */
         const sendSnapshot = (live: Live, attachment: Attachment) => {
           offer(attachment, {
             _tag: "Snapshot",
@@ -482,7 +426,6 @@ export class TerminalService extends Context.Service<
           live.pendingFrom = live.seq
         }
 
-        /** Everything a terminal shows goes through here: its process's output and our markers. */
         const feed = (live: Live, data: string) => {
           if (data === "") return
           live.seq += data.length
@@ -498,16 +441,12 @@ export class TerminalService extends Context.Service<
           else live.flushTimer ??= setTimeout(() => flush(live), FLUSH_MS)
         }
 
-        // Processes ----------------------------------------------------------------------------
-
-        /** Stops the process, without waiting for it. */
         const killProcess = (live: Live) => {
           live.generation++
           live.pty?.kill()
           live.pty = undefined
         }
 
-        /** Stops the process and waits for it to be gone (for a while: a stuck one is left). */
         const stopProcess = (live: Live) =>
           Effect.suspend(() => {
             const exited = live.exited
@@ -529,8 +468,6 @@ export class TerminalService extends Context.Service<
               .exists(live.info.cwd)
               .pipe(Effect.orElseSucceed(() => false))
             const cwd = cwdExists ? live.info.cwd : fallbackFolder
-            // ConPTY draws as if it started at the top of an empty screen: a shell started again
-            // on a screen with something on it gets that screen scrolled up into the scrollback.
             if (process.platform === "win32" && live.seq > 0) {
               feed(live, `${"\r\n".repeat(live.screen.rows())}\x1b[H`)
             }
@@ -568,7 +505,6 @@ export class TerminalService extends Context.Service<
                 offer(attachment, { _tag: "Exited", exitCode })
               }
             })
-            // A fresh shell: whether it integrates is known from its first mark.
             update(live, {
               state: "running",
               exitCode: null,
@@ -612,17 +548,11 @@ export class TerminalService extends Context.Service<
             nextCursor: 0,
             cwdTimer: undefined,
           }
-          // The queries a program sends (cursor position, device attributes…) are answered here,
-          // from the same bytes the views draw: at once, whether or not a view is open (ConPTY
-          // waits for one before it starts the shell), and once however many views are open.
-          // The views stay silent on them.
           live.screen.onReply((reply) => live.pty?.write(reply))
           live.screen.onOsc(133, (data) => onCommandMark(live, data))
           live.screen.onOsc(7, (data) => onFolderMark(live, data))
           return live
         }
-
-        // Persistence --------------------------------------------------------------------------
 
         const save = (live: Live) =>
           Effect.gen(function* () {
@@ -728,8 +658,6 @@ export class TerminalService extends Context.Service<
           Effect.forever,
           Effect.forkScoped,
         )
-
-        // Operations ---------------------------------------------------------------------------
 
         const find = (terminalId: string) =>
           Effect.suspend(() => {
@@ -845,7 +773,6 @@ export class TerminalService extends Context.Service<
             return live.info
           })
 
-        /** Where a shell starts again when the folder it was last in is gone. */
         const folderFor = (live: Live) =>
           Effect.map(Effect.option(placeOf(live.info.owner)), (place) =>
             Option.match(place, { onNone: () => live.info.cwd, onSome: ({ folder }) => folder }),
@@ -944,7 +871,6 @@ export class TerminalService extends Context.Service<
               live.folder = folder
               const { state, integration, busy } = live.info
               if (state === "restored" || state === "exited") {
-                // No shell runs: the next one starts in the worktree.
                 update(live, { cwd: folder, location: "folder" })
                 saveCwd(live)
               } else if (integration && busy === false) {
@@ -958,20 +884,16 @@ export class TerminalService extends Context.Service<
                   ),
                 )
               } else {
-                // Running something, or no way to tell: it stays where it is, and says so.
                 update(live, { location: "checkout" })
               }
             }
           })
-
-        // The agent's reads -------------------------------------------------------------------
 
         const ensureStarted = (live: Live) =>
           live.info.state === "restored"
             ? Effect.flatMap(folderFor(live), (folder) => startProcess(live, folder))
             : Effect.void
 
-        /** Once the screen has parsed everything printed so far. */
         const settled = (live: Live) =>
           Effect.callback<void>((resume) => {
             live.screen.write("", () => resume(Effect.void))
@@ -980,7 +902,6 @@ export class TerminalService extends Context.Service<
         const buffer = (live: Live) => live.screen.terminal.buffer.active
         const cursorLine = (live: Live) => buffer(live).baseY + buffer(live).cursorY
 
-        /** Lines `from` to `to` as text: a wrapped line joins the one before it. */
         const linesText = (live: Live, from: number, to: number) => {
           const lines: Array<string> = []
           for (let y = Math.max(0, from); y <= to; y++) {
@@ -1014,7 +935,6 @@ export class TerminalService extends Context.Service<
           return id
         }
 
-        /** Where a cursor points now; `dropped` when it was forgotten or scrolled away. */
         const resolveCursor = (live: Live, since: string | undefined) => {
           if (since === undefined) return undefined
           const cursor = live.cursors.get(since)

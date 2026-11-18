@@ -3,7 +3,6 @@ import { existsSync, lstatSync } from "node:fs"
 import { posix, win32 } from "node:path"
 import { findCommand, type LocateOptions, systemLocateOptions } from "../agent/installedCli.ts"
 
-/** The shells Humanity knows how to start, and later to integrate with. */
 export type ShellKind = "pwsh" | "powershell" | "cmd" | "bash" | "zsh" | "fish" | "sh" | "wsl"
 
 export interface Shell extends ShellInfo {
@@ -43,7 +42,6 @@ const envValue = (env: LocateOptions["env"], name: string) => {
   return key === undefined ? undefined : env[key]
 }
 
-/** Git for Windows' bash, found beside its git, never System32's bash (that one is WSL's). */
 const gitBash = (options: LocateOptions): string | undefined => {
   const candidates: Array<string> = []
   const git = findCommand("git", options)
@@ -94,10 +92,6 @@ const unixShells = (options: LocateOptions, etcShells: string | undefined): Arra
   return shells
 }
 
-/**
- * A Store app's command (PowerShell 7 from the Microsoft Store, for one) is an app execution alias
- * that cannot be stat'ed, only lstat'ed; it still starts like any executable.
- */
 const existsOrAlias = (path: string) => {
   if (existsSync(path)) return true
   try {
@@ -108,19 +102,16 @@ const existsOrAlias = (path: string) => {
   }
 }
 
-/** Where shells are looked for: like the agents' CLIs, with Store app aliases too. */
 export const shellLocateOptions = (): LocateOptions => ({
   ...systemLocateOptions(),
   exists: existsOrAlias,
 })
 
-/** Every shell found on this machine, the system's default first. */
 export const detectShells = (options: LocateOptions): ReadonlyArray<Shell> =>
   options.platform === "win32"
     ? windowsShells(options)
     : unixShells(options, options.readFile("/etc/shells"))
 
-/** The shell a new terminal starts: the one asked for when it is found, else the default. */
 export const pickShell = (
   shells: ReadonlyArray<Shell>,
   wanted: string | null | undefined,

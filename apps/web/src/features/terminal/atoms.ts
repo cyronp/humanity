@@ -3,10 +3,6 @@ import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/**
- * An owner's terminals, kept up to date while something looks at them. Keyed by the owner as
- * JSON, so the same owner is the same atom.
- */
 export const terminalsAtom = Atom.family((owner: string) =>
   HumanityClient.runtime.atom(
     Stream.unwrap(
@@ -26,10 +22,6 @@ export interface AttachKey {
 
 export const attachKey = (key: AttachKey) => JSON.stringify(key)
 
-/**
- * One view's attachment to a terminal: the screen, then what it prints. If the connection drops
- * it attaches again with the same id and starts over from a fresh screen.
- */
 export const attachAtom = Atom.family((key: string) => {
   const { terminalId, attachmentId, cols, rows } = JSON.parse(key) as AttachKey
   return HumanityClient.runtime.atom(

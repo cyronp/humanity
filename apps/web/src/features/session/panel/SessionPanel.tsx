@@ -109,17 +109,12 @@ export function ToolRail({
   )
 }
 
-/**
- * The rail where there is no thread (the new-thread page): every tool works on a thread's branch
- * and folder, so each is shown, and disabled.
- */
 export function IdleToolRail() {
   return (
     <RailFrame>
       {SHELF_TOOLS.map((tool) => (
         <Tooltip key={tool}>
           <TooltipTrigger asChild>
-            {/* A disabled button gets no pointer events: its wrapper shows the tooltip. */}
             <span tabIndex={0} className="rounded-md">
               <Button
                 variant="ghost"

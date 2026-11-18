@@ -11,7 +11,6 @@ const DECORATIONS: ISearchDecorationOptions = {
   activeMatchColorOverviewRuler: "#f97316",
 }
 
-/** A find bar over the shown terminal: Enter finds the next match, Shift+Enter the previous. */
 export function TerminalFind({
   search,
   onClose,
@@ -44,7 +43,6 @@ export function TerminalFind({
     else search.findPrevious(query, options())
   }
 
-  // Searching as the human types, from where the last match was.
   useEffect(() => {
     if (query === "") search.clearDecorations()
     else

@@ -202,7 +202,6 @@
 :root[data-resizing="row"] * {
   cursor: row-resize !important;
 }
-/* A frame or a terminal under the pointer would take it from the handle being dragged. */
 :root[data-resizing] :is(iframe, .xterm) {
   pointer-events: none;
 }

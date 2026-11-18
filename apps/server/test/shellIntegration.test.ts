@@ -111,8 +111,6 @@ describe("shellLaunch", () => {
   })
 })
 
-// The daemon --------------------------------------------------------------------------------
-
 const layerFor = (home: string, host = makeFakePtyHost()) =>
   services(home, () => [], undefined, undefined, undefined, undefined, host.layer)
 
@@ -127,7 +125,6 @@ const startThread = (repo: string) =>
     return session
   })
 
-/** Waits (up to `seconds`) for the terminal to be as `check` wants. */
 const until = (
   owner: TerminalOwner,
   terminalId: string,
@@ -247,14 +244,10 @@ describe("shell integration in the daemon", () => {
   )
 })
 
-// Real shells -----------------------------------------------------------------------------------
-
-/** Every integrated shell on this machine; CI has bash on Linux, a Windows machine PowerShell. */
 const realShells = detectShells(shellLocateOptions()).filter(
   (each) => each.kind !== "cmd" && each.kind !== "wsl" && each.kind !== "sh",
 )
 
-/** A command that fails with exit code 3, in the shell's own language. */
 const failWith3 = (each: Shell) =>
   each.kind === "pwsh" || each.kind === "powershell" ? "cmd /c exit 3" : "sh -c 'exit 3'"
 
@@ -282,7 +275,6 @@ describe.skipIf(realShells.length === 0)("shell integration in a real shell", ()
             )
             assert.strictEqual(ended.lastExitCode, 3)
 
-            // What the agent reads is what the screen shows, however the shell drew it.
             const cursor = yield* terminals.agentCursor(terminal.id)
             yield* terminals.agentWrite(terminal.id, "echo humanity-check\r")
             const waited = yield* terminals.agentWait(terminal.id, {

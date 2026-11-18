@@ -56,9 +56,6 @@ function LiveSession({
   const terminalOwner = useMemo((): TerminalOwner => ({ _tag: "Session", sessionId }), [sessionId])
 
   if (view !== undefined) return <Workspace project={project} view={view} search={search} />
-  // Until the thread is there (or when it cannot be), the page keeps its frame: the layout buttons
-  // stay where they always are, and its terminals show without a new one opening. A thread that
-  // cannot be opened has no terminals to show.
   const failed = AsyncResult.isFailure(result)
   return (
     <WorkspaceFrame

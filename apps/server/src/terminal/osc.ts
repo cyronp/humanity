@@ -1,10 +1,8 @@
-/** What one OSC 133 mark says about the shell's commands. */
 export type CommandMark =
   | { readonly _tag: "PromptStart" }
   | { readonly _tag: "CommandStart" }
   | { readonly _tag: "CommandEnd"; readonly exitCode: number | null }
 
-/** OSC 133's payload: `A` (prompt), `C` (the command runs), `D;<exit code>` (it ended). */
 export const parseCommandMark = (data: string): CommandMark | undefined => {
   const [kind, ...rest] = data.split(";")
   switch (kind) {
@@ -21,11 +19,6 @@ export const parseCommandMark = (data: string): CommandMark | undefined => {
   }
 }
 
-/**
- * The folder an OSC 7 mark (`file://<host>/<path>`) names, as the daemon's platform writes it,
- * or `undefined` when it names none it can use. On Windows the shells write `/C:/…` (PowerShell)
- * or `/c/…` (Git Bash); a path of Git Bash's own (`/usr/bin`) or of WSL has no Windows folder.
- */
 export const folderFromOsc7 = (data: string, platform: NodeJS.Platform): string | undefined => {
   const match = /^file:\/\/[^/]*(\/.*)$/.exec(data)
   const path = match?.[1]
@@ -38,7 +31,6 @@ export const folderFromOsc7 = (data: string, platform: NodeJS.Platform): string 
   return `${letter}:${rest}`
 }
 
-/** Whether `path` is `folder` or inside it, whatever the case on Windows. */
 export const isInsideFolder = (
   folder: string,
   path: string,

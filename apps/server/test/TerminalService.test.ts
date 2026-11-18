@@ -26,7 +26,6 @@ const startThread = (repo: string) =>
     return session
   })
 
-/** Attaches in the background and collects what the view is sent. */
 const attachTo = (terminalId: string, attachmentId = "view-1", cols = 80, rows = 24) =>
   Effect.gen(function* () {
     const terminals = yield* TerminalService

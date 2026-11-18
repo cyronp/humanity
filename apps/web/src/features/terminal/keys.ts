@@ -1,4 +1,3 @@
-/** What a key press in a terminal means to Humanity rather than to the program in it. */
 export type TerminalCommand =
   | "copy"
   | "paste"
@@ -19,11 +18,6 @@ export interface KeyPress {
   readonly metaKey: boolean
 }
 
-/**
- * The command a key press is, or `undefined` to let the terminal send it to its program.
- * `paste` is left to the browser's own paste, which xterm turns into a bracketed paste.
- * Ctrl+C copies only when text is selected; otherwise it interrupts, as in any terminal.
- */
 export const terminalCommand = (
   press: KeyPress,
   options: { readonly mac: boolean; readonly hasSelection: boolean },
@@ -54,6 +48,5 @@ export const terminalCommand = (
 
 export const isMac = () => /mac/i.test(navigator.platform)
 
-/** "Ctrl+`" or "⌃`" for a tooltip. */
 export const shortcutLabel = (shortcut: string) =>
   isMac() ? shortcut.replace("Ctrl+Shift+", "⌃⇧").replace("Ctrl+", "⌃") : shortcut

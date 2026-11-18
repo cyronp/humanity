@@ -10,7 +10,6 @@ export interface PtySpawnOptions {
   readonly rows: number
 }
 
-/** A running pseudo-terminal. Callbacks run on Node's event loop, outside any fiber. */
 export interface PtyProcess {
   readonly pid: number
   readonly write: (data: string) => void
@@ -28,7 +27,6 @@ export class PtyHost extends Context.Service<
     readonly spawn: (options: PtySpawnOptions) => Effect.Effect<PtyProcess, PtySpawnError>
   }
 >()("humanity/PtyHost") {
-  /** node-pty, loaded on first use so the daemon starts even where its binary is missing. */
   static readonly layer = Layer.sync(PtyHost, () => {
     let loaded: Promise<typeof NodePty> | undefined
     const load = () => (loaded ??= import("node-pty"))
@@ -51,16 +49,12 @@ export class PtyHost extends Context.Service<
               resize: (cols, rows) => {
                 try {
                   child.resize(cols, rows)
-                } catch {
-                  // A process that just exited cannot be resized; its exit is reported anyway.
-                }
+                } catch {}
               },
               kill: () => {
                 try {
                   child.kill()
-                } catch {
-                  // Already gone.
-                }
+                } catch {}
               },
               onData: (listener) => void child.onData(listener),
               onExit: (listener) =>
@@ -76,7 +70,6 @@ export class PtyHost extends Context.Service<
   })
 }
 
-/** A scripted pty for tests: what is written to it is recorded, and the test makes it print. */
 export interface FakePty extends PtyProcess {
   readonly options: PtySpawnOptions
   readonly written: Array<string>
@@ -88,9 +81,7 @@ export interface FakePty extends PtyProcess {
 
 export const makeFakePtyHost = (
   options: {
-    /** Runs on each spawn, e.g. to print a prompt or fail. */
     readonly onSpawn?: (pty: FakePty) => void
-    /** Runs on each write, e.g. to play a shell that answers what is typed. */
     readonly onWrite?: (pty: FakePty, data: string) => void
     readonly fail?: (options: PtySpawnOptions) => string | undefined
   } = {},
