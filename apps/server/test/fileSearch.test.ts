@@ -90,6 +90,12 @@ describe("searchFiles", () => {
     expect(searchFiles([decomposed], "résumé").map((entry) => entry.path)).toEqual([decomposed])
   })
 
+  it("reads a query full of slashes in linear time", () => {
+    const started = performance.now()
+    expect(paths(`${"/".repeat(100_000)}x`)).toEqual([])
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
   it("returns nothing when nothing matches, and at most `limit` entries", () => {
     expect(paths("zzz")).toEqual([])
     expect(paths("s", 2)).toHaveLength(2)

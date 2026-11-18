@@ -162,7 +162,9 @@ interface Query {
 
 const parseQuery = (query: string): Query => {
   const needle = compose(query.trim().replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase())
-  const bare = needle.replace(/\/+$/, "")
+  let end = needle.length
+  while (end > 0 && needle[end - 1] === "/") end--
+  const bare = needle.slice(0, end)
   const joined = bare.replace(/[-_ ]/g, "")
   return {
     bare,

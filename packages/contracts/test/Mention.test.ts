@@ -23,6 +23,14 @@ describe("mentionedPaths", () => {
     ).toEqual(["node/@types/a.ts", 'say "hi".md'])
   })
 
+  it("drops trailing punctuation in linear time", () => {
+    const started = performance.now()
+    expect(mentionedPaths(`@a.ts${"!".repeat(100_000)}x @b.ts!!!`, ["a.ts", "b.ts"])).toEqual([
+      "b.ts",
+    ])
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
   it("keeps at most MENTION_LIMIT paths", () => {
     const paths = Array.from({ length: MENTION_LIMIT + 5 }, (_, index) => `f${index}.ts`)
     expect(mentionedPaths(paths.map((path) => `@${path}`).join(" "), paths)).toHaveLength(

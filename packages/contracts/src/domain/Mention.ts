@@ -13,7 +13,13 @@ export interface MentionToken {
 }
 
 const MENTION = /(^|\s)@(?:"((?:\\"|[^"\n])+)"|([^\s"]\S*))/g
-const TRAILING = /[.,;:!?)\]}'"]+$/
+const TRAILING = new Set(".,;:!?)]}'\"")
+
+const withoutTrailing = (raw: string) => {
+  let end = raw.length
+  while (end > 0 && TRAILING.has(raw[end - 1]!)) end--
+  return raw.slice(0, end)
+}
 
 export const unescapeQuoted = (quoted: string): string => quoted.replaceAll('\\"', '"')
 
@@ -28,7 +34,7 @@ export const mentionTokens = (text: string, mentions: ReadonlySet<string>): Arra
       continue
     }
     const raw = match[3] ?? ""
-    const path = mentions.has(raw) ? raw : raw.replace(TRAILING, "")
+    const path = mentions.has(raw) ? raw : withoutTrailing(raw)
     if (path !== "" && mentions.has(path)) {
       tokens.push({ start, end: start + 1 + path.length, path })
     }
