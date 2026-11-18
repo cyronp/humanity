@@ -335,7 +335,8 @@ function DockAction({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
-        {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}      </TooltipContent>
+        {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}{" "}
+      </TooltipContent>
     </Tooltip>
   )
 }
