@@ -124,7 +124,6 @@ describe("the add-repository list", () => {
   it("searches by the repository a pasted URL names", () => {
     expect(repoNeedle("  https://github.com/Acme/Widgets.git ")).toBe("acme/widgets")
     expect(repoNeedle(" Gadg ")).toBe("gadg")
-    // A quoted path still finds the row that adds its folder.
     expect(repoNeedle('"C:\\Code\\App"')).toBe("c:\\code\\app")
   })
 
@@ -138,7 +137,6 @@ describe("the add-repository list", () => {
       kind: "clone",
       fullName: "other/thing",
     })
-    // Listed already: the row itself is the way to add it.
     expect(typedChoice("https://github.com/acme/gadgets", repos, projects)).toBeUndefined()
   })
 

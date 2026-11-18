@@ -4,17 +4,19 @@ import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { FolderPlus } from "lucide-react"
-import { type FormEvent, type KeyboardEvent, useState } from "react"
+import { type FormEvent, type KeyboardEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { InputGroupTextarea } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
 import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
+import { MentionTextarea } from "@/features/chat/MentionTextarea"
+import { useFileMention } from "@/features/chat/useFileMention"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { codexStatusAtom } from "@/features/codex/atoms"
-import { branchesAtom } from "@/features/git/atoms"
+import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
@@ -31,18 +33,7 @@ import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
-/**
- * The home page: one message box, like any AI chat. It starts a new session
- * in the repository the human prompted last, with that thread's model and
- * reasoning effort (or the pinned effort) and the project's or the human's
- * default autonomy, unless they pick otherwise.
- */
-export function NewChat({
-  projectId,
-}: {
-  /** The project chosen in the URL (from the header's switcher); the last prompted one otherwise. */
-  readonly projectId: ProjectId | undefined
-}) {
+export function NewChat({ projectId }: { readonly projectId: ProjectId | undefined }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
   const claude = useAtomValue(claudeStatusAtom)
@@ -51,7 +42,6 @@ export function NewChat({
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)
   const { pinned } = usePinnedDefaults()
-  // Until the human picks one, follow the last prompted project as it loads.
   const project =
     list.find((candidate) => candidate.id === projectId) ??
     list.find((candidate) => candidate.id === lastProjectId) ??
@@ -92,7 +82,6 @@ export function NewChat({
   )
 }
 
-/** The project of the most recently active session: where the human was last prompting. */
 const lastPrompted = (sessions: ReadonlyArray<Session>): ProjectId | undefined =>
   sessions[0]?.projectId
 
@@ -113,12 +102,10 @@ function NewChatForm({
   defaults,
 }: {
   readonly project: Project
-  /** What a new thread starts with here; each setting follows it until the human picks another. */
   readonly defaults: ThreadDefaults
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
-  // `undefined` is "not picked yet"; a `null` model is a picked "Default".
   const [chosenModel, setModel] = useState<ModelChoice>()
   const [chosenEffort, setEffort] = useState<ReasoningEffort | null>()
   const [chosenAutonomy, setAutonomy] = useState<Autonomy>()
@@ -131,10 +118,20 @@ function NewChatForm({
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
+  const searchFiles = useAtomSet(searchProjectFilesAtom, { mode: "promiseExit" })
+  const mentions = useFileMention({
+    text,
+    setText,
+    textarea,
+    search: (query, recent) => searchFiles({ payload: { projectId: project.id, query, recent } }),
+    recentScope: project.id,
+    disabled: pending,
+  })
+  const idBase = useId()
+  const mentionIds = fileMentionIds(idBase)
 
   const branches = useAtomValue(branchesAtom(project.id))
   const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
-  // The checkout stays on its branch unless the human picks another one.
   const current = AsyncResult.isSuccess(branches)
     ? branches.value.find((branch) => branch.isCurrent && !branch.isRemote)?.name
     : undefined
@@ -152,6 +149,7 @@ function NewChatForm({
         ...(chosen === undefined ? {} : { baseBranch: chosen }),
         prompt,
         ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
+        ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
         autonomy,
         provider,
         ...(model === null ? {} : { model }),
@@ -165,6 +163,7 @@ function NewChatForm({
       return
     }
     setText("")
+    mentions.sent()
     files.clear()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",
@@ -173,6 +172,7 @@ function NewChatForm({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentions.onKeyDown(event)) return
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       void submit()
@@ -184,19 +184,32 @@ function NewChatForm({
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
-      <ChatBox className={dropTargetClass} {...(pending ? {} : files.dropProps)}>
+      <ChatBox
+        className={dropTargetClass}
+        behind={
+          mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />
+        }
+        {...(pending ? {} : files.dropProps)}
+      >
         <AttachmentTray draft={files} />
-        <InputGroupTextarea
+        <MentionTextarea
           ref={textarea}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          mentions={mentions.picked}
+          {...mentions.textareaProps}
+          aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
+          aria-activedescendant={
+            mentions.menu === undefined || mentions.menu.highlighted < 0
+              ? undefined
+              : mentionIds.option(mentions.menu.highlighted)
+          }
           onKeyDown={onKeyDown}
           onPaste={pending ? undefined : files.onPaste}
-          placeholder="Ask anything."
+          placeholder="Ask anything. @ files."
           disabled={pending}
           rows={3}
           autoFocus
-          className="max-h-72 min-h-20 px-4 pt-3.5"
+          className="max-h-72 min-h-20"
           aria-label="First message to the agent"
         />
         <ChatBoxFooter>

@@ -7,17 +7,11 @@ import type {
   PullRequestFeed,
 } from "@humanity/contracts"
 
-/** How each host names what this panel opens. */
 export const forgeTerms = (forge: Forge) =>
   forge === "github"
     ? { noun: "pull request", site: "GitHub", symbol: "#" }
     : { noun: "merge request", site: "GitLab", symbol: "!" }
 
-/**
- * The paths a commit of `files` names, each once: a rename takes its old path
- * along, so it isn't left as a deletion. A path can be listed twice, staged
- * as deleted and back on disk untracked; git commits both parts together.
- */
 export const commitPaths = (files: ReadonlyArray<FileDiff>): Array<string> => [
   ...new Set(
     files.flatMap((file) =>
@@ -26,11 +20,6 @@ export const commitPaths = (files: ReadonlyArray<FileDiff>): Array<string> => [
   ),
 ]
 
-/**
- * Branches a pull request from `current` can merge into: local ones and those
- * only on `origin`, each once, without `current` itself. `preferred` (the
- * project's default branch) comes first.
- */
 export const baseBranches = (
   branches: ReadonlyArray<Branch>,
   current: string | null,
@@ -55,14 +44,9 @@ export const baseBranches = (
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
 
-/**
- * Whether the folder the session works in has another branch checked out than
- * the session's own: another thread, or a git command, switched the checkout.
- */
 export const checkoutMoved = (publication: BranchPublication): boolean =>
   publication.branch !== null && publication.checkedOut !== publication.branch
 
-/** Whether the branch has commits its remote lacks, or isn't on the remote at all. */
 export const needsPush = (publication: BranchPublication): boolean =>
   publication.branch !== null && (publication.upstream === null || publication.ahead > 0)
 
@@ -83,11 +67,9 @@ export interface CheckSummary {
   readonly failed: number
   readonly pending: number
   readonly other: number
-  /** The one word for all of them: what a badge shows. */
   readonly overall: "none" | "failure" | "pending" | "success"
 }
 
-/** Totals of a pull request's checks. Any failure fails it; else anything unfinished keeps it pending. */
 export const summarizeChecks = (checks: ReadonlyArray<PullRequestCheck>): CheckSummary => {
   let passed = 0
   let failed = 0
@@ -105,7 +87,6 @@ export const summarizeChecks = (checks: ReadonlyArray<PullRequestCheck>): CheckS
 }
 
 export interface FeedNotice {
-  /** An `error` is something to fix; a `note` only explains what is on screen. */
   readonly tone: "error" | "note"
   readonly title: string
   readonly message: string
@@ -114,10 +95,6 @@ export interface FeedNotice {
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-/**
- * What to say above a pull request when the forge isn't being asked as usual:
- * a rate limit on hold, a forge that failed, or no token to ask with.
- */
 export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | null => {
   const { site } = forgeTerms(forge)
   if (feed.pausedUntil !== null) {

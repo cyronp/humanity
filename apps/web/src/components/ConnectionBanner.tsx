@@ -4,16 +4,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { socketStore } from "@/lib/connection"
 import { checkAuth, readToken } from "@/lib/token"
 
-/** A blip shorter than this, like a daemon restarting, shows nothing. */
 const GRACE_MS = 1500
-/** How often a lost connection checks whether the token is still the daemon's. */
 const TOKEN_CHECK_MS = 5000
 
-/**
- * Says so while the app has lost the daemon. The socket reconnects by itself,
- * so this only shows that it is trying, or that it never will because the
- * daemon no longer takes this token.
- */
 export function ConnectionBanner() {
   const state = useSyncExternalStore(socketStore.subscribe, socketStore.get)
   return state === "lost" ? <LostBanner /> : null
@@ -35,7 +28,6 @@ function LostBanner() {
   }, [])
 
   if (!shown) return null
-  // Above dialogs (z-50) too: with the daemon gone, nothing in them works either.
   return (
     <div
       role="status"
@@ -45,7 +37,6 @@ function LostBanner() {
       {rejected ? (
         <>
           <span>Humanity no longer accepts this browser's token.</span>
-          {/* Reloading lands on the connect screen, which asks for the new one. */}
           <Button size="xs" className="rounded-full" onClick={() => window.location.reload()}>
             Enter a new token
           </Button>

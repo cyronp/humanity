@@ -38,7 +38,6 @@ describe("HistoryImport", () => {
       const history = {
         [repo]: [
           conversation("cli-1", Date.UTC(2026, 10, 2), ["Fix the login bug"]),
-          // Only `/clear`: not a conversation.
           {
             ...conversation("cli-2", Date.UTC(2026, 10, 3), []),
             entries: [
@@ -98,7 +97,6 @@ describe("HistoryImport", () => {
         const [thread] = yield* sessions.list(project.id)
         const id = thread?.id ?? ""
 
-        // More was said in the CLI.
         history = { [repo]: [conversation("cli-1", 2000, ["one", "two"])] }
         assert.strictEqual(yield* imports.syncProject(project.id), 1)
         assert.deepStrictEqual(tags((yield* contents(id)).messages), [
@@ -109,7 +107,6 @@ describe("HistoryImport", () => {
         ])
         assert.strictEqual((yield* sessions.list(project.id)).length, 1)
 
-        // Continued in Humanity: the conversation resumes where the CLI left it.
         yield* sessions.sendMessage(id, "three")
         yield* waitForStatus(id, "idle")
         const runs = yield* Ref.get(log.runs)
@@ -118,7 +115,6 @@ describe("HistoryImport", () => {
         const continued = yield* contents(id)
         assert.deepStrictEqual(tags(continued.messages).slice(4, 6), ["notice", "user"])
 
-        // The CLI's transcript no longer replaces what happened here.
         history = { [repo]: [conversation("cli-1", 3000, ["one", "two", "elsewhere"])] }
         assert.strictEqual(yield* imports.syncProject(project.id), 0)
         assert.deepStrictEqual(tags((yield* contents(id)).messages), tags(continued.messages))

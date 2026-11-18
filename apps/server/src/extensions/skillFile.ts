@@ -1,13 +1,7 @@
-/**
- * SKILL.md files: YAML frontmatter with the skill's `name` and `description`,
- * then the instructions as Markdown. Only the frontmatter subset skills use
- * is read: plain, quoted and block (`|`, `>`) scalars.
- */
 
 export interface SkillFile {
   readonly name: string | undefined
   readonly description: string | undefined
-  /** The instructions after the frontmatter. */
   readonly body: string
 }
 
@@ -17,7 +11,6 @@ const unquote = (value: string): string => {
       const parsed: unknown = JSON.parse(value)
       if (typeof parsed === "string") return parsed
     } catch {
-      // Not JSON-compatible: fall back to the text between the quotes.
     }
     return value.slice(1, -1)
   }
@@ -29,7 +22,6 @@ const unquote = (value: string): string => {
 
 const isIndented = (line: string) => /^\s+\S/.test(line) || line.trim() === ""
 
-/** Top-level `key: value` pairs of a frontmatter block. */
 const parseFrontmatter = (lines: ReadonlyArray<string>): Map<string, string> => {
   const fields = new Map<string, string>()
   let index = 0
@@ -50,7 +42,6 @@ const parseFrontmatter = (lines: ReadonlyArray<string>): Map<string, string> => 
       while (content.length > 0 && content[content.length - 1] === "") content.pop()
       fields.set(key, block[1] === "|" ? content.join("\n") : content.join(" ").trim())
     } else {
-      // A plain scalar may wrap onto indented lines; YAML folds them with spaces.
       const folded = [raw, ...continuation.map((line) => line.trim())]
         .filter((part) => part !== "")
         .join(" ")
@@ -82,7 +73,6 @@ export const parseSkillFile = (text: string): SkillFile => {
   }
 }
 
-/** The SKILL.md of a skill written in Humanity. Quoting with JSON keeps any description valid YAML. */
 export const renderSkillFile = (skill: {
   readonly name: string
   readonly description: string

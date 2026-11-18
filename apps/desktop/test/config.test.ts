@@ -69,7 +69,6 @@ describe("resolveDesktopConfig", () => {
     const config = resolveDesktopConfig({ ...input, env: { HUMANITY_DESKTOP_DEV: "1" } })
     expect(config.daemon).toBeUndefined()
     expect(config.origin).toBe("http://127.0.0.1:5173")
-    // A profile of its own, so it can run next to the installed app.
     expect(config.userDataDir).toBe(join(home, "desktop-dev"))
   })
 })

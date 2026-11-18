@@ -10,14 +10,12 @@ import { ReadyStep } from "./ReadyStep.tsx"
 import { RepositoriesStep } from "./RepositoriesStep.tsx"
 import { WelcomeStep } from "./WelcomeStep.tsx"
 
-/** The setup guide, floating over the app. Closing it any way counts as having seen it. */
 export function OnboardingDialog() {
   const { open, step } = useOnboarding()
   const [celebrating, setCelebrating] = useState(false)
   const stopCelebrating = useCallback(() => setCelebrating(false), [])
   const previous = neighbourStep(step, -1)
   const next = neighbourStep(step, 1)
-  // The first and last steps carry their own button, in the middle of the page.
   const middle = previous !== undefined && next !== undefined
 
   const finish = () => {

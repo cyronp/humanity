@@ -3,10 +3,6 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui"
 
-/**
- * A few options side by side in one frame, the chosen one filled in. With
- * `type="single"` it is a radio group: arrow keys move between the options.
- */
 function ToggleGroup({
   className,
   ...props

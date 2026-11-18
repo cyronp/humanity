@@ -54,13 +54,11 @@ type Editing =
   | { readonly kind: "edit"; readonly server: McpServer }
   | { readonly kind: "import" }
 
-/** Humanity's own MCP servers, editable, then the repository's, read-only. */
 export function McpServersSettings({
   servers,
   repositoryName,
 }: {
   readonly servers: ReadonlyArray<McpServer>
-  /** The project whose repository's servers are listed, if one is open. */
   readonly repositoryName: string | undefined
 }) {
   const [editing, setEditing] = useState<Editing>()
@@ -130,7 +128,6 @@ function ServerRow({
   onEdit,
 }: {
   readonly server: McpServer
-  /** `undefined` for a repository's server, which is changed in the repository. */
   readonly onEdit: (() => void) | undefined
 }) {
   const setEnabled = useAtomSet(setMcpServerEnabledAtom, { mode: "promiseExit" })
@@ -215,7 +212,6 @@ function ServerEditor({
   server,
   onDone,
 }: {
-  /** `undefined` adds a new server. */
   readonly server: McpServer | undefined
   readonly onDone: () => void
 }) {
@@ -350,7 +346,6 @@ function ServerEditor({
   )
 }
 
-/** Environment variables or headers: a name and a hidden value per row. */
 function Entries({
   title,
   namePlaceholder,
@@ -374,7 +369,6 @@ function Entries({
         <div key={entry.id} className="flex items-center gap-2">
           <Input
             value={entry.name}
-            // A saved value belongs to its name; renaming one means entering it again.
             onChange={(event) => change(entry.id, { name: event.target.value, saved: false })}
             placeholder={namePlaceholder}
             aria-label={`${title}: name`}

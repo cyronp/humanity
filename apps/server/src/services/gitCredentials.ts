@@ -1,12 +1,5 @@
 import { Option, Redacted } from "effect"
 
-/**
- * Environment that gives one git process (a clone or a push) a token. Git
- * reads the header from the environment, so the token is never written into
- * the repository's config or shown in `ps`. It is only sent to URLs under
- * `origin`, and `user` is the name that host expects next to a token:
- * `x-access-token` on GitHub, `oauth2` on GitLab.
- */
 export const credentialEnv = (
   origin: string,
   user: string,

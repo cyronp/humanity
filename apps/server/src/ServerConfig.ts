@@ -4,35 +4,23 @@ import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
 export interface ServerConfigShape {
-  /** Data directory. Everything Humanity writes lives under it (or in a session worktree inside it). */
   readonly home: string
-  /** The daemon only ever binds to loopback in the MVP. */
   readonly host: "127.0.0.1"
   readonly port: number
   readonly databasePath: string
   readonly worktreesDir: string
   readonly reposDir: string
-  /** Files attached to messages: `<attachmentsDir>/<sessionId>/<attachmentId>`. */
   readonly attachmentsDir: string
-  /** Claude Code config folders of added accounts: `<accountsDir>/<accountId>`. */
   readonly accountsDir: string
-  /** Codex folders (`CODEX_HOME`) of added accounts: `<codexAccountsDir>/<accountId>`. */
   readonly codexAccountsDir: string
-  /** Kiro folders (`KIRO_HOME`) of added accounts: `<kiroAccountsDir>/<accountId>`. */
   readonly kiroAccountsDir: string
   readonly authTokenPath: string
-  /** A GitHub token the human saved from the UI. The file exists only while one is saved. */
   readonly githubTokenPath: string
-  /** A GitLab token the human saved from the UI, and the instance it is for. Same lifetime. */
   readonly gitlabTokenPath: string
   readonly gitlabHostPath: string
-  /** Humanity's own MCP servers, in Claude Code's `.mcp.json` format. Exists once one is added. */
   readonly mcpConfigPath: string
-  /** The local Claude Code plugin Humanity's own skills live in: `<pluginDir>/skills/<name>/SKILL.md`. */
   readonly pluginDir: string
-  /** Built web assets served in production. `undefined` when they should not be served. */
   readonly webDist: string | undefined
-  /** Origin the human should open. Differs from the daemon's own in development (Vite). */
   readonly webOrigin: string
 }
 
@@ -68,7 +56,6 @@ const make = (options: {
 export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShape>()(
   "humanity/ServerConfig",
 ) {
-  /** Creates the data directories so every other service can assume they exist. */
   static readonly layer = (options: Parameters<typeof make>[0]) =>
     Layer.effect(
       ServerConfig,
@@ -85,7 +72,6 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
       }).pipe(Effect.orDie),
     )
 
-  /** `HUMANITY_HOME` and `HUMANITY_PORT` override the defaults. */
   static readonly fromEnv = (options: {
     readonly webDist?: string | undefined
     readonly webOrigin?: string | undefined

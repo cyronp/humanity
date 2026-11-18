@@ -31,7 +31,6 @@ export const GITHUB_API = "https://api.github.com"
 
 export type GitHubError = GitHubNotAuthenticated | GitHubRateLimited | GitHubRequestFailed
 
-// Only the fields Humanity uses.
 const UserJson = Schema.Struct({
   login: Schema.String,
   name: Schema.NullOr(Schema.String),
@@ -153,7 +152,6 @@ const toPullRequest = (pull: typeof PullJson.Type): PullRequest => ({
   createdAt: pull.created_at,
 })
 
-/** A check run's status and conclusion, as one status. */
 export const githubCheckRunStatus = (status: string, conclusion: string | null): CheckStatus => {
   if (status !== "completed") return status === "in_progress" ? "running" : "queued"
   switch (conclusion) {
@@ -173,7 +171,6 @@ export const githubCheckRunStatus = (status: string, conclusion: string | null):
   }
 }
 
-/** A commit status's state (`error`, `failure`, `pending`, `success`), as a check status. */
 export const githubCommitStatus = (state: string): CheckStatus =>
   state === "success"
     ? "success"
@@ -188,7 +185,6 @@ const authorOf = (user: typeof AuthorJson.Type) => ({
   avatarUrl: user?.avatar_url ?? null,
 })
 
-/** How many items one list of a pull request may hold, so a huge one can't stall the UI. */
 const MAX_PULL_ITEMS = 500
 
 export interface NewGitHubPull {
@@ -220,29 +216,22 @@ export const nextPageUrl = (link: string | undefined): string | undefined => {
   return undefined
 }
 
-/** Upper bound for `listRepos`, so a huge organization can't stall the UI. */
 const MAX_REPOS = 1000
 
 export class GitHubService extends Context.Service<
   GitHubService,
   {
     readonly whoami: Effect.Effect<GitHubUser, GitHubError>
-    /** Where the token comes from and who it signs in as. A token GitHub refuses is a `problem`, not a failure. */
     readonly connection: (options: { readonly refresh: boolean }) => Effect.Effect<GitHubConnection>
-    /** Saves a token once GitHub accepted it; one it rejects is not saved. */
     readonly saveToken: (token: string) => Effect.Effect<GitHubConnection, GitHubError>
-    /** Forgets the saved token and reports what is used instead. */
     readonly removeToken: Effect.Effect<GitHubConnection>
-    /** Every page of the user's repositories, as a stream that follows `Link: rel="next"`. */
     readonly repos: Stream.Stream<GitHubRepo, GitHubError>
     readonly listRepos: Effect.Effect<ReadonlyArray<GitHubRepo>, GitHubError>
     readonly getRepo: (fullName: string) => Effect.Effect<GitHubRepo, GitHubError>
     readonly listBranches: (
       fullName: string,
     ) => Effect.Effect<ReadonlyArray<GitHubBranch>, GitHubError>
-    /** The token for authenticated git operations, when one is available. */
     readonly token: Effect.Effect<Option.Option<Redacted.Redacted<string>>>
-    /** `branch`'s open pull request in `fullName`, else its most recently updated one. */
     readonly findPullRequest: (
       fullName: string,
       branch: string,
@@ -251,12 +240,10 @@ export class GitHubService extends Context.Service<
       fullName: string,
       pull: NewGitHubPull,
     ) => Effect.Effect<PullRequest, GitHubError>
-    /** The check runs and commit statuses of `sha`. */
     readonly checks: (
       fullName: string,
       sha: string,
     ) => Effect.Effect<ReadonlyArray<PullRequestCheck>, GitHubError>
-    /** Conversation comments, reviews with something to say and inline comments, oldest first. */
     readonly comments: (
       fullName: string,
       number: number,
@@ -295,11 +282,6 @@ export class GitHubService extends Context.Service<
           Effect.catch(() => Effect.succeed("")),
         )
 
-      /**
-       * Turns a response that is neither 2xx nor `304 Not Modified` into the
-       * matching tagged error. A rate limit also keeps `scope` away from GitHub
-       * until it lifts.
-       */
       const checkStatus = (response: HttpClientResponse.HttpClientResponse, scope: string) =>
         Effect.gen(function* () {
           if ((response.status >= 200 && response.status < 300) || response.status === 304) {
@@ -310,8 +292,6 @@ export class GitHubService extends Context.Service<
             return yield* new GitHubNotAuthenticated({ reason: "rejected" })
           }
           const body = yield* errorMessage(response)
-          // The primary limit says so with a spent quota; a secondary one with
-          // `Retry-After` or in words.
           if (
             response.status === 429 ||
             (response.status === 403 &&
@@ -346,11 +326,6 @@ export class GitHubService extends Context.Service<
           onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
         })
 
-      /**
-       * Every request goes through here: refused at once while GitHub's rate
-       * limit keeps this token away, a few at a time otherwise, and what the
-       * answer says of the quota is kept for the next one.
-       */
       const send = (
         request: HttpClientRequest.HttpClientRequest,
         token: Option.Option<Redacted.Redacted<string>>,
@@ -373,11 +348,6 @@ export class GitHubService extends Context.Service<
       const get = (url: string, token: Option.Option<Redacted.Redacted<string>>) =>
         send(HttpClientRequest.get(absolute(url), { headers: authorization(token) }), token)
 
-      /**
-       * A GET that revalidates: it sends the `ETag` of the last answer, and a
-       * `304 Not Modified` hands that answer back. GitHub does not count a 304
-       * against the rate limit, so asking again for what did not change is free.
-       */
       const read = (
         url: string,
         token: Option.Option<Redacted.Redacted<string>>,
@@ -472,7 +442,6 @@ ${absolute(url)}`
       const saveToken = (token: string) =>
         Effect.gen(function* () {
           const candidate = Redacted.make(token)
-          // Asking who it is proves GitHub accepts it, before anything is written.
           yield* whoamiWith(candidate)
           yield* tokens.save(candidate)
           return yield* connection({ refresh: false })
@@ -497,7 +466,6 @@ ${absolute(url)}`
 
       const listRepos = repos.pipe(Stream.take(MAX_REPOS), Stream.runCollect)
 
-      // Public repositories work without a token; private ones need it.
       const getRepo = (fullName: string) =>
         Effect.gen(function* () {
           const token = yield* tokens.get
@@ -527,7 +495,6 @@ ${absolute(url)}`
           ).pipe(Stream.take(MAX_REPOS), Stream.runCollect)
         })
 
-      /** Every page of a list, up to `MAX_PULL_ITEMS` items. */
       const all = <S extends Schema.Constraint>(
         first: string,
         schema: S,
@@ -632,8 +599,6 @@ ${absolute(url)}`
               line: comment.line ?? comment.original_line ?? null,
               reviewState: null,
             })),
-            // A bare "commented" review only wraps its inline comments, listed above;
-            // a pending one is a draft only its author sees.
             ...reviews
               .filter((review) => review.state !== "PENDING")
               .filter((review) => (review.body ?? "") !== "" || review.state !== "COMMENTED")

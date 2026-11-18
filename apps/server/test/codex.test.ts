@@ -1,11 +1,12 @@
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { outsideWorktreeDenial, reviewTarget } from "../src/agent/review.ts"
 import { codexUserInput } from "../src/agent/CodexRunner.ts"
 import { cliVersionOf } from "../src/codex/AppServer.ts"
 import { codexPlanUsage } from "../src/codex/Codex.ts"
 import {
-  bundledCodexExecutable,
   codexEnvironment,
+  codexNativeExecutable,
   codexTargetTriple,
 } from "../src/codex/environment.ts"
 import { classifyCodexAccount } from "../src/services/CodexAccountService.ts"
@@ -25,7 +26,7 @@ describe("codexEnvironment", () => {
   })
 })
 
-describe("the bundled Codex executable", () => {
+describe("the native Codex executable", () => {
   it("names each platform's build as its package does", () => {
     expect(codexTargetTriple("win32", "x64")).toBe("x86_64-pc-windows-msvc")
     expect(codexTargetTriple("darwin", "arm64")).toBe("aarch64-apple-darwin")
@@ -33,12 +34,28 @@ describe("the bundled Codex executable", () => {
     expect(codexTargetTriple("linux", "ia32")).toBeUndefined()
   })
 
-  it("is installed for this machine", () => {
-    expect(bundledCodexExecutable()).toMatch(/codex(\.exe)?$/)
+  const npm = join("/npm", "node_modules", "@openai", "codex")
+  const script = join(npm, "bin", "codex.js")
+  const at =
+    (...paths: ReadonlyArray<string>) =>
+    (path: string) =>
+      paths.includes(path)
+
+  it("is found in the platform package npm installs inside the CLI's own", () => {
+    const vendor = join(npm, "node_modules", "@openai", "codex-win32-x64", "vendor")
+    const native = join(vendor, "x86_64-pc-windows-msvc", "bin", "codex.exe")
+    expect(codexNativeExecutable(script, "win32", "x64", at(native))).toBe(native)
   })
 
-  it("is missing for a platform nothing was installed for", () => {
-    expect(bundledCodexExecutable("aix", "ppc64")).toBeNull()
+  it("is found in a platform package installed next to the CLI", () => {
+    const vendor = join("/npm", "node_modules", "@openai", "codex-linux-arm64", "vendor")
+    const native = join(vendor, "aarch64-unknown-linux-musl", "codex", "codex")
+    expect(codexNativeExecutable(script, "linux", "arm64", at(native))).toBe(native)
+  })
+
+  it("is missing when npm put none there, or for a platform Codex is not built for", () => {
+    expect(codexNativeExecutable(script, "win32", "x64", () => false)).toBeUndefined()
+    expect(codexNativeExecutable(script, "aix", "ppc64", () => true)).toBeUndefined()
   })
 })
 

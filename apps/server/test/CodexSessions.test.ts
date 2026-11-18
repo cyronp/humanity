@@ -66,7 +66,6 @@ describe("threads on Codex", () => {
           "the agent to start",
           Effect.map(Ref.get(log.runs), (runs) => (runs.length === 1 ? runs : undefined)),
         )
-        // Codex's active account says nothing about which account a Claude thread runs as.
         yield* sessions.create({ projectId: project.id, prompt: "hi" })
         assert.deepStrictEqual(
           (yield* eventually(
@@ -79,14 +78,12 @@ describe("threads on Codex", () => {
           ],
         )
 
-        // An open thread still needs the account's login, and only Codex has this account.
         assert.strictEqual((yield* Effect.flip(codexAccounts.remove(work.id)))._tag, "AccountInUse")
         assert.strictEqual(
           (yield* Effect.flip(claudeAccounts.setActive(work.id)))._tag,
           "AccountNotFound",
         )
 
-        // Ended, the thread no longer holds the account.
         yield* sessions.end(onCodex.id, { removeWorktree: false })
         yield* codexAccounts.remove(work.id)
       }).pipe(Effect.provide(services(home, () => [{ hang: true }])))

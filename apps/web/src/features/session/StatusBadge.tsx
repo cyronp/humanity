@@ -12,7 +12,6 @@ const STATUS = {
   ended: { label: "ended", Icon: CircleStop, className: "" },
 } satisfies Record<SessionStatus, unknown>
 
-/** The badge takes the state's colour where it needs the human; the rest read plain. */
 const variantOf = (status: SessionStatus) => {
   const tone = STATUS_TONE[status]
   if (tone === "warning" || tone === "destructive") return tone

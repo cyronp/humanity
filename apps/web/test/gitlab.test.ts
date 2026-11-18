@@ -114,7 +114,6 @@ describe("the add-repository list with GitLab", () => {
       kind: "cloneGitLab",
       fullPath: "other/thing",
     })
-    // Listed already: the row itself is the way to add it.
     expect(
       typedChoice("https://gitlab.com/acme/tools/gadgets", [], projects, gitlab),
     ).toBeUndefined()

@@ -13,7 +13,6 @@ import { sessionViewAtom } from "@/features/session/atoms"
 import { Workspace } from "@/features/session/Workspace"
 import { describeCause } from "@/lib/errors"
 
-/** `?file=<path>` deep-links to a file change waiting for an answer. */
 const WorkspaceSearch = Schema.Struct({
   file: Schema.optional(Schema.String),
 })

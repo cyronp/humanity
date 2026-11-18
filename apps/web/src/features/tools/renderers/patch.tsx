@@ -17,7 +17,6 @@ const KIND_LABEL: Record<PatchedFile["kind"], string> = {
 
 const usePatch = (props: ToolCallProps) => useMemo(() => patchFiles(props.input), [props.input])
 
-/** A file change by Codex: one patch over one or more files, each shown as its diff. */
 export const patchRenderer: ToolRenderer = {
   name: "ApplyPatch",
   match: (toolName) => toolName === PATCH_TOOL,

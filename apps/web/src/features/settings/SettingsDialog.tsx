@@ -71,13 +71,11 @@ export function SettingsDialog() {
         showCloseButton={false}
         className="flex h-[min(50rem,var(--dialog-max-height))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(80rem,calc(100%-2rem))]"
         onEscapeKeyDown={(event) => {
-          // The first Escape clears a search; the next one closes the settings.
           if (query === "") return
           event.preventDefault()
           setQuery("")
         }}
         onKeyDown={(event) => {
-          // "/" jumps to the search, unless it is being typed somewhere.
           if (event.key !== "/" || isTyping(event.target)) return
           event.preventDefault()
           searchRef.current?.focus()
@@ -141,7 +139,6 @@ function SectionList({
       {groups.map(({ label, sections }, index) => (
         <Fragment key={sections[0]}>
           {index > 0 && (
-            // A line between groups in the narrow row; from md up, space and the group's name.
             <li role="none" className="flex shrink-0 items-center px-1 md:hidden">
               <Separator orientation="vertical" className="h-5" />
             </li>
@@ -181,7 +178,6 @@ function SectionList({
   )
 }
 
-/** Whether a key press lands in a field, where "/" is just a character. */
 const isTyping = (target: EventTarget): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))

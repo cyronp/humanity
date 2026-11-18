@@ -15,3 +15,5 @@ export const workingTreeDiffAtom = Atom.family((projectId: ProjectId) =>
 )
 
 export const createBranchAtom = HumanityClient.mutation("Git.createBranch")
+
+export const searchProjectFilesAtom = HumanityClient.mutation("Git.searchFiles")

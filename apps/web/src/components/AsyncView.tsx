@@ -5,11 +5,6 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Skeleton } from "@/components/ui/skeleton"
 import { describeCause } from "@/lib/errors"
 
-/**
- * Renders the three states of a query the same way everywhere: skeleton while
- * loading, a visible error on failure, `children` on success. A refresh keeps
- * the previous value on screen instead of flashing the skeleton.
- */
 export function AsyncView<A, E>({
   result,
   errorTitle,

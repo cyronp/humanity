@@ -6,42 +6,34 @@ export class CodexFailed extends Data.TaggedError("CodexFailed")<{
   readonly reason: string
 }> {}
 
-/** A notification from Codex, or a request it makes of Humanity. */
 export interface ServerMessage {
   readonly method: string
   readonly params: unknown
 }
 
-/** Humanity's answer to a request from Codex, and what to do once it is sent. */
 export interface ServerReply {
   readonly result: unknown
   readonly afterwards?: Effect.Effect<void>
 }
 
-/** One running `codex app-server`, spoken to over its standard input and output. */
 export interface AppServer {
   readonly cliVersion: string | undefined
   readonly codexHome: string | undefined
   readonly request: (method: string, params?: unknown) => Effect.Effect<unknown, CodexFailed>
-  /** What Codex reports, in order. Fails when the process stops on its own. */
   readonly notifications: Stream.Stream<ServerMessage, CodexFailed>
 }
 
 export interface AppServerOptions {
   readonly executable: string
+  readonly args?: ReadonlyArray<string> | undefined
   readonly cwd: string
   readonly env: Record<string, string>
-  /**
-   * Answers a request from Codex (an approval, a question). A failure goes
-   * back to Codex as an error. Interrupted when the connection closes.
-   */
   readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
 }
 
 const CLIENT_VERSION = "0.1.0"
 const HANDSHAKE_TIMEOUT = "30 seconds"
 
-/** Streams Humanity never shows: output as it is typed, thoughts as they form, the running diff. */
 const UNUSED_NOTIFICATIONS: ReadonlyArray<string> = [
   "item/commandExecution/outputDelta",
   "item/fileChange/outputDelta",
@@ -64,16 +56,11 @@ const parseLine = (line: string): Record<string, unknown> | undefined => {
   }
 }
 
-/** `humanity/0.169.0 (Windows 10; x86_64) …` → `0.169.0` */
 export const cliVersionOf = (userAgent: string): string | undefined =>
   /^[^/\s]+\/(\S+)/.exec(userAgent)?.[1]
 
 const decodeInitialize = decode(InitializeResponse)
 
-/**
- * Starts `codex app-server` and shakes hands with it. Messages are JSON, one
- * per line, in both directions. The process is stopped when the scope closes.
- */
 export const connectAppServer = (
   options: AppServerOptions,
 ): Effect.Effect<AppServer, CodexFailed, Scope.Scope | ChildProcessSpawner.ChildProcessSpawner> =>
@@ -89,7 +76,7 @@ export const connectAppServer = (
 
     const handle = yield* spawner
       .spawn(
-        ChildProcess.make(options.executable, ["app-server"], {
+        ChildProcess.make(options.executable, [...(options.args ?? []), "app-server"], {
           cwd: options.cwd,
           env: options.env,
           stdin: Stream.fromQueue(outbound).pipe(
@@ -126,7 +113,6 @@ export const connectAppServer = (
         if (typeof method === "string") {
           const incoming: ServerMessage = { method, params: message["params"] }
           if (id === undefined) yield* Queue.offer(notifications, incoming)
-          // Waiting for a human must not hold up what Codex says meanwhile.
           else yield* Effect.forkIn(answer(id, incoming), scope)
           return
         }

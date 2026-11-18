@@ -13,10 +13,6 @@ export const sessionsAtom = Atom.family((projectId: ProjectId) =>
   ),
 )
 
-/**
- * Every session of every project, most recently active first, kept live by
- * `Sessions.watchAll`. Feeds the sidebar and the home page's project choice.
- */
 export const allSessionsAtom = HumanityClient.runtime
   .atom(() =>
     Stream.unwrap(
@@ -25,17 +21,9 @@ export const allSessionsAtom = HumanityClient.runtime
   )
   .pipe(Atom.keepAlive)
 
-/** How long events gather before the view is updated with all of them at once. */
 const BATCH_WINDOW = "50 millis"
-/** A burst this long is applied at once, without waiting out the window. */
 const BATCH_SIZE = 512
 
-/**
- * The live view of one session: the subscription's snapshot plus every event
- * since, folded by `reduceSessionEvent`. A dropped connection resubscribes and
- * the fresh snapshot replaces the old state. Events are folded in batches, so
- * a streaming reply updates the page at most every 50ms instead of once per token.
- */
 export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.runtime.atom(
     Stream.unwrap(
@@ -48,7 +36,6 @@ export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** A page of the messages a snapshot left out, just before a given one. */
 export const earlierMessagesAtom = HumanityClient.mutation("Sessions.earlierMessages")
 
 export const createSessionAtom = HumanityClient.mutation("Sessions.create")
@@ -58,7 +45,6 @@ export const setAutonomyAtom = HumanityClient.mutation("Sessions.setAutonomy")
 export const setModelAtom = HumanityClient.mutation("Sessions.setModel")
 export const setEffortAtom = HumanityClient.mutation("Sessions.setEffort")
 
-/** A stored attachment's bytes, keyed `<sessionId>/<attachmentId>`. Used for image thumbnails. */
 export const attachmentAtom = Atom.family((key: string) => {
   const [sessionId = "", attachmentId = ""] = key.split("/")
   return HumanityClient.query("Sessions.attachment", {
@@ -66,15 +52,15 @@ export const attachmentAtom = Atom.family((key: string) => {
     attachmentId,
   })
 })
-/** The same bytes on demand, for opening a file in a new tab. */
 export const fetchAttachmentAtom = HumanityClient.mutation("Sessions.attachment")
 export const interruptAtom = HumanityClient.mutation("Sessions.interrupt")
-/** The new numbers also arrive as `UsageUpdated` on the session's stream. */
 export const refreshUsageAtom = HumanityClient.mutation("Sessions.refreshUsage")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 
 export const decideChangeAtom = HumanityClient.mutation("Approvals.decideChange")
 export const decideConfirmationAtom = HumanityClient.mutation("Approvals.decideConfirmation")
+
+export const searchSessionFilesAtom = HumanityClient.mutation("Sessions.searchFiles")
 
 export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.query(
@@ -84,7 +70,6 @@ export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** The commits of a session's branch, read from git wherever the checkout is now. */
 export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.query(
     "Sessions.commits",
@@ -95,7 +80,6 @@ export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
 
 export const commitAtom = HumanityClient.mutation("Sessions.commit")
 
-/** The session's branch against its remote. Read from git, so refreshing it asks no forge. */
 export const publicationAtom = Atom.family((sessionId: SessionId) =>
   HumanityClient.query(
     "PullRequests.publication",
@@ -104,15 +88,9 @@ export const publicationAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** Names the feed of one session on one branch; a new branch is a new feed. */
 export const feedKey = (sessionId: SessionId, branch: string | null): string =>
   `${sessionId}\n${branch ?? ""}`
 
-/**
- * The pull request of a session's branch with its checks and comments, pushed
- * by the daemon. It asks the forge only while someone watches, so a page that
- * is hidden stops watching and keeps showing what it last heard.
- */
 export const pullRequestFeedAtom = Atom.family((key: string) => {
   const sessionId = SessionId.make(key.split("\n")[0] ?? "")
   return HumanityClient.runtime.atom(
@@ -125,7 +103,6 @@ export const pullRequestFeedAtom = Atom.family((key: string) => {
   )
 })
 
-/** Asks the forge again now; the answer arrives on the feed. */
 export const refreshPullRequestAtom = HumanityClient.mutation("PullRequests.refresh")
 
 export const pushAtom = HumanityClient.mutation("PullRequests.push")

@@ -32,28 +32,17 @@ const config = resolveDesktopConfig({
   appPath: app.getAppPath(),
 })
 
-// Before anything else: the instance lock and Chromium's profile both live there.
 mkdirSync(config.userDataDir, { recursive: true })
 app.setPath("userData", config.userDataDir)
 
-/**
- * The theme the page was last in, kept next to Chromium's profile: the window
- * opens in it, before any page can say. The system's theme until one has.
- */
 const themePath = join(config.userDataDir, "theme")
 let dark = nativeTheme.shouldUseDarkColors
 try {
   const remembered = readFileSync(themePath, "utf8").trim()
   if (remembered === "dark" || remembered === "light") dark = remembered === "dark"
 } catch {
-  // First start: nothing remembered yet.
 }
 
-/**
- * No title bar of the system's: the web app's own top bar takes its place, and
- * the window buttons are drawn over its right end. macOS keeps its title bar
- * for now, where the buttons would land on the sidebar's left end instead.
- */
 const ownsTitleBar = process.platform !== "darwin"
 const frame = (): BrowserWindowConstructorOptions =>
   ownsTitleBar ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlay(dark) } : {}
@@ -68,7 +57,6 @@ const loadApp = () => {
   void window.loadURL(appUrl(config.origin, TOKEN_PARAM, readToken()))
 }
 
-/** Why this app cannot update itself, or `undefined` when it can. */
 const updatesUnsupported = (): string | undefined => {
   if (!app.isPackaged) return "This is a development build. Updates install in the packaged app."
   if (process.platform !== "win32") return "Updates are not available on this system yet."
@@ -83,15 +71,12 @@ const createWindow = () => {
     minHeight: 560,
     title: "Humanity",
     autoHideMenuBar: true,
-    // Shown until a page paints, and between the pages of the loading sequence.
     backgroundColor: backdropColor(dark),
     ...frame(),
-    // A packaged app takes its icon from the executable.
     ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   })
   const created = window
-  // The page says which theme it is in; the window buttons follow it.
   created.webContents.on("did-change-theme-color", (_event, color) => {
     const pageDark = isDarkColor(color)
     if (pageDark === undefined) return
@@ -108,7 +93,6 @@ const createWindow = () => {
   else void window.loadURL(splashUrl(brandMark, dark))
 }
 
-/** The page only ever shows Humanity; every other link opens in the human's browser. */
 const confine = (contents: WebContents) => {
   contents.on("will-navigate", (event, url) => {
     const destination = destinationOf(url, config.origin)
@@ -123,7 +107,6 @@ const confine = (contents: WebContents) => {
       ? {
           action: "allow",
           overrideBrowserWindowOptions: {
-            // A tab the page opened is not the app: it gets an ordinary window.
             titleBarStyle: "default",
             autoHideMenuBar: true,
             webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
@@ -138,7 +121,6 @@ const start = () => {
   const stop = Effect.runSync(Deferred.make<void>())
 
   let updatesStarted = false
-  /** Talks to the daemon about updates once it is up; reconnects by itself after a restart. */
   const startUpdates = () => {
     if (updatesStarted) return
     updatesStarted = true
@@ -153,7 +135,6 @@ const start = () => {
           unsupported === undefined
             ? makeElectronUpdater({
                 cacheBase: join(config.home, "updates"),
-                // The daemon stops its agents and closes the database before the installer runs.
                 beforeInstall: stopDaemon,
               })
             : undefined,
@@ -161,7 +142,6 @@ const start = () => {
     )
   }
 
-  /** Resolves once the daemon is gone: with what it last printed if it never came up. */
   const supervision = runtime.runPromise(
     supervise({
       daemon: config.daemon,
@@ -169,7 +149,6 @@ const start = () => {
       stop,
       onOutput: (chunk) => process.stdout.write(chunk),
       onReady: Effect.sync(() => {
-        // A daemon that came back after a crash is found again by the page itself.
         if (daemonReady) return
         daemonReady = true
         loadApp()
@@ -199,7 +178,6 @@ const start = () => {
     await supervision
   }
 
-  // Quitting waits for the daemon, so it can stop its agents and close the database.
   app.on("before-quit", (event) => {
     if (finished) return
     event.preventDefault()

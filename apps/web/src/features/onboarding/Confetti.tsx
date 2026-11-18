@@ -5,7 +5,6 @@ const COLORS = ["#3b82f6", "#60a5fa", "#f59e0b", "#10b981", "#ef4444", "#a855f7"
 const PIECES = 160
 const GRAVITY = 0.25
 const DRAG = 0.985
-/** A hard stop, in case a piece never leaves the screen. */
 const MAX_MS = 6000
 
 interface Piece {
@@ -19,7 +18,6 @@ interface Piece {
   color: string
 }
 
-/** Thrown up and inward from one of the two bottom corners. */
 const makePiece = (index: number, width: number, height: number): Piece => {
   const fromLeft = index % 2 === 0
   const direction = (Math.PI / 180) * (50 + Math.random() * 30)
@@ -39,10 +37,6 @@ const makePiece = (index: number, width: number, height: number): Piece => {
 export const prefersReducedMotion = (): boolean =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
-/**
- * One burst of confetti over the whole window. It never takes a click, and
- * calls `onDone` once every piece has fallen out of view.
- */
 export function Confetti({ onDone }: { readonly onDone: () => void }) {
   const ref = useRef<HTMLCanvasElement>(null)
 

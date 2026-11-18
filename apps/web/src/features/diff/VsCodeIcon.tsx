@@ -1,11 +1,6 @@
 import { cn } from "cn"
 import { type SVGProps, useId } from "react"
 
-/**
- * VS Code's logo in its brand colours. Decorative: the control it sits in
- * names VS Code. Its mask, filters and gradient get ids of their own per
- * instance, so many logos on one page don't borrow each other's.
- */
 export function VsCodeIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "")
   const mask = `${id}-mask`
@@ -74,7 +69,6 @@ export function VsCodeIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** The soft shadow each of the logo's two lower folds casts. */
 function DropShadow({
   id,
   ...region

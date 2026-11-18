@@ -64,13 +64,6 @@ import { keys } from "@/lib/rpc"
 import { closeAddRepository, useAddRepositoryOpen } from "./addRepository.ts"
 import { addLocalProjectAtom, folderQueryAtom, foldersAtom, projectsAtom } from "./atoms.ts"
 
-/**
- * Adds a repository as a project: a searchable palette at the top of the
- * page, like the branch picker, listing the repositories of the connected
- * GitHub and GitLab accounts. Typing `owner/repo`, a GitHub or GitLab URL or a
- * folder path offers that repository too, and its footer always offers a
- * folder on this computer, for a repository that is cloned already.
- */
 export function AddRepositoryDialog() {
   const open = useAddRepositoryOpen()
   return (
@@ -88,15 +81,12 @@ export function AddRepositoryDialog() {
   )
 }
 
-/** What is being added right now, in the words shown while it runs. */
 type Job =
   | { readonly kind: "clone"; readonly target: CloneTarget }
   | { readonly kind: "local"; readonly path: string }
 
-/** Lives only while the palette is open, so every opening starts from the list. */
 function AddRepository() {
   const [job, setJob] = useState<Job>()
-  // The path being typed in the folder step; `undefined` while the list shows.
   const [folder, setFolder] = useState<string>()
   const [localError, setLocalError] = useState<string>()
   const [clone, startClone] = useAtom(cloneAtom)
@@ -104,13 +94,11 @@ function AddRepository() {
   const refreshProjects = useAtomRefresh(projectsAtom)
   const navigate = useNavigate()
 
-  // A clone belongs to one opening: forget the last one, and stop one still running on close.
   useEffect(() => {
     startClone(Atom.Reset)
     return () => startClone(Atom.Interrupt)
   }, [startClone])
 
-  /** The new project's first thread is one click away: open the new chat in it. */
   const open = (project: Project) => {
     closeAddRepository()
     void navigate({ to: "/", search: { project: project.id } })
@@ -197,7 +185,6 @@ function AddRepository() {
             onClick={() => {
               startClone(Atom.Reset)
               setLocalError(undefined)
-              // A path that failed goes back to be corrected, wherever it was typed.
               setFolder(job.kind === "local" ? job.path : undefined)
               setJob(undefined)
             }}
@@ -211,12 +198,6 @@ function AddRepository() {
   )
 }
 
-/**
- * A path typed or pasted in a search field of its own. As it is typed, the
- * daemon lists the folders that complete it: Enter on a repository adds it,
- * on any other folder goes into it. A path that ends in a separator offers
- * that folder itself first.
- */
 function FolderStep({
   value,
   onChange,
@@ -237,7 +218,6 @@ function FolderStep({
   const result = useAtomValue(foldersAtom)
   const matches = AsyncResult.isSuccess(result) ? result.value : undefined
 
-  // The last list stays while the next one loads, narrowed to what is typed now.
   const listed =
     query !== undefined && matches !== undefined && matches.query.folder === query.folder
       ? matches
@@ -248,11 +228,9 @@ function FolderStep({
       : listed.entries.filter((entry) =>
           entry.name.toLowerCase().startsWith(query.prefix.toLowerCase()),
         )
-  // A list that could not be had is as good as an empty one: the typed path can still be added.
   const settled =
     AsyncResult.isFailure(result) ||
     (listed !== undefined && listed.query.prefix === query?.prefix && !result.waiting)
-  // The typed path itself: first when it names a folder, else only when nothing completes it.
   const addFirst = path !== undefined && query?.prefix === ""
   const addLast =
     path !== undefined && !addFirst && (query === undefined || (settled && entries.length === 0))
@@ -383,12 +361,10 @@ function RepositoryList({
   const needle = repoNeedle(search, gitlab?.host)
   const accountsPending =
     AsyncResult.isInitial(connection) || AsyncResult.isInitial(gitlabConnection)
-  // Until the accounts are known, and then their repositories, the list is still loading.
   const loading =
     accountsPending ||
     (connected && repos === undefined) ||
     (gitlabConnected && gitlabRepos === undefined)
-  // What keeps repositories from being listed, when no account lists any.
   const unlisted =
     accountsPending || connected || gitlabConnected
       ? undefined
@@ -400,7 +376,6 @@ function RepositoryList({
 
   return (
     <Command
-      // Plain substring search: predictable for names, and a pasted URL finds its repository.
       filter={(value, _search, keywords) =>
         [value, ...(keywords ?? [])].some((text) => text.toLowerCase().includes(needle)) ? 1 : 0
       }
@@ -515,7 +490,6 @@ function RepositoryList({
   )
 }
 
-/** The repositories of the connected account that are not projects yet, newest activity first. */
 function GitHubRepos({
   login,
   projects,
@@ -524,7 +498,6 @@ function GitHubRepos({
 }: {
   readonly login: string
   readonly projects: ReadonlyArray<Project>
-  /** Hands the whole list up, so typed text is only offered when the list lacks it. */
   readonly onLoaded: (repos: ReadonlyArray<GitHubRepo>) => void
   readonly onClone: (target: CloneTarget) => void
 }) {
@@ -561,7 +534,6 @@ function GitHubRepos({
   )
 }
 
-/** The same for the connected GitLab instance. */
 function GitLabRepos({
   host,
   username,
@@ -608,14 +580,12 @@ function GitLabRepos({
   )
 }
 
-/** Two lines, like a branch: the repository and when it last changed, then what it is. */
 function RepoRow({
   name,
   repo,
   now,
   onSelect,
 }: {
-  /** The repository as its host writes it: `owner/repo` or `group/subgroup/name`. */
   readonly name: string
   readonly repo: Pick<GitHubRepo, "description" | "private" | "updatedAt">
   readonly now: number
@@ -660,7 +630,6 @@ function ListSkeleton() {
   )
 }
 
-/** One line under the list: what else there is to do, and the button that does it. */
 function FooterRow({
   icon: Icon,
   action,

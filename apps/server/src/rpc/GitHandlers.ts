@@ -1,15 +1,13 @@
 import { GitRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
+import { FileSearchService } from "../services/FileSearchService.ts"
 import { GitService } from "../services/GitService.ts"
 import { ProjectService } from "../services/ProjectService.ts"
 
-/**
- * Git RPCs act on the project's own repository, read-only apart from creating
- * a branch ref. Nothing here checks out or edits the user's working copy.
- */
 export const GitHandlers = GitRpcs.toLayer(
   Effect.gen(function* () {
     const projects = yield* ProjectService
+    const files = yield* FileSearchService
     const git = yield* GitService
 
     return GitRpcs.of({
@@ -23,6 +21,10 @@ export const GitHandlers = GitRpcs.toLayer(
         Effect.flatMap(projects.get(projectId), (project) => git.status(project.localPath)),
       "Git.diff": ({ projectId }) =>
         Effect.flatMap(projects.get(projectId), (project) => git.diff(project.localPath)),
+      "Git.searchFiles": ({ projectId, query, recent }) =>
+        Effect.flatMap(projects.get(projectId), (project) =>
+          files.search(project.localPath, query, recent),
+        ),
     })
   }),
 )

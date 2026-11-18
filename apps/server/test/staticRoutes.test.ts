@@ -7,7 +7,6 @@ import { join } from "node:path"
 import { staticRoutes } from "../src/http/HttpApp.ts"
 import { tempDir } from "./helpers.ts"
 
-/** A built web app: an index page and one hashed asset. */
 const fakeBuild = Effect.gen(function* () {
   const dist = yield* tempDir()
   mkdirSync(join(dist, "assets"))
@@ -29,7 +28,6 @@ const serve = (dist: string) =>
     Effect.map(
       ({ handler }) =>
         (path: string) =>
-          // As a browser asks: the SPA fallback answers navigations, which accept HTML.
           Effect.promise(() =>
             handler(new Request(`http://127.0.0.1${path}`, { headers: { accept: "text/html" } })),
           ),
@@ -53,7 +51,6 @@ describe("staticRoutes", () => {
         assert.include(yield* Effect.promise(() => page.text()), "<title>Humanity</title>")
       }
 
-      // An asset of another build is missing, not the page in its place.
       assert.strictEqual((yield* get("/assets/index-old999.js")).status, 404)
     }).pipe(Effect.scoped),
   )

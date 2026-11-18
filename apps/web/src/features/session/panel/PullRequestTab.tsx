@@ -42,19 +42,13 @@ const CHECK_ICON: Record<
   neutral: { Icon: CircleMinus, className: "text-muted-foreground" },
 }
 
-/**
- * The branch's pull request: its CI checks and every comment on it. The
- * daemon follows it and sends what changes, so this tab never asks the forge.
- */
 export function PullRequestTab({
   session,
   onOpenCommit,
 }: {
   readonly session: Session
-  /** Shows the commit tab, where a pull request is opened. */
   readonly onOpenCommit: () => void
 }) {
-  // Git alone says which host this is and which branch to follow.
   const publication = useAtomValue(publicationAtom(session.id))
   return (
     <AsyncView result={publication} errorTitle="Could not read the branch">
@@ -76,7 +70,6 @@ export function PullRequestTab({
   )
 }
 
-/** What the forge last said of the branch, under a note when it isn't being asked as usual. */
 function Followed({
   session,
   forge,
@@ -101,7 +94,6 @@ function Followed({
               No branch is checked out.
             </p>
           ) : (
-            // Until the forge answered once, nobody knows whether there is one.
             value.fetchedAt !== null && (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <p className="text-sm text-muted-foreground">

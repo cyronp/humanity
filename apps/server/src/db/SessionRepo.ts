@@ -79,7 +79,6 @@ const toAttachment = (row: typeof AttachmentRow.Type): Attachment => ({
 
 const MessageJson = Schema.fromJsonString(MessageContent)
 
-/** The tool calls a run of messages started, in order. */
 const toolUseIdsOf = (messages: ReadonlyArray<ChatMessage>): Array<string> =>
   messages.flatMap((message) =>
     message.content._tag === "assistant"
@@ -135,7 +134,6 @@ const toToolCall = (row: typeof ToolCallRow.Type): ToolCall => ({
   finishedAt: row.finished_at,
 })
 
-/** JSON text for a value that may not be serializable (the SDK's raw messages). */
 const safeJson = (value: unknown): string => {
   try {
     return JSON.stringify(value) ?? "null"
@@ -145,24 +143,19 @@ const safeJson = (value: unknown): string => {
 }
 
 export interface ImportIndex {
-  /** Imported threads by the Claude Code session they came from. */
   readonly bySource: ReadonlyMap<
     string,
     {
       readonly sessionId: SessionId
-      /** The transcript's mtime at the last import; `null` once continued in Humanity. */
       readonly mtime: number | null
     }
   >
-  /** Every Agent SDK session id a thread has, imported or not. */
   readonly sdkSessionIds: ReadonlySet<string>
 }
 
 export interface ImportedThreadRows {
   readonly session: Session
-  /** The Claude Code session the thread came from. */
   readonly sourceId: string
-  /** The transcript's mtime, in milliseconds. */
   readonly mtime: number
   readonly messages: ReadonlyArray<{ readonly message: ChatMessage; readonly raw: unknown }>
   readonly toolCalls: ReadonlyArray<ToolCall>
@@ -175,14 +168,12 @@ const ImportIndexRow = Schema.Struct({
   import_mtime: Schema.NullOr(Schema.Number),
 })
 
-/** Persistence for sessions, their messages and tool calls. Rows are decoded with Schema. */
 export class SessionRepo extends Context.Service<
   SessionRepo,
   {
     readonly insert: (session: Session) => Effect.Effect<void>
     readonly get: (sessionId: string) => Effect.Effect<Option.Option<Session>>
     readonly listByProject: (projectId: string) => Effect.Effect<ReadonlyArray<Session>>
-    /** Every session of every project, most recently active first. */
     readonly listAll: Effect.Effect<ReadonlyArray<Session>>
     readonly listByStatus: (
       statuses: ReadonlyArray<SessionStatus>,
@@ -193,43 +184,22 @@ export class SessionRepo extends Context.Service<
         readonly status?: SessionStatus
         readonly sdkSessionId?: string
         readonly autonomy?: Autonomy
-        /** `null` stores Claude Code's default. */
         readonly model?: string | null
-        /** `null` stores the model's default effort. */
         readonly effort?: ReasoningEffort | null
-        /** The branch the session's folder is on, when the agent switched it. */
         readonly branch?: string
-        /** Set together when the session moves into its own worktree. */
         readonly worktree?: { readonly branch: string; readonly path: string }
-        /** Stops refreshing an imported thread from its Claude Code transcript. */
         readonly detachImport?: true
         readonly updatedAt: string
       },
     ) => Effect.Effect<void>
-    /**
-     * Which Claude Code conversations Humanity already knows: the imported
-     * ones by the session they came from, and every `sdk_session_id`.
-     */
     readonly importIndex: Effect.Effect<ImportIndex>
-    /**
-     * Writes an imported thread with its whole transcript, replacing what an
-     * earlier import of the same thread stored. One transaction, so a thread
-     * is never seen half imported. `false` when the thread was continued in
-     * Humanity meanwhile, and nothing was written.
-     */
     readonly writeImported: (imported: ImportedThreadRows) => Effect.Effect<boolean>
-    /** The limits the session last heard about; all `null` until the agent reports them. */
-    /** The added Claude account a session runs as; `null` is Claude Code's default login. */
     readonly getAccountId: (sessionId: string) => Effect.Effect<string | null>
     readonly setAccountId: (sessionId: string, accountId: string | null) => Effect.Effect<void>
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
-    /**
-     * The latest `TRANSCRIPT_PAGE_SIZE` messages, or those just before the
-     * message `before`, with the tool calls they started.
-     */
     readonly transcriptPage: (
       sessionId: string,
       before?: string | undefined,
@@ -306,7 +276,6 @@ export class SessionRepo extends Context.Service<
           limit: Schema.Number,
         }),
         Result: MessageRow,
-        // Newest first, so LIMIT keeps the end of the transcript.
         execute: ({ sessionId, before, limit }) =>
           before === null
             ? sql`SELECT id, session_id, normalized_json, created_at FROM messages WHERE session_id = ${sessionId} ORDER BY rowid DESC LIMIT ${limit}`
@@ -420,7 +389,6 @@ export class SessionRepo extends Context.Service<
         findUsage(sessionId).pipe(
           Effect.map((row) =>
             row.pipe(
-              // A value written by another version of Humanity reads as "nothing reported yet".
               Option.flatMap(({ usage_json }) => decodeUsage(usage_json)),
               Option.getOrElse(() => NO_USAGE),
             ),
@@ -508,7 +476,6 @@ export class SessionRepo extends Context.Service<
 
       const transcriptPage = (sessionId: string, before?: string | undefined) =>
         Effect.gen(function* () {
-          // One more than a page, to learn whether anything is left before it.
           const rows = yield* findMessagePage({
             sessionId,
             before: before ?? null,
@@ -516,7 +483,6 @@ export class SessionRepo extends Context.Service<
           })
           const messages = rows.slice(0, TRANSCRIPT_PAGE_SIZE).reverse().map(toMessage)
           const toolUseIds = toolUseIdsOf(messages)
-          // A few hundred at a time, well under SQLite's limit on bound values.
           const toolCalls = yield* Effect.forEach(chunksOf(toolUseIds, 500), (chunk) =>
             findToolCallsOf({ sessionId, toolUseIds: chunk }),
           )
@@ -566,7 +532,6 @@ export class SessionRepo extends Context.Service<
               ? {}
               : { structured: changes.structuredOutput }),
           }).pipe(
-            // A structured output that does not serialize must not lose the result itself.
             Effect.catch(() => encodeOutput({ result: changes.output })),
           )
           yield* sql`
@@ -621,7 +586,6 @@ export class SessionRepo extends Context.Service<
         toolCalls,
       }: ImportedThreadRows) =>
         Effect.gen(function* () {
-          // Continued in Humanity since the import was planned: its messages are the human's now.
           const existing = yield* findImportMtime(session.id)
           if (Option.isSome(existing) && existing.value.import_mtime === null) return false
           yield* sql`

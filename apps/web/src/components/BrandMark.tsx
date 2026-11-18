@@ -1,12 +1,6 @@
 import type { SVGProps } from "react"
 import { cn } from "cn"
 
-/**
- * Humanity's brand mark: a 24×24 pixel halftone of the head of Michelangelo's
- * David. Each layer is one path of 1×1 cells at a fixed opacity, all drawn in
- * `currentColor`; at 24px every cell lands on one CSS pixel. The favicon
- * (`public/favicon.svg`) is the same mark in blue-500.
- */
 const LAYERS: ReadonlyArray<readonly [opacity: number, d: string]> = [
   [
     0.25,

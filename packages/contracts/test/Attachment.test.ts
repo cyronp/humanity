@@ -39,7 +39,6 @@ describe("checkAttachment", () => {
     const zip = checkAttachment(bytes("PK", [3, 4, 0x14, 0, 0xff, 0xfe]))
     expect(zip.ok).toBe(false)
     if (!zip.ok) expect(zip.reason).toMatch(/Save Word, Excel or other documents as PDF/)
-    // Valid UTF-8 with a NUL byte is still binary.
     expect(checkAttachment(bytes("abc", [0], "def")).ok).toBe(false)
     expect(checkAttachment(new Uint8Array()).ok).toBe(false)
   })

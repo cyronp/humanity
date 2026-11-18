@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { githubBranchesAtom } from "./atoms.ts"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-/** Branches as GitHub sees them. Start a session from any `origin/<name>` in the session form. */
 export function GitHubBranchesCard({
   project,
   fullName,

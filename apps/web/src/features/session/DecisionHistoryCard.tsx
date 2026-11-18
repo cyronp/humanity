@@ -17,7 +17,6 @@ const when = (record: ApprovalRecord) => {
   return { iso: at, label: new Date(at).toLocaleString() }
 }
 
-/** Everything the human allowed or denied across the project's sessions, newest first. */
 export function DecisionHistoryCard({ project }: { readonly project: Project }) {
   const history = useAtomValue(historyAtom(project.id))
   return (
@@ -66,7 +65,6 @@ function HistoryRow({
   const sessionId =
     approval._tag === "change" ? approval.change.sessionId : approval.confirmation.sessionId
   const time = when(record)
-  // A change still waiting links straight to it.
   const search =
     approval._tag === "change" && approval.change.status === "pending"
       ? { file: approval.change.filePath }

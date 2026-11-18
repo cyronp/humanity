@@ -15,7 +15,6 @@ import { InlineError } from "@/components/InlineError"
 import { PinDefaultButton } from "@/components/PinDefaultButton"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 
-/** The model's own choice. Picking it sends no effort, so the session follows the model. */
 const DEFAULT = "default"
 
 interface EffortOption {
@@ -24,7 +23,6 @@ interface EffortOption {
   readonly description: string
 }
 
-/** From the least to the most thinking, after the model's default. */
 export const EFFORT_OPTIONS: ReadonlyArray<EffortOption> = [
   { value: DEFAULT, label: "Default", description: "The effort the model picks on its own." },
   { value: "low", label: "Low", description: "Fastest. For small, well-defined tasks." },
@@ -38,11 +36,6 @@ export const EFFORT_OPTIONS: ReadonlyArray<EffortOption> = [
   },
 ]
 
-/**
- * How hard the model reasons in a thread, chosen before it starts or changed
- * while it is open. `null` means the model's default. The pin on an option
- * makes it the effort every new thread starts with.
- */
 export function ReasoningPicker({
   value,
   onChange,

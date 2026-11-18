@@ -115,7 +115,6 @@ describe("MCP configurations", () => {
     assert.deepStrictEqual(kept, {
       config: { _tag: "stdio", command: "srv", args: ["--x"], env: { TOKEN: "t0k", MODE: "fast" } },
     })
-    // Nothing saved under that name: the human must enter one.
     assert.deepStrictEqual(
       mcpConfigFromInput(
         { _tag: "http", url: "https://x.dev", headers: [{ name: "X", value: null }] },

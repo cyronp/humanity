@@ -19,7 +19,6 @@ const currentStatus = UpdateService.use((updates) =>
   updates.watch.pipe(Stream.take(1), Stream.runHead),
 ).pipe(Effect.map((head) => (head._tag === "Some" ? head.value : undefined)))
 
-/** Runs `attachDesktop` in the background, its commands collected into a queue. */
 const attach = (version: string) =>
   Effect.gen(function* () {
     const updates = yield* UpdateService
@@ -28,7 +27,6 @@ const attach = (version: string) =>
       Stream.runForEach((command) => Queue.offer(received, command)),
       Effect.forkScoped,
     )
-    // The first command proves the connection is registered.
     const first = yield* Queue.take(received)
     return { fiber, received, first }
   })

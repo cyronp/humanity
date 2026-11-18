@@ -1,10 +1,5 @@
 import { Cause, Predicate } from "effect"
 
-/**
- * Turns whatever an RPC failed with into one sentence for the human. Tagged
- * errors from the contracts carry an actionable `message`; anything else is a
- * defect and is shown as such rather than swallowed.
- */
 export const describeError = (error: unknown): string => {
   if (Predicate.isTagged(error, "RpcClientError")) {
     return "Lost the connection to the Humanity daemon. Check that it is still running."

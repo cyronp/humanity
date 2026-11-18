@@ -50,11 +50,9 @@ const toProject = (row: typeof ProjectRow.Type): Project => ({
   createdAt: row.created_at,
 })
 
-/** How many folders a completion offers, and how many names it looks at to find them. */
 const MAX_FOLDERS = 50
 const MAX_CANDIDATES = 500
 
-// Windows and default macOS file systems are case-insensitive.
 const samePath = (a: string, b: string) =>
   process.platform === "linux" ? a === b : a.toLowerCase() === b.toLowerCase()
 
@@ -63,48 +61,25 @@ export class ProjectService extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<Project>>
     readonly get: (projectId: string) => Effect.Effect<Project, ProjectNotFound>
-    /** Registers an existing local repository. Nothing inside it is modified. */
     readonly addLocal: (
       path: string,
     ) => Effect.Effect<Project, PathNotFound | GitError | ProjectAlreadyExists>
-    /**
-     * The folders in `folder` whose names start with `prefix`, to complete a
-     * path as it is typed; hidden ones only for a prefix that starts with a
-     * dot. Empty when the folder cannot be read. Only reads.
-     */
     readonly listFolders: (
       folder: string,
       prefix: string,
     ) => Effect.Effect<ReadonlyArray<FolderEntry>>
-    /**
-     * Sets the autonomy the project's new threads start with; `null` follows
-     * the human's default for every project.
-     */
     readonly setDefaultAutonomy: (
       projectId: string,
       autonomy: Autonomy | null,
     ) => Effect.Effect<Project, ProjectNotFound>
-    /** Deletes Humanity's records and session worktrees. The repository itself is left alone. */
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
-    /**
-     * The project's favicon, looked up in the usual places of its working copy
-     * (including `apps/*` and `packages/*` in a monorepo). Only reads.
-     */
     readonly icon: (projectId: string) => Effect.Effect<ProjectIcon | null, ProjectNotFound>
-    /**
-     * Clones `owner/repo` into `<home>/repos/<owner>/<repo>`, streaming git's
-     * progress, and adds the clone as a project when it finishes.
-     */
     readonly cloneFromGitHub: (
       fullName: string,
     ) => Stream.Stream<
       CloneEvent,
       GitHubError | CloneTargetExists | ProjectAlreadyExists | PathNotFound | GitError
     >
-    /**
-     * Clones `group/name` of the connected GitLab instance into
-     * `<home>/repos/<host>/<group>/<name>`, the same way.
-     */
     readonly cloneFromGitLab: (
       fullPath: string,
     ) => Stream.Stream<
@@ -160,7 +135,6 @@ export class ProjectService extends Context.Service<
           )
           .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }))
           .slice(0, MAX_CANDIDATES)
-        // A folder the daemon may not stat (a system folder, a broken link) is left out.
         const isFolder = (name: string) =>
           fs.stat(join(dir, name)).pipe(
             Effect.map((info) => info.type === "Directory"),
@@ -179,7 +153,6 @@ export class ProjectService extends Context.Service<
       })
 
       const addLocal = Effect.fn("ProjectService.addLocal")(function* (path: string) {
-        // `~/code/app` is offered by the web app, which cannot know whose home `~` is.
         const trimmed = expandHome(path.trim(), homedir())
         const isDirectory = yield* fs.stat(trimmed).pipe(
           Effect.map((info) => info.type === "Directory"),
@@ -194,7 +167,6 @@ export class ProjectService extends Context.Service<
         }
 
         const origin = yield* git.originUrl(localPath)
-        // A remote is GitLab's when it is on gitlab.com or on the instance Humanity is connected to.
         const gitlabHosts = [(yield* gitlab.credentials).host, GITLAB_DEFAULT_HOST]
         const project: Project = {
           id: ProjectId.make(randomUUID()),
@@ -242,7 +214,6 @@ export class ProjectService extends Context.Service<
 
       const remove = Effect.fn("ProjectService.remove")(function* (projectId: string) {
         const project = yield* get(projectId)
-        // Only worktrees Humanity created under its data directory are removed.
         const worktrees = yield* sessionWorktrees(projectId).pipe(Effect.orDie)
         yield* Effect.forEach(
           worktrees.filter((row) => isInsideDir(config.worktreesDir, row.worktree_path)),
@@ -258,7 +229,6 @@ export class ProjectService extends Context.Service<
           { discard: true },
         )
         yield* sql`DELETE FROM projects WHERE id = ${projectId}`.pipe(Effect.orDie)
-        // The database rows go with the project; the attached files are Humanity's to delete too.
         yield* Effect.forEach(
           worktrees,
           (row) => {
@@ -271,7 +241,6 @@ export class ProjectService extends Context.Service<
         )
       })
 
-      /** The icon file at `relativePath`, if it is a small image inside the repository. */
       const readIcon = (root: string, relativePath: string) =>
         Effect.gen(function* () {
           const mimeType = iconMimeType(relativePath)
@@ -280,7 +249,6 @@ export class ProjectService extends Context.Service<
           const info = yield* fs.stat(path).pipe(Effect.option)
           if (Option.isNone(info) || info.value.type !== "File") return undefined
           if (Number(info.value.size) > MAX_ICON_BYTES) return undefined
-          // A symlink must not lead the daemon to read files outside the repository.
           const real = yield* fs.realPath(path).pipe(Effect.option)
           const realRoot = yield* fs.realPath(root).pipe(Effect.option)
           if (
@@ -313,7 +281,6 @@ export class ProjectService extends Context.Service<
         return null
       })
 
-      /** Clones `cloneUrl` into `target`, a folder under the repos directory that must not exist yet. */
       const cloneInto = Effect.fn("ProjectService.cloneInto")(function* (
         cloneUrl: string,
         target: string,
@@ -338,7 +305,6 @@ export class ProjectService extends Context.Service<
           addLocal(target).pipe(Effect.map((project): CloneEvent => ({ _tag: "Cloned", project }))),
         )
         return Stream.concat(progress, added).pipe(
-          // A failed or abandoned clone leaves nothing behind; the folder did not exist before.
           Stream.onExit((exit) =>
             exit._tag === "Success"
               ? Effect.void
@@ -365,11 +331,9 @@ export class ProjectService extends Context.Service<
           Effect.gen(function* () {
             const repo = yield* gitlab.getRepo(fullPath)
             const { host, token } = yield* gitlab.credentials
-            // `oauth2` is accepted with a personal access token and with the CLI's OAuth login.
             const env = credentialEnv(`https://${host}`, "oauth2", token)
             return yield* cloneInto(
               repo.cloneUrl,
-              // A port's colon cannot be part of a folder name on Windows.
               join(config.reposDir, host.replace(":", "_"), ...repo.fullPath.split("/")),
               env,
             )

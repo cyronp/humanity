@@ -6,17 +6,9 @@ import { decode, type ToolCallFields } from "../acp/protocol.ts"
 import type { Normalized } from "./normalize.ts"
 import type { PatchFile } from "./normalizeCodex.ts"
 
-/**
- * Turns what an ACP run reports into Humanity's normalized shapes. The agent
- * streams a message in chunks and a tool call in updates; the run puts each
- * back together and hands on whole things, as `AcpEvent`s.
- */
 
-/** The session exists and can be reopened by this id. */
 export const ACP_READY = "humanity/ready"
-/** A chunk of the answer, as it is written. */
 export const ACP_TEXT_DELTA = "message/delta"
-/** The answer so far, whole, once something else follows it. */
 export const ACP_TEXT = "message"
 export const ACP_THOUGHT = "thought"
 export const ACP_TOOL_STARTED = "tool/started"
@@ -35,7 +27,6 @@ export const acpEvent = (method: string, params: unknown): AcpEvent => ({
   params,
 })
 
-/** A tool call under the name Humanity knows the tool by, with its input. */
 export interface NamedTool {
   readonly toolName: string
   readonly input: Record<string, unknown>
@@ -52,22 +43,16 @@ const stringOf = (record: Record<string, unknown>, keys: ReadonlyArray<string>) 
   return undefined
 }
 
-/** A change from one text to another as bare `@@` hunks, the way a patch carries it. */
 const hunksText = (before: string, after: string): string =>
   computeHunks(before, after)
     .map((hunk) => [hunkHeader(hunk), ...hunk.lines].join("\n"))
     .join("\n")
 
-/**
- * A file as the agent names it, as a path. The protocol asks for absolute
- * paths; some agents (Kiro) write a `file://` URI where a diff's path goes.
- */
 export const acpPath = (path: string): string => {
   if (!path.startsWith("file://")) return path
   try {
     return fileURLToPath(path)
   } catch {
-    // Not a URI of this platform (no drive letter, say): what follows the scheme is the path.
     const bare = path.slice("file://".length)
     try {
       return decodeURIComponent(bare)
@@ -77,7 +62,6 @@ export const acpPath = (path: string): string => {
   }
 }
 
-/** One file going from one text to another; no text before means a new file. */
 export const acpPatchFile = (
   path: string,
   before: string | null | undefined,
@@ -90,7 +74,6 @@ export const acpPatchFile = (
       ? { path, kind: "delete", diff: before }
       : { path, kind: "update", diff: hunksText(before, after) }
 
-/** The files a tool call changes, from the diffs it shows; empty when it shows none. */
 export const acpPatchFiles = (call: ToolCallFields): Array<PatchFile> => {
   const files: Array<PatchFile> = []
   for (const part of call.content ?? []) {
@@ -102,12 +85,6 @@ export const acpPatchFiles = (call: ToolCallFields): Array<PatchFile> => {
   return files
 }
 
-/**
- * What an ACP tool call is to Humanity, read from the kind the agent gives
- * it. A command is `Bash` and a file change that shows its diffs is
- * `ApplyPatch`, so both are decided like any other agent's. A call Humanity
- * cannot place keeps the agent's own name for it, which no thread pre-approves.
- */
 export const acpToolCall = (call: ToolCallFields): NamedTool => {
   const raw = isRecord(call.rawInput) ? call.rawInput : {}
   const title = call.title ?? ""
@@ -157,7 +134,6 @@ export const acpToolCall = (call: ToolCallFields): NamedTool => {
   }
 }
 
-/** What a finished tool call produced, as text. */
 export const acpToolOutput = (call: ToolCallFields): string => {
   const parts: Array<string> = []
   for (const part of call.content ?? []) {
@@ -180,7 +156,6 @@ const Event = Schema.Struct({
 })
 const Ready = Schema.Struct({ sessionId: Schema.String, model: Schema.String })
 const Text = Schema.Struct({ text: Schema.String })
-/** The call of the sub-agent a tool call belongs to; none for the agent's own. */
 const parent = Schema.optional(Schema.NullOr(Schema.String))
 const ToolStarted = Schema.Struct({
   toolCallId: Schema.String,
@@ -195,9 +170,7 @@ const ToolCompleted = Schema.Struct({
   parent,
 })
 const TurnCompleted = Schema.Struct({
-  /** Why the agent stopped: `end_turn`, `cancelled`, `max_tokens`, `refusal`, … */
   stopReason: Schema.String,
-  /** Set when the turn could not run or broke off. */
   error: Schema.NullOr(Schema.String),
   durationMs: Schema.Number,
   usage: Schema.NullOr(

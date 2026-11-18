@@ -12,10 +12,6 @@ import {
 
 const reactivityKeys = [keys.gitlab]
 
-/**
- * The GitLab connection and what can be done with it. Every action resolves
- * to an error message, or `undefined` when it worked.
- */
 export function useGitLabConnection() {
   const result = useAtomValue(gitlabConnectionAtom)
   const check = useAtomSet(refreshGitLabConnectionAtom, { mode: "promiseExit" })
@@ -23,7 +19,6 @@ export function useGitLabConnection() {
   const dropToken = useAtomSet(removeGitLabTokenAtom, { mode: "promiseExit" })
   const [refreshing, setRefreshing] = useState(false)
 
-  /** Looks the token up again right away, so a login just made in a terminal shows up. */
   const refresh = useCallback(async () => {
     setRefreshing(true)
     const exit = await check({ payload: { refresh: true }, reactivityKeys })

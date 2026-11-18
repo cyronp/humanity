@@ -33,7 +33,6 @@ const TRACKS = [
 const formatTime = (iso: string): string =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-/** How the desktop app finds and installs new versions of itself. */
 export function UpdatesSettings() {
   const status = useAtomValue(updateStatusAtom)
 
@@ -58,7 +57,6 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
   const { preferences, state } = status
   const updating = isUpdating(state)
 
-  // The new preferences come back through `Updates.watch`.
   const change = async (next: UpdatePreferences) => {
     setError(undefined)
     const exit = await savePreferences({ payload: { preferences: next } })
@@ -67,7 +65,6 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
     }
   }
 
-  // The outcome arrives through `Updates.watch`; only a refusal to start lands here.
   const run = async (action: typeof check, title: string) => {
     setError(undefined)
     const exit = await action({ payload: undefined })

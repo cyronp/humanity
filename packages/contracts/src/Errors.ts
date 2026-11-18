@@ -214,15 +214,10 @@ export class SessionBusy extends Schema.TaggedError<SessionBusy>()("SessionBusy"
   }
 }
 
-/**
- * The project's checkout is on another branch than the session's, most likely
- * switched by another thread: a commit there would land on the wrong branch.
- */
 export class BranchNotCheckedOut extends Schema.TaggedError<BranchNotCheckedOut>()(
   "BranchNotCheckedOut",
   {
     branch: Schema.String,
-    /** `null` on a detached HEAD. */
     checkedOut: Schema.NullOr(Schema.String),
   },
 ) {
@@ -240,7 +235,6 @@ export class NothingToCommit extends Schema.TaggedError<NothingToCommit>()("Noth
   }
 }
 
-/** A push or pull request that can't be made from where the session stands; `reason` says why. */
 export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavailable>()(
   "PullRequestUnavailable",
   { reason: Schema.String },
@@ -279,7 +273,6 @@ export class AccountNameInvalid extends Schema.TaggedError<AccountNameInvalid>()
   }
 }
 
-/** The config folder given for a new account cannot be used. */
 export class AccountFolderInvalid extends Schema.TaggedError<AccountFolderInvalid>()(
   "AccountFolderInvalid",
   { folder: Schema.String, reason: Schema.String },
@@ -289,7 +282,6 @@ export class AccountFolderInvalid extends Schema.TaggedError<AccountFolderInvali
   }
 }
 
-/** Claude Code could not say how much of the plan is used right now. */
 export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailable>()(
   "PlanUsageUnavailable",
   { reason: Schema.String },
@@ -299,7 +291,6 @@ export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailabl
   }
 }
 
-/** An MCP server or skill could not be saved as given. */
 export class ExtensionInvalid extends Schema.TaggedError<ExtensionInvalid>()("ExtensionInvalid", {
   reason: Schema.String,
 }) {
@@ -318,12 +309,32 @@ export class ExtensionNotFound extends Schema.TaggedError<ExtensionNotFound>()(
   }
 }
 
-/** Updates are installed by the desktop app, and none is connected to this daemon. */
 export class UpdatesUnavailable extends Schema.TaggedError<UpdatesUnavailable>()(
   "UpdatesUnavailable",
   { reason: Schema.String },
 ) {
   override get message() {
     return this.reason
+  }
+}
+
+export class CliNotInstalled extends Schema.TaggedError<CliNotInstalled>()("CliNotInstalled", {
+  product: Schema.String,
+  command: Schema.String,
+  installUrl: Schema.String,
+}) {
+  override get message() {
+    return `${this.product} is not installed: no \`${this.command}\` command was found. Install it (${this.installUrl}), then check again.`
+  }
+}
+
+export class CliUpdateFailed extends Schema.TaggedError<CliUpdateFailed>()("CliUpdateFailed", {
+  product: Schema.String,
+  command: Schema.String,
+  output: Schema.String,
+}) {
+  override get message() {
+    const output = this.output.trim()
+    return `\`${this.command}\` did not update ${this.product}.${output === "" ? "" : `\n${output}`}`
   }
 }

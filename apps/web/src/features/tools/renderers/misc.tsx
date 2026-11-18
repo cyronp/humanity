@@ -47,7 +47,6 @@ export const skillRenderer: ToolRenderer = {
   },
 }
 
-/** Subagents: the Agent SDK's `Task` (also called `Agent`) tool. */
 export const subagentRenderer: ToolRenderer = {
   name: "Subagent",
   match: (toolName) => toolName === "Task" || toolName === "Agent",
@@ -156,7 +155,6 @@ export const mcpRenderer: ToolRenderer = {
   ),
 }
 
-/** Everything without a renderer of its own: name, then the raw input and output. */
 export const genericRenderer: ToolRenderer = {
   name: "Generic",
   match: () => true,

@@ -5,7 +5,6 @@ import { SessionRepo } from "../src/db/SessionRepo.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { addProject, contents, services, setup } from "./sessionHelpers.ts"
 
-/** An assistant message that starts tool call `toolu_<n>`, so each page has tool calls to bring along. */
 const toolMessage = (sessionId: SessionId, n: number): ChatMessage => ({
   id: `m${n}`,
   sessionId,
@@ -51,7 +50,6 @@ describe("transcript pages", () => {
         assert.strictEqual(snapshot.messages.length, TRANSCRIPT_PAGE_SIZE)
         assert.strictEqual(snapshot.messages[0]?.id, `m${total - TRANSCRIPT_PAGE_SIZE}`)
         assert.strictEqual(snapshot.messages.at(-1)?.id, `m${total - 1}`)
-        // Only the tool calls of the messages it carries, in order.
         assert.deepStrictEqual(
           snapshot.toolCalls.map((call) => call.toolUseId),
           snapshot.messages.map((message) => message.id.replace("m", "toolu_")),

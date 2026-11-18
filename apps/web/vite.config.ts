@@ -9,7 +9,6 @@ const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 const daemonPort = process.env["HUMANITY_PORT"] ?? "7420"
 
-// The app's version is the desktop app's: the one releases are tagged with.
 const { version } = JSON.parse(readFileSync(fromHere("../desktop/package.json"), "utf8")) as {
   readonly version: string
 }
@@ -17,7 +16,6 @@ const { version } = JSON.parse(readFileSync(fromHere("../desktop/package.json"),
 export default defineConfig({
   define: {
     __HUMANITY_VERSION__: JSON.stringify(version),
-    // Named on the connect screen when the daemon behind the dev server is down.
     __HUMANITY_DEV_DAEMON__: JSON.stringify(`127.0.0.1:${daemonPort}`),
   },
   plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
@@ -33,7 +31,6 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      // The RPC WebSocket is served by the daemon; the dev server only forwards it.
       "/rpc": { target: `ws://127.0.0.1:${daemonPort}`, ws: true },
       "/api": { target: `http://127.0.0.1:${daemonPort}` },
     },

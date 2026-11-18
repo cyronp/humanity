@@ -23,7 +23,6 @@ interface Recorded {
   readonly body: unknown
 }
 
-/** A fake API: replies by `METHOD url`, and records each request. */
 const fakeApi = (routes: Record<string, Reply>) =>
   Effect.gen(function* () {
     const requests = yield* Ref.make<ReadonlyArray<Recorded>>([])

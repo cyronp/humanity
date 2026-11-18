@@ -33,7 +33,6 @@ describe("sharedClock", () => {
     const stopSecond = clock.subscribe(second)
     expect(vi.getTimerCount()).toBe(1)
 
-    // The same time between ticks, so React sees nothing to render.
     expect(clock.getSnapshot()).toBe(clock.getSnapshot())
     vi.advanceTimersByTime(1000)
     expect(first).toHaveBeenCalledTimes(1)

@@ -56,7 +56,6 @@ export function RepositoriesSettings() {
   )
 }
 
-/** Whether a service is connected: a light, with its meaning for screen readers and on hover. */
 function Status({
   tone,
   title,

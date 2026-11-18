@@ -20,7 +20,6 @@ import { SqlClient, SqlSchema } from "effect/sql"
 import type { PermissionDecision } from "../agent/AgentRunner.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
-/** An approval the agent is blocked on, with the deferred its `canUseTool` awaits. */
 interface Waiter {
   readonly sessionId: string
   readonly deferred: Deferred.Deferred<PermissionDecision>
@@ -94,18 +93,14 @@ const HunksJson = Schema.fromJsonString(Schema.Array(Hunk))
 const interruptedMessage =
   "The session was interrupted before the human decided. Nothing was applied."
 
-/** What the agent is told when the human denies a file change. Nothing was written. */
 export const changeDeniedMessage = (filePath: string, comment: string | undefined): string =>
   comment
     ? `DENIED by the human reviewer: your change to ${filePath} was not applied and the file on disk is unchanged. They said: ${comment}`
     : `DENIED by the human reviewer: your change to ${filePath} was not applied and the file on disk is unchanged. Ask how to proceed if the change is necessary.`
 
-/** How a request is decided, whichever kind it is. */
 export interface DecisionOptions {
   readonly decision: ApprovalDecision
-  /** Sent to the agent with a denial. */
   readonly comment?: string | undefined
-  /** Also stop asking about this tool for the rest of the thread. Only with `allow`. */
   readonly allowForSession?: boolean | undefined
 }
 
@@ -115,20 +110,13 @@ const byCreation = (a: Approval, b: Approval) => {
   return at(a).localeCompare(at(b))
 }
 
-/**
- * The registry of everything the agent is waiting on. A request persists the
- * approval, publishes it and parks the agent on a `Deferred`; a decision
- * applies the outcome, persists it and completes that `Deferred`.
- */
 export class ApprovalService extends Context.Service<
   ApprovalService,
   {
-    /** Blocks until the human decides. Interruption expires the request. */
     readonly requestChange: (change: ProposedChange) => Effect.Effect<PermissionDecision>
     readonly requestConfirmation: (
       confirmation: PendingConfirmation,
     ) => Effect.Effect<PermissionDecision>
-    /** The whole file change: allowed, the agent's tool applies it; denied, nothing is written. */
     readonly decideChange: (
       changeId: string,
       options: DecisionOptions,
@@ -136,19 +124,12 @@ export class ApprovalService extends Context.Service<
     readonly decideConfirmation: (
       confirmationId: string,
       options: DecisionOptions & {
-        /** The answers to an `AskUserQuestion` call; they become the tool's input. */
         readonly answers?: QuestionAnswers | undefined
       },
     ) => Effect.Effect<PendingConfirmation, ApprovalNotFound | ApprovalAlreadyDecided>
-    /**
-     * Whether the human chose to stop being asked about this tool in this
-     * thread. Kept in memory: after a daemon restart the thread asks again.
-     */
     readonly allowsInSession: (sessionId: string, toolName: string) => boolean
-    /** Every approval of a session, oldest first. */
     readonly listForSession: (sessionId: string) => Effect.Effect<ReadonlyArray<Approval>>
     readonly pendingCount: (sessionId: string) => Effect.Effect<number>
-    /** Releases everything a session's agent waits on, telling it nothing was applied. */
     readonly expireSession: (sessionId: string) => Effect.Effect<void>
   }
 >()("humanity/ApprovalService") {
@@ -159,7 +140,6 @@ export class ApprovalService extends Context.Service<
       const events = yield* SessionEvents
 
       const waiters = new Map<string, Waiter>()
-      /** Per thread, the tools the human allowed for the rest of it. */
       const allowedInSession = new Map<string, Set<string>>()
       const allowsInSession = (sessionId: string, toolName: string) =>
         allowedInSession.get(sessionId)?.has(toolName) === true
@@ -231,7 +211,6 @@ export class ApprovalService extends Context.Service<
           WHERE id = ${confirmation.id}
         `.pipe(Effect.asVoid, Effect.orDie)
 
-      /** Marks a still-pending request expired and releases its waiter with a denial. */
       const expire = (id: string) =>
         Effect.gen(function* () {
           const waiter = waiters.get(id)
@@ -261,7 +240,6 @@ export class ApprovalService extends Context.Service<
           }
         })
 
-      /** Parks the caller until a decision completes its deferred. */
       const wait = (id: string, sessionId: string, register: Effect.Effect<void>) =>
         Effect.gen(function* () {
           const deferred = yield* Deferred.make<PermissionDecision>()
@@ -321,7 +299,6 @@ export class ApprovalService extends Context.Service<
           }),
         )
 
-      /** The waiter for a pending request, or the reason it can't be decided. */
       const pendingWaiter = (id: string, status: Option.Option<string>) =>
         Effect.gen(function* () {
           if (Option.isNone(status)) return yield* new ApprovalNotFound({ id })
@@ -351,7 +328,6 @@ export class ApprovalService extends Context.Service<
 
             const resolved: ProposedChange = {
               ...change,
-              // Every hunk shares the verdict, so the diff reads as applied or not.
               hunks: change.hunks.map((hunk) => ({
                 ...hunk,
                 status: allowed ? ("approved" as const) : ("rejected" as const),
@@ -388,7 +364,6 @@ export class ApprovalService extends Context.Service<
             const isQuestion = confirmation.toolName === QUESTION_TOOL
             const answers = isQuestion && options.decision === "allow" ? options.answers : undefined
 
-            // A question is answered each time; it can never be allowed once and for all.
             if (options.decision === "allow" && options.allowForSession === true && !isQuestion) {
               allowInSession(confirmation.sessionId, confirmation.toolName)
             }
@@ -450,7 +425,6 @@ export class ApprovalService extends Context.Service<
           ),
         )
 
-      // Nobody is waiting on requests from before a restart; their agents are gone.
       const restartedAt = yield* now
       yield* sql`UPDATE proposed_changes SET status = 'expired', decided_at = ${restartedAt} WHERE status = 'pending'`.pipe(
         Effect.orDie,

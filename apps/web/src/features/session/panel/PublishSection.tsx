@@ -32,7 +32,6 @@ import { FeedNote } from "./FeedNote.tsx"
 import { baseBranches, checkoutMoved, forgeTerms, needsPush, remoteStatus } from "./publication.ts"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 
-/** With nothing left to commit: push the branch, then open its pull request or show the one it has. */
 export function PublishSection({
   session,
   onOpenPullRequest,
@@ -67,7 +66,6 @@ export function PublishSection({
   )
 }
 
-/** The branch, where it stands against its remote, and a push when it needs one. */
 function BranchCard({
   session,
   publication,
@@ -116,7 +114,6 @@ function BranchCard({
   )
 }
 
-/** What the forge says of the branch, then the pull request it has or the form to open one. */
 function NextStep({
   session,
   publication,
@@ -147,7 +144,6 @@ function NextStep({
   )
 }
 
-/** The pull request the branch has, the form to open one, or why it can't be opened from here. */
 function PullRequestStep({
   session,
   publication,
@@ -215,7 +211,6 @@ function PullRequestForm({
   const create = useAtomSet(createPullRequestAtom, { mode: "promiseExit" })
   const terms = forgeTerms(forge)
   const bases = baseBranches(branches, branch, publication.defaultBranch)
-  // The last commit's subject is usually the title it wants.
   const [title, setTitle] = useState(
     () => branches.find((each) => !each.isRemote && each.name === branch)?.subject ?? "",
   )

@@ -5,10 +5,6 @@ import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type AccountRegistry, makeAccountRegistry } from "./accountRegistry.ts"
 
-/**
- * The Claude accounts: the default Claude Code login and every config folder
- * added next to it. Humanity holds no credential of its own.
- */
 export class ClaudeAccountService extends Context.Service<
   ClaudeAccountService,
   AccountRegistry<ClaudeStatus>
@@ -25,7 +21,6 @@ export class ClaudeAccountService extends Context.Service<
           const checkedAt = DateTime.formatIso(yield* DateTime.now)
           const base = {
             configDir: configDir ?? claude.configDir,
-            bundledExecutable: claude.bundledExecutable,
             checkedAt,
           }
           if (Result.isFailure(result)) {

@@ -6,17 +6,11 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
-/**
- * Every file change the agent waits on, each allowed or denied as a whole.
- * Keyboard, outside the message box, for the oldest change (or the one a link
- * named): `a` allow, `d` deny, `c` comment.
- */
 export const ChangeCards = memo(function ChangeCards({
   changes,
   file,
 }: {
   readonly changes: ReadonlyArray<ProposedChange>
-  /** Deep link: the change to act on first, from `?file=`. */
   readonly file: string | undefined
 }) {
   const current = changes.find((change) => change.filePath === file) ?? changes[0]
@@ -63,7 +57,6 @@ export const ChangeCards = memo(function ChangeCards({
   }, [])
 
   return changes.map((change) => (
-    // A solid base: the card's own amber tint is see-through.
     <div key={change.id} className="rounded-lg bg-background">
       <ChangeCard change={change} />
     </div>

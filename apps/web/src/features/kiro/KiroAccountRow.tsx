@@ -12,18 +12,12 @@ import { PROVIDERS } from "@/features/providers/ProviderIcon"
 import { RemoveAccount } from "@/features/providers/RemoveAccount"
 import { kiroSignInCommand, kiroSignInUsesPowerShell, kiroTitle } from "./summary.ts"
 
-/**
- * One Kiro account in the list of the provider's accounts: whether it is
- * signed in, or exactly what to do to sign it in, plus making it the account
- * of new threads and removing it.
- */
 export function KiroAccountRow({
   account,
   onSetActive,
   onRemove,
 }: {
   readonly account: KiroAccount
-  /** Both resolve to an error message, or `undefined` when they worked. */
   readonly onSetActive: (accountId: string) => Promise<string | undefined>
   readonly onRemove: (accountId: string) => Promise<string | undefined>
 }) {

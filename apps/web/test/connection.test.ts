@@ -34,7 +34,6 @@ describe("retryDelayMs", () => {
   })
 })
 
-/** A socket that fires the events a test asks for. */
 const fakeSocket = () => {
   const listeners = new Map<string, Array<() => void>>()
   return {
@@ -59,7 +58,6 @@ describe("createSocketStore", () => {
     first.fire("open")
     first.fire("close")
 
-    // The reconnect is a new socket.
     const second = fakeSocket()
     store.watch(second)
     second.fire("close")

@@ -2,15 +2,10 @@ import type { AgentProvider, Session } from "@humanity/contracts"
 import { cn } from "cn"
 import type { SVGProps } from "react"
 
-/**
- * The agent providers Humanity can run sessions on. A new provider adds an
- * entry to `PROVIDERS` with its real icon.
- */
 export type ProviderId = AgentProvider
 
 type IconProps = SVGProps<SVGSVGElement>
 
-/** Claude's mark, from Simple Icons (CC0), in Claude's brand colour. */
 export function ClaudeIcon({ className, children, ...props }: IconProps) {
   return (
     <svg
@@ -26,7 +21,6 @@ export function ClaudeIcon({ className, children, ...props }: IconProps) {
   )
 }
 
-/** OpenAI's mark, from Simple Icons (CC0), in the text colour like OpenAI shows it. */
 export function OpenAIIcon({ className, children, ...props }: IconProps) {
   return (
     <svg
@@ -42,7 +36,6 @@ export function OpenAIIcon({ className, children, ...props }: IconProps) {
   )
 }
 
-/** Kiro's mark, as supplied for Humanity. Drawn in the text colour, so it follows the theme. */
 export function KiroIcon({ className, children, ...props }: IconProps) {
   return (
     <svg
@@ -63,10 +56,8 @@ export const PROVIDERS: Record<
   ProviderId,
   {
     readonly name: string
-    /** Who makes its models, shown under each model's name. */
     readonly vendor: string
     readonly Icon: typeof ClaudeIcon
-    /** Works, but its agent protocol is new and not yet checked against a live account. */
     readonly beta?: boolean
   }
 > = {
@@ -75,12 +66,10 @@ export const PROVIDERS: Record<
   kiro: { name: "Kiro", vendor: "Kiro", Icon: KiroIcon, beta: true },
 }
 
-/** Every provider, in the order they are listed everywhere. */
 export const PROVIDER_IDS = Object.keys(PROVIDERS) as ReadonlyArray<ProviderId>
 
 export const sessionProvider = (session: Session): ProviderId => session.provider
 
-/** A provider's icon, labelled with its name for screen readers and on hover. */
 export function ProviderIcon({
   provider,
   className,

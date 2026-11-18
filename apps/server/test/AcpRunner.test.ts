@@ -1,8 +1,17 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Deferred, Effect, Fiber, Stream } from "effect"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { basename, join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { AcpFailed, type AgentMessage } from "../src/acp/Connection.ts"
 import type { InitializeResponse } from "../src/acp/protocol.ts"
-import { type AcpConnect, type AcpProfile, acpPrompt, startAcpRun } from "../src/agent/AcpRunner.ts"
+import {
+  type AcpConnect,
+  type AcpProfile,
+  acpFileLinks,
+  acpPrompt,
+  startAcpRun,
+} from "../src/agent/AcpRunner.ts"
 import type {
   AgentRunOptions,
   PermissionDecision,
@@ -18,6 +27,7 @@ import {
   ACP_TURN_COMPLETED,
   type AcpEvent,
 } from "../src/agent/normalizeAcp.ts"
+import { tempDir } from "./helpers.ts"
 import { eventually } from "./sessionHelpers.ts"
 
 interface Call {
@@ -27,7 +37,6 @@ interface Call {
 
 const SESSION = "session-1"
 
-/** A scripted ACP agent: it records what Humanity asks and says what the test tells it to. */
 const fakeAgent = (agent: InitializeResponse = {}) =>
   Effect.gen(function* () {
     const calls: Array<Call> = []
@@ -72,12 +81,10 @@ const fakeAgent = (agent: InitializeResponse = {}) =>
 
     return {
       connect,
-      /** What the agent answers to each request; a test may change it. */
       answers,
       calls,
       notified,
       called: (method: string) => calls.filter((call) => call.method === method),
-      /** The agent reports something about the conversation. */
       update: (sessionUpdate: string, fields: Record<string, unknown> = {}, sessionId = SESSION) =>
         Effect.suspend(() => {
           if (onNotification === undefined) return Effect.die("the agent is not connected yet")
@@ -86,7 +93,6 @@ const fakeAgent = (agent: InitializeResponse = {}) =>
             params: { sessionId, update: { sessionUpdate, ...fields } },
           })
         }),
-      /** The agent asks Humanity something, as it does for a permission. */
       ask: (method: string, params: Record<string, unknown>) =>
         Effect.suspend(() => {
           if (onRequest === undefined) return Effect.die("the agent is not connected yet")
@@ -116,7 +122,6 @@ const runOptions = (
   canUseTool: (request: ToolPermissionRequest) => PermissionDecision,
   overrides: Partial<AgentRunOptions> = {},
 ): AgentRunOptions => ({
-  // The generic layer has no provider of its own yet; the field is not read by it.
   provider: "codex",
   cwd: "/work/repo",
   configDir: undefined,
@@ -198,7 +203,6 @@ describe("an ACP run", () => {
           },
         ],
       })
-      // The thread's model and effort are options of the session, set before the turn.
       assert.deepStrictEqual(
         agent.called("session/set_config_option").map((call) => call.params),
         [
@@ -229,7 +233,6 @@ describe("an ACP run", () => {
       yield* agent.update("agent_thought_chunk", chunk("look."))
       yield* agent.update("agent_message_chunk", chunk("I will "))
       yield* agent.update("agent_message_chunk", chunk("list the files."))
-      // Announced before the agent says what it is: nothing to show yet.
       yield* agent.update("tool_call", { toolCallId: "t1", title: "Running", status: "pending" })
       yield* agent.update("tool_call_update", {
         toolCallId: "t1",
@@ -242,7 +245,6 @@ describe("an ACP run", () => {
         status: "completed",
         content: [{ type: "content", content: { type: "text", text: "a.ts\nb.ts" } }],
       })
-      // Another session of the same agent is not this conversation.
       yield* agent.update("agent_message_chunk", chunk("Elsewhere."), "session-2")
       yield* agent.update("agent_message_chunk", chunk("Two files."))
       yield* agent.update("usage_update", { used: 1200, size: 200000 })
@@ -327,11 +329,9 @@ describe("an ACP run", () => {
         ],
       })
 
-      // The call is shown before it is decided, so the request has something to point at.
       const events = yield* take(run, 2)
       assert.strictEqual(events[1]?.method, ACP_TOOL_STARTED)
 
-      // "Always" is a rule the agent would keep for itself: never chosen, even as the only way in.
       const onlyAlways = yield* agent.ask("session/request_permission", {
         toolCall: { toolCallId: "t2", title: "npm test", kind: "execute" },
         options: [{ optionId: "always", name: "Always allow", kind: "allow_always" }],
@@ -493,7 +493,6 @@ describe("an ACP run", () => {
   it.live("writes the model to an agent that lists it late, then the effort it lists with it", () =>
     Effect.gen(function* () {
       const agent = yield* fakeAgent()
-      // Like Kiro: a new session lists neither its model nor its effort.
       agent.answers["session/new"] = () => ({ sessionId: SESSION, configOptions: [] })
       const run = yield* startAcpRun(agent.connect, () => ({
         product: "Test agent",
@@ -502,7 +501,6 @@ describe("an ACP run", () => {
       yield* run.send({ text: "Go", attachments: [] })
 
       yield* waitFor(agent)("session/set_config_option")
-      // The options of the model arrive a moment after its write was answered.
       yield* agent.update("config_option_update", {
         configOptions: [
           { id: "model", category: "model", type: "select", currentValue: "opus" },
@@ -576,7 +574,6 @@ describe("an ACP run", () => {
     Effect.gen(function* () {
       const agent = yield* fakeAgent()
       agent.answers["session/new"] = () => autopilot("on")
-      // The write is answered, and the setting is as it was.
       agent.answers["session/set_config_option"] = () => autopilot("on")
       const run = yield* startAcpRun(agent.connect, () => SUPERVISED)(runOptions(allow))
       const failure = yield* Effect.flip(Stream.runDrain(run.messages))
@@ -643,7 +640,6 @@ describe("an ACP run", () => {
       const answer = yield* agent.ask("session/request_permission", reviewOf("t9"))
       assert.deepStrictEqual(answer, { outcome: { outcome: "selected", optionId: "reject" } })
       assert.deepStrictEqual(asked, ["Review changes"])
-      // The agent says nothing more about a review, so its answer closes it.
       const events = yield* take(run, 3)
       assert.deepStrictEqual(
         events.map((event) => event.method),
@@ -802,4 +798,46 @@ describe("acpPrompt", () => {
       text: "Look\n\n[The image a.png was attached, but this agent cannot read images.]",
     })
   })
+
+  it("links mentioned files after the text", () => {
+    const links = [{ uri: "file:///repo/src/a.ts", name: "src/a.ts" }]
+    assert.deepStrictEqual(
+      acpPrompt({ text: "Look at @src/a.ts", attachments: [] }, { images: true, links }),
+      [
+        { type: "text", text: "Look at @src/a.ts" },
+        { type: "resource_link", uri: "file:///repo/src/a.ts", name: "src/a.ts" },
+      ],
+    )
+  })
+})
+
+describe("acpFileLinks", () => {
+  it.effect("links existing files inside the folder, once each, and nothing else", () =>
+    Effect.gen(function* () {
+      const outside = yield* tempDir()
+      const root = yield* tempDir()
+      mkdirSync(join(root, "src"))
+      writeFileSync(join(root, "src", "a.ts"), "a")
+      writeFileSync(join(outside, "secret.txt"), "s")
+      const links = yield* acpFileLinks(root, [
+        "src/a.ts",
+        "./src/a.ts",
+        "src/",
+        "src",
+        "missing.ts",
+        `../${basename(outside)}/secret.txt`,
+        join(outside, "secret.txt"),
+      ])
+      assert.deepStrictEqual(links, [
+        { uri: pathToFileURL(join(root, "src", "a.ts")).href, name: "src/a.ts" },
+      ])
+    }),
+  )
+
+  it.effect("links nothing when the folder is gone", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDir()
+      assert.deepStrictEqual(yield* acpFileLinks(join(root, "gone"), ["a.ts"]), [])
+    }),
+  )
 })

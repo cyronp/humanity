@@ -28,10 +28,6 @@ export function ToolSummary(props: ToolCallProps) {
   return <Summary {...props} />
 }
 
-/**
- * A tool call inline in the chat, on shadcn's Trace: one line that shimmers
- * while the call runs, expandable to its renderer's detail view.
- */
 export function ToolCallCard({
   toolName,
   input,
@@ -48,7 +44,6 @@ export function ToolCallCard({
   const status = call?.status ?? "running"
   const props: ToolCallProps = { toolName, input, call, approval, worktreePath }
   const { Summary, Detail } = findRenderer(toolRenderers, toolName, input)
-  // A call waiting for the human is not running; its badge says so instead.
   const waiting = approvalStatus(approval, false) === "pending"
   const line =
     status === "failed" ? "error" : status === "running" && !waiting ? "running" : undefined

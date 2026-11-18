@@ -1,12 +1,6 @@
 import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 
-/**
- * Variables a parent Codex session sets for its own children. If the daemon
- * itself was started from inside Codex, passing these on would make the
- * agent's CLI believe it runs inside that session.
- */
 export const INHERITED_CODEX_VARIABLES: ReadonlyArray<string> = [
   "CODEX_THREAD_ID",
   "CODEX_SANDBOX",
@@ -14,12 +8,6 @@ export const INHERITED_CODEX_VARIABLES: ReadonlyArray<string> = [
   "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
 ]
 
-/**
- * The environment Codex runs with. Everything else is passed through
- * unchanged, in particular `CODEX_HOME` (where its login lives) and any
- * `OPENAI_*` credential the human configured. Humanity never reads or stores
- * those values; Codex does.
- */
 export const codexEnvironment = (
   env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string> => {
@@ -30,7 +18,6 @@ export const codexEnvironment = (
   return result
 }
 
-/** The Rust target a platform's Codex executable is built for, as its package names the folder. */
 export const codexTargetTriple = (platform: NodeJS.Platform, arch: string): string | undefined => {
   const cpu = arch === "x64" ? "x86_64" : arch === "arm64" ? "aarch64" : undefined
   if (cpu === undefined) return undefined
@@ -40,29 +27,27 @@ export const codexTargetTriple = (platform: NodeJS.Platform, arch: string): stri
   return undefined
 }
 
-/**
- * The Codex executable that ships with the `@openai/codex` package: an
- * optional package per platform, installed next to it. `null` when it is missing.
- */
-export const bundledCodexExecutable = (
+export const codexNativeExecutable = (
+  script: string,
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
-): string | null => {
+  exists: (path: string) => boolean = existsSync,
+): string | undefined => {
   const triple = codexTargetTriple(platform, arch)
-  if (triple === undefined) return null
+  if (triple === undefined) return undefined
   const binary = platform === "win32" ? "codex.exe" : "codex"
-  try {
-    const cli = createRequire(import.meta.url).resolve("@openai/codex/package.json")
-    // The platform package is the CLI's dependency, so it resolves from there.
-    const platformPackage = createRequire(cli).resolve(
-      `@openai/codex-${platform}-${arch}/package.json`,
-    )
-    const vendor = join(dirname(platformPackage), "vendor", triple)
+  const cli = dirname(dirname(script))
+  const platformPackage = `codex-${platform}-${arch}`
+  const packages = [
+    join(cli, "node_modules", "@openai", platformPackage),
+    join(dirname(cli), platformPackage),
+    cli,
+  ]
+  for (const folder of packages) {
+    const vendor = join(folder, "vendor", triple)
     for (const path of [join(vendor, "bin", binary), join(vendor, "codex", binary)]) {
-      if (existsSync(path)) return path
+      if (exists(path)) return path
     }
-  } catch {
-    // Not installed for this platform.
   }
-  return null
+  return undefined
 }

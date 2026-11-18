@@ -15,8 +15,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
         sessions.setAutonomy(sessionId, autonomy),
       "Sessions.setModel": ({ sessionId, model }) => sessions.setModel(sessionId, model),
       "Sessions.setEffort": ({ sessionId, effort }) => sessions.setEffort(sessionId, effort),
-      "Sessions.sendMessage": ({ sessionId, text, attachments }) =>
-        sessions.sendMessage(sessionId, text, attachments ?? []),
+      "Sessions.sendMessage": ({ sessionId, text, attachments, mentions }) =>
+        sessions.sendMessage(sessionId, text, attachments ?? [], mentions ?? []),
       "Sessions.attachment": ({ sessionId, attachmentId }) =>
         sessions.attachment(sessionId, attachmentId),
       "Sessions.interrupt": ({ sessionId }) => sessions.interrupt(sessionId),
@@ -24,6 +24,8 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.end": ({ sessionId, removeWorktree }) =>
         sessions.end(sessionId, { removeWorktree }),
       "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),
+      "Sessions.searchFiles": ({ sessionId, query, recent }) =>
+        sessions.searchFiles(sessionId, query, recent),
       "Sessions.commits": ({ sessionId }) => sessions.commits(sessionId),
       "Sessions.commit": ({ sessionId, message, paths }) =>
         sessions.commit(sessionId, message, paths),

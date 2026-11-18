@@ -27,10 +27,6 @@ import { keys } from "@/lib/rpc"
 import { closeSettings, selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, SettingsPane, SettingsSplit } from "./SettingsLayout.tsx"
 
-/**
- * The projects Humanity works on, listed on the left; the chosen one's facts,
- * permissions and removal on the right.
- */
 export function ProjectsSettings() {
   const projects = useAtomValue(projectsAtom)
 
@@ -66,8 +62,6 @@ export function ProjectsSettings() {
 function ProjectList({ projects }: { readonly projects: ReadonlyArray<Project> }) {
   const { projectId: openProjectId } = useParams({ strict: false })
   const { items } = useSettings()
-  // Until one is picked (or once the picked one is removed), the project of
-  // the page behind the settings; else the first.
   const project =
     projects.find((candidate) => candidate.id === items.projects) ??
     projects.find((candidate) => candidate.id === openProjectId) ??
@@ -156,10 +150,6 @@ function Row({ label, children }: { readonly label: string; readonly children: R
   )
 }
 
-/**
- * Asks before removing: the project's threads and their history go with it.
- * Once it is gone the list shows another project, since the picked one no longer matches.
- */
 function RemoveProject({ project }: { readonly project: Project }) {
   const remove = useAtomSet(removeProjectAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
@@ -180,7 +170,6 @@ function RemoveProject({ project }: { readonly project: Project }) {
       return
     }
     setOpen(false)
-    // The page behind the settings showed a thread of this project: it is gone too.
     if (openProjectId === project.id) void navigate({ to: "/" })
   }
 

@@ -152,12 +152,9 @@ describe("SessionService", () => {
           git(session.worktreePath, "branch", "--show-current").trim(),
           session.branch,
         )
-        // The user's working copy stays on its branch.
         assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
-        // Already set up: nothing changes.
         assert.deepStrictEqual(yield* sessions.setupWorktree(session.id), session)
 
-        // The next run resumes the conversation in the worktree, and the agent hears of the move.
         yield* sessions.sendMessage(session.id, "now fix it")
         yield* waitForStatus(session.id, "idle")
         const runs = yield* Ref.get(log.runs)
@@ -174,7 +171,6 @@ describe("SessionService", () => {
               message.content._tag === "notice" && message.content.text.includes(session.branch),
           ),
         )
-        // The transcript keeps the human's own words.
         assert.isTrue(
           snapshot.messages.some(
             (message) => message.content._tag === "user" && message.content.text === "now fix it",
@@ -184,10 +180,41 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live("keeps the files picked with @ that a message still mentions", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({
+          projectId: project.id,
+          prompt: "read @README.md please",
+          mentions: ["README.md", "removed.ts"],
+        })
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.sendMessage(created.id, "and @src/", [], ["src/", "src/"])
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.sendMessage(created.id, "thanks")
+        yield* waitForStatus(created.id, "idle")
+
+        const users = (yield* contents(created.id)).messages.flatMap((message) =>
+          message.content._tag === "user" ? [message.content] : [],
+        )
+        assert.deepStrictEqual(
+          users.map((content) => content.mentions),
+          [["README.md"], ["src/"], undefined],
+        )
+        const sent = (yield* Ref.get(log.sent)).map((message) => message.text)
+        assert.deepStrictEqual(sent, ["read @README.md please", "and @src/", "thanks"])
+      }).pipe(Effect.provide(services(home, () => [{ text: "ok" }])))
+    }),
+  )
+
   it.live("keeps a thread on its own branch when another thread moves the shared checkout", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
-      // The agent makes a branch of its own, as it would with `git checkout -b`.
       const script: FakeScript = (prompt) => {
         if (prompt.includes("branch off")) git(repo, "checkout", "--quiet", "-b", "feat/a")
         return [{ text: "ok" }]
@@ -204,7 +231,6 @@ describe("SessionService", () => {
         writeFileSync(join(repo, "a.txt"), "a\n")
         yield* sessions.commit(first.id, "add a")
 
-        // Another thread starts on main, which switches the checkout under the first.
         const second = yield* sessions.create({ projectId: project.id, baseBranch: "main" })
         assert.strictEqual(second.branch, "main")
         assert.strictEqual((yield* sessions.get(first.id)).branch, "feat/a")
@@ -222,7 +248,6 @@ describe("SessionService", () => {
           ["initial"],
         )
 
-        // What is uncommitted now belongs to main, not to the first thread.
         writeFileSync(join(repo, "b.txt"), "b\n")
         assert.deepInclude(yield* pullRequests.publication(first.id), {
           branch: "feat/a",
@@ -242,7 +267,6 @@ describe("SessionService", () => {
         })
         assert.strictEqual(git(repo, "rev-list", "--count", "feat/a").trim(), "2")
 
-        // A worktree starts from the thread's branch, not from what the checkout has now.
         const moved = yield* sessions.setupWorktree(first.id)
         assert.isTrue(existsSync(join(moved.worktreePath, "a.txt")))
         assert.isFalse(existsSync(join(moved.worktreePath, "b.txt")))
@@ -291,7 +315,6 @@ describe("SessionService", () => {
         return chosen.id
       }).pipe(Effect.provide(services(home, () => [])))
 
-      // A new "daemon" over the same data directory resumes on the same model.
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const log = yield* FakeAgentLog
@@ -327,9 +350,7 @@ describe("SessionService", () => {
           (yield* Ref.get(log.runs)).map((run) => run.configDir),
           [undefined, workDir],
         )
-        // An open thread still needs the account's login.
         assert.strictEqual((yield* Effect.flip(accounts.remove(work.id)))._tag, "AccountInUse")
-        // Switching back changes new threads only.
         yield* accounts.setActive("default")
         return { onWork: onWork.id, workDir }
       }).pipe(Effect.provide(services(home, () => [])))
@@ -359,12 +380,9 @@ describe("SessionService", () => {
         yield* waitForStatus(session.id, "idle")
         const before = yield* sessions.get(session.id)
 
-        // The run is still open between turns, so it switches in place.
         const updated = yield* sessions.setModel(session.id, " sonnet ")
         assert.strictEqual(updated.model, "sonnet")
-        // The sidebar counts from `updatedAt`; a change of model is not a change of status.
         assert.strictEqual(updated.updatedAt, before.updatedAt)
-        // Back to Claude Code's default, and a repeat of the same value is a no-op.
         assert.isNull((yield* sessions.setModel(session.id, null)).model)
         yield* sessions.setModel(session.id, null)
         yield* sessions.setModel(session.id, "opus")
@@ -373,7 +391,6 @@ describe("SessionService", () => {
         return session.id
       }).pipe(Effect.provide(services(home, () => [])))
 
-      // After a restart there is no run to switch: the next one starts on the stored model.
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const log = yield* FakeAgentLog
@@ -412,7 +429,6 @@ describe("SessionService", () => {
           const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
           yield* waitForStatus(session.id, "idle")
           const [run] = yield* Ref.get(log.runs)
-          // Humanity's own server comes on top, with a token for this thread alone.
           const { humanity, ...added } = run?.extensions.mcpServers ?? {}
           assert.deepStrictEqual(added, {
             docs: { type: "http", url: "https://docs.dev/mcp", headers: {} },
@@ -424,7 +440,6 @@ describe("SessionService", () => {
             /^Bearer [\w-]{43}$/,
           )
 
-          // Nothing changed: the next turn leaves the agent's servers alone.
           yield* sessions.sendMessage(session.id, "again")
           yield* waitForStatus(session.id, "idle")
           assert.lengthOf(yield* Ref.get(log.extensionChanges), 0)
@@ -439,7 +454,6 @@ describe("SessionService", () => {
           yield* waitForStatus(session.id, "idle")
           const changes = yield* Ref.get(log.extensionChanges)
           assert.lengthOf(changes, 1)
-          // The human's server is gone; Humanity's own stays, on the same token.
           assert.deepStrictEqual(changes[0]?.mcpServers, { ...(humanity && { humanity }) })
           assert.lengthOf(yield* Ref.get(log.runs), 1)
         }).pipe(Effect.provide(services(home, () => [])))
@@ -469,11 +483,9 @@ describe("SessionService", () => {
             ["high"],
           )
 
-          // The run is still open between turns, so it switches in place.
           const updated = yield* sessions.setEffort(session.id, "low")
           assert.strictEqual(updated.effort, "low")
           assert.strictEqual(updated.updatedAt, before.updatedAt)
-          // Back to the model's default, and a repeat of the same value is a no-op.
           assert.isNull((yield* sessions.setEffort(session.id, null)).effort)
           yield* sessions.setEffort(session.id, null)
           yield* sessions.setEffort(session.id, "max")
@@ -481,7 +493,6 @@ describe("SessionService", () => {
           return session.id
         }).pipe(Effect.provide(services(home, () => [])))
 
-        // After a restart there is no run to switch: the next one starts on the stored effort.
         yield* Effect.gen(function* () {
           const sessions = yield* SessionService
           const log = yield* FakeAgentLog
@@ -533,7 +544,6 @@ describe("SessionService", () => {
         return session.id
       }).pipe(Effect.provide(services(home, () => [{ text: "hello" }])))
 
-      // After a restart no agent is running: the last report is still shown.
       yield* Effect.gen(function* () {
         assert.deepStrictEqual((yield* contents(sessionId)).usage, reported)
       }).pipe(Effect.provide(services(home, () => [])))
@@ -568,7 +578,6 @@ describe("SessionService", () => {
         const session = yield* sessions.create({ projectId: project.id, prompt: "hi" })
         yield* waitForStatus(session.id, "idle")
 
-        // The running agent answers; no extra Claude Code is started.
         const refreshed = yield* sessions.refreshUsage(session.id)
         assert.deepStrictEqual(refreshed.plan, fromAgent)
         assert.isNotNull(refreshed.context)
@@ -583,7 +592,6 @@ describe("SessionService", () => {
         const sessions = yield* SessionService
         const before = (yield* contents(sessionId)).usage
 
-        // No agent after a restart: an idle Claude Code on the session's account answers.
         const events = yield* sessions.subscribe(sessionId).pipe(
           Stream.filter((event) => event._tag === "UsageUpdated"),
           Stream.take(1),
@@ -600,7 +608,6 @@ describe("SessionService", () => {
         )
         assert.deepStrictEqual((yield* contents(sessionId)).usage, refreshed)
 
-        // A failed check is reported and leaves the last numbers alone.
         idleAnswer = Effect.fail(new ClaudeProbeFailed({ reason: "not signed in" }))
         const failed = yield* sessions.refreshUsage(sessionId).pipe(Effect.flip)
         assert.strictEqual(failed._tag, "PlanUsageUnavailable")
@@ -704,12 +711,10 @@ describe("SessionService", () => {
             ["WebFetch", "succeeded"],
           ],
         )
-        // Read is pre-approved; WebFetch reached Humanity, which let the thread run it.
         assert.deepStrictEqual(
           (yield* Ref.get(log.permissions)).map((entry) => [entry.toolName, entry.decision]),
           [["WebFetch", { behavior: "allow" }]],
         )
-        // Neither call reached a human.
         assert.deepStrictEqual(snapshot.approvals, [])
         const [run] = yield* Ref.get(log.runs)
         assert.includeMembers([...(run?.allowedTools ?? [])], ["Read", "Glob", "Grep"])
@@ -782,7 +787,6 @@ describe("SessionService", () => {
         return session.id
       }).pipe(Effect.provide(services(home, script)))
 
-      // A brand new daemon over the same data directory.
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
         const log = yield* FakeAgentLog
@@ -839,7 +843,6 @@ describe("SessionService", () => {
 
         yield* sessions.interrupt(session.id)
         yield* waitForStatus(session.id, "interrupted")
-        // The status flips at once; the agent's closing result follows.
         let result: MessageContent | undefined
         for (let attempt = 0; attempt < 200 && result?._tag !== "result"; attempt++) {
           yield* Effect.sleep("10 millis")
@@ -947,7 +950,6 @@ describe("SessionService", () => {
           const opened = (yield* sessions.list(project.id)).find(
             (session) => session.id !== parent.id,
           )
-          // The agent is handed the link it puts in its reply.
           assert.include(
             call?.output?.content,
             `[Flaky login](${threadHref(project.id, opened?.id ?? "")})`,
@@ -956,7 +958,6 @@ describe("SessionService", () => {
           const child = yield* waitForStatus(opened?.id ?? "", "idle")
           assert.strictEqual(child.title, "Flaky login")
           assert.strictEqual(child.worktreePath, project.localPath)
-          // Not the autonomy of the thread that opened it: the default for new threads.
           assert.strictEqual(child.autonomy, "auto")
           const childRun = (yield* Ref.get(log.runs))[1]
           assert.strictEqual(childRun?.model, "opus")
@@ -1008,7 +1009,6 @@ describe("SessionService", () => {
         const [opened, refused] = (yield* contents(parent.id)).toolCalls
         assert.strictEqual(opened?.status, "succeeded")
         assert.include(opened?.output?.content, "on Kiro, claude-sonnet-5.5, max effort")
-        // A model Kiro does not offer comes back to the agent with those it does.
         assert.strictEqual(refused?.status, "failed")
         assert.include(refused?.output?.content, '"gpt-9" is not a model Kiro offers')
         assert.include(refused?.output?.content, "claude-sonnet-5.5 (Claude Sonnet 5.5)")

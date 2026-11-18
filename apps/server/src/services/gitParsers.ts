@@ -6,7 +6,6 @@ import type {
   StatusEntryKind,
 } from "@humanity/contracts"
 
-/** Field separator used in `--format` strings; it cannot occur in ref names or subjects. */
 export const FIELD = "\u001f"
 
 export const BRANCH_FORMAT = [
@@ -21,7 +20,6 @@ export const BRANCH_FORMAT = [
   "%(upstream:track,nobracket)",
 ].join(FIELD)
 
-/** Ends each commit of `git log`; a subject cannot contain it. */
 export const RECORD = ""
 
 export const LOG_FORMAT = ["%H", "%h", "%s", "%an", "%cI"].join(FIELD) + RECORD
@@ -37,7 +35,6 @@ export const parseLog = (output: string): Array<CommitSummary> =>
       return { hash, shortHash, subject, author, committedAt }
     })
 
-/** `ahead 2, behind 1`, `ahead 3`, `gone` or empty, as `%(upstream:track,nobracket)` prints it. */
 const trackCount = (track: string, word: "ahead" | "behind") =>
   Number(new RegExp(`${word} (\\d+)`).exec(track)?.[1] ?? 0)
 
@@ -57,7 +54,6 @@ export const parseBranches = (output: string): Array<Branch> =>
         committedAt = "",
         track = "",
       ] = line.split(FIELD)
-      // `origin/HEAD` is a pointer to the remote's default branch, not a branch.
       if (refname.endsWith("/HEAD") || name === "" || name.startsWith("(")) return []
       return [
         {
@@ -85,11 +81,6 @@ const kindFromCodes = (index: string, worktree: string): StatusEntryKind => {
   return "modified"
 }
 
-/**
- * Parses `git status --porcelain=v2 --branch -z`. With `-z` records end in NUL
- * and paths are never quoted; a rename record is followed by one extra NUL
- * field holding the original path.
- */
 export const parseStatus = (output: string): RepoStatus => {
   let branch: string | null = null
   let upstream: string | null = null
@@ -121,8 +112,6 @@ export const parseStatus = (output: string): RepoStatus => {
     if (type === "?") {
       entries.push({ path: record.slice(2), kind: "untracked", staged: false, unstaged: true })
     } else if (type === "1" || type === "2") {
-      // 1 XY sub mH mI mW hH hI path            (8 fields before the path)
-      // 2 XY sub mH mI mW hH hI Xscore path     (9 fields before the path)
       const fieldsBeforePath = type === "1" ? 8 : 9
       const parts = record.split(" ")
       const xy = parts[1] ?? ".."
@@ -138,7 +127,6 @@ export const parseStatus = (output: string): RepoStatus => {
         unstaged: worktree !== ".",
       })
     } else if (type === "u") {
-      // u XY sub m1 m2 m3 mW h1 h2 h3 path      (10 fields before the path)
       entries.push({
         path: record.split(" ").slice(10).join(" "),
         kind: "conflicted",
@@ -146,7 +134,6 @@ export const parseStatus = (output: string): RepoStatus => {
         unstaged: true,
       })
     }
-    // "!" (ignored) records are not requested and are skipped if present.
   }
 
   return { branch, upstream, ahead, behind, entries }
@@ -155,11 +142,9 @@ export const parseStatus = (output: string): RepoStatus => {
 export interface Worktree {
   readonly path: string
   readonly head: string | undefined
-  /** Short branch name, or `undefined` when detached. */
   readonly branch: string | undefined
 }
 
-/** Parses `git worktree list --porcelain`: blank-line separated attribute blocks. */
 export const parseWorktrees = (output: string): Array<Worktree> =>
   output
     .split(/\r?\n\r?\n/)

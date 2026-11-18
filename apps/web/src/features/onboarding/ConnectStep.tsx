@@ -13,10 +13,6 @@ import { usePollWhile } from "@/lib/usePollWhile"
 import { useHistoryImport } from "./historyImport.ts"
 import { ServiceRow } from "./ServiceRow.tsx"
 
-/**
- * The agent CLIs Humanity runs threads on: every provider there is, every
- * account of each, and whether it is signed in.
- */
 export function ConnectStep() {
   const history = useHistoryImport()
   const switchId = useId()
@@ -50,12 +46,10 @@ export function ConnectStep() {
   )
 }
 
-/** One provider's accounts, a row each; a single row while they are being read. */
 function ProviderRows({ provider }: { readonly provider: ProviderId }) {
   const { result, refresh, refreshing } = useProviderAccounts(provider)
   const accounts = AsyncResult.isSuccess(result) ? result.value : undefined
   const waiting = accounts?.some((account) => account.state !== "connected") === true
-  // A login made in a terminal or in the settings shows up here by itself.
   const poll = useCallback(() => void refresh(false), [refresh])
   usePollWhile(waiting, poll, refreshing)
 

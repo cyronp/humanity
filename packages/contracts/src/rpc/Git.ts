@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { Branch, RepoStatus, WorkingTreeDiff } from "../domain/Git.ts"
+import { Branch, FileEntry, RepoStatus, WorkingTreeDiff } from "../domain/Git.ts"
 import { ProjectId } from "../domain/Project.ts"
 import {
   GitBranchExists,
@@ -20,12 +20,10 @@ export const GitRpcs = RpcGroup.make(
     success: Schema.Array(Branch),
     error: Schema.Union(GitFailure),
   }),
-  /** Creates a branch ref in the project's repository. Nothing is checked out. */
   Rpc.make("Git.createBranch", {
     payload: {
       projectId: ProjectId,
       name: Schema.String,
-      /** Branch or commit to start from. Defaults to the project's default branch. */
       from: Schema.optional(Schema.String),
     },
     success: Branch,
@@ -36,10 +34,18 @@ export const GitRpcs = RpcGroup.make(
     success: RepoStatus,
     error: Schema.Union(GitFailure),
   }),
-  /** Uncommitted changes of the project's working copy, including untracked files. */
   Rpc.make("Git.diff", {
     payload: { projectId: ProjectId },
     success: WorkingTreeDiff,
+    error: Schema.Union(GitFailure),
+  }),
+  Rpc.make("Git.searchFiles", {
+    payload: {
+      projectId: ProjectId,
+      query: Schema.String,
+      recent: Schema.optional(Schema.Array(Schema.String)),
+    },
+    success: Schema.Array(FileEntry),
     error: Schema.Union(GitFailure),
   }),
 )

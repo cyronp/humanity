@@ -14,14 +14,9 @@ import { AddAccountForm } from "./AddAccount.tsx"
 import { useProviderAccounts } from "./providerAccounts.ts"
 import { PROVIDER_IDS, PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
-/**
- * Adds another account to any provider: one button, and the dialog asks which
- * provider first. Where the provider is already known, `AddAccount` is the one.
- */
 export function AddProviderAccount({
   initial = PROVIDER_IDS[0] ?? "claude-code",
 }: {
-  /** The provider the dialog opens on. */
   readonly initial?: ProviderId
 }) {
   const pickerId = useId()
@@ -38,7 +33,6 @@ export function AddProviderAccount({
         <SelectTrigger id={pickerId} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        {/* Below the field and as wide as it, not laid over it at the list's own width. */}
         <SelectContent position="popper" align="start">
           {PROVIDER_IDS.map((id) => {
             const { name, Icon } = PROVIDERS[id]
@@ -63,7 +57,6 @@ export function AddProviderAccount({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        {/* Keyed: each provider has its own way of adding, and its own form. */}
         <FormFor
           key={provider}
           provider={provider}

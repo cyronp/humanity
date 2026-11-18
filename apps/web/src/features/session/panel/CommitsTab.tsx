@@ -5,10 +5,6 @@ import { AsyncView } from "@/components/AsyncView"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { sessionCommitsAtom } from "../atoms.ts"
 
-/**
- * The commits of the session's branch, newest first: those its project's
- * default branch lacks, or the latest ones on the default branch itself.
- */
 export function CommitsTab({ session }: { readonly session: Session }) {
   const commits = useAtomValue(sessionCommitsAtom(session.id))
   return (

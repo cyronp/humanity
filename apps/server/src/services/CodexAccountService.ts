@@ -4,7 +4,6 @@ import { Codex, type CodexProbe } from "../codex/Codex.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { type AccountRegistry, makeAccountRegistry } from "./accountRegistry.ts"
 
-/** `plus` → `ChatGPT Plus` */
 const planLabel = (plan: string | null | undefined): string => {
   if (typeof plan !== "string" || plan === "" || plan === "unknown") return "ChatGPT"
   return `ChatGPT ${plan.charAt(0).toUpperCase()}${plan.slice(1).replace(/_/g, " ")}`
@@ -31,10 +30,6 @@ export const classifyCodexAccount = (account: CodexProbe["account"]): CodexConne
   }
 }
 
-/**
- * The Codex accounts: the default Codex login and every Codex folder
- * (`CODEX_HOME`) added next to it. Humanity holds no credential of its own.
- */
 export class CodexAccountService extends Context.Service<
   CodexAccountService,
   AccountRegistry<CodexStatus>
@@ -49,7 +44,7 @@ export class CodexAccountService extends Context.Service<
         Effect.gen(function* () {
           const result = yield* Effect.result(codex.probe(codexHome))
           const checkedAt = DateTime.formatIso(yield* DateTime.now)
-          const base = { executable: codex.executable, checkedAt }
+          const base = { executable: codex.executable(), checkedAt }
           if (Result.isFailure(result)) {
             yield* Effect.logWarning("Codex check failed", result.failure.reason)
             return {

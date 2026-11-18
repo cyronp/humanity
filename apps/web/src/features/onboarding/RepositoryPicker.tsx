@@ -35,17 +35,12 @@ interface Option {
 interface Progress {
   readonly total: number
   readonly done: number
-  /** The repository being cloned; `undefined` once every one was tried. */
   readonly current: string | undefined
   readonly failures: ReadonlyArray<{ readonly name: string; readonly message: string }>
 }
 
 const plural = (count: number): string => (count === 1 ? "repository" : "repositories")
 
-/**
- * A list, hidden until asked for, of the connected accounts' repositories. Any
- * number can be ticked and added as projects, cloned one after the other.
- */
 export function RepositoryPicker() {
   const githubResult = useAtomValue(githubConnectionAtom)
   const gitlabResult = useAtomValue(gitlabConnectionAtom)
@@ -104,7 +99,6 @@ export function RepositoryPicker() {
       if (Exit.isFailure(exit)) {
         failures.push({ name: option.name, message: describeCause(exit.cause) })
       } else {
-        // It is a project now: the sidebar shows it and the list stops offering it.
         refreshProjects()
       }
     }
@@ -234,7 +228,6 @@ export function RepositoryPicker() {
   )
 }
 
-/** A checkbox in the guide's blue; `indeterminate` shows some, not all, are chosen. */
 function GuideCheckbox({
   checked,
   indeterminate = false,
@@ -287,14 +280,12 @@ function ProgressLine({ progress }: { readonly progress: Progress }) {
   )
 }
 
-/** Reads the GitHub account's repositories, which only a connected account can list. */
 function GitHubReposLoader({
   onLoaded,
 }: {
   readonly onLoaded: (repos: ReadonlyArray<GitHubRepo>) => void
 }) {
   const repos = useAtomValue(reposAtom)
-  // A list that cannot be read is an empty one here; the row above says what is wrong.
   const loaded = AsyncResult.isSuccess(repos) ? repos.value : undefined
   const failed = AsyncResult.isFailure(repos)
   useEffect(() => {
@@ -304,7 +295,6 @@ function GitHubReposLoader({
   return null
 }
 
-/** The same for the connected GitLab instance. */
 function GitLabReposLoader({
   onLoaded,
 }: {

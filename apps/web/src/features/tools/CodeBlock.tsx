@@ -13,10 +13,6 @@ import { CodeLine } from "@/features/diff/HunkView"
 import { useHighlightedLines } from "@/features/diff/highlighter"
 import { parseAnsi } from "./ansi.ts"
 
-/**
- * Read-only code with optional line numbers, on shadcn's Code Block and
- * highlighted with the shared Shiki instance and themes.
- */
 export function CodeBlock({
   code,
   language,
@@ -26,7 +22,6 @@ export function CodeBlock({
 }: {
   readonly code: string
   readonly language: BundledLanguage | undefined
-  /** Shows line numbers starting here. */
   readonly firstLine?: number
   readonly maxLines?: number
   readonly className?: string

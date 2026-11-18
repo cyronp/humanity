@@ -1,10 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-/**
- * Whether the "Add repository" palette is open. It floats over whatever page
- * is showing and is opened from several places: the header's project menu,
- * the empty home page and the end of the setup guide.
- */
 
 let open = false
 const listeners = new Set<() => void>()

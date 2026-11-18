@@ -1,11 +1,9 @@
-import { join } from "node:path"
+import { CLI_MINIMUM_VERSIONS } from "@humanity/contracts"
+import { createRequire } from "node:module"
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
-import {
-  bundledClaudeExecutable,
-  bundledExecutablePackages,
-  claudeConfigDir,
-  claudeEnvironment,
-} from "../src/claude/environment.ts"
+import { claudeConfigDir, claudeEnvironment } from "../src/claude/environment.ts"
 
 describe("claudeEnvironment", () => {
   it("drops a parent Claude Code session's variables and keeps everything else", () => {
@@ -36,24 +34,12 @@ describe("claudeConfigDir", () => {
   })
 })
 
-describe("bundled executable", () => {
-  it("lists the SDK's platform packages, musl after glibc on Linux", () => {
-    expect(bundledExecutablePackages("win32", "x64")).toEqual([
-      "@anthropic-ai/claude-agent-sdk-win32-x64",
-    ])
-    expect(bundledExecutablePackages("linux", "arm64")).toEqual([
-      "@anthropic-ai/claude-agent-sdk-linux-arm64",
-      "@anthropic-ai/claude-agent-sdk-linux-arm64-musl",
-    ])
-  })
-
-  it("finds the CLI installed with the SDK on this machine", () => {
-    const path = bundledClaudeExecutable()
-    expect(path).not.toBeNull()
-    expect(path).toMatch(/claude(\.exe)?$/)
-  })
-
-  it("returns null for a platform whose package is not installed", () => {
-    expect(bundledClaudeExecutable("aix", "ppc64")).toBeNull()
+describe("the oldest Claude Code Humanity runs", () => {
+  it("is the one the Agent SDK is built for", () => {
+    const entry = createRequire(import.meta.url).resolve("@anthropic-ai/claude-agent-sdk")
+    const sdk = JSON.parse(readFileSync(join(dirname(entry), "package.json"), "utf8")) as {
+      readonly claudeCodeVersion: string
+    }
+    expect(CLI_MINIMUM_VERSIONS["claude-code"]).toBe(sdk.claudeCodeVersion)
   })
 })

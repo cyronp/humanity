@@ -127,7 +127,6 @@ function NewSessionForm({ project }: { readonly project: Project }) {
             autoComplete="off"
           />
         </Field>
-        {/* The branch list keeps its own width. */}
         <Field className="gap-1.5 *:w-auto">
           <FieldLabel htmlFor="session-base">Start from</FieldLabel>
           <Select value={baseBranch} onValueChange={setBaseBranch}>

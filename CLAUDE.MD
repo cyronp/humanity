@@ -35,7 +35,7 @@ Before considering any task done, `lint`, `typecheck` and `test` must all pass.
 - Never substitute a library from the spec's stack without asking.
 - Call the git CLI with argument arrays only, never shell-interpolated strings.
 - Never use the SDK's `bypassPermissions` mode: every call that is not a read reaches Humanity's own permission check, where the thread's autonomy decides. A tool Humanity does not know is never pre-approved; it asks in a thread that asks. The same holds on Codex: never the approval policy `never`, always `untrusted` with Humanity as the reviewer.
-- Never write outside `~/.humanity/` or the folder a session works in (its worktree, or the project's checkout until it has one).
+- Never write outside `~/.humanity/` or the folder a session works in (its worktree, or the project's checkout until it has one). The one exception is a provider CLI's own updater, run only when the human clicks Update.
 - Never store API keys or tokens in the database.
 
 ## Workflow

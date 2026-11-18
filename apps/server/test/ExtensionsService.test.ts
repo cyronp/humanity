@@ -31,7 +31,6 @@ describe("ExtensionsService", () => {
         assert.deepStrictEqual(listed.mcpServers, [saved])
         assert.isFalse(JSON.stringify(listed).includes("s3cret"))
 
-        // The agent gets the value.
         const agent = yield* extensions.forAgent
         assert.deepStrictEqual(agent.mcpServers, {
           tracker: {
@@ -44,7 +43,6 @@ describe("ExtensionsService", () => {
         assert.deepStrictEqual(agent.plugins, [join(home, "plugin")])
       }).pipe(Effect.provide(services(home)))
 
-      // In Claude Code's format, and only readable by the human where the OS supports it.
       const file = JSON.parse(readFileSync(join(home, "mcp.json"), "utf8"))
       assert.strictEqual(file.mcpServers.tracker.env.API_TOKEN, "s3cret")
       if (process.platform !== "win32") {
@@ -74,7 +72,6 @@ describe("ExtensionsService", () => {
           "renamed",
           stdio([{ name: "TOKEN", value: null }]),
         )
-        // Still disabled after the rename, and still in first place.
         assert.isFalse(renamed.enabled)
         assert.deepStrictEqual(
           (yield* extensions.list(undefined)).mcpServers.map((server) => server.name),
@@ -136,7 +133,6 @@ describe("ExtensionsService", () => {
         join(repo, ".claude", "skills", "deploy", "SKILL.md"),
         "---\nname: deploy\ndescription: Ships the app\n---\nSteps.\n",
       )
-      // A folder without a SKILL.md is no skill.
       mkdirSync(join(repo, ".claude", "skills", "empty"), { recursive: true })
       writeFileSync(
         join(repo, ".mcp.json"),
@@ -200,7 +196,6 @@ describe("ExtensionsService", () => {
         assert.strictEqual(gone._tag, "ExtensionNotFound")
       }).pipe(Effect.provide(services(home)))
 
-      // The plugin manifest Claude Code loads the folder by.
       const manifest = JSON.parse(
         readFileSync(join(home, "plugin", ".claude-plugin", "plugin.json"), "utf8"),
       )

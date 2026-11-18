@@ -2,7 +2,6 @@ import type { GitHubConnection, GitHubTokenSource } from "@humanity/contracts"
 
 export interface GitHubSummary {
   readonly tone: "ok" | "warning" | "error"
-  /** One sentence for headings. */
   readonly title: string
 }
 
@@ -20,14 +19,8 @@ export const summarizeGitHub = (connection: GitHubConnection): GitHubSummary => 
     : { tone: "ok", title: `Connected as ${connection.user.login} through ${through}` }
 }
 
-/** True when the human's repositories can be listed. */
 export const isConnected = (connection: GitHubConnection): boolean => connection.user !== null
 
-/**
- * The command that installs the GitHub CLI on the computer the browser runs
- * on, which is the daemon's own. `null` where there is no single command, as
- * on Linux: the install page covers each distribution.
- */
 export const installCliCommand = (userAgent: string): string | null => {
   if (/Windows/i.test(userAgent)) return "winget install --id GitHub.cli"
   if (/Mac/i.test(userAgent)) return "brew install gh"

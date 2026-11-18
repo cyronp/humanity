@@ -11,20 +11,11 @@ import { ToneDot } from "@/features/claude/ToneDot"
 import { describeCause } from "@/lib/errors"
 import { usePollWhile } from "@/lib/usePollWhile"
 
-/** What every repository service's connection says about itself. */
 interface ServiceConnection {
-  /** How it is connected; `null` while it is not. */
   readonly source: string | null
-  /** Why the service turned the login down, if it did. */
   readonly problem: string | null
 }
 
-/**
- * A repository service (GitHub, GitLab) in the settings: its name and how it
- * is connected, a button to check again, then the ways to connect it. While
- * there is no token at all it checks again by itself: then a check is a local
- * lookup, no request to the service.
- */
 export function ServiceConnect<C extends ServiceConnection, E>({
   name,
   icon,
@@ -39,7 +30,6 @@ export function ServiceConnect<C extends ServiceConnection, E>({
   readonly name: string
   readonly icon: ReactNode
   readonly result: AsyncResult.AsyncResult<C, E>
-  /** Resolves to an error message, or `undefined` when it worked. */
   readonly refresh: () => Promise<string | undefined>
   readonly refreshing: boolean
   readonly summary: (connection: C) => {
@@ -48,7 +38,6 @@ export function ServiceConnect<C extends ServiceConnection, E>({
   }
   readonly avatarUrl: (connection: C) => string | null
   readonly problemTitle: (connection: C) => string
-  /** The ways to connect it; `waiting` while it checks again by itself. */
   readonly children: (connection: C, waiting: boolean) => ReactNode
 }) {
   const [refreshError, setRefreshError] = useState<string>()
@@ -133,10 +122,6 @@ function ConnectionLine({
   )
 }
 
-/**
- * How to sign in with a service's CLI: install it if it is missing, sign in
- * in a terminal, then come back.
- */
 export function CliSteps({
   cliName,
   installed,
@@ -149,14 +134,11 @@ export function CliSteps({
   loginHint,
   waiting,
 }: {
-  /** "GitHub CLI" */
   readonly cliName: string
   readonly installed: boolean
-  /** The command that installs it on this computer, when there is one. */
   readonly install: string | null
   readonly installUrl: string
   readonly installUrlLabel: string
-  /** The words before the link, when there is an install command: "Or download it from ". */
   readonly installFallback: string
   readonly service: string
   readonly loginCommand: string

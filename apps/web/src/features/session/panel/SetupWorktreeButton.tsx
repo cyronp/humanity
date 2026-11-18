@@ -11,10 +11,6 @@ import { keys } from "@/lib/rpc"
 import { setupWorktreeAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 
-/**
- * Moves a session that works in the project's checkout into its own branch
- * and worktree. Hidden once it has one; disabled while the agent works.
- */
 export function SetupWorktreeButton({ session }: { readonly session: Session }) {
   const setup = useAtomSet(setupWorktreeAtom, { mode: "promiseExit" })
   const [pending, setPending] = useState(false)
@@ -49,7 +45,6 @@ export function SetupWorktreeButton({ session }: { readonly session: Session }) 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        {/* A span keeps the tooltip working while the button is disabled. */}
         <span tabIndex={busy ? 0 : -1}>
           <Button
             variant="ghost"

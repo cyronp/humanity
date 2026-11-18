@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { GitService } from "../src/services/GitService.ts"
 import { git, tempDir, tempRepo } from "./helpers.ts"
@@ -17,6 +17,19 @@ describe("GitService", () => {
       const dir = yield* tempDir()
       const error = yield* withGit((service) => Effect.flip(service.repositoryRoot(dir)))
       assert.strictEqual(error._tag, "GitNotARepository")
+    }),
+  )
+
+  it.live("lists tracked and untracked files, leaving ignored ones out", () =>
+    Effect.gen(function* () {
+      const repo = yield* tempRepo({ "README.md": "# fixture\n", ".gitignore": "dist/\n" })
+      mkdirSync(join(repo, "src"))
+      mkdirSync(join(repo, "dist"))
+      writeFileSync(join(repo, "src", "new file.ts"), "export {}\n")
+      writeFileSync(join(repo, "dist", "out.js"), "\n")
+
+      const files = yield* withGit((service) => service.listFiles(repo))
+      assert.deepStrictEqual([...files].sort(), [".gitignore", "README.md", "src/new file.ts"])
     }),
   )
 
@@ -72,7 +85,6 @@ describe("GitService", () => {
           assert.strictEqual(optionLike._tag, "GitRefNotFound")
         }),
       )
-      // None of the rejected calls left a branch behind.
       assert.strictEqual(git(repo, "branch", "--list").trim(), "* main")
     }),
   )
@@ -81,7 +93,6 @@ describe("GitService", () => {
     Effect.gen(function* () {
       const repo = yield* tempRepo()
       const marker = join(repo, "pwned")
-      // Legal in a ref name (and a file name), and a command chain if a shell ever saw it.
       const name = `x;touch${"$"}{IFS}pwned&&touch${"$"}{IFS}pwned`
 
       const branch = yield* withGit((service) => service.createBranch(repo, name, "main"))
@@ -195,7 +206,6 @@ describe("GitService", () => {
           assert.strictEqual(readFileSync(join(worktree, "README.md"), "utf8"), "# fixture\n")
           assert.strictEqual(yield* service.currentBranch(worktree), "humanity/abc123-fix-bug")
 
-          // The user's working copy is still on main and still clean.
           assert.strictEqual(yield* service.currentBranch(repo), "main")
           assert.deepStrictEqual((yield* service.status(repo)).entries, [])
 
@@ -203,7 +213,6 @@ describe("GitService", () => {
           assert.strictEqual(listed.length, 2)
           assert.strictEqual(listed[1]?.branch, "humanity/abc123-fix-bug")
 
-          // Work in the worktree does not leak into the original copy.
           writeFileSync(join(worktree, "README.md"), "# changed by the agent\n")
           assert.strictEqual((yield* service.status(worktree)).entries.length, 1)
           assert.deepStrictEqual((yield* service.status(repo)).entries, [])
@@ -217,7 +226,6 @@ describe("GitService", () => {
           yield* service.worktreeRemove(repo, worktree)
           assert.isFalse(existsSync(worktree))
           assert.strictEqual((yield* service.worktreeList(repo)).length, 1)
-          // The branch and its commit survive the worktree.
           assert.strictEqual(
             git(repo, "log", "-1", "--format=%s", "humanity/abc123-fix-bug").trim(),
             "agent: update readme",

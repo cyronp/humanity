@@ -20,14 +20,9 @@ const configure = (preferences: UpdatePreferences): DesktopUpdateCommand => ({
   preferences,
 })
 
-/**
- * Runs `serveUpdates` in the background against a fake updater. Commands go
- * in through `send`; every report comes out of `next` in order.
- */
 const harness = (options: {
   readonly updater?: Updater
   readonly unsupported?: string
-  /** False for a connection made after the app had already opened. */
   readonly firstOpen?: boolean
 }) =>
   Effect.gen(function* () {
@@ -48,7 +43,6 @@ const harness = (options: {
     }
   })
 
-/** A fake updater that finds `version` (or nothing), downloads in two steps and records what it was asked. */
 const fakeUpdater = (version: string | null, failCheck = false) =>
   Effect.gen(function* () {
     const tracks = yield* Ref.make<ReadonlyArray<UpdateTrack>>([])
@@ -115,7 +109,6 @@ describe("serveUpdates", () => {
       const app = yield* harness({ updater: fake.updater, firstOpen: false })
       assert.strictEqual(yield* app.nextTag, "Idle")
       yield* app.send(configure({ autoCheck: true, track: "stable" }))
-      // The next report comes from the human's check, not from one of its own.
       yield* app.send({ _tag: "Check" })
       assert.strictEqual(yield* app.nextTag, "Checking")
       assert.strictEqual(yield* app.nextTag, "UpToDate")
@@ -164,7 +157,6 @@ describe("serveUpdates", () => {
       const updater: Updater = {
         check: () => Effect.succeed("0.3.0"),
         download: Stream.make(100),
-        // Like the app's: the daemon stops, its socket closes, then the installer runs.
         install: Queue.end(commands).pipe(
           Effect.andThen(Effect.promise(() => new Promise((done) => setTimeout(done, 20)))),
           Effect.andThen(Ref.set(installed, true)),

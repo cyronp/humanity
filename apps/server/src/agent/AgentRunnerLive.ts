@@ -13,11 +13,12 @@ import {
   toolMode,
 } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
-import { ClaudeCode } from "../claude/ClaudeCode.ts"
+import { ClaudeCode, claudeExecutable, notInstalled } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
 import { readPlanUsage } from "../claude/planUsage.ts"
 import {
   type AgentExtensions,
+  type AgentRun,
   type AgentRunOptions,
   AgentRunError,
   AgentRunner,
@@ -27,7 +28,6 @@ import { startCodexRun } from "./CodexRunner.ts"
 import { startAcpRun } from "./AcpRunner.ts"
 import { Kiro } from "../kiro/Kiro.ts"
 
-/** An async iterable fed from outside: the SDK's streaming input. */
 class Inbox<T> implements AsyncIterable<T> {
   private readonly items: Array<T> = []
   private waiting: ((result: IteratorResult<T>) => void) | undefined
@@ -72,10 +72,20 @@ When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOO
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause)
 
-/**
- * Asks the agent process something that is only nice to know: a failure, a
- * shape Humanity does not expect or no answer in time all read as `undefined`.
- */
+const notStarted = (message: string): AgentRun => {
+  const error = new AgentRunError({ message })
+  return {
+    messages: Stream.fail(error),
+    send: () => Effect.void,
+    interrupt: Effect.void,
+    setModel: () => Effect.fail(error),
+    setEffort: () => Effect.fail(error),
+    applyExtensions: () => Effect.fail(error),
+    contextUsage: Effect.succeed(undefined),
+    planUsage: Effect.succeed(undefined),
+  }
+}
+
 const quietly = <A, B>(ask: () => Promise<A>, read: (answer: A) => B | undefined) =>
   Effect.tryPromise(ask).pipe(
     Effect.flatMap((answer) => Effect.try(() => read(answer))),
@@ -84,11 +94,6 @@ const quietly = <A, B>(ask: () => Promise<A>, read: (answer: A) => B | undefined
     Effect.orElseSucceed(() => undefined),
   )
 
-/**
- * Runs before the SDK applies permission rules from settings files, so a
- * repository cannot pre-approve a tool on Humanity's behalf: anything not
- * `auto` is forced into `canUseTool`, where the thread's autonomy decides.
- */
 const permissionGuard: HookCallback = async (input) => {
   if (input.hook_event_name !== "PreToolUse") return {}
   if (toolMode(input.tool_name) === "auto") return {}
@@ -101,10 +106,6 @@ const permissionGuard: HookCallback = async (input) => {
   }
 }
 
-/**
- * A user message for the Messages API. Files go first, each document titled
- * with its name, then the text, as the API recommends for images and documents.
- */
 const userContent = (message: AgentUserMessage): SDKUserMessage["message"]["content"] => {
   if (message.attachments.length === 0) return message.text
   return [
@@ -137,7 +138,6 @@ const userContent = (message: AgentUserMessage): SDKUserMessage["message"]["cont
   ]
 }
 
-/** Humanity's MCP servers in the SDK's (mutable) configuration types. */
 const sdkMcpServers = (extensions: AgentExtensions): Record<string, McpServerConfig> =>
   Object.fromEntries(
     Object.entries(extensions.mcpServers).map(([name, server]): [string, McpServerConfig] => [
@@ -159,6 +159,8 @@ export const AgentRunnerLive = Layer.effect(
 
     const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {
+        const launch = claude.launch()
+        if (launch === undefined) return notStarted(notInstalled().reason)
         const context = yield* Effect.context<never>()
         const runPromise = Effect.runPromiseWith(context)
         const inbox = new Inbox<SDKUserMessage>()
@@ -181,28 +183,23 @@ export const AgentRunnerLive = Layer.effect(
           prompt: inbox,
           options: {
             cwd: options.cwd,
+            pathToClaudeCodeExecutable: claudeExecutable(launch),
             ...(options.resume === undefined ? {} : { resume: options.resume }),
             ...(options.model === undefined ? {} : { model: options.model }),
             ...(options.effort === undefined ? {} : { effort: options.effort }),
-            // Every non-auto call must reach canUseTool. Never bypassPermissions.
             permissionMode: "default",
             allowedTools: [...options.allowedTools],
             canUseTool,
             hooks: { PreToolUse: [{ hooks: [permissionGuard], onFailure: "block" }] },
-            // Loads the human's user settings (e.g. `attribution` for commit trailers)
-            // and the repository's CLAUDE.md, skills and project settings.
             settingSources: ["user", "project"],
             systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_PROMPT_APPEND },
             includePartialMessages: true,
-            // Humanity's own servers and skills. Their MCP tools still reach `canUseTool`.
             mcpServers: sdkMcpServers(options.extensions),
             plugins: options.extensions.plugins.map((path) => ({
               type: "local" as const,
               path,
               skipMcpDiscovery: true,
             })),
-            // Claude Code's own environment and config directory, so it signs in
-            // with the human's login (`claude auth login`), like the account check.
             env: {
               ...claude.environment,
               ...(options.configDir === undefined ? {} : { CLAUDE_CONFIG_DIR: options.configDir }),
@@ -242,7 +239,6 @@ export const AgentRunnerLive = Layer.effect(
             }),
           setEffort: (effort: ReasoningEffort | undefined) =>
             Effect.tryPromise({
-              // `null` resets the session to the model's default effort.
               try: () => handle.applyFlagSettings({ effortLevel: effort ?? null }),
               catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
             }),
@@ -250,12 +246,10 @@ export const AgentRunnerLive = Layer.effect(
             Effect.tryPromise({
               try: async () => {
                 await handle.setMcpServers(sdkMcpServers(extensions))
-                // Re-reads the plugin folders, so added, edited and removed skills show.
                 await handle.reloadPlugins()
               },
               catch: (cause) => new AgentRunError({ message: errorMessage(cause) }),
             }),
-          // "summary" answers from the last response's usage, without token-count calls.
           contextUsage: quietly(
             () => handle.getContextUsage({ detail: "summary" }),
             (usage): ContextUsage | undefined =>
@@ -263,7 +257,6 @@ export const AgentRunnerLive = Layer.effect(
                 ? { usedTokens: usage.totalTokens, maxTokens: usage.maxTokens }
                 : undefined,
           ),
-          // The SDK marks this call experimental: any surprise reads as "cannot say".
           planUsage: quietly(
             () =>
               handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({

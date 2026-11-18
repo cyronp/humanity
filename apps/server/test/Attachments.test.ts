@@ -45,7 +45,6 @@ describe("attachments", () => {
             size,
           ]),
           [
-            // Only the base name of a path is kept.
             ["screen.png", "image", "image/png", PNG.length],
             ["spec.pdf", "pdf", "application/pdf", PDF.length],
             ["notes.md", "text", "text/plain", NOTES.length],
@@ -65,7 +64,6 @@ describe("attachments", () => {
           { kind: "text", name: "notes.md", text: "line one\nline two\n" },
         ])
 
-        // The bytes live under the data directory and come back unchanged.
         const image = first.attachments?.[0]
         if (image === undefined) return assert.fail("expected the image")
         const stored = join(home, "attachments", session.id, image.id)
@@ -100,7 +98,6 @@ describe("attachments", () => {
         assert.lengthOf(yield* sessions.list(project.id), 0)
         assert.isFalse(existsSync(join(home, "worktrees", project.id)))
 
-        // An open thread refuses it too, without recording the message.
         const session = yield* sessions.create({ projectId: project.id })
         const again = yield* sessions
           .sendMessage(session.id, "Read this", [upload("report.docx", ZIP)])
@@ -109,13 +106,11 @@ describe("attachments", () => {
         assert.lengthOf((yield* contents(session.id)).messages, 0)
         assert.lengthOf(yield* Ref.get(log.sent), 0)
 
-        // Files need a message to go with.
         const empty = yield* sessions
           .create({ projectId: project.id, attachments: [upload("a.png", PNG)] })
           .pipe(Effect.flip)
         assert.strictEqual(empty._tag, "AttachmentRejected")
 
-        // A payload that is not base64 is refused rather than half-decoded.
         const broken = yield* sessions
           .sendMessage(session.id, "hi", [{ name: "a.png", data: "not base64!" }])
           .pipe(Effect.flip)

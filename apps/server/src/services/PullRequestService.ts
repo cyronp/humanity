@@ -23,31 +23,26 @@ import { SessionService, threadBranch } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
-/** Where a project's pull requests live, as far as Humanity can reach them. */
 type Remote =
   | { readonly forge: "github"; readonly fullName: string }
   | {
       readonly forge: "gitlab"
       readonly fullPath: string
       readonly host: string
-      /** Why the connected instance can't be used for this project, when it can't. */
       readonly mismatch: string | null
     }
 
-/** Where a branch stands against its upstream. */
 interface Tracking {
   readonly upstream: string | null
   readonly ahead: number
   readonly behind: number
 }
 
-/** The agent is mid-turn, so the branch may be about to change under the push. */
 const isBusy = (session: Session) =>
   session.status === "running" || session.status === "waiting_for_human"
 
 const sameHost = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
-/** The branch of `remote` the forge can be asked about, when there is one. */
 const targetOf = (remote: Remote | null, branch: string | null): ForgeTarget | null => {
   if (remote === null || branch === null) return null
   if (remote.forge === "github") return { forge: "github", fullName: remote.fullName, branch }
@@ -55,18 +50,9 @@ const targetOf = (remote: Remote | null, branch: string | null): ForgeTarget | n
   return { forge: "gitlab", host: remote.host, fullPath: remote.fullPath, branch }
 }
 
-/**
- * Publishing a session's branch: push it, open its pull request (a merge
- * request on GitLab), and follow its checks and comments. Everything acts on
- * the session's own branch, even when another thread has since switched the
- * checkout it shares to another one. Where the branch stands comes from git
- * alone; what the forge says comes through `ForgeSync`,
- * which asks it once for everyone watching.
- */
 export class PullRequestService extends Context.Service<
   PullRequestService,
   {
-    /** The branch against its remote, read from git: the forge is not asked. */
     readonly publication: (sessionId: string) => Effect.Effect<BranchPublication, Base>
     readonly push: (
       sessionId: string,
@@ -75,7 +61,6 @@ export class PullRequestService extends Context.Service<
       sessionId: string,
       pullRequest: NewPullRequest,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
-    /** The branch's pull request, checks and comments, kept fresh while the stream runs. */
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
   }
@@ -89,7 +74,6 @@ export class PullRequestService extends Context.Service<
       const github = yield* GitHubService
       const gitlab = yield* GitLabService
       const sync = yield* ForgeSync
-      /** Where each session's branch stood against its remote when last read. */
       const lastSeen = new Map<
         string,
         { branch: string | null; upstream: string | null; ahead: number }
@@ -101,8 +85,6 @@ export class PullRequestService extends Context.Service<
             return { forge: "github", fullName: project.githubFullName } satisfies Remote
           }
           const { host } = yield* gitlab.credentials
-          // A project added before its GitLab instance was connected has no
-          // remote on record; its origin still says where it lives.
           let onGitLab = project.gitlab
           if (onGitLab === null) {
             const origin = yield* git.originUrl(project.localPath)
@@ -121,10 +103,6 @@ export class PullRequestService extends Context.Service<
           } satisfies Remote
         })
 
-      /**
-       * Where `branch` stands against its upstream. The folder's status has it
-       * when the branch is checked out there; otherwise its ref is asked.
-       */
       const trackingOf = (cwd: string, branch: string | null, status: RepoStatus) =>
         branch === null || branch === status.branch
           ? Effect.succeed<Tracking>(status)
@@ -137,7 +115,6 @@ export class PullRequestService extends Context.Service<
               }
             })
 
-      /** The session, its project, its folder and where the session's branch stands, read fresh. */
       const load = (sessionId: string) =>
         Effect.gen(function* () {
           const session = yield* sessions.get(sessionId)
@@ -177,14 +154,9 @@ export class PullRequestService extends Context.Service<
         upstream: tracking.upstream,
         ahead: tracking.ahead,
         behind: tracking.behind,
-        // What another branch has uncommitted is that branch's, not this thread's.
         uncommitted: branch === null || branch === status.branch ? status.entries.length : 0,
       })
 
-      /**
-       * A branch that reached its remote since it was last read was pushed
-       * outside Humanity, most likely by the agent: the forge has news.
-       */
       const notePush = (
         sessionId: string,
         branch: string | null,
@@ -211,7 +183,6 @@ export class PullRequestService extends Context.Service<
         return describe(loaded)
       })
 
-      /** The token for `origin`'s host, for this one push. */
       const pushEnv = (remote: Remote | null) =>
         Effect.gen(function* () {
           if (remote === null) return {}
@@ -247,7 +218,6 @@ export class PullRequestService extends Context.Service<
         const { session, remote, branch: own } = yield* load(sessionId)
         yield* requireIdle(session)
         const branch = yield* requireBranch(own)
-        // A full refspec: it pushes the thread's branch whatever the checkout is on.
         yield* git.push(session.worktreePath, branch, yield* pushEnv(remote))
         const after = yield* load(sessionId)
         lastSeen.set(sessionId, {
@@ -289,7 +259,6 @@ export class PullRequestService extends Context.Service<
             reason: `${branch} already has an open ${forgeName(remote.forge)}: ${existing.url}`,
           })
         }
-        // The forge can only open it from a branch it has, at the commit the human sees.
         if (tracking.upstream === null || tracking.ahead > 0) {
           yield* git.push(session.worktreePath, branch, yield* pushEnv(remote))
         }
@@ -320,7 +289,6 @@ export class PullRequestService extends Context.Service<
             const { remote, branch } = yield* load(sessionId)
             const target = targetOf(remote, branch)
             if (target !== null) return sync.watch(target)
-            // Nothing to ask: say why once, when there is a why.
             const problem = remote?.forge === "gitlab" ? remote.mismatch : null
             const feed: PullRequestFeed = { ...EMPTY_FEED, problem }
             return Stream.make(feed)

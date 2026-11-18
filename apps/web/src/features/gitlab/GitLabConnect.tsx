@@ -19,11 +19,6 @@ import {
 import { GitLabIcon } from "./GitLabIcon.tsx"
 import { useGitLabConnection } from "./useGitLabConnection.ts"
 
-/**
- * GitLab as a place repositories come from, on gitlab.com or an instance of
- * the human's own, and the two ways to connect it: the GitLab CLI's login, or
- * a token saved in Humanity.
- */
 export function GitLabConnect() {
   const { result, refresh, refreshing, saveToken, removeToken } = useGitLabConnection()
   return (
@@ -40,7 +35,6 @@ export function GitLabConnect() {
       {(connection, waiting) => (
         <>
           <CliOption connection={connection} waiting={waiting} />
-          {/* Keyed by what is saved, so the form starts over from the instance in use. */}
           <TokenOption
             key={`${connection.source}:${connection.host}`}
             connection={connection}
@@ -94,7 +88,6 @@ function TokenOption({
   onRemove,
 }: {
   readonly connection: GitLabConnection
-  /** Both resolve to an error message, or `undefined` when they worked. */
   readonly onSave: (token: string, host: string) => Promise<string | undefined>
   readonly onRemove: () => Promise<string | undefined>
 }) {
@@ -105,7 +98,6 @@ function TokenOption({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const saved = connection.source === "token"
-  // An empty field means gitlab.com; anything else has to be a host.
   const instance = host.trim() === "" ? GITLAB_DEFAULT_HOST : normalizeGitLabHost(host)
 
   const submit = async (event: FormEvent) => {

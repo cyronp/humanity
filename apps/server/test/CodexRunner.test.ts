@@ -15,7 +15,6 @@ interface Call {
   readonly params: Record<string, unknown>
 }
 
-/** A scripted app server: it records what Humanity asks and says what the test tells it to. */
 const fakeCodex = Effect.gen(function* () {
   const notifications = yield* Queue.unbounded<ServerMessage, CodexFailed | Cause.Done>()
   const calls: Array<Call> = []
@@ -50,7 +49,6 @@ const fakeCodex = Effect.gen(function* () {
     called: (method: string) => calls.filter((call) => call.method === method),
     notify: (method: string, params: Record<string, unknown>) =>
       Queue.offer(notifications, { method, params: { threadId: "thread-1", ...params } }),
-    /** Codex asks Humanity something, as it does for an approval. */
     ask: (method: string, params: Record<string, unknown>) =>
       Effect.suspend(() => {
         if (onRequest === undefined) return Effect.die("Codex is not connected yet")
@@ -119,7 +117,6 @@ describe("a Codex run", () => {
 
       const thread = codex.called("thread/start")[0]?.params
       assert.strictEqual(thread?.["cwd"], "/work/repo")
-      // Never `never`: every command and patch must come to Humanity to be decided.
       assert.strictEqual(thread?.["approvalPolicy"], "untrusted")
       assert.strictEqual(thread?.["approvalsReviewer"], "user")
       assert.deepStrictEqual(thread?.["config"], {
@@ -131,7 +128,6 @@ describe("a Codex run", () => {
             env: { A: "1" },
             default_tools_approval_mode: "prompt",
           },
-          // Humanity's own server: the tool no thread asks about is approved, the rest ask.
           humanity: {
             url: "http://127.0.0.1:7420/mcp",
             http_headers: { Authorization: "Bearer thread-token" },
@@ -200,7 +196,6 @@ describe("a Codex run", () => {
         command: "rm -rf build",
       })
       assert.deepStrictEqual(denied.result, { decision: "decline" })
-      // Codex's own answer has no room for the human's words: they follow as a message.
       yield* denied.afterwards ?? Effect.void
       const steered = codex.called("turn/steer")[0]?.params
       assert.strictEqual(steered?.["expectedTurnId"], "turn-1")
@@ -234,7 +229,6 @@ describe("a Codex run", () => {
           changes: [{ path: "/work/repo/a.txt", kind: { type: "add" }, diff: "hi\n" }],
         },
       })
-      // The announcement reaches the transcript before Codex asks.
       yield* run.messages.pipe(Stream.take(2), Stream.runDrain)
 
       const reply = yield* codex.ask("item/fileChange/requestApproval", { itemId: "patch-1" })
@@ -245,7 +239,6 @@ describe("a Codex run", () => {
         toolUseId: "patch-1",
       })
 
-      // A change Humanity never saw is not one it can allow.
       const unknown = yield* codex.ask("item/fileChange/requestApproval", { itemId: "patch-9" })
       assert.deepStrictEqual(unknown.result, { decision: "decline" })
       assert.strictEqual(asked.length, 1)

@@ -12,21 +12,8 @@ import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 
-/**
- * Humanity's own MCP server: the tools the app itself gives the agent of a
- * thread. The daemon serves it over MCP's Streamable HTTP transport, so every
- * provider reaches it the way it reaches any MCP server the human added,
- * whatever process the agent runs in. Each thread gets a token of its own,
- * which says which thread a call comes from and lives only as long as the
- * thread's agent does. It is kept in memory, never in the database.
- *
- * Only what the agents need of the transport is spoken: each POST carries one
- * JSON-RPC message (or a batch) and is answered with plain JSON, never a
- * stream, and there is no session to resume. https://modelcontextprotocol.io
- */
 export const MCP_PATH = "/mcp"
 
-/** The protocol versions this server speaks, newest first. */
 const PROTOCOL_VERSIONS: ReadonlyArray<string> = [
   "2025-11-25",
   "2025-06-18",
@@ -34,7 +21,6 @@ const PROTOCOL_VERSIONS: ReadonlyArray<string> = [
   "2024-11-05",
 ]
 
-/** What the agent passes to `open_thread`. */
 export const OpenThreadRequest = Schema.Struct({
   prompt: Schema.String,
   title: Schema.optional(Schema.NullOr(Schema.String)),
@@ -45,14 +31,11 @@ export const OpenThreadRequest = Schema.Struct({
 export type OpenThreadRequest = typeof OpenThreadRequest.Type
 const decodeOpenThread = Schema.decodeUnknownOption(OpenThreadRequest)
 
-/** Why a thread was not opened, in words the agent can act on. */
 export class OpenThreadFailed extends Data.TaggedError("OpenThreadFailed")<{
   readonly reason: string
 }> {}
 
-/** What Humanity's tools do for one thread. */
 export interface HumanityTools {
-  /** Starts a new thread in the thread's project on the given prompt. */
   readonly openThread: (request: OpenThreadRequest) => Effect.Effect<OpenedThread, OpenThreadFailed>
 }
 
@@ -99,11 +82,9 @@ const OPEN_THREAD_TOOL_DEFINITION = {
     additionalProperties: false,
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  // Claude Code would otherwise defer it behind its ToolSearch tool, which a thread that asks asks about.
   _meta: { "anthropic/alwaysLoad": true },
 }
 
-/** How the daemon answers one POST: a status and, unless there is nothing to say, a JSON body. */
 export interface McpReply {
   readonly status: number
   readonly body?: unknown
@@ -130,7 +111,6 @@ const INVALID_REQUEST = -32600
 const METHOD_NOT_FOUND = -32601
 const INVALID_PARAMS = -32602
 
-/** Calls one of Humanity's tools for the thread whose tools these are. */
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
   if (name !== OPEN_THREAD_TOOL_NAME) return Option.none()
@@ -155,10 +135,8 @@ const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   )
 }
 
-/** The answer to one JSON-RPC message, or `undefined` for a notification. */
 const answer = (tools: HumanityTools, message: unknown): Effect.Effect<unknown> => {
   if (!isRecord(message) || message["jsonrpc"] !== "2.0" || typeof message["method"] !== "string") {
-    // A response from the client (to a request this server never makes) needs no answer either.
     return Effect.succeed(
       isRecord(message) && ("result" in message || "error" in message)
         ? undefined
@@ -199,10 +177,6 @@ const answer = (tools: HumanityTools, message: unknown): Effect.Effect<unknown> 
   }
 }
 
-/**
- * Answers the body of one POST from the agent of the thread `tools` belong
- * to: a message, or a batch of them. Notifications alone get `202 Accepted`.
- */
 export const answerMcp = (tools: HumanityTools, body: unknown): Effect.Effect<McpReply> => {
   if (Array.isArray(body)) {
     if (body.length === 0) {
@@ -221,7 +195,6 @@ export const answerMcp = (tools: HumanityTools, body: unknown): Effect.Effect<Mc
   )
 }
 
-/** The reply to a body that is not JSON. */
 export const MCP_PARSE_ERROR: McpReply = {
   status: 400,
   body: error(null, PARSE_ERROR, "The body is not JSON."),
@@ -232,19 +205,10 @@ const BEARER = "Bearer "
 export class HumanityMcp extends Context.Service<
   HumanityMcp,
   {
-    /**
-     * Humanity's MCP server for one thread, as the agent is given it, for as
-     * long as the scope is open: its tools then act for that thread.
-     */
     readonly serve: (tools: HumanityTools) => Effect.Effect<AgentMcpServer, never, Scope.Scope>
-    /**
-     * The tools of the thread an `Authorization` header stands for;
-     * `undefined` when it stands for none, or for one whose agent has stopped.
-     */
     readonly toolsFor: (authorization: string | undefined) => HumanityTools | undefined
   }
 >()("humanity/HumanityMcp") {
-  /** Served by this daemon, at the address it listens on. */
   static readonly layer = Layer.effect(
     HumanityMcp,
     Effect.gen(function* () {

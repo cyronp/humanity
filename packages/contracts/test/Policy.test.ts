@@ -37,7 +37,6 @@ describe("toolMode", () => {
   it("treats everything else as a call to allow or deny", () => {
     expect(toolMode("Bash")).toBe("confirm")
     expect(toolMode("PowerShell")).toBe("confirm")
-    // Subagents and anything else the CLI adds later.
     expect(toolMode("Task")).toBe("confirm")
     expect(toolMode("WebFetch")).toBe("confirm")
     expect(toolMode("mcp__github__create_issue")).toBe("confirm")

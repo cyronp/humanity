@@ -5,7 +5,6 @@ import { whileVisible } from "@/lib/visibility"
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 20))
 
-/** A page whose visibility the test flips, and a feed that counts who is watching it. */
 const stage = () => {
   const visibility = Effect.runSync(PubSub.unbounded<boolean>())
   const feed = Effect.runSync(PubSub.unbounded<string>())
@@ -46,7 +45,6 @@ describe("whileVisible", () => {
     await tick()
     expect(value()).toBe("first")
 
-    // Hidden: the subscription ends, so the daemon stops asking the forge for this page.
     show(false)
     await tick()
     expect(watchers).toEqual({ now: 0, ever: 1 })
@@ -54,7 +52,6 @@ describe("whileVisible", () => {
     await tick()
     expect(value()).toBe("first")
 
-    // Shown again: a new subscription, which the daemon answers with what it knows.
     show(true)
     await tick()
     expect(watchers).toEqual({ now: 1, ever: 2 })
@@ -62,7 +59,6 @@ describe("whileVisible", () => {
     await tick()
     expect(value()).toBe("second")
 
-    // The panel closes: nobody watches.
     unmount()
     await tick()
     expect(watchers.now).toBe(0)

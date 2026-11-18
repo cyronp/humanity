@@ -5,11 +5,6 @@ import { describeCause } from "@/lib/errors"
 import { earlierMessagesAtom } from "./atoms.ts"
 import { addEarlierPage, type EarlierPages, joinEarlier, type SessionView } from "./state.ts"
 
-/**
- * The transcript to show: the live view's latest messages, after whatever
- * earlier pages the human asked for. `loadEarlier` reads the page before the
- * first message shown.
- */
 export const useTranscript = (view: SessionView) => {
   const fetchEarlier = useAtomSet(earlierMessagesAtom, { mode: "promiseExit" })
   const [pages, setPages] = useState<EarlierPages>()

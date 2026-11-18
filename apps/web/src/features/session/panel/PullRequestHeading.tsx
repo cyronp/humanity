@@ -10,10 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { forgeTerms } from "./publication.ts"
 
-/**
- * Each state in the colour git already has for it here: added, deleted and
- * merged follow the theme, so the pill reads the same in light and dark.
- */
 const STATE: Record<
   PullRequestState,
   { readonly label: string; readonly Icon: typeof GitMerge; readonly className: string }
@@ -42,7 +38,6 @@ export function PullRequestStateBadge({ state }: { readonly state: PullRequestSt
   )
 }
 
-/** A pull request's state, title and number, linked to its page, and the branches it joins. */
 export function PullRequestHeading({ pullRequest }: { readonly pullRequest: PullRequest }) {
   const terms = forgeTerms(pullRequest.forge)
   return (

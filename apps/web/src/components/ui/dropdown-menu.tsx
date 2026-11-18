@@ -21,7 +21,6 @@ function DropdownMenuTrigger({
   return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
 }
 
-/** A menu taller than the space around its trigger scrolls inside, less the content's padding. */
 const MENU_VIEWPORT = "max-h-[calc(var(--radix-dropdown-menu-content-available-height)-0.5rem)]"
 
 function DropdownMenuContent({

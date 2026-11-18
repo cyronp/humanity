@@ -3,29 +3,18 @@ import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref, Stream } fro
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { ServerConfig } from "../ServerConfig.ts"
 
-/** The token GitHub is called with, and where it was found. */
 export interface ResolvedGitHubToken {
   readonly token: Option.Option<Redacted.Redacted<string>>
-  /** `null` when there is no token. */
   readonly source: GitHubTokenSource | null
-  /** Whether the `gh` command exists, signed in or not. */
   readonly cliInstalled: boolean
 }
 
-/**
- * Where the GitHub token comes from. A token the human saved from the UI is
- * tried first; it lives in a file of its own under the data directory, never
- * in the database. Without one it is `gh auth token` when the GitHub CLI is
- * logged in, else `GITHUB_TOKEN`; those two are looked up, never stored.
- */
 export class GitHubToken extends Context.Service<
   GitHubToken,
   {
     readonly get: Effect.Effect<Option.Option<Redacted.Redacted<string>>>
     readonly resolve: Effect.Effect<ResolvedGitHubToken>
-    /** Looks everything up again on the next `get` or `resolve`. */
     readonly invalidate: Effect.Effect<void>
-    /** Saves a token; it is used from the next lookup on. */
     readonly save: (token: Redacted.Redacted<string>) => Effect.Effect<void>
     readonly clear: Effect.Effect<void>
   }
@@ -42,7 +31,6 @@ export class GitHubToken extends Context.Service<
           const token = text.trim()
           return token === "" ? Option.none<string>() : Option.some(token)
         }),
-        // No file: no token was saved.
         Effect.catch(() => Effect.succeed(Option.none<string>())),
       )
 
@@ -62,7 +50,6 @@ export class GitHubToken extends Context.Service<
         }
       }).pipe(
         Effect.scoped,
-        // gh could not be started: it is not installed.
         Effect.catch(() => Effect.succeed({ installed: false, token: Option.none<string>() })),
       )
 
@@ -89,12 +76,10 @@ export class GitHubToken extends Context.Service<
         } satisfies ResolvedGitHubToken
       })
 
-      // A login made while the daemon runs is picked up within a minute.
       const [resolve, invalidate] = yield* Effect.cachedInvalidateWithTTL(lookUp, "1 minute")
 
       const save = (token: Redacted.Redacted<string>) =>
         fs.writeFileString(config.githubTokenPath, Redacted.value(token), { mode: 0o600 }).pipe(
-          // The data directory is Humanity's own; failing to write there is a defect.
           Effect.orDie,
           Effect.andThen(invalidate),
         )
@@ -113,10 +98,6 @@ export class GitHubToken extends Context.Service<
     }),
   )
 
-  /**
-   * For tests: a fixed token (or none) standing in for `GITHUB_TOKEN`, no
-   * GitHub CLI, and saved tokens kept in memory.
-   */
   static readonly layerTest = (token: string | undefined) =>
     Layer.effect(
       GitHubToken,

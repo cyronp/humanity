@@ -42,15 +42,12 @@ interface DraftAttachment {
   readonly name: string
   readonly size: number
   readonly kind: AttachmentKind
-  /** base64 */
   readonly data: string
-  /** An object URL for an image's thumbnail. */
   readonly previewUrl: string | undefined
 }
 
 const toBase64 = (bytes: Uint8Array): string => {
   let binary = ""
-  // In slices, so a large file never overflows the argument list.
   for (let start = 0; start < bytes.length; start += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000))
   }
@@ -59,18 +56,12 @@ const toBase64 = (bytes: Uint8Array): string => {
 
 const hasFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files")
 
-/**
- * The files of the message being written: added from the paperclip, pasted
- * or dropped onto the box. Every file is checked here with the daemon's own
- * rules, so a refusal shows up before sending.
- */
 export function useAttachmentDraft() {
   const [items, setItems] = useState<ReadonlyArray<DraftAttachment>>([])
   const [error, setError] = useState<string>()
   const [reading, setReading] = useState(0)
   const [dragging, setDragging] = useState(false)
   const previews = useRef(new Set<string>())
-  // The latest items, for checks made after reading files asynchronously.
   const latest = useRef(items)
   useEffect(() => {
     latest.current = items
@@ -145,7 +136,6 @@ export function useAttachmentDraft() {
     setError(undefined)
   }
 
-  /** Pasted files are attached; a paste that also carries text stays a text paste. */
   const onPaste = (event: ClipboardEvent) => {
     const files = Array.from(event.clipboardData.files)
     if (files.length === 0 || event.clipboardData.types.includes("text/plain")) return
@@ -162,7 +152,6 @@ export function useAttachmentDraft() {
       setDragging(true)
     },
     onDragLeave: (event: DragEvent) => {
-      // Moving between the box's own children is not leaving it.
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
     },
     onDrop: (event: DragEvent) => {
@@ -183,11 +172,9 @@ export type AttachmentDraft = ReturnType<typeof useAttachmentDraft>
 export const dropTargetClass =
   "data-[dragging]:border-primary data-[dragging]:ring-2 data-[dragging]:ring-primary/30"
 
-/** A file as a card: 48px tall, its preview 40px square, on the page's colour. */
 const CARD =
   "h-12 max-w-56 min-w-0 flex-nowrap gap-2 bg-background has-data-[slot=attachment-content]:px-1"
 const CARD_MEDIA = "group-data-[size=xs]/attachment:w-10"
-/** Name over size at the line height of small text, with no gap between them. */
 const CARD_TEXT = "text-xs"
 
 export function AttachmentTray({ draft }: { readonly draft: AttachmentDraft }) {
@@ -229,19 +216,16 @@ const blobOf = (content: AttachmentContent) => {
   const binary = atob(content.data)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index)
-  // Text is shown as text, never rendered as a page.
   const type = content.mediaType === "text/plain" ? "text/plain;charset=utf-8" : content.mediaType
   return new Blob([bytes], { type })
 }
 
-/** Opens a stored attachment in a new tab: the browser's own image, PDF or text viewer. */
 const useOpenAttachment = (sessionId: SessionId) => {
   const load = useAtomSet(fetchAttachmentAtom, { mode: "promiseExit" })
   const [error, setError] = useState<string>()
   const open = useCallback(
     async (attachment: Attachment) => {
       setError(undefined)
-      // Opened before the await, so the browser counts it as the click's own popup.
       const tab = window.open("", "_blank")
       const exit = await load({ payload: { sessionId, attachmentId: attachment.id } })
       if (Exit.isFailure(exit)) {
@@ -259,7 +243,6 @@ const useOpenAttachment = (sessionId: SessionId) => {
   return { open, error }
 }
 
-/** The files sent with a message, in the transcript. Images show as thumbnails. */
 export function MessageAttachments({
   sessionId,
   attachments,

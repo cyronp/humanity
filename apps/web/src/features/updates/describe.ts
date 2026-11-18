@@ -1,6 +1,5 @@
 import type { UpdateState } from "@humanity/contracts"
 
-/** One line on where the desktop app's updates stand. `formatTime` renders an ISO time. */
 export const describeUpdate = (state: UpdateState, formatTime: (iso: string) => string): string => {
   switch (state._tag) {
     case "Unsupported":
@@ -22,6 +21,5 @@ export const describeUpdate = (state: UpdateState, formatTime: (iso: string) => 
   }
 }
 
-/** True while the desktop app is downloading or installing, when nothing else can start. */
 export const isUpdating = (state: UpdateState): boolean =>
   state._tag === "Downloading" || state._tag === "Installing"

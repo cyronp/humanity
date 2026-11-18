@@ -2,15 +2,10 @@ import { Context, Effect, FileSystem, Layer } from "effect"
 import { randomBytes, timingSafeEqual } from "node:crypto"
 import { ServerConfig } from "./ServerConfig.ts"
 
-/**
- * The daemon's auth token. Generated on first start, kept in
- * `<home>/auth-token` and never stored in the database.
- */
 export class AuthToken extends Context.Service<
   AuthToken,
   {
     readonly value: string
-    /** Constant-time comparison against a candidate supplied by a client. */
     readonly matches: (candidate: string | null | undefined) => boolean
   }
 >()("humanity/AuthToken") {

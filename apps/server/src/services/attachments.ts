@@ -9,7 +9,6 @@ import {
 import { Effect } from "effect"
 import type { AgentAttachment, AgentImageMediaType } from "../agent/AgentRunner.ts"
 
-/** An upload that passed every check, ready to be stored and sent. */
 export interface PreparedAttachment {
   readonly name: string
   readonly kind: AttachmentKind
@@ -19,7 +18,6 @@ export interface PreparedAttachment {
 
 const STRICT_BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 
-/** A file name for display only: no directories, no control characters, not too long. */
 const cleanName = (name: string): string => {
   const base = name.split(/[\\/]/).pop() ?? ""
   // eslint-disable-next-line no-control-regex
@@ -27,10 +25,6 @@ const cleanName = (name: string): string => {
   return visible.slice(0, 200) || "file"
 }
 
-/**
- * Decodes and checks every upload of one message. The web app runs the same
- * checks first; these are the ones that count.
- */
 export const prepareAttachments = (uploads: ReadonlyArray<AttachmentUpload>) =>
   Effect.gen(function* () {
     const prepared: Array<PreparedAttachment> = []

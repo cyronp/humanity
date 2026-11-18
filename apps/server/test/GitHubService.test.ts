@@ -19,7 +19,6 @@ interface Reply {
   readonly headers?: Record<string, string>
 }
 
-/** A fake GitHub API: replies by path, and records each request's URL and auth header. */
 const fakeGitHub = (routes: Record<string, Reply>) =>
   Effect.gen(function* () {
     const requests = yield* Ref.make<ReadonlyArray<{ url: string; auth: string | undefined }>>([])
@@ -201,7 +200,6 @@ describe("GitHubService", () => {
         problem: null,
       })
 
-      // Without a token there is nobody to ask GitHub about.
       const before = (yield* Ref.get(requests)).length
       assert.deepStrictEqual(yield* connection.pipe(Effect.provide(github(client, undefined))), {
         source: null,
@@ -293,7 +291,6 @@ describe("GitHubService", () => {
 })
 
 describe("cloning from GitHub", () => {
-  /** Project and git services over a temp home, with a fake GitHub whose clone URL is local. */
   const services = (home: string, client: HttpClient.HttpClient, token: string | undefined) =>
     ProjectService.layer.pipe(
       Layer.provideMerge(GitService.layer),
@@ -325,14 +322,11 @@ describe("cloning from GitHub", () => {
       const target = join(home, "repos", "acme", "widgets")
       assert.strictEqual(last.project.localPath.toLowerCase(), target.toLowerCase())
       assert.strictEqual(last.project.defaultBranch, "main")
-      // The checkout follows the machine's own line-ending settings.
       assert.strictEqual(
         readFileSync(join(target, "README.md"), "utf8").replace(/\r\n/g, "\n"),
         "# widgets\n",
       )
-      // Remote branches arrive with the clone, ready to start a session from.
       assert.include(git(target, "branch", "--all"), "remotes/origin/feature/x")
-      // The token never lands in the clone's configuration.
       assert.notInclude(readFileSync(join(target, ".git", "config"), "utf8"), "secret-token")
       assert.notInclude(
         readFileSync(join(target, ".git", "config"), "utf8"),
@@ -360,7 +354,6 @@ describe("cloning from GitHub", () => {
         const project = (yield* projects.list)[0]
         if (project === undefined) return assert.fail("expected the cloned project")
         yield* projects.remove(project.id)
-        // The project is gone but the folder stays; cloning again would overwrite it.
         const exists = yield* Effect.flip(
           projects.cloneFromGitHub("acme/widgets").pipe(Stream.runDrain),
         )
@@ -428,9 +421,7 @@ describe("GitHubToken", () => {
 
         yield* tokens.clear
         assert.isFalse(existsSync(file))
-        // Whatever this machine has (a gh login, GITHUB_TOKEN or nothing), it is not the saved one.
         assert.notStrictEqual((yield* tokens.resolve).source, "token")
-        // Forgetting twice is not an error.
         yield* tokens.clear
       }).pipe(
         Effect.provide(

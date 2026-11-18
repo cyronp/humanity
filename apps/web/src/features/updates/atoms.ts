@@ -2,7 +2,6 @@ import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient } from "@/lib/rpc"
 
-/** The desktop app's update status, kept live by `Updates.watch`. */
 export const updateStatusAtom = HumanityClient.runtime
   .atom(() =>
     Stream.unwrap(

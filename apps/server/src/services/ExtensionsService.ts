@@ -24,30 +24,20 @@ import { parseSkillFile, renderSkillFile } from "../extensions/skillFile.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 
-/** What the agent gets from Humanity, and which change of the settings it reflects. */
 export interface AgentExtensionsSnapshot extends AgentExtensions {
-  /** Grows with every change, so a running agent knows when it is behind. */
   readonly version: number
 }
 
 interface McpFile {
   readonly servers: ReadonlyArray<readonly [string, McpConfig]>
-  /** Names of servers kept in the settings but not given to the agent. */
   readonly disabled: ReadonlySet<string>
 }
 
 const SKILL_FILE = "SKILL.md"
 
-/**
- * MCP servers and skills. Humanity's own live in its data folder and reach
- * every project: servers in `mcp.json` (with any tokens they carry, never in
- * the database) and skills in a local Claude Code plugin. A repository's own
- * `.mcp.json` and `.claude/skills/` are read, never written.
- */
 export class ExtensionsService extends Context.Service<
   ExtensionsService,
   {
-    /** Humanity's own servers and skills, then those of the repository at `projectPath`. */
     readonly list: (projectPath: string | undefined) => Effect.Effect<Extensions>
     readonly saveMcpServer: (
       previousName: string | null,
@@ -67,7 +57,6 @@ export class ExtensionsService extends Context.Service<
       skill: SkillInput,
     ) => Effect.Effect<Skill, ExtensionInvalid | ExtensionNotFound>
     readonly removeSkill: (name: string) => Effect.Effect<void, ExtensionNotFound>
-    /** The enabled servers and the skills plugin, as a new agent run is given them. */
     readonly forAgent: Effect.Effect<AgentExtensionsSnapshot>
   }
 >()("humanity/ExtensionsService") {
@@ -77,11 +66,9 @@ export class ExtensionsService extends Context.Service<
       const fs = yield* FileSystem.FileSystem
       const config = yield* ServerConfig
       const skillsDir = join(config.pluginDir, "skills")
-      // One writer at a time, so two saves never lose each other's change.
       const writeLock = yield* Semaphore.make(1)
       const version = yield* Ref.make(0)
 
-      // The plugin's manifest, so Claude Code loads the folder as the "humanity" plugin.
       yield* fs.makeDirectory(join(config.pluginDir, ".claude-plugin"), { recursive: true })
       yield* fs.makeDirectory(skillsDir, { recursive: true })
       yield* fs.writeFileString(
@@ -100,7 +87,6 @@ export class ExtensionsService extends Context.Service<
       const readJson = (path: string) =>
         fs.readFileString(path).pipe(
           Effect.map((text): unknown => JSON.parse(text.replace(/^\uFEFF/, ""))),
-          // No file, or not JSON: nothing configured there.
           Effect.catch(() => Effect.succeed(undefined)),
           Effect.catchDefect(() => Effect.succeed(undefined)),
         )
@@ -133,11 +119,9 @@ export class ExtensionsService extends Context.Service<
               null,
               2,
             )}\n`,
-            // Its servers' variables and headers often hold tokens.
             { mode: 0o600 },
           )
           .pipe(
-            // The data directory is Humanity's own; failing to write there is a defect.
             Effect.orDie,
             Effect.andThen(Ref.update(version, (n) => n + 1)),
           )
@@ -155,7 +139,6 @@ export class ExtensionsService extends Context.Service<
           ),
         )
 
-      /** Skills in `<dir>/<name>/SKILL.md`, sorted by name. */
       const readSkills = (dir: string, source: Skill["source"]) =>
         Effect.gen(function* () {
           const folders = yield* fs
@@ -167,7 +150,6 @@ export class ExtensionsService extends Context.Service<
                 const file = parseSkillFile(text)
                 return [
                   {
-                    // Humanity names the folder after the skill; a repository might not.
                     name: source === "humanity" ? folder : (file.name ?? folder),
                     description: file.description ?? "",
                     source,
@@ -179,7 +161,6 @@ export class ExtensionsService extends Context.Service<
                   },
                 ]
               }),
-              // A folder without a SKILL.md is no skill.
               Effect.catch(() => Effect.succeed<Array<Skill>>([])),
             ),
           )
@@ -233,7 +214,6 @@ export class ExtensionsService extends Context.Service<
               const disabled = new Set(file.disabled)
               const wasDisabled = previousName !== null && disabled.delete(previousName)
               if (wasDisabled) disabled.add(name)
-              // Replaced in place, so a rename keeps the server's position.
               const servers =
                 previousName === null
                   ? [...file.servers, [name, built.config] as const]
@@ -300,7 +280,6 @@ export class ExtensionsService extends Context.Service<
           }),
         )
 
-      /** A skill's folder, checked to be inside the plugin before anything is written or removed. */
       const skillDir = (name: string) =>
         Effect.gen(function* () {
           const dir = join(skillsDir, name)
@@ -336,7 +315,6 @@ export class ExtensionsService extends Context.Service<
               }
               const dir = yield* skillDir(skill.name)
               if (previousName !== null && previousName !== skill.name) {
-                // A rename moves the folder, so files next to SKILL.md come along.
                 yield* fs.rename(yield* skillDir(previousName), dir).pipe(Effect.orDie)
               }
               yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.orDie)

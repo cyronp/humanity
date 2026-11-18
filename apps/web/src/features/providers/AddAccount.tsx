@@ -16,28 +16,19 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
 
-/** What a provider calls the folder its login lives in, and what a second one could be named. */
 const FOLDERS: Record<ProviderId, { readonly variable: string; readonly example: string }> = {
   "claude-code": { variable: "CLAUDE_CONFIG_DIR", example: "~/.claude-personal" },
   codex: { variable: "CODEX_HOME", example: "~/.codex-work" },
   kiro: { variable: "KIRO_HOME", example: "~/.kiro-work" },
 }
 
-/** Where the new account's login lives: a folder made for it, or one the human already has. */
 type Source = "new" | "folder"
 
-/**
- * Adds another account to a provider. Either it starts signed out, with a
- * login of its own that its row then shows how to sign in, or it runs on a
- * config folder the human already signed in with (like `~/.claude-personal`
- * or `~/.codex-work`).
- */
 export function AddAccount({
   provider,
   onAdd,
 }: {
   readonly provider: ProviderId
-  /** Resolves to an error message, or `undefined` when the account was added. */
   readonly onAdd: (name: string, configDir?: string) => Promise<string | undefined>
 }) {
   const [open, setOpen] = useState(false)
@@ -56,10 +47,6 @@ export function AddAccount({
   )
 }
 
-/**
- * What the dialog that adds an account holds, for one provider. It lives only
- * while the dialog is open, so it starts empty every time.
- */
 export function AddAccountForm({
   provider,
   onAdd,
@@ -67,10 +54,8 @@ export function AddAccountForm({
   picker,
 }: {
   readonly provider: ProviderId
-  /** Resolves to an error message, or `undefined` when the account was added. */
   readonly onAdd: (name: string, configDir?: string) => Promise<string | undefined>
   readonly onAdded: () => void
-  /** The choice of provider, where the dialog adds to any of them. */
   readonly picker?: ReactNode
 }) {
   const { name: providerName, Icon } = PROVIDERS[provider]

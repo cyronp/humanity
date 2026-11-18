@@ -9,7 +9,6 @@ import {
 } from "./SettingsLayout.tsx"
 import { ThemePicker } from "./ThemePicker.tsx"
 
-/** Settings of the app itself, not of a provider or a project. */
 export function GeneralSettings() {
   return (
     <SettingsFrame id="settings-general" title="General">

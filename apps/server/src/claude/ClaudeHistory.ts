@@ -3,12 +3,9 @@ import { Context, Data, Effect, Layer } from "effect"
 
 export interface ClaudeConversation {
   readonly sessionId: string
-  /** The `/rename` title, Claude Code's own summary, or the first prompt. */
   readonly title: string
   readonly gitBranch: string | undefined
-  /** Milliseconds since the epoch. */
   readonly createdAt: number | undefined
-  /** When the transcript last changed, in milliseconds since the epoch. */
   readonly lastModified: number
 }
 
@@ -25,18 +22,9 @@ const unavailable = (cause: unknown) =>
     reason: cause instanceof Error ? cause.message : String(cause),
   })
 
-/**
- * Reads the conversations the human had in the Claude Code CLI, from its own
- * transcripts (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`). Read only.
- */
 export class ClaudeHistory extends Context.Service<
   ClaudeHistory,
   {
-    /**
-     * The conversations held in exactly this folder, newest first. Programmatic
-     * runs (`claude -p`, the Agent SDK, Humanity's own threads) are left out,
-     * like Claude Code's `/resume` leaves them out.
-     */
     readonly list: (
       dir: string,
     ) => Effect.Effect<ReadonlyArray<ClaudeConversation>, ClaudeHistoryUnavailable>
@@ -69,7 +57,6 @@ export class ClaudeHistory extends Context.Service<
       }),
   })
 
-  /** The conversations `folders` returns when asked, per folder, for tests. */
   static readonly layerTest = (
     folders: () => Readonly<Record<string, ReadonlyArray<TestConversation>>> = () => ({}),
   ) =>

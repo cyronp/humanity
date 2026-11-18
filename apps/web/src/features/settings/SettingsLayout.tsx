@@ -5,14 +5,7 @@ import { Button } from "@/components/ui/button"
 import { DialogClose } from "@/components/ui/dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-/**
- * The building blocks of a settings section: a bar with where you are and the
- * way out, then either one scrolling pane or a list of items on the left with
- * the chosen one's settings on the right. Settings sit in a centered column,
- * in groups of rows.
- */
 
-/** The section's description, shown at the top of its pane. */
 const DescriptionContext = createContext<ReactNode>(undefined)
 
 export function SettingsFrame({
@@ -25,7 +18,6 @@ export function SettingsFrame({
   readonly id: string
   readonly title: string
   readonly description?: ReactNode
-  /** A button beside the close button, like "Add repository". */
   readonly action?: ReactNode
   readonly children: ReactNode
 }) {
@@ -68,7 +60,6 @@ export function SettingsPane({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/** A titled group of settings, like "Appearance". */
 export function SettingsGroup({
   title,
   children,
@@ -88,14 +79,9 @@ export interface SettingsListItem {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  /** Shown in the tile's top-right corner, like a status light. Give it words for screen readers. */
   readonly status?: ReactNode
 }
 
-/**
- * A section's items on the left, scrolling when there are many (a row
- * across the top on narrow screens), and the chosen item on the right.
- */
 export function SettingsSplit({
   label,
   items,
@@ -103,7 +89,6 @@ export function SettingsSplit({
   onSelect,
   children,
 }: {
-  /** What the list holds, for screen readers: "Repository services". */
   readonly label: string
   readonly items: ReadonlyArray<SettingsListItem>
   readonly selected: string
@@ -151,11 +136,6 @@ export function SettingsSplit({
   )
 }
 
-/**
- * One setting: its name and what it does on the left, the control on the
- * right, or below and full width when `stacked`, for a control too wide to sit
- * beside it.
- */
 export function SettingsRow({
   label,
   labelId,
@@ -164,7 +144,6 @@ export function SettingsRow({
   children,
 }: {
   readonly label: string
-  /** Lets the control name itself by the label, with `aria-labelledby`. */
   readonly labelId?: string
   readonly detail?: ReactNode
   readonly stacked?: boolean
@@ -188,12 +167,10 @@ export function SettingsRow({
   )
 }
 
-/** A list of `SettingsRow`s, a line between each. */
 export function SettingsRows({ children }: { readonly children: ReactNode }) {
   return <div className="flex flex-col divide-y border-y">{children}</div>
 }
 
-/** A choice of a few options side by side, like a theme. One is always picked. */
 export function SettingsChoice<Value extends string>({
   labelledBy,
   options,
@@ -201,7 +178,6 @@ export function SettingsChoice<Value extends string>({
   onChange,
   disabled = false,
 }: {
-  /** The id of the `SettingsRow` label that names the choice. */
   readonly labelledBy: string
   readonly options: ReadonlyArray<{
     readonly value: Value
@@ -219,7 +195,6 @@ export function SettingsChoice<Value extends string>({
       value={value}
       disabled={disabled}
       onValueChange={(next) => {
-        // Pressing the picked option again would clear it; one stays picked.
         const option = options.find((candidate) => candidate.value === next)
         if (option !== undefined) onChange(option.value)
       }}

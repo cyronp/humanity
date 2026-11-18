@@ -3,13 +3,8 @@ import { Children, type ReactNode } from "react"
 import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia } from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner"
 
-/** `undefined` while it is still being looked up. */
 export type ServiceState = "connected" | "disconnected" | undefined
 
-/**
- * One thing the guide connects to: its icon and name, whether it is connected
- * and, below, whatever helps when it is not.
- */
 export function ServiceRow({
   icon,
   name,
@@ -20,7 +15,6 @@ export function ServiceRow({
   readonly icon: ReactNode
   readonly name: string
   readonly state: ServiceState
-  /** Who it is connected as and how; shown only when connected. */
   readonly detail?: string
   readonly children?: ReactNode
 }) {
@@ -46,7 +40,6 @@ export function ServiceRow({
             <span className="text-xs text-muted-foreground">Not connected</span>
           )}
         </ItemActions>
-        {/* Only when there is something to show: an empty footer would still take a row. */}
         {Children.toArray(children).length > 0 && (
           <ItemFooter className="flex-col items-stretch">{children}</ItemFooter>
         )}

@@ -13,16 +13,13 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
     const imports = yield* HistoryImport
     return ProjectsRpcs.of({
       "Projects.list": () => projects.list,
-      // Its conversations from the Claude Code CLI follow into the thread history.
       "Projects.addLocal": ({ path }) =>
         Effect.tap(projects.addLocal(path), (project) => imports.syncInBackground(project.id)),
       "Projects.listFolders": ({ folder, prefix }) => projects.listFolders(folder, prefix),
       "Projects.cloneFromGitHub": ({ fullName }) => projects.cloneFromGitHub(fullName),
       "Projects.cloneFromGitLab": ({ fullPath }) => projects.cloneFromGitLab(fullPath),
-      // Stop the project's agents before their worktrees disappear.
       "Projects.remove": ({ projectId }) =>
         Effect.andThen(sessions.stopProject(projectId), projects.remove(projectId)).pipe(
-          // Its sessions went with it.
           Effect.andThen(events.publishListChanged),
         ),
       "Projects.icon": ({ projectId }) => projects.icon(projectId),

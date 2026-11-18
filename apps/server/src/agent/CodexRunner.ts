@@ -40,9 +40,7 @@ import {
 } from "./AgentRunner.ts"
 import { CODEX_READY, codexEvent, type CodexTurnUsage, patchInput } from "./normalizeCodex.ts"
 
-/** Starts a Codex app server in a folder; the real one, or a scripted one in tests. */
 export type CodexConnect = (options: {
-  /** The folder of the account the thread runs as; without it, Codex's default login. */
   readonly codexHome?: string | undefined
   readonly cwd: string
   readonly onRequest: (request: ServerMessage) => Effect.Effect<ServerReply, CodexFailed>
@@ -53,15 +51,7 @@ The human chooses how much each thread does on its own. Depending on that, a fil
 When a command or file change is declined, the message that follows is the human's decision and feedback. Follow it instead of retrying the same call.
 When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOOL_NAME} tool of the ${HUMANITY_MCP_SERVER} MCP server. Do not use it on your own initiative.`
 
-/**
- * How every thread runs, whatever the human's own Codex settings say. Codex
- * asks before each command it does not know to be a harmless read and before
- * each file change, and Humanity answers by the thread's permissions: never
- * `never`, which would decide without Humanity. No sandbox on top, so what
- * Humanity allowed runs like it does for any other agent.
- */
 const APPROVAL_POLICY = "untrusted"
-/** Requests go to Humanity, not to a reviewing agent of Codex's own. */
 const APPROVALS_REVIEWER = "user"
 
 const decodeThread = decode(ThreadResponse)
@@ -81,7 +71,6 @@ const threadIdOf = (params: unknown): string | undefined => {
 
 const textInput = (text: string) => ({ type: "text", text, text_elements: [] })
 
-/** A user message as Codex takes it: images first, then the text with any text files inline. */
 export const codexUserInput = (message: AgentUserMessage): ReadonlyArray<unknown> => {
   const images: Array<unknown> = []
   let text = message.text
@@ -101,11 +90,6 @@ export const codexUserInput = (message: AgentUserMessage): ReadonlyArray<unknown
   return [...images, textInput(text)]
 }
 
-/**
- * The tools of Humanity's own server that no thread asks about, approved in
- * Codex's terms. Codex asks about an MCP call by its server alone, so a tool
- * Humanity never asks about is not left to that question.
- */
 const humanityAutoTools: Record<string, unknown> = Object.fromEntries(
   AUTO_TOOLS.flatMap((toolName) => {
     const parsed = parseMcpToolName(toolName)
@@ -115,13 +99,11 @@ const humanityAutoTools: Record<string, unknown> = Object.fromEntries(
   }),
 )
 
-/** Humanity's MCP servers in Codex's configuration format, each asking before its tools run. */
 const mcpServerConfig = (
   extensions: AgentExtensions,
   configured: ReadonlyArray<string>,
 ): Record<string, unknown> => {
   const servers: Record<string, unknown> = {}
-  // The human's own servers keep their settings; only how their tools are approved is set.
   for (const name of configured) servers[name] = { default_tools_approval_mode: "prompt" }
   for (const [name, server] of Object.entries(extensions.mcpServers)) {
     servers[name] = {
@@ -135,30 +117,23 @@ const mcpServerConfig = (
   return servers
 }
 
-/** A form with fields is a question Humanity cannot put to the human yet; an empty one only asks to allow. */
 const asksForInput = (schema: unknown): boolean => {
   if (typeof schema !== "object" || schema === null) return false
   const properties = (schema as { readonly properties?: unknown }).properties
   return typeof properties === "object" && properties !== null && Object.keys(properties).length > 0
 }
 
-/**
- * One Codex conversation on its own app server. Messages queue like they do
- * for Claude Code: each starts a turn when the one before it is over.
- */
 export const startCodexRun =
   (connect: CodexConnect) =>
   (options: AgentRunOptions): Effect.Effect<AgentRun, never, Scope.Scope> =>
     Effect.gen(function* () {
       const outer = yield* Effect.scope
-      // Closed early when Codex cannot start, so no process lingers behind a failed run.
       const own = yield* Scope.fork(outer)
       const outbox = yield* Queue.unbounded<unknown, AgentRunError | Cause.Done>()
       const inbox = yield* Queue.unbounded<AgentUserMessage>()
       yield* Effect.addFinalizer(() => Queue.end(outbox))
       const emit = (event: unknown) => Queue.offer(outbox, event).pipe(Effect.asVoid)
 
-      /** File changes Codex announced, by item: an approval request names only the item. */
       const patches = new Map<string, ThreadItem>()
       let model = options.model
       let effort = options.effort
@@ -171,7 +146,6 @@ export const startCodexRun =
       let usedBeforeTurn: TokenBreakdown | undefined
       let requests = 0
 
-      /** Tells the agent why a call was declined: Codex's own answer carries no message. */
       const steer = (message: string) =>
         Effect.suspend(() => {
           const active = turn?.id
@@ -215,7 +189,6 @@ export const startCodexRun =
             const changes = Option.isSome(asked)
               ? patches.get(asked.value.itemId)?.changes
               : undefined
-            // A change Humanity cannot see is a change nobody can decide on.
             if (Option.isNone(asked) || changes === undefined) {
               return Effect.succeed({
                 result: { decision: "decline" },
@@ -273,10 +246,8 @@ export const startCodexRun =
                   : { ...decline, afterwards: steer(decision.message) },
             )
           }
-          // Wider permissions than the thread has: never granted on the agent's request.
           case "item/permissions/requestApproval":
             return Effect.succeed({ result: { permissions: {}, scope: "turn" } })
-          // The protocol's older approval requests, which this Codex no longer sends.
           case "execCommandApproval":
           case "applyPatchApproval":
             return Effect.succeed({ result: { decision: "denied" } })
@@ -308,7 +279,6 @@ export const startCodexRun =
 
       const onNotification = ({ method, params }: ServerMessage) =>
         Effect.gen(function* () {
-          // An agent Codex spawned has a thread of its own; only this one is the conversation.
           const from = threadIdOf(params)
           if (from !== undefined && from !== threadId) return
           switch (method) {
@@ -345,7 +315,6 @@ export const startCodexRun =
       const interruptTurn = Effect.suspend(() => {
         if (turn === undefined) return Effect.void
         if (server === undefined || threadId === undefined || turn.id === undefined) {
-          // The turn is still starting; it is stopped as soon as Codex names it.
           turn.interrupt = true
           return Effect.void
         }
@@ -371,7 +340,6 @@ export const startCodexRun =
             }),
           )
           if (started._tag === "Failure") {
-            // No turn began, so Codex will not end one: say how it went ourselves.
             yield* emit(
               codexEvent("turn/completed", {
                 turn: {
@@ -451,7 +419,6 @@ export const startCodexRun =
         messages: Stream.fromQueue(outbox),
         send: (message: AgentUserMessage) => Queue.offer(inbox, message).pipe(Effect.asVoid),
         interrupt: interruptTurn,
-        // Codex takes both with each turn, so the next one runs on them.
         setModel: (next: string | undefined) =>
           Effect.sync(() => {
             model = next

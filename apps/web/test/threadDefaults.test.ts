@@ -70,7 +70,6 @@ describe("threadDefaults", () => {
   it("follows the last thread's provider, with a model that provider still offers", () => {
     const onCodex = [session("latest", { provider: "codex", model: "gpt-codex" })]
     expect(threadDefaults(onCodex, models)).toMatchObject({ provider: "codex", model: "gpt-codex" })
-    // `opus` is Claude Code's, not something Codex offers.
     const stale = [session("latest", { provider: "codex", model: "opus" })]
     expect(threadDefaults(stale, models)).toMatchObject({ provider: "codex", model: null })
   })

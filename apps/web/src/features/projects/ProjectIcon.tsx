@@ -6,19 +6,12 @@ import type { CSSProperties } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { projectIconAtom } from "./atoms.ts"
 
-/** A stable hue per project, so fallbacks are told apart at a glance. */
 const hueOf = (name: string) => {
   let hash = 0
   for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) % 360
   return hash
 }
 
-/**
- * The project's avatar: its favicon from the repository, on shadcn's Avatar.
- * The favicon keeps its own shape (not clipped to a circle), since it's a logo.
- * Without one (or while it loads, or if it fails to decode) the fallback
- * shows the project's initial on a tile coloured by its name.
- */
 export function ProjectIcon({
   project,
   className,

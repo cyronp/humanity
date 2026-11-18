@@ -2,8 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
-
-/* Streamdown ships Tailwind classes; the root node_modules is three levels up. */
 @source "../../../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
@@ -17,6 +15,7 @@
   --color-git-draft: var(--git-draft);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-file-ref: var(--file-ref);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
@@ -89,21 +88,17 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  /* Accent used only where Claude itself is shown (its mark, the connection step). */
   --claude: oklch(0.65 0.14 40);
-  /* The chat area and the sidebar trade places: the chat is the lighter grey, the sidebar the page colour. */
   --chat: oklch(0.985 0 0);
-  /* File status colours: the hues of VS Code's Git decorations, saturated to stand out on this theme. */
   --git-modified: #d97706;
   --git-added: #16a34a;
   --git-deleted: #dc2626;
   --git-renamed: #0d9488;
   --git-merged: #7c3aed;
   --git-draft: #0284c7;
-  /* Humanity's own blue, for the guide's main actions and links. The mark itself is fixed to the favicon's blue. */
   --brand: #2563eb;
   --brand-foreground: #ffffff;
-  /* States: something worked, needs a look, or is under way. `--destructive` is the fourth. */
+  --file-ref: #2563eb;
   --success: #059669;
   --warning: #d97706;
   --warning-foreground: oklch(0.145 0 0);
@@ -152,6 +147,7 @@
   --git-draft: #38bdf8;
   --brand: #60a5fa;
   --brand-foreground: oklch(0.205 0 0);
+  --file-ref: #60a5fa;
   --success: #34d399;
   --warning: #fbbf24;
   --warning-foreground: oklch(0.145 0 0);
@@ -169,10 +165,6 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    /*
-     * The few places that scroll natively (the transcript, code blocks, text
-     * fields) get a thin bar in the colours of the ScrollArea's.
-     */
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
@@ -187,31 +179,18 @@
     @apply font-sans;
   }
 }
-
-/*
- * The desktop app has no title bar of its own: its window buttons are drawn
- * over the top right corner of the page, and the bars along the top move the
- * window. `--titlebar-controls` is the width those buttons cover, and zero in
- * a browser, where none of this has any effect.
- */
 :root {
   --titlebar-controls: max(
     0px,
     calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
   );
-  /* How far down those buttons reach; zero in a browser too. */
   --titlebar-height: env(titlebar-area-height, 0px);
-  /*
-   * The buttons are drawn over everything, a dialog included, so a dialog
-   * keeps to the page below them: centred there, and no taller than it.
-   */
   --dialog-center: calc(50% + var(--titlebar-height) / 2);
   --dialog-max-height: calc(100svh - var(--titlebar-height) - 2rem);
 }
 .titlebar {
   app-region: drag;
 }
-/* What can be clicked in a bar, and anything floating over one, is not a handle. */
 .titlebar :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]),
 [role="dialog"],
 [role="menu"],
@@ -220,11 +199,6 @@
 [data-slot$="-overlay"] {
   app-region: no-drag;
 }
-
-/*
- * Shiki emits both theme colours on every token as CSS variables; the same
- * `dark` class that drives shadcn picks which one applies, in diffs and chat.
- */
 .shiki-token {
   color: var(--shiki-light);
 }

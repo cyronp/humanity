@@ -41,7 +41,6 @@ import {
 
 export function AppSidebar() {
   const { setOpenFloating } = useSidebar()
-  // Choosing a destination closes the sidebar while it floats over the page.
   const close = () => setOpenFloating(false)
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
@@ -85,7 +84,6 @@ export function AppSidebar() {
           </HeaderLink>
         </div>
       </SidebarHeader>
-      {/* shadcn's scroll fade: the list fades out at whichever edge has more threads past it. */}
       <SidebarContent viewportClassName="scroll-fade-y">
         <SidebarGroup>
           <SidebarGroupContent>
@@ -128,7 +126,6 @@ export function AppSidebar() {
   )
 }
 
-/** An icon-only link in the header row, named by its tooltip. */
 function HeaderLink({
   to,
   label,
@@ -226,11 +223,9 @@ function Conversations({
             active={session.id === activeId}
             onNavigate={onNavigate}
           />
-          {/* Takes the place of the time on hover or keyboard focus; always shown on touch screens. */}
           {session.status !== "ended" && (
             <EndSessionButton
               session={session}
-              // The row's hover colour behind it, so a long project name does not show through.
               className="absolute top-1 right-1.5 bg-sidebar-accent opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 pointer-coarse:opacity-100"
             />
           )}

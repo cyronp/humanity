@@ -1,12 +1,6 @@
 import type { McpServer, McpTransportInput } from "@humanity/contracts"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 
-/**
- * MCP server configurations in Claude Code's own format (`.mcp.json`):
- * `{ "mcpServers": { "<name>": { "command": …, "args": […], "env": {…} } } }`
- * for local servers, `{ "type": "http" | "sse", "url": …, "headers": {…} }`
- * for remote ones. No I/O here.
- */
 
 export type McpConfig =
   | {
@@ -26,7 +20,6 @@ export const MCP_SERVER_NAME = /^[A-Za-z0-9_-]{1,64}$/
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
-/** Only string values; anything else in the map is dropped. */
 const stringMap = (value: unknown): Record<string, string> => {
   if (!isRecord(value)) return {}
   const out: Record<string, string> = {}
@@ -37,7 +30,6 @@ const stringMap = (value: unknown): Record<string, string> => {
   return out
 }
 
-/** A configuration as Claude Code reads it, or `undefined` when it is not one Humanity understands. */
 export const readMcpConfig = (raw: unknown): McpConfig | undefined => {
   if (!isRecord(raw)) return undefined
   const type = raw["type"]
@@ -48,7 +40,6 @@ export const readMcpConfig = (raw: unknown): McpConfig | undefined => {
     return { _tag: "stdio", command: raw["command"], args, env: stringMap(raw["env"]) }
   }
   if (typeof raw["url"] === "string") {
-    // A remote server without a type is most likely the newer HTTP transport.
     const tag = type === "sse" ? "sse" : type === undefined || type === "http" ? "http" : undefined
     if (tag === undefined) return undefined
     return { _tag: tag, url: raw["url"], headers: stringMap(raw["headers"]) }
@@ -61,7 +52,6 @@ export const writeMcpConfig = (config: McpConfig): Record<string, unknown> =>
     ? { type: "stdio", command: config.command, args: config.args, env: config.env }
     : { type: config._tag, url: config.url, headers: config.headers }
 
-/** The servers of a `{ "mcpServers": { … } }` document; unreadable entries are skipped. */
 export const readMcpServers = (document: unknown): ReadonlyArray<[string, McpConfig]> => {
   if (!isRecord(document) || !isRecord(document["mcpServers"])) return []
   return Object.entries(document["mcpServers"]).flatMap(([name, raw]) => {
@@ -70,7 +60,6 @@ export const readMcpServers = (document: unknown): ReadonlyArray<[string, McpCon
   })
 }
 
-/** What the UI sees: names of variables and headers, never their values. */
 export const mcpServerView = (
   name: string,
   config: McpConfig,
@@ -109,10 +98,6 @@ const resolveEntries = (
   return { values }
 }
 
-/**
- * The configuration the human entered. A `null` value keeps the one saved
- * before under that name; there must be one.
- */
 export const mcpConfigFromInput = (
   input: McpTransportInput,
   previous: McpConfig | undefined,
@@ -142,10 +127,6 @@ export const mcpConfigFromInput = (
   return { config: { _tag: input._tag, url: input.url.trim(), headers: headers.values } }
 }
 
-/**
- * The servers of a configuration pasted from a server's docs: the whole
- * `{ "mcpServers": { … } }` document, or just the map of names to servers.
- */
 export const parseMcpImport = (
   json: string,
 ): { readonly servers: ReadonlyArray<[string, McpConfig]> } | { readonly error: string } => {
@@ -185,11 +166,6 @@ export const parseMcpImport = (
   return { servers }
 }
 
-/**
- * `${VAR}` and `${VAR:-default}` filled from the daemon's environment, as
- * Claude Code does for `.mcp.json`. An unset variable without a default stays
- * as written, so the server reports it rather than getting an empty value.
- */
 export const expandEnv = (value: string, env: Readonly<Record<string, string | undefined>>) =>
   value.replace(
     /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
@@ -201,7 +177,6 @@ const expandAll = (
   env: Readonly<Record<string, string | undefined>>,
 ) => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, expandEnv(value, env)]))
 
-/** The configuration as the agent is given it, with variables expanded. */
 export const toAgentMcpServer = (
   config: McpConfig,
   env: Readonly<Record<string, string | undefined>>,

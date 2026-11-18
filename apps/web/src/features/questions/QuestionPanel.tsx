@@ -31,7 +31,6 @@ import {
 import { decideConfirmationAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 
-/** The row's number, filled once the row is part of the answer. */
 function RowMark({
   index,
   chosen,
@@ -54,24 +53,13 @@ function RowMark({
   )
 }
 
-/**
- * A row of the list. The active one is highlighted: the row the pointer last
- * moved over or the keyboard is on, the first one to begin with.
- */
 const ROW =
   "flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left text-sm data-[active=true]:bg-accent"
 
-/** The footer's buttons: small, and as tall on a phone as anywhere else. */
 const ACTION = "min-h-0"
 
 const itemName = (index: number) => `question-${index}`
 
-/**
- * The agent's questions, in place of the message box until they are answered:
- * one question at a time, its options as numbered rows, and a last row to
- * type an answer of one's own. Arrows move, a number picks, Enter goes on.
- * "Talk about it" sends no answer and gives the message box back.
- */
 export function QuestionPanel({
   confirmation,
   questions,
@@ -84,13 +72,11 @@ export function QuestionPanel({
   const [drafts, setDrafts] = useState<ReadonlyArray<QuestionDraft>>(() =>
     questions.map(() => EMPTY_QUESTION_DRAFT),
   )
-  // Which row of the current question is highlighted; the own-answer row is the one after the options.
   const [active, setActive] = useState(0)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const form = useRef<HTMLFormElement>(null)
 
-  // The keyboard belongs to the questions from the start: numbers and arrows work at once.
   useEffect(() => {
     form.current?.querySelector<HTMLElement>("fieldset[data-active]")?.focus()
   }, [])
@@ -113,7 +99,6 @@ export function QuestionPanel({
   const setDraft = (index: number, next: QuestionDraft) =>
     setDrafts((current) => current.map((existing, at) => (at === index ? next : existing)))
 
-  /** The number after the last option goes to the field for an answer of one's own. */
   const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return
     const target = event.target as HTMLElement

@@ -9,13 +9,7 @@ import {
 } from "../codex/protocol.ts"
 import { type Normalized, toolResultText } from "./normalize.ts"
 
-/**
- * Turns what a Codex run reports into Humanity's normalized shapes. A run
- * hands on the app server's own notifications, wrapped as `CodexEvent`s, plus
- * one event of its own when the thread is ready.
- */
 
-/** The run's own event: the thread exists and can be resumed by this id. */
 export const CODEX_READY = "humanity/ready"
 
 export interface CodexTurnUsage {
@@ -29,7 +23,6 @@ export interface CodexEvent {
   readonly type: "codex"
   readonly method: string
   readonly params: unknown
-  /** On `turn/completed`: what the turn used. */
   readonly usage?: CodexTurnUsage
 }
 
@@ -61,7 +54,6 @@ export interface PatchFile {
   readonly path: string
   readonly kind: "add" | "delete" | "update"
   readonly movePath?: string
-  /** A new file's content, or the unified diff of a change. */
   readonly diff: string
 }
 
@@ -76,10 +68,6 @@ export const patchInput = (
   })),
 })
 
-/**
- * What a Codex item is as a tool call: the name Humanity knows the tool by and
- * its input. `undefined` for items that are not tool calls (messages, thoughts).
- */
 export const codexToolCall = (
   item: ThreadItem,
 ): { readonly toolName: string; readonly input: Record<string, unknown> } | undefined => {
@@ -237,7 +225,6 @@ export const normalizeCodexEvent = (raw: unknown): Normalized => {
           numTurns: 1,
           costUsd: 0,
           usage: {
-            // Codex counts cached tokens as input; Humanity shows them apart.
             inputTokens: Math.max(0, (usage?.inputTokens ?? 0) - cached),
             outputTokens: usage?.outputTokens ?? 0,
             cacheReadTokens: cached,

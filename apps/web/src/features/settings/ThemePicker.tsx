@@ -9,11 +9,6 @@ const CHOICES = [
   { value: "dark", label: "Dark" },
 ] as const satisfies ReadonlyArray<{ readonly value: ThemeChoice; readonly label: string }>
 
-/**
- * The colours of each theme, from `index.css` and the diff's row tints. A
- * preview shows its own theme whatever the page's is, so it can't read the
- * page's variables.
- */
 const PALETTES: Readonly<Record<Theme, CSSProperties>> = {
   light: {
     "--pv-page": "oklch(1 0 0)",
@@ -43,7 +38,6 @@ const PALETTES: Readonly<Record<Theme, CSSProperties>> = {
   } as CSSProperties,
 }
 
-/** The rows of the hunk in the preview's diff panel, and how long each line is. */
 const DIFF_ROWS = [
   { kind: "context", width: "60%" },
   { kind: "remove", width: "72%" },
@@ -54,16 +48,11 @@ const DIFF_ROWS = [
   { kind: "context", width: "52%" },
 ] as const
 
-/**
- * The theme as three small pictures of the app: System, Light and Dark. One
- * is always picked; arrow keys move between them.
- */
 export function ThemePicker({
   labelledBy,
   value,
   onChange,
 }: {
-  /** The id of the label that names the choice. */
   readonly labelledBy: string
   readonly value: ThemeChoice
   readonly onChange: (value: ThemeChoice) => void
@@ -74,7 +63,6 @@ export function ThemePicker({
       aria-labelledby={labelledBy}
       value={value}
       onValueChange={(next) => {
-        // Pressing the picked option again would clear it; one stays picked.
         const choice = CHOICES.find((candidate) => candidate.value === next)
         if (choice !== undefined) onChange(choice.value)
       }}
@@ -98,7 +86,6 @@ export function ThemePicker({
   )
 }
 
-/** A small picture of the app in one theme, or split down the middle for System. */
 function ThemePreview({ choice }: { readonly choice: ThemeChoice }) {
   return (
     <span
@@ -117,12 +104,6 @@ function ThemePreview({ choice }: { readonly choice: ThemeChoice }) {
   )
 }
 
-/**
- * A thread drawn in blocks: the sidebar with its new-thread button and
- * threads, the chat with the human's message, the agent's reply and the
- * composer, and the diff panel with its tabs and a changed file. Sizes are in
- * `cqw` so it scales with the card.
- */
 function MiniApp({ theme, className }: { readonly theme: Theme; readonly className?: string }) {
   return (
     <span
@@ -169,7 +150,6 @@ function MiniApp({ theme, className }: { readonly theme: Theme; readonly classNa
   )
 }
 
-/** A changed file in the diff panel: its header, and its hunk when open. */
 function DiffFile({ open = false }: { readonly open?: boolean }) {
   return (
     <span className="flex flex-col overflow-hidden rounded-[1.2cqw] border border-(--pv-border) bg-(--pv-card)">

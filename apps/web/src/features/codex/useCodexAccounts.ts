@@ -13,10 +13,6 @@ import {
 
 const reactivityKeys = [keys.codex]
 
-/**
- * The Codex accounts and what can be done with them. Every action resolves
- * to an error message, or `undefined` when it worked.
- */
 export function useCodexAccounts() {
   const result = useAtomValue(codexAccountsAtom)
   const check = useAtomSet(refreshCodexAccountsAtom, { mode: "promiseExit" })
@@ -25,7 +21,6 @@ export function useCodexAccounts() {
   const setActiveAccount = useAtomSet(setActiveCodexAccountAtom, { mode: "promiseExit" })
   const [refreshing, setRefreshing] = useState(false)
 
-  /** `force` starts Codex again for every account; without it the daemon's short cache answers. */
   const refresh = useCallback(
     async (force: boolean) => {
       setRefreshing(true)
@@ -36,7 +31,6 @@ export function useCodexAccounts() {
     [check],
   )
 
-  /** Without `configDir` the account gets a new login; with it, it runs on that existing folder. */
   const add = useCallback(
     async (name: string, configDir?: string) => {
       const payload = configDir === undefined ? { name } : { name, configDir }

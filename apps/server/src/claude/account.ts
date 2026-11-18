@@ -1,13 +1,5 @@
 import type { ClaudeConnection } from "@humanity/contracts"
 
-/**
- * The `account` Claude Code reports when it initializes (the Agent SDK's
- * `AccountInfo`). Only the fields Humanity reads are listed. Observed shapes:
- *
- * - signed in with a subscription: `{ email, organization, subscriptionType: "Claude Pro", apiProvider: "firstParty" }`
- * - signed out:                    `{ tokenSource: "none", apiProvider: "firstParty" }`
- * - `ANTHROPIC_API_KEY` set:       `{ tokenSource: "claude.ai", apiKeySource: "ANTHROPIC_API_KEY", apiProvider: "firstParty" }`
- */
 export interface ReportedAccount {
   readonly email?: string | undefined
   readonly organization?: string | undefined
@@ -37,7 +29,6 @@ const PLANS: Record<string, string> = {
   enterprise: "Claude Enterprise",
 }
 
-/** Token sources that are really an API credential, not a claude.ai login. */
 const API_TOKEN_SOURCES: Record<string, string> = {
   ANTHROPIC_AUTH_TOKEN: "Auth token from ANTHROPIC_AUTH_TOKEN",
   apiKey: "Anthropic API key",
@@ -48,7 +39,6 @@ const API_TOKEN_SOURCES: Record<string, string> = {
 const present = (value: string | undefined): value is string =>
   value !== undefined && value.trim() !== "" && value !== "none"
 
-/** "pro" → "Claude Pro"; an already readable label ("Claude Max") is kept. */
 export const planLabel = (subscriptionType: string | undefined): string => {
   if (!present(subscriptionType)) return "Claude subscription"
   const trimmed = subscriptionType.trim()
@@ -71,11 +61,6 @@ export const apiKeyLabel = (apiKeySource: string): string => {
   }
 }
 
-/**
- * Decides which credential Claude Code will actually use. Mirrors the CLI's
- * precedence: a third-party provider, then an API key (which wins over a stored
- * claude.ai login), then the subscription login.
- */
 export const classifyAccount = (account: ReportedAccount | undefined): ClaudeConnection => {
   const email = present(account?.email) ? account.email : null
   const organization = present(account?.organization) ? account.organization : null
@@ -105,7 +90,6 @@ export const classifyAccount = (account: ReportedAccount | undefined): ClaudeCon
       label: apiKeyLabel(account.apiKeySource),
       email,
       organization,
-      // A token source next to an API key means a claude.ai login exists but is bypassed.
       subscriptionShadowed: present(account.tokenSource),
     }
   }

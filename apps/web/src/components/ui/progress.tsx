@@ -10,7 +10,6 @@ function Progress({
   value,
   ...props
 }: React.ComponentProps<typeof ProgressPrimitive.Root> & {
-  /** Colours the filled part, e.g. by how close it is to full. */
   indicatorClassName?: string
 }) {
   return (

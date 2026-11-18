@@ -28,18 +28,15 @@ import {
 import { nextPageUrl } from "./GitHubService.ts"
 import { GitLabToken } from "./GitLabToken.ts"
 
-/** The REST API of the instance at `host`. Always https, so a token never travels in the clear. */
 export const gitlabApi = (host: string): string => `https://${host}/api/v4`
 
 export type GitLabError = GitLabNotAuthenticated | GitLabRateLimited | GitLabRequestFailed
 
-/** The token for an instance, and that instance: what a clone needs to authenticate. */
 export interface GitLabCredentials {
   readonly host: string
   readonly token: Option.Option<Redacted.Redacted<string>>
 }
 
-// Only the fields Humanity uses.
 const UserJson = Schema.Struct({
   username: Schema.String,
   name: Schema.optional(Schema.NullOr(Schema.String)),
@@ -50,7 +47,6 @@ const RepoJson = Schema.Struct({
   path_with_namespace: Schema.String,
   name: Schema.String,
   description: Schema.optional(Schema.NullOr(Schema.String)),
-  // Left out of what GitLab shows an anonymous caller, who only ever sees public ones.
   visibility: Schema.optional(Schema.String),
   http_url_to_repo: Schema.String,
   web_url: Schema.String,
@@ -63,7 +59,6 @@ const BranchJson = Schema.Struct({
   protected: Schema.optional(Schema.Boolean),
 })
 
-// GitLab answers `{ message }` (a string, or an object of field errors) or `{ error }`.
 const ErrorJson = Schema.Struct({
   message: Schema.optional(Schema.Unknown),
   error: Schema.optional(Schema.Unknown),
@@ -87,7 +82,6 @@ const toRepo = (repo: typeof RepoJson.Type): GitLabRepo => ({
   updatedAt: repo.last_activity_at,
 })
 
-/** Upper bound for the lists, so a huge instance can't stall the UI. */
 const MAX_ITEMS = 1000
 
 const MergeRequestJson = Schema.Struct({
@@ -160,7 +154,6 @@ const toMergeRequest = (mr: typeof MergeRequestJson.Type): PullRequest => ({
   createdAt: mr.created_at,
 })
 
-/** A pipeline job's status as a check status. A job allowed to fail never fails the checks. */
 export const gitlabJobStatus = (status: string, allowFailure: boolean): CheckStatus => {
   switch (status) {
     case "success":
@@ -177,7 +170,6 @@ export const gitlabJobStatus = (status: string, allowFailure: boolean): CheckSta
     case "manual":
       return "neutral"
     default:
-      // created, pending, preparing, scheduled, waiting_for_resource, ...
       return "queued"
   }
 }
@@ -195,25 +187,19 @@ const REPOS_PAGE = "/projects?membership=true&archived=false&order_by=last_activ
 export class GitLabService extends Context.Service<
   GitLabService,
   {
-    /** Which instance, where the token comes from and who it signs in as. A token GitLab refuses is a `problem`, not a failure. */
     readonly connection: (options: { readonly refresh: boolean }) => Effect.Effect<GitLabConnection>
-    /** Saves a token and its instance once that instance accepted it; one it rejects is not saved. */
     readonly saveToken: (
       token: string,
       host: string,
     ) => Effect.Effect<GitLabConnection, GitLabError>
-    /** Forgets the saved token and reports what is used instead. */
     readonly removeToken: Effect.Effect<GitLabConnection>
-    /** Every page of the user's repositories, as a stream that follows `Link: rel="next"`. */
     readonly repos: Stream.Stream<GitLabRepo, GitLabError>
     readonly listRepos: Effect.Effect<ReadonlyArray<GitLabRepo>, GitLabError>
     readonly getRepo: (fullPath: string) => Effect.Effect<GitLabRepo, GitLabError>
     readonly listBranches: (
       fullPath: string,
     ) => Effect.Effect<ReadonlyArray<GitLabBranch>, GitLabError>
-    /** The instance in use, and its token for authenticated git operations when there is one. */
     readonly credentials: Effect.Effect<GitLabCredentials>
-    /** `branch`'s open merge request in `fullPath`, else its most recently updated one. */
     readonly findMergeRequest: (
       fullPath: string,
       branch: string,
@@ -222,12 +208,10 @@ export class GitLabService extends Context.Service<
       fullPath: string,
       mergeRequest: NewGitLabMergeRequest,
     ) => Effect.Effect<PullRequest, GitLabError>
-    /** The jobs of the merge request's latest pipeline. */
     readonly checks: (
       fullPath: string,
       iid: number,
     ) => Effect.Effect<ReadonlyArray<PullRequestCheck>, GitLabError>
-    /** Its human notes, inline ones included, oldest first. */
     readonly comments: (
       fullPath: string,
       mergeRequest: PullRequest,
@@ -259,11 +243,6 @@ export class GitLabService extends Context.Service<
       const gate = yield* makeForgeGate
       const scopeOf = ({ host, token }: GitLabCredentials) => forgeScope(host, token)
 
-      /**
-       * Turns a response that is neither 2xx nor `304 Not Modified` into the
-       * matching tagged error. A rate limit also keeps `scope` away from the
-       * instance until it lifts.
-       */
       const checkStatus = (response: HttpClientResponse.HttpClientResponse, scope: string) =>
         Effect.gen(function* () {
           if ((response.status >= 200 && response.status < 300) || response.status === 304) {
@@ -304,11 +283,6 @@ export class GitLabService extends Context.Service<
           onSome: (value) => ({ authorization: `Bearer ${Redacted.value(value)}` }),
         })
 
-      /**
-       * Every request goes through here: refused at once while the instance's
-       * rate limit keeps this token away, a few at a time otherwise, and what
-       * the answer says of the quota is kept for the next one.
-       */
       const send = (request: HttpClientRequest.HttpClientRequest, using: GitLabCredentials) =>
         Effect.gen(function* () {
           const scope = scopeOf(using)
@@ -323,7 +297,6 @@ export class GitLabService extends Context.Service<
           return yield* checkStatus(response, scope)
         })
 
-      /** `path` is relative to the instance's API, so the token can only go to its own instance. */
       const get = (path: string, using: GitLabCredentials) =>
         send(
           HttpClientRequest.get(`${gitlabApi(using.host)}${path}`, {
@@ -332,11 +305,6 @@ export class GitLabService extends Context.Service<
           using,
         )
 
-      /**
-       * A GET that revalidates: it sends the `ETag` of the last answer, and a
-       * `304 Not Modified` hands that answer back without the instance building
-       * and sending it again.
-       */
       const read = (
         path: string,
         using: GitLabCredentials,
@@ -396,14 +364,12 @@ ${path}`
             ),
           )
 
-      /** The path of the next page, when the `Link` header names one on this same instance. */
       const nextPath = (response: Pick<ForgePage, "headers">, host: string) => {
         const next = nextPageUrl(response.headers["link"])
         const api = gitlabApi(host)
         return next?.startsWith(`${api}/`) ? Option.some(next.slice(api.length)) : Option.none()
       }
 
-      /** Every page of a list, starting at `first`; `fetch` is `read` for a list worth revalidating. */
       const pages = <S extends Schema.Constraint>(
         first: string,
         schema: S,
@@ -450,7 +416,6 @@ ${path}`
       const saveToken = (token: string, host: string) =>
         Effect.gen(function* () {
           const candidate = Redacted.make(token)
-          // Asking who it is proves the instance accepts it, before anything is written.
           yield* whoamiWith({ host, token: Option.some(candidate) })
           yield* tokens.save(candidate, host)
           return yield* connection({ refresh: false })
@@ -466,7 +431,6 @@ ${path}`
 
       const listRepos = repos.pipe(Stream.take(MAX_ITEMS), Stream.runCollect)
 
-      // Public repositories work without a token; private ones need it.
       const getRepo = (fullPath: string) =>
         Effect.gen(function* () {
           const using = yield* credentials
@@ -515,7 +479,6 @@ ${path}`
             {
               source_branch: mergeRequest.sourceBranch,
               target_branch: mergeRequest.targetBranch,
-              // GitLab marks a merge request as a draft by its title.
               title: mergeRequest.draft ? `Draft: ${mergeRequest.title}` : mergeRequest.title,
               description: mergeRequest.description,
             },

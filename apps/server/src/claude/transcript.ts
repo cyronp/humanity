@@ -2,23 +2,12 @@ import type { ChatMessage, MessageContent, SessionId, ToolCall } from "@humanity
 import { Option, Schema } from "effect"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 
-/**
- * Turns a Claude Code transcript, as the Agent SDK's `getSessionMessages`
- * returns it, into a Humanity thread's messages and tool calls. Pure: the
- * caller stores the result.
- */
 
 const TranscriptEntry = Schema.Struct({
   type: Schema.String,
   timestamp: Schema.optional(Schema.String),
-  /** A slash command Claude Code ran itself (`/model`, `/login`): never part of the conversation. */
   isCompletedLocalCommand: Schema.optional(Schema.Boolean),
   isMeta: Schema.optional(Schema.Boolean),
-  /**
-   * Who wrote a user entry. Claude Code marks the human's own messages
-   * `human`; others are its own (background task notifications, subagent
-   * hand-backs). Older transcripts have no origin at all.
-   */
   origin: Schema.optional(Schema.Struct({ kind: Schema.String })),
   message: Schema.optional(
     Schema.Struct({
@@ -32,16 +21,13 @@ const Block = Schema.Struct({ type: Schema.String, text: Schema.optional(Schema.
 const decodeEntry = Schema.decodeUnknownOption(TranscriptEntry)
 const decodeBlock = Schema.decodeUnknownOption(Block)
 
-/** Context Claude Code adds around what the human typed; none of it is theirs. */
 const INJECTED_CONTEXT =
   /<(system-reminder|ide_opened_file|ide_selection|ide_diagnostics|local-command-caveat|local-command-stdout|local-command-stderr)>[\s\S]*?<\/\1>/g
 
-/** The human pasted this; the text is theirs, the wrapper is not. */
 const PASTE_WRAPPER = /<\/?pasted_content(?:\s[^>]*)?>/g
 
 const INTERRUPTION = /^\[Request interrupted by user[^\]]*\]$/
 
-/** `<command-name>/review</command-name>…<command-args>42</command-args>` → `/review 42` */
 const slashCommand = (text: string): string | undefined => {
   const name = /<command-name>([\s\S]*?)<\/command-name>/.exec(text)?.[1]?.trim()
   if (name === undefined || name === "") return undefined
@@ -49,14 +35,12 @@ const slashCommand = (text: string): string | undefined => {
   return args === "" ? name : `${name} ${args}`
 }
 
-/** What the human typed, without the context Claude Code wrapped around it. */
 export const humanText = (text: string): string => {
   const command = slashCommand(text)
   if (command !== undefined) return command
   return text.replace(INJECTED_CONTEXT, "").replace(PASTE_WRAPPER, "").trim()
 }
 
-/** The human's words in a user entry, or `undefined` when it carries none. */
 const userText = (content: string | ReadonlyArray<unknown>): string | undefined => {
   if (typeof content === "string") return humanText(content)
   const parts: Array<string> = []
@@ -78,14 +62,12 @@ const userText = (content: string | ReadonlyArray<unknown>): string | undefined 
 export interface ImportedTranscript {
   readonly messages: ReadonlyArray<{ readonly message: ChatMessage; readonly raw: unknown }>
   readonly toolCalls: ReadonlyArray<ToolCall>
-  /** Whether the human said anything: a transcript of only `/clear` or `/login` is not a conversation. */
   readonly hasConversation: boolean
 }
 
 export const importTranscript = (
   sessionId: SessionId,
   entries: ReadonlyArray<unknown>,
-  /** When an entry carries no timestamp of its own. */
   fallbackTime: string,
 ): ImportedTranscript => {
   const messages: Array<{ message: ChatMessage; raw: unknown }> = []
@@ -112,7 +94,6 @@ export const importTranscript = (
 
     if (entry.type === "user" && content !== undefined) {
       const text = userText(content)
-      // Written by Claude Code on the human's behalf, not by the human.
       if (text !== undefined && entry.origin !== undefined && entry.origin.kind !== "human") {
         continue
       }
@@ -167,7 +148,6 @@ export const importTranscript = (
 
   return {
     messages,
-    // A call the transcript never answered is not still running: Claude Code stopped first.
     toolCalls: [...toolCalls.values()].map((call) =>
       call.status === "running" ? { ...call, status: "failed" as const } : call,
     ),

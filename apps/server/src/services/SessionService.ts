@@ -10,9 +10,11 @@ import {
   type AttachmentUpload,
   type Autonomy,
   type BranchCommits,
+  type FileEntry,
   BranchNotCheckedOut,
   ChangeId,
   DEFAULT_AUTONOMY,
+  mentionedPaths,
   DEFAULT_ACCOUNT,
   DEFAULT_PROVIDER,
   type ChatMessage,
@@ -45,6 +47,8 @@ import {
   NothingToCommit,
   newThreadAutonomy,
   toolMode,
+  trimCharacters,
+  trimTrailing,
   type WorkingTreeDiff,
   type ToolCall,
 } from "@humanity/contracts"
@@ -88,71 +92,52 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
+import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
 
-/** The agent process attached to a session while the daemon is running. */
 interface ActiveRun {
   readonly run: AgentRun
   readonly scope: Scope.Closeable
-  /** Set by `interrupt` so the turn's closing result reads as an interruption. */
   interrupted: boolean
   initSeen: boolean
-  /** Tool calls Humanity denied, so their error results are shown as denials. */
   readonly denied: Set<string>
-  /** One usage refresh at a time, so an older answer never overwrites a newer one. */
   readonly usageLock: Semaphore.Semaphore
-  /** The change of Humanity's MCP servers and skills the agent last got. */
   extensionsVersion: number
-  /** Humanity's own MCP server, as this run's agent reaches it. */
   readonly humanity: AgentMcpServer
 }
 
-/** The MCP servers and skills the human added, with Humanity's own server on top. */
 const withHumanity = (added: AgentExtensions, humanity: AgentMcpServer): AgentExtensions => ({
-  // Last, so no server the human added can take its name.
   mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
   plugins: added.plugins,
 })
 
-/** `Fix the login bug!` → `fix-the-login-bug` */
-export const slugify = (title: string): string =>
-  title
+export const slugify = (title: string): string => {
+  const words = title
     .normalize("NFKD")
-    // Drop the accents NFKD split off: `Ü` becomes `U`, not `u-`.
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "") || "session"
+  return trimTrailing(trimCharacters(words, "-").slice(0, 40), "-") || "session"
+}
 
-/** `humanity/<short-id>-<slug>` */
 export const sessionBranchName = (sessionId: string, title: string): string =>
   `humanity/${sessionId.slice(0, 8)}-${slugify(title)}`
 
-/** `Claude Haiku 5.5`, `claude-haiku-5-5` and `haiku 5.5` → `haiku-5-5` */
-const modelKey = (name: string): string =>
-  name
+const modelKey = (name: string): string => {
+  const words = name
     .toLowerCase()
     .replace(/\(.*?\)/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/^claude-/, "")
+  return trimCharacters(words, "-").replace(/^claude-/, "")
+}
 
-/** A model as every provider lists the ones it offers an account. */
 interface OfferedModel {
   readonly value: string
   readonly displayName: string
 }
 
-/**
- * The model an agent asked for, as one of the values the provider offers the
- * account: by that value, or else by its name and version however they are
- * written (`Haiku 5.5` and `claude-haiku-5-5` are both the `haiku` alias when
- * that is how Claude Code lists Haiku 5.5). `undefined` when nothing matches.
- */
 export const matchModel = (
   models: ReadonlyArray<OfferedModel>,
   requested: string,
@@ -167,10 +152,8 @@ export const matchModel = (
   )?.value
 }
 
-/** How many of a branch's commits the source control panel lists. */
 const COMMIT_LIST_LIMIT = 50
 
-/** The session's own branch; `null` when it started on a detached HEAD. */
 export const threadBranch = (session: Session): string | null =>
   session.branch === "HEAD" ? null : session.branch
 
@@ -179,16 +162,13 @@ export class SessionService extends Context.Service<
   {
     readonly list: (projectId: string) => Effect.Effect<ReadonlyArray<Session>, ProjectNotFound>
     readonly get: (sessionId: string) => Effect.Effect<Session, SessionNotFound>
-    /**
-     * Starts a session in the project's checkout, switching it to `baseBranch`
-     * first when one is given. No worktree until `setupWorktree`.
-     */
     readonly create: (options: {
       readonly projectId: string
       readonly title?: string | undefined
       readonly baseBranch?: string | undefined
       readonly prompt?: string | undefined
       readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+      readonly mentions?: ReadonlyArray<string> | undefined
       readonly provider?: AgentProvider | undefined
       readonly model?: string | undefined
       readonly effort?: ReasoningEffort | undefined
@@ -202,10 +182,6 @@ export class SessionService extends Context.Service<
       | GitRefNotFound
       | AttachmentRejected
     >
-    /**
-     * Moves the session from the project's checkout into its own branch and
-     * worktree, between turns. The conversation resumes there.
-     */
     readonly setupWorktree: (
       sessionId: string,
     ) => Effect.Effect<
@@ -219,42 +195,29 @@ export class SessionService extends Context.Service<
       | GitInvalidBranchName
       | GitRefNotFound
     >
-    /** Changes how much the agent may do without asking, from its next tool call on. */
     readonly setAutonomy: (
       sessionId: string,
       autonomy: Autonomy,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
-    /**
-     * Changes the model; `null` is Claude Code's default. A running agent
-     * switches right away, otherwise the next run starts on it.
-     */
     readonly setModel: (
       sessionId: string,
       model: string | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
-    /**
-     * Changes how hard the model reasons; `null` is the model's default. A
-     * running agent switches right away, otherwise the next run starts on it.
-     */
     readonly setEffort: (
       sessionId: string,
       effort: ReasoningEffort | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
-    /** Sends a message, with files the agent receives inline (images, PDFs, text). */
     readonly sendMessage: (
       sessionId: string,
       text: string,
       attachments?: ReadonlyArray<AttachmentUpload>,
+      mentions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, SessionNotFound | SessionEnded | AttachmentRejected>
     readonly attachment: (
       sessionId: string,
       attachmentId: string,
     ) => Effect.Effect<AttachmentContent, SessionNotFound | AttachmentNotFound>
     readonly interrupt: (sessionId: string) => Effect.Effect<void, SessionNotFound>
-    /**
-     * Reads the plan's usage right now (and the context, when an agent is
-     * running), stores it and publishes `UsageUpdated`.
-     */
     readonly refreshUsage: (
       sessionId: string,
     ) => Effect.Effect<SessionUsage, SessionNotFound | PlanUsageUnavailable>
@@ -262,23 +225,16 @@ export class SessionService extends Context.Service<
       sessionId: string,
       options: { readonly removeWorktree: boolean },
     ) => Effect.Effect<Session, SessionNotFound | GitError>
-    /** Stops every running agent of a project, before the project is removed. */
+    readonly searchFiles: (
+      sessionId: string,
+      query: string,
+      recent?: ReadonlyArray<string>,
+    ) => Effect.Effect<ReadonlyArray<FileEntry>, SessionNotFound | GitError>
     readonly stopProject: (projectId: string) => Effect.Effect<void>
-    /** Uncommitted changes where the session works: its worktree or the project's checkout. */
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
-    /**
-     * The commits of the session's branch, wherever the checkout is now: those
-     * the project's default branch lacks, or the latest on the default branch.
-     */
     readonly commits: (
       sessionId: string,
     ) => Effect.Effect<BranchCommits, SessionNotFound | ProjectNotFound | GitError | GitRefNotFound>
-    /**
-     * Commits where the session works to the session's branch: what the agent
-     * changed, on its own or with the human's allow. Only the files under
-     * `paths` when given, else everything. Refused while another branch is
-     * checked out there.
-     */
     readonly commit: (
       sessionId: string,
       message: string,
@@ -288,12 +244,10 @@ export class SessionService extends Context.Service<
       SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
     >
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
-    /** The messages just before `before`, which the snapshot left out, a page at a time. */
     readonly earlierMessages: (
       sessionId: string,
       before: string,
     ) => Effect.Effect<TranscriptPage, SessionNotFound>
-    /** Every session of every project, again after each change. Most recently active first. */
     readonly watchAll: Stream.Stream<ReadonlyArray<Session>>
   }
 >()("humanity/SessionService") {
@@ -305,6 +259,7 @@ export class SessionService extends Context.Service<
       const runner = yield* AgentRunner
       const projects = yield* ProjectService
       const git = yield* GitService
+      const fileSearch = yield* FileSearchService
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
       const preferences = yield* PreferencesService
@@ -320,18 +275,12 @@ export class SessionService extends Context.Service<
 
       const active = new Map<string, ActiveRun>()
 
-      /** Each provider keeps its own accounts, and a thread runs as one of its provider's. */
       const accountsOf = (provider: AgentProvider) =>
         provider === "codex" ? codexAccounts : provider === "kiro" ? kiroAccounts : accounts
-      /** The config folder of the account a thread runs as; `undefined` is its provider's default login. */
       const accountDir = (session: Session) =>
         Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
           accountsOf(session.provider).configDirFor(accountId),
         )
-      /**
-       * Sessions that moved into a worktree since the agent last heard from
-       * Humanity: the next message tells it where it works now.
-       */
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
       const startLock = yield* Semaphore.make(1)
 
@@ -352,18 +301,11 @@ export class SessionService extends Context.Service<
           yield* events.publishListChanged
         })
 
-      /**
-       * Records the branch the session's folder is on as its turn ends: the
-       * agent may have switched to another or made a new one. Read only then,
-       * while the folder is this thread's, so another thread switching the
-       * checkout later leaves this thread's branch where it was.
-       */
       const followBranch = (sessionId: string) =>
         Effect.gen(function* () {
           const session = yield* get(sessionId)
           const current = yield* git.currentBranch(session.worktreePath)
           if (current === undefined || current === session.branch) return
-          // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
           yield* repo.update(sessionId, { branch: current, updatedAt: session.updatedAt })
           yield* events.publish(sessionId, {
             _tag: "SessionUpdated",
@@ -392,7 +334,6 @@ export class SessionService extends Context.Service<
           return message
         })
 
-      /** Shows the agent as blocked on the human while `waitForHuman` runs. */
       const whileWaiting = <A>(sessionId: string, waitForHuman: Effect.Effect<A>) =>
         Effect.gen(function* () {
           yield* setStatus(sessionId, "waiting_for_human")
@@ -402,7 +343,6 @@ export class SessionService extends Context.Service<
             Effect.gen(function* () {
               const pending = yield* approvals.pendingCount(sessionId)
               const session = yield* repo.get(sessionId)
-              // An interrupt or a crash sets its own status; only an answered request resumes.
               if (
                 pending === 0 &&
                 Option.isSome(session) &&
@@ -428,7 +368,6 @@ export class SessionService extends Context.Service<
           return yield* whileWaiting(session.id, approvals.requestConfirmation(confirmation))
         })
 
-      /** A file change: simulate the edit, show its diff, wait for the human to allow or deny it. */
       const review = (session: Session, request: ToolPermissionRequest) =>
         Effect.gen(function* () {
           const target = reviewTarget(request.toolName, request.input, session.worktreePath)
@@ -478,7 +417,6 @@ export class SessionService extends Context.Service<
           return yield* whileWaiting(session.id, approvals.requestChange(change))
         })
 
-      /** The session's autonomy right now; the human can change it while the agent runs. */
       const currentAutonomy = (sessionId: string) =>
         Effect.map(repo.get(sessionId), (found) =>
           Option.match(found, {
@@ -487,10 +425,6 @@ export class SessionService extends Context.Service<
           }),
         )
 
-      /**
-       * Every tool call that is not pre-approved lands here. The session's
-       * autonomy is read fresh on each call, so a change applies to a running agent.
-       */
       const decide =
         (session: Session, state: { readonly denied: Set<string> }) =>
         (request: ToolPermissionRequest): Effect.Effect<PermissionDecision> =>
@@ -498,7 +432,6 @@ export class SessionService extends Context.Service<
             const decision: PermissionDecision = yield* Effect.gen(function* () {
               const tool = toolMode(request.toolName)
               const autonomy = yield* currentAutonomy(session.id)
-              // No amount of autonomy answers a question for the human.
               const mode =
                 request.toolName === QUESTION_TOOL
                   ? tool
@@ -507,7 +440,6 @@ export class SessionService extends Context.Service<
                     : applyAutonomy(autonomy, tool)
               switch (mode) {
                 case "auto": {
-                  // A file change let through without asking still stays inside the worktree.
                   const denial =
                     tool === "review"
                       ? outsideWorktreeDenial(request.toolName, request.input, session.worktreePath)
@@ -585,11 +517,6 @@ export class SessionService extends Context.Service<
           }
         })
 
-      /**
-       * Asks the agent how full its context window is and, with `withPlan`,
-       * how much of the plan's rate-limit windows is used. What it cannot say
-       * keeps the last known value.
-       */
       const refreshUsage = (sessionId: string, state: ActiveRun, withPlan: boolean) =>
         state.usageLock.withPermits(1)(
           Effect.gen(function* () {
@@ -599,7 +526,6 @@ export class SessionService extends Context.Service<
           }),
         )
 
-      /** Stores and publishes what is known now; what is not keeps its last value. */
       const storeUsage = (
         sessionId: string,
         context: ContextUsage | undefined,
@@ -617,11 +543,6 @@ export class SessionService extends Context.Service<
           return usage
         })
 
-      /**
-       * The plan's windows right now: from the running agent when the session
-       * has one, otherwise from a Claude Code started idle on the session's
-       * account just to ask, which sends nothing to the model.
-       */
       const refreshUsageNow = Effect.fn("SessionService.refreshUsage")(function* (
         sessionId: string,
       ) {
@@ -635,7 +556,6 @@ export class SessionService extends Context.Service<
           }
           return usage
         }
-        // Kiro reports no plan limits through ACP, so an idle Kiro thread has none to ask for.
         if (session.provider === "kiro") {
           return yield* unavailable("Kiro does not report plan limits here.")
         }
@@ -682,19 +602,15 @@ export class SessionService extends Context.Service<
                 })
               }
             }
-            // Init can repeat; one transcript entry per agent process is enough.
             if (state.initSeen) return
             state.initSeen = true
           }
-          // The prompt was recorded when it was sent; the SDK's echoes add nothing.
           if (content._tag === "other" && content.type === "user") return
 
           yield* addMessage(session.id, content, raw)
           yield* startToolCalls(session, content)
           yield* finishToolCalls(session, state, content, normalized.structuredResult)
 
-          // The context grows with each of the agent's own replies; the plan's
-          // window is asked once per turn. Neither holds up the transcript.
           const turnEnded = content._tag === "result"
           if (turnEnded || (content._tag === "assistant" && content.parentToolUseId === null)) {
             yield* refreshUsage(session.id, state, turnEnded).pipe(Effect.forkIn(state.scope))
@@ -723,7 +639,6 @@ export class SessionService extends Context.Service<
           if (state === undefined) return
           active.delete(sessionId)
           yield* Scope.close(state.scope, Exit.void)
-          // Anything the agent was still waiting on can no longer be answered.
           yield* approvals.expireSession(sessionId)
         })
 
@@ -735,7 +650,6 @@ export class SessionService extends Context.Service<
 
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
-            // Its tools act for this thread while its agent runs, whatever the provider.
             const humanity = yield* mcp
               .serve({ openThread: openThread(session) })
               .pipe(Scope.provide(scope))
@@ -765,7 +679,6 @@ export class SessionService extends Context.Service<
             const ready: ActiveRun = Object.assign(state, { run })
             active.set(session.id, ready)
 
-            // Consume the agent's messages until the run ends or fails.
             yield* run.messages.pipe(
               Stream.runForEach(handleRaw(session, ready)),
               Effect.matchCauseEffect({
@@ -781,7 +694,6 @@ export class SessionService extends Context.Service<
                     yield* setStatus(session.id, "error", reason)
                   }),
               }),
-              // A finished run is detached, so the next message starts a fresh one that resumes.
               Effect.ensuring(
                 Effect.suspend(() =>
                   active.get(session.id) === ready
@@ -798,7 +710,6 @@ export class SessionService extends Context.Service<
       const list = (projectId: string) =>
         Effect.flatMap(projects.get(projectId), () => repo.listByProject(projectId))
 
-      /** Writes each file under `<attachmentsDir>/<sessionId>/` and records it. */
       const storeAttachments = (sessionId: string, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
           if (files.length === 0) return []
@@ -821,11 +732,6 @@ export class SessionService extends Context.Service<
           )
         })
 
-      /**
-       * Gives a running agent the MCP servers and skills changed in the
-       * settings since it started, before its next turn. A failure leaves the
-       * agent as it was; the message still goes through.
-       */
       const syncExtensions = (sessionId: string, state: ActiveRun) =>
         Effect.gen(function* () {
           const latest = yield* extensions.forAgent
@@ -844,10 +750,6 @@ export class SessionService extends Context.Service<
             )
         })
 
-      /**
-       * Files the session's agent could not read are refused before anything is
-       * stored or sent, so the human hears it instead of the agent guessing.
-       */
       const checkReadable = (provider: AgentProvider, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
           if (provider !== "codex") return
@@ -860,40 +762,49 @@ export class SessionService extends Context.Service<
           }
         })
 
-      const deliver = (session: Session, text: string, files: ReadonlyArray<PreparedAttachment>) =>
+      const deliver = (
+        session: Session,
+        text: string,
+        files: ReadonlyArray<PreparedAttachment>,
+        mentions: ReadonlyArray<string>,
+      ) =>
         Effect.gen(function* () {
           const moved = relocated.get(session.id)
           relocated.delete(session.id)
-          // Only the agent sees this; the transcript shows the move as a notice.
           const forAgent =
             moved === undefined
               ? text
               : `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.\n\n${text}`
           const stored = yield* storeAttachments(session.id, files)
-          yield* addMessage(
-            session.id,
-            stored.length === 0
-              ? { _tag: "user", text }
-              : { _tag: "user", text, attachments: stored },
-          )
+          const mentioned = mentionedPaths(text, mentions)
+          yield* addMessage(session.id, {
+            _tag: "user",
+            text,
+            ...(stored.length === 0 ? {} : { attachments: stored }),
+            ...(mentioned.length === 0 ? {} : { mentions: mentioned }),
+          })
           const state = yield* ensureRun(session)
           state.interrupted = false
           yield* syncExtensions(session.id, state)
           yield* setStatus(session.id, "running")
-          yield* state.run.send({ text: forAgent, attachments: files.map(toAgentAttachment) })
+          yield* state.run.send({
+            text: forAgent,
+            attachments: files.map(toAgentAttachment),
+            ...(mentioned.length === 0 ? {} : { mentions: mentioned }),
+          })
         })
 
       const sendMessage = Effect.fn("SessionService.sendMessage")(function* (
         sessionId: string,
         text: string,
         uploads: ReadonlyArray<AttachmentUpload> = [],
+        mentions: ReadonlyArray<string> = [],
       ) {
         const session = yield* get(sessionId)
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         const files = yield* prepareAttachments(uploads)
         yield* checkReadable(session.provider, files)
         if (session.origin === "claude-code") {
-          // From now on the conversation goes on here; the CLI's transcript no longer replaces it.
           yield* repo.update(sessionId, { detachImport: true, updatedAt: session.updatedAt })
           if (session.status === "ended") {
             yield* addMessage(sessionId, {
@@ -903,7 +814,7 @@ export class SessionService extends Context.Service<
             })
           }
         }
-        yield* deliver(session, text, files)
+        yield* deliver(session, text, files, mentions)
       })
 
       const attachment = Effect.fn("SessionService.attachment")(function* (
@@ -924,11 +835,6 @@ export class SessionService extends Context.Service<
         } satisfies AttachmentContent
       })
 
-      /**
-       * Switches the project's checkout to `name`, unless it is on it already.
-       * A remote-tracking branch (`origin/x`) switches to the local `x`, which
-       * git creates to track it when it does not exist yet.
-       */
       const switchCheckout = (checkout: string, name: string) =>
         Effect.gen(function* () {
           const branches = yield* git.listBranches(checkout)
@@ -945,13 +851,13 @@ export class SessionService extends Context.Service<
         readonly baseBranch?: string | undefined
         readonly prompt?: string | undefined
         readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+        readonly mentions?: ReadonlyArray<string> | undefined
         readonly provider?: AgentProvider | undefined
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
-        // Checked before anything changes, so a bad file leaves the checkout as it was.
         const files = yield* prepareAttachments(options.attachments ?? [])
         const provider = options.provider ?? DEFAULT_PROVIDER
         yield* checkReadable(provider, files)
@@ -991,20 +897,13 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
-        // The thread keeps this account for good: its conversation lives in that account's folder.
         const accountId = yield* accountsOf(provider).activeId
         if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
-        if (prompt) yield* deliver(session, prompt, files)
+        if (prompt) yield* deliver(session, prompt, files, options.mentions ?? [])
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
       })
 
-      /**
-       * The model of an `open_thread` call as the session stores it. Checked
-       * against what the provider offers its active account, when that is
-       * known, so a name the agent made up comes back to it instead of failing
-       * the new thread. A provider nobody is signed in to opens no thread.
-       */
       const threadModel = (provider: AgentProvider, requested: string | undefined | null) =>
         Effect.gen(function* () {
           const product = PROVIDER_NAMES[provider]
@@ -1026,12 +925,6 @@ export class SessionService extends Context.Service<
           })
         })
 
-      /**
-       * Humanity's `open_thread` tool for the agent of `parent`: a new thread
-       * in the same project, started on the prompt, on the provider asked for
-       * or else the parent's. Its autonomy is the default for new threads
-       * there, not that of the thread that opened it.
-       */
       const openThread =
         (parent: Session) =>
         (request: OpenThreadRequest): Effect.Effect<OpenedThread, OpenThreadFailed> =>
@@ -1075,7 +968,6 @@ export class SessionService extends Context.Service<
         const session = yield* get(sessionId)
         if (session.status === "ended") return yield* new SessionEnded({ sessionId })
         if (session.inWorktree) return session
-        // The agent's cwd cannot change under a running turn.
         if (session.status === "running" || session.status === "waiting_for_human") {
           return yield* new SessionBusy({ sessionId })
         }
@@ -1083,14 +975,11 @@ export class SessionService extends Context.Service<
         const branch = sessionBranchName(session.id, session.title)
         const path = join(config.worktreesDir, project.id, session.id)
         const checkout = yield* git.status(project.localPath)
-        // From the thread's own branch, even when another thread has switched the checkout since.
         const own = threadBranch(session)
         const base = own === null || own === checkout.branch ? "HEAD" : own
         yield* git.worktreeAdd(project.localPath, { path, branch, base })
 
-        // The agent process keeps its cwd; the next message starts one in the worktree.
         yield* stopRun(sessionId)
-        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { worktree: { branch, path }, updatedAt: session.updatedAt })
         if (session.sdkSessionId !== null) {
           relocated.set(sessionId, { from: session.worktreePath, to: path })
@@ -1117,7 +1006,6 @@ export class SessionService extends Context.Service<
         const session = yield* get(sessionId)
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         if (session.autonomy === autonomy) return session
-        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { autonomy, updatedAt: session.updatedAt })
         const updated = yield* get(sessionId)
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
@@ -1133,9 +1021,7 @@ export class SessionService extends Context.Service<
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         const model = requested?.trim() || null
         if (session.model === model) return session
-        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { model, updatedAt: session.updatedAt })
-        // A session without an active run reads the stored model when its next run starts.
         const state = active.get(sessionId)
         if (state !== undefined) {
           yield* state.run.setModel(model ?? undefined).pipe(
@@ -1145,7 +1031,6 @@ export class SessionService extends Context.Service<
                   sessionId,
                   reason: error.message,
                 })
-                // Between turns, closing the run makes the next message resume on the new model.
                 if (session.status !== "running" && session.status !== "waiting_for_human") {
                   yield* stopRun(sessionId)
                   return
@@ -1172,9 +1057,7 @@ export class SessionService extends Context.Service<
         const session = yield* get(sessionId)
         if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
         if (session.effort === effort) return session
-        // `updatedAt` is when the status last changed (the sidebar counts from it); keep it.
         yield* repo.update(sessionId, { effort, updatedAt: session.updatedAt })
-        // A session without an active run reads the stored effort when its next run starts.
         const state = active.get(sessionId)
         if (state !== undefined) {
           yield* state.run.setEffort(effort ?? undefined).pipe(
@@ -1184,7 +1067,6 @@ export class SessionService extends Context.Service<
                   sessionId,
                   reason: error.message,
                 })
-                // Between turns, closing the run makes the next message resume on the new effort.
                 if (session.status !== "running" && session.status !== "waiting_for_human") {
                   yield* stopRun(sessionId)
                   return
@@ -1211,7 +1093,6 @@ export class SessionService extends Context.Service<
         state.interrupted = true
         yield* setStatus(sessionId, "interrupted")
         yield* state.run.interrupt
-        // The SDK aborts pending permission requests itself; this is the safety net.
         yield* approvals.expireSession(sessionId)
       })
 
@@ -1234,6 +1115,11 @@ export class SessionService extends Context.Service<
       const diff = (sessionId: string) =>
         Effect.flatMap(get(sessionId), (session) => git.diff(session.worktreePath))
 
+      const searchFiles = (sessionId: string, query: string, recent?: ReadonlyArray<string>) =>
+        Effect.flatMap(get(sessionId), (session) =>
+          fileSearch.search(session.worktreePath, query, recent),
+        )
+
       const commits = Effect.fn("SessionService.commits")(function* (sessionId: string) {
         const session = yield* get(sessionId)
         const project = yield* projects.get(session.projectId)
@@ -1241,7 +1127,6 @@ export class SessionService extends Context.Service<
         const own = threadBranch(session)
         let base: string | undefined
         if (own !== project.defaultBranch) {
-          // The remote's default branch is what a pull request would merge into.
           for (const candidate of [`origin/${project.defaultBranch}`, project.defaultBranch]) {
             if (yield* git.hasCommit(cwd, candidate)) {
               base = candidate
@@ -1249,7 +1134,6 @@ export class SessionService extends Context.Service<
             }
           }
         }
-        // By its full name, so a tag of the same name is never read instead.
         const ref = own === null ? "HEAD" : `refs/heads/${own}`
         const listed = yield* git.log(cwd, ref, { exclude: base, limit: COMMIT_LIST_LIMIT })
         return { branch: own ?? "HEAD", base: base ?? null, ...listed } satisfies BranchCommits
@@ -1261,13 +1145,11 @@ export class SessionService extends Context.Service<
         paths?: ReadonlyArray<string>,
       ) {
         const session = yield* get(sessionId)
-        // A commit in the middle of a turn could capture half of the agent's work.
         if (session.status === "running" || session.status === "waiting_for_human") {
           return yield* new SessionBusy({ sessionId })
         }
         const status = yield* git.status(session.worktreePath)
         const own = threadBranch(session)
-        // Another thread can have switched the checkout: its changes are not this thread's.
         if (own !== null && status.branch !== own) {
           return yield* new BranchNotCheckedOut({ branch: own, checkedOut: status.branch })
         }
@@ -1292,7 +1174,6 @@ export class SessionService extends Context.Service<
       const subscribe = (sessionId: string) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            // Subscribe before reading the snapshot, so nothing falls in between.
             const subscription = yield* events.subscribe(sessionId)
             const session = yield* get(sessionId)
             const page = yield* repo.transcriptPage(sessionId)
@@ -1312,7 +1193,6 @@ export class SessionService extends Context.Service<
 
       const watchAll: Stream.Stream<ReadonlyArray<Session>> = Stream.unwrap(
         Effect.gen(function* () {
-          // Subscribe before the first read, so no change falls in between.
           const changes = yield* events.subscribeListChanged
           return Stream.concat(Stream.succeed(undefined), Stream.fromSubscription(changes)).pipe(
             Stream.mapEffect(() => repo.listAll),
@@ -1320,7 +1200,6 @@ export class SessionService extends Context.Service<
         }),
       )
 
-      // Agent processes do not survive a daemon restart; say so instead of showing "running".
       const orphaned = yield* repo.listByStatus(["running", "waiting_for_human"])
       yield* Effect.forEach(
         orphaned,
@@ -1359,6 +1238,7 @@ export class SessionService extends Context.Service<
         end,
         stopProject,
         diff,
+        searchFiles,
         commits,
         commit,
         subscribe,
