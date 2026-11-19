@@ -20,6 +20,9 @@ import { guestDestinationOf, isRecording, recordingPath } from "./previewRules.t
 /** Permissions a Browser page gets; everything else (camera, location, notifications…) is denied. */
 const ALLOWED_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"])
 
+/** How long after `prepareCapture` the window's `getDisplayMedia` may take the page. */
+const CAPTURE_WINDOW_MS = 5_000
+
 /**
  * The desktop app's Browser: hardens every `<webview>` the window attaches, keeps its pages away
  * from Humanity, turns their new windows into tabs and their downloads into links opened outside,
@@ -125,9 +128,32 @@ export const installPreview = (options: {
     return new Uint8Array(image.toPNG())
   })
 
-  ipcMain.handle(PREVIEW_CHANNELS.mediaSourceId, (event, id: unknown) =>
-    guestOf(event, id).getMediaSourceId(event.sender),
-  )
+  /** The page each window's next `getDisplayMedia` captures, named just before it asks. */
+  const captures = new Map<number, { readonly guest: WebContents; readonly until: number }>()
+
+  ipcMain.handle(PREVIEW_CHANNELS.prepareCapture, (event, id: unknown) => {
+    captures.set(event.sender.id, {
+      guest: guestOf(event, id),
+      until: Date.now() + CAPTURE_WINDOW_MS,
+    })
+  })
+
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    const host = request.frame === null ? undefined : webContents.fromFrame(request.frame)
+    const capture = host === undefined ? undefined : captures.get(host.id)
+    if (host !== undefined) captures.delete(host.id)
+    if (
+      host === undefined ||
+      capture === undefined ||
+      !options.isAppContents(host) ||
+      Date.now() > capture.until ||
+      capture.guest.isDestroyed()
+    ) {
+      callback(null)
+      return
+    }
+    callback({ video: capture.guest.mainFrame })
+  })
 
   ipcMain.handle(
     PREVIEW_CHANNELS.saveRecording,

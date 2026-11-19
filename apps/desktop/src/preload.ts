@@ -20,7 +20,7 @@ const preview: DesktopPreviewBridge = {
     ipcRenderer.invoke(PREVIEW_CHANNELS.setColorScheme, guest, scheme),
   clearData: () => ipcRenderer.invoke(PREVIEW_CHANNELS.clearData),
   capture: (guest) => ipcRenderer.invoke(PREVIEW_CHANNELS.capture, guest),
-  mediaSourceId: (guest) => ipcRenderer.invoke(PREVIEW_CHANNELS.mediaSourceId, guest),
+  prepareCapture: (guest) => ipcRenderer.invoke(PREVIEW_CHANNELS.prepareCapture, guest),
   saveRecording: (threadId, data) =>
     ipcRenderer.invoke(PREVIEW_CHANNELS.saveRecording, threadId, data),
   reveal: (path) => ipcRenderer.invoke(PREVIEW_CHANNELS.reveal, path),

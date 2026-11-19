@@ -5,24 +5,19 @@ const MAX_BYTES = 50 * 1024 * 1024
 const MAX_MS = 10 * 60 * 1000
 const FRAME_RATE = 30
 
-/** A live video of a Browser page, from the desktop app's media source for it. */
+/**
+ * A live video of a Browser page: the desktop app answers the window's `getDisplayMedia` with the
+ * page it was told about just before, with no picker.
+ */
 export const pageStream = async (
   bridge: DesktopPreviewBridge,
   guest: number,
 ): Promise<MediaStream> => {
-  const sourceId = await bridge.mediaSourceId(guest)
-  // Chromium's tab capture takes its source through the legacy `mandatory` constraints.
-  const constraints = {
+  await bridge.prepareCapture(guest)
+  return navigator.mediaDevices.getDisplayMedia({
+    video: { frameRate: FRAME_RATE },
     audio: false,
-    video: {
-      mandatory: {
-        chromeMediaSource: "tab",
-        chromeMediaSourceId: sourceId,
-        maxFrameRate: FRAME_RATE,
-      },
-    },
-  } as unknown as MediaStreamConstraints
-  return navigator.mediaDevices.getUserMedia(constraints)
+  })
 }
 
 const stopStream = (stream: MediaStream | undefined) => {

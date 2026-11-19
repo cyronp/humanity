@@ -109,6 +109,13 @@ jobs:
           test -f "$pty/prebuilds/win32-x64/conpty/conpty.dll"
           test -f "$pty/prebuilds/win32-x64/conpty/OpenConsole.exe"
           test -z "$(find "$pty" -name '*.pdb')"
+      # Without the window's preload, the Browser's desktop features vanish silently.
+      - name: Check the app's archive
+        shell: bash
+        run: |
+          files=$(npx asar list apps/desktop/release/win-unpacked/resources/app.asar)
+          echo "$files" | grep -qx '[\\/]dist[\\/]main.cjs'
+          echo "$files" | grep -qx '[\\/]dist[\\/]preload.cjs'
       - uses: actions/upload-artifact@v4
         with:
           name: humanity-desktop-windows

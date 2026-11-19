@@ -25,8 +25,11 @@ export interface DesktopPreviewBridge {
   readonly clearData: () => Promise<void>
   /** The visible page as a PNG. */
   readonly capture: (guest: number) => Promise<Uint8Array>
-  /** A media source id for `getUserMedia`'s `chromeMediaSourceId`, to record or mirror a page. */
-  readonly mediaSourceId: (guest: number) => Promise<string>
+  /**
+   * Names the page the window's next `getDisplayMedia` call captures, to record or mirror it. The
+   * desktop app answers that call with the page, and only within a few seconds.
+   */
+  readonly prepareCapture: (guest: number) => Promise<void>
   /** Saves a recording under `~/.humanity/recordings/` and returns its path. */
   readonly saveRecording: (threadId: string, data: Uint8Array) => Promise<string>
   /** Shows a saved recording in the system's file manager. */
@@ -44,7 +47,7 @@ export const PREVIEW_CHANNELS = {
   setColorScheme: "preview:set-color-scheme",
   clearData: "preview:clear-data",
   capture: "preview:capture",
-  mediaSourceId: "preview:media-source-id",
+  prepareCapture: "preview:prepare-capture",
   saveRecording: "preview:save-recording",
   reveal: "preview:reveal",
   openTab: "preview:open-tab",

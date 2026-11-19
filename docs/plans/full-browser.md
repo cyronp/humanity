@@ -35,7 +35,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 | 9 | Panel: tabs, device sizes, zoom, link setting | ✅ checked in headless Edge |
 | 10 | Desktop: the webview, the preload bridge, navigation, find, DevTools, appearance, mute, clear data, popups, downloads, crash recovery | ✅ checked in the real desktop app |
 | 11 | Capture: pick element, screenshot and annotate into the composer | ✅ checked in the real desktop app |
-| 12 | Recording and picture-in-picture | ✅ lint, typecheck and tests pass; not yet tried in the app |
+| 12 | Recording and picture-in-picture | ✅ checked in the real desktop app |
 
 ---
 
@@ -109,7 +109,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
   - `setColorScheme(id, "light" | "dark" | "system")`: CDP `Emulation.setEmulatedMedia` over `webContents.debugger`.
   - `clearData()`: the preview partition's cookies, storage and cache.
   - `capture(id)` → PNG bytes
-  - `mediaSourceId(id)`
+  - `prepareCapture(id)`: names the page the window's next `getDisplayMedia` captures; `session.setDisplayMediaRequestHandler` answers with that page's frame, for the app's window only and within 5 s
   - `saveRecording(threadId, bytes)` → a path under `~/.humanity/recordings/`
   - `reveal(path)`, only for a path under `~/.humanity/recordings/`
   - `onOpenTab`, `onDownload`
@@ -143,7 +143,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 ## Phase 12: recording and picture-in-picture
 
 - **Recording:**
-  - `mediaSourceId(id)` → `getUserMedia({video: {mandatory: {chromeMediaSource: "tab", chromeMediaSourceId}}})` → `MediaRecorder` (WebM, VP9, 30 fps).
+  - `prepareCapture(id)` → `getDisplayMedia({video: {frameRate: 30}})` → `MediaRecorder` (WebM, VP9, 30 fps). Tab capture through `getUserMedia` and a media source id was refused ("Permission denied") in the real app.
   - It stops at 50 MB or 10 minutes, then calls `saveRecording`.
   - The panel shows the saved file with Reveal.
 - **Picture-in-picture:** the same stream in a hidden `<video>` → `requestPictureInPicture()`. It mirrors the tab and stops with it.
