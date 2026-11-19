@@ -273,4 +273,5 @@ Each phase must pass `npm run lint`, `npm run typecheck` and `npm run test`, the
 - **Long waits in MCP calls:** human decisions and `terminal_wait` keep an HTTP request open, so provider timeouts must be raised where they exist.
 - **Color queries (OSC 10 and 11):** the daemon answers with default colors, so a TUI that checks the background may guess dark. Sending the view's colors to the daemon would fix it later.
 - **Slow tests:** each `Sync.test.ts` test starts some 25 git processes, 6–11 s on Windows alone and past 20 s under a full parallel run, so that file has a 60 s limit.
-- **PowerShell outside Windows:** CI's Ubuntu runners have `pwsh`, so the real-shell test runs it on Linux too. Its folder mark names the host with `[Environment]::MachineName`, since `$env:COMPUTERNAME` exists only on Windows.
+- **PowerShell outside Windows:** its folder mark names the host with `[Environment]::MachineName`, since `$env:COMPUTERNAME` exists only on Windows.
+- **bash's `PROMPT_COMMAND` can be an array** (bash 5.1+; CI's Ubuntu runner showed exactly this symptom). Entries after the first ran after Humanity's hook and fired the DEBUG trap, marking an idle terminal busy. Humanity's hook is now the only entry and runs the human's own entries itself, with their `$?`.

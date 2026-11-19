@@ -1,7 +1,13 @@
 import { assert, describe, it } from "@effect/vitest"
-import type { SessionId, TerminalInfo, TerminalOwner } from "@humanity/contracts"
+import {
+  type SessionId,
+  stripAnsi,
+  type TerminalInfo,
+  type TerminalOwner,
+} from "@humanity/contracts"
 import { Effect } from "effect"
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { ServerConfig } from "../src/ServerConfig.ts"
 import { SessionService } from "../src/services/SessionService.ts"
@@ -108,8 +114,9 @@ describe("shellLaunch", () => {
   })
 
   it("keeps the prompt hook out of bash's command marks", () => {
-    assert.include(BASH_SCRIPT, "__humanity_prompt_start*|__humanity_prompt_end*) return")
+    assert.include(BASH_SCRIPT, "__humanity_prompt*) return")
     assert.include(BASH_SCRIPT, '__humanity_precmd "$status"')
+    assert.include(BASH_SCRIPT, "PROMPT_COMMAND=__humanity_prompt")
   })
 })
 
@@ -254,6 +261,63 @@ const failWith3 = (each: Shell) =>
   process.platform === "win32" && (each.kind === "pwsh" || each.kind === "powershell")
     ? "cmd /c exit 3"
     : "sh -c 'exit 3'"
+
+const realBash = realShells.find((each) => each.kind === "bash")
+
+describe.skipIf(realBash === undefined)("bash's own PROMPT_COMMAND", () => {
+  it.live(
+    "runs inside Humanity's prompt hook, as an array too, and sees the last exit code",
+    () =>
+      Effect.gen(function* () {
+        const bash = realBash as Shell
+        const home = mkdtempSync(join(tmpdir(), "humanity-bash-"))
+        writeFileSync(
+          join(home, ".bashrc"),
+          "PROMPT_COMMAND=('echo first=$?' '' 'echo second=$?')\nPS1='$ '\n",
+        )
+        const rcfile = join(home, "humanity.bash")
+        writeFileSync(rcfile, BASH_SCRIPT)
+        const env: Record<string, string> = { ...(process.env as Record<string, string>) }
+        delete env["PROMPT_COMMAND"]
+        delete env["HUMANITY_SHELL_LOGIN"]
+        const host = yield* PtyHost
+        const pty = yield* host.spawn({
+          file: bash.path,
+          args: ["--rcfile", rcfile.replaceAll("\\", "/"), "-i"],
+          cwd: home,
+          env: { ...env, HOME: home },
+          cols: 120,
+          rows: 30,
+        })
+        let output = ""
+        pty.onData((data) => {
+          output += data
+        })
+        const marks = () =>
+          // eslint-disable-next-line no-control-regex
+          [...output.matchAll(/\x1b\]133;([^\x07]*)\x07/g)].map((m) => m[1])
+        const text = () => stripAnsi(output)
+        const waitFor = (description: string, check: () => boolean) =>
+          Effect.gen(function* () {
+            for (let attempt = 0; attempt < 800; attempt++) {
+              if (check()) return
+              yield* Effect.sleep("50 millis")
+            }
+            assert.fail(
+              `timed out waiting for ${description}: marks ${marks().join(" ")}; text ${JSON.stringify(text().slice(-400))}`,
+            )
+          })
+
+        yield* waitFor("the first prompt", () => marks().includes("A"))
+        pty.write("sh -c 'exit 3'\r")
+        yield* waitFor("the prompt's own commands", () => /second=3(?!\d)/.test(text()))
+        pty.kill()
+        assert.deepStrictEqual(marks(), ["A", "C", "D;3", "A"])
+        assert.match(text(), /first=3(?!\d)/)
+      }).pipe(Effect.provide(PtyHost.layer)),
+    { timeout: 90_000 },
+  )
+})
 
 describe.skipIf(realShells.length === 0)("shell integration in a real shell", () => {
   for (const realShell of realShells) {

@@ -88,15 +88,28 @@ if [ -z "\${__humanity_integration-}" ]; then
   else
     __humanity_debug() {
       case "$BASH_COMMAND" in
-        __humanity_prompt_start*|__humanity_prompt_end*) return ;;
+        __humanity_prompt*) return ;;
       esac
       [ -n "\${__humanity_in_prompt-}" ] && return
       [ -n "\${COMP_LINE-}" ] && return
       __humanity_preexec
     }
-    __humanity_prompt_start() { local status=$?; __humanity_in_prompt=1; __humanity_precmd "$status"; local result=$?; return $result; }
-    __humanity_prompt_end() { unset __humanity_in_prompt; }
-    PROMPT_COMMAND="__humanity_prompt_start\${PROMPT_COMMAND:+;$PROMPT_COMMAND};__humanity_prompt_end"
+    __humanity_status() { return "$1"; }
+    __humanity_prompt_commands=(\${PROMPT_COMMAND[@]+"\${PROMPT_COMMAND[@]}"})
+    __humanity_prompt() {
+      local status=$? command
+      __humanity_in_prompt=1
+      __humanity_precmd "$status"
+      for command in \${__humanity_prompt_commands[@]+"\${__humanity_prompt_commands[@]}"}; do
+        [ -z "$command" ] && continue
+        __humanity_status "$status"
+        eval "$command"
+      done
+      unset __humanity_in_prompt
+      __humanity_status "$status"
+    }
+    unset PROMPT_COMMAND
+    PROMPT_COMMAND=__humanity_prompt
     trap '__humanity_debug' DEBUG
   fi
 fi
