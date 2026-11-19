@@ -232,7 +232,7 @@ New pure file `packages/contracts/src/domain/Preview.ts`:
 - **`apps/web/src/features/browser/BrowserView.tsx`:**
   - `<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads">`.
   - **Refused ports:** `location.port`, the daemon's port (`lib/connection.ts`), 7420 and 7421, matched whatever the host. Combining same-origin with scripts is only safe because Humanity's own ports are refused.
-  - It stays mounted, hidden, while another shelf tool is open, so switching tools doesn't reload the previewed app.
+  - It stays mounted, hidden, while another shelf tool is open, so switching tools doesn't reload the previewed app. (Superseded in `full-browser.md`: the Browser now closes whenever it isn't shown.)
   - The last URL per thread is kept in `localStorage` (`humanity.browser.<sessionId>`).
 - **Offers:** `Workspace.tsx` merges `TerminalInfo.urls` with `localUrls` over the thread's `Bash` calls.
   - A new address puts a dot badge on the Browser icon.

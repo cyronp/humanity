@@ -164,8 +164,8 @@ function RailFrame({ children }: { readonly children: ReactNode }) {
 }
 
 /**
- * The open tool's panel, between the chat and the rail. The Browser, once opened, stays mounted
- * while another tool shows, so switching tools doesn't reload its page; closing the panel stops it.
+ * The open tool's panel, between the chat and the rail. The Browser only lives while it shows:
+ * switching to another tool or hiding the panel closes its pages, so nothing runs out of sight.
  */
 export function ToolPanel({
   session,
@@ -186,9 +186,6 @@ export function ToolPanel({
   readonly onReference?: ((reference: string) => void) | undefined
   readonly onCapture?: CaptureTarget | undefined
 }) {
-  const [browserMounted, setBrowserMounted] = useState(tool === "browser")
-  if (tool === "browser" && !browserMounted) setBrowserMounted(true)
-  const gitShown = tool !== "browser"
   const [openFiles, setOpenFiles] = useState<ReadonlySet<string>>(new Set())
   const setFileOpen = (key: string, open: boolean) =>
     setOpenFiles((current) => {
@@ -199,7 +196,7 @@ export function ToolPanel({
     })
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {gitShown && (
+      {tool !== "browser" && (
         <GitPanel
           session={session}
           activity={activity}
@@ -211,10 +208,9 @@ export function ToolPanel({
           onFileOpenChange={setFileOpen}
         />
       )}
-      {browserMounted && (
+      {tool === "browser" && (
         <BrowserView
           browser={browser}
-          shown={tool === "browser"}
           onClose={onClose}
           titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
           onCapture={onCapture}

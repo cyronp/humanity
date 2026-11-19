@@ -80,7 +80,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 
 ## Phase 9: the panel
 
-- **Tabs:** any number per thread, each `{id, url, title}`, kept in `localStorage` (`humanity.browser.<sessionId>`, replacing `{url, seen}`). A middle click closes a tab. Only the active tab is mounted in a browser tab; the desktop app keeps every tab's webview alive, hidden.
+- **Tabs:** any number per thread, each `{id, url, title}`, kept in `localStorage` (`humanity.browser.<sessionId>`, replacing `{url, seen}`). A middle click closes a tab. Only the active tab is mounted in a browser tab; the desktop app keeps every tab's webview alive, hidden, while the Browser shows. Switching to another shelf tool or hiding the panel unmounts the Browser: every page closes, a recording ends and is saved, picture-in-picture closes (decided with the human, 2026-11-18).
 - **Device sizes** (`packages/contracts`, `PREVIEW_VIEWPORT_PRESETS`, t3code's 18):
   - "Fill" (the default), a preset with portrait or landscape, or a freeform size dragged by handles.
   - The frame is centred and scaled down when it doesn't fit.

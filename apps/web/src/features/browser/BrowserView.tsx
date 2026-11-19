@@ -76,27 +76,25 @@ const openOutside = (url: string) => void window.open(url, "_blank", "noopener,n
 
 const DOWNLOAD_NOTICE_MS = 6_000
 
-/**
- * The Browser tool: tabs of pages, each at the panel's size or a device's. In the desktop app each
- * tab is a `<webview>` that shows any site and stays alive while hidden; in a browser tab, the shown
- * tab is a frame of a local address. The Browser stays mounted while another shelf tool shows, so
- * switching tools doesn't reload its pages.
- */
 /** Where the Browser sends what it captures: the thread's composer. */
 export interface CaptureTarget {
   readonly block: (text: string) => void
   readonly attach: (files: ReadonlyArray<File>) => void
 }
 
+/**
+ * The Browser tool: tabs of pages, each at the panel's size or a device's. In the desktop app each
+ * tab is a `<webview>` that shows any site; in a browser tab, the shown tab is a frame of a local
+ * address. It only lives while it is the tool on screen: hiding it closes every page, ends a
+ * recording (saving what was recorded) and picture-in-picture. The tabs and their addresses stay.
+ */
 export function BrowserView({
   browser,
-  shown,
   onClose,
   titlebarPadding,
   onCapture,
 }: {
   readonly browser: BrowserState
-  readonly shown: boolean
   readonly onClose: () => void
   readonly titlebarPadding: string
   /** Absent while the thread takes no message. */
@@ -107,7 +105,7 @@ export function BrowserView({
   const native = bridge !== undefined
   const refused = useMemo(() => refusedPorts(window.location, daemonAddress()), [])
   const tab = activeTab(memory)
-  const servers = useLocalServers(shown)
+  const servers = useLocalServers(true)
   const [error, setError] = useState<string>()
   const [reloads, setReloads] = useState<Readonly<Record<string, number>>>({})
   const [notices, setNotices] = useState<Readonly<Record<string, PreviewProbe | undefined>>>({})
@@ -215,8 +213,8 @@ export function BrowserView({
   }, [bridge])
 
   useEffect(() => {
-    if (shown) onSeen()
-  }, [shown, onSeen])
+    onSeen()
+  }, [onSeen])
 
   const checkFrame = async (id: string, loaded: string) => {
     const exit = await probe({ payload: { url: loaded, embedder: window.location.origin } })
@@ -298,7 +296,7 @@ export function BrowserView({
   }
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", !shown && "hidden")} onKeyDown={onKeyDown}>
+    <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
       <div
         className="titlebar flex h-12 shrink-0 items-center gap-1 border-b px-2"
         style={{ paddingRight: titlebarPadding }}
