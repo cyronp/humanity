@@ -63,7 +63,7 @@ import {
   type PickedElement,
 } from "./capture.ts"
 import { CaptureTools, FindBar, NavigationButtons, PageTools } from "./DesktopTools.tsx"
-import { type RecorderState, usePagePictureInPicture, usePageRecorder } from "./recording.ts"
+import { type RecorderState, usePageRecorder } from "./recording.ts"
 import { ServerList, useLocalServers } from "./ServerList.tsx"
 import type { BrowserState } from "./useBrowser.ts"
 import { ViewportFrame } from "./ViewportFrame.tsx"
@@ -86,7 +86,7 @@ export interface CaptureTarget {
  * The Browser tool: tabs of pages, each at the panel's size or a device's. In the desktop app each
  * tab is a `<webview>` that shows any site; in a browser tab, the shown tab is a frame of a local
  * address. It only lives while it is the tool on screen: hiding it closes every page, ends a
- * recording (saving what was recorded) and picture-in-picture. The tabs and their addresses stay.
+ * recording (saving what was recorded). The tabs and their addresses stay.
  */
 export function BrowserView({
   browser,
@@ -116,7 +116,6 @@ export function BrowserView({
   const [capturing, setCapturing] = useState(false)
   const [annotating, setAnnotating] = useState<string>()
   const recorder = usePageRecorder(bridge, browser.sessionId)
-  const pip = usePagePictureInPicture(bridge)
   const controllers = useRef(new Map<string, TabController>())
   const probe = useAtomSet(probeAtom, { mode: "promiseExit" })
   const latest = useRef(memory)
@@ -277,12 +276,6 @@ export function BrowserView({
     if (guest !== undefined && tab !== undefined) void recorder.start(guest, tab.id)
   }
 
-  const togglePictureInPicture = () => {
-    if (pip.active) return pip.close()
-    const guest = control()?.guestId()
-    if (guest !== undefined) void pip.open(guest).catch(fail)
-  }
-
   const closeAnnotation = () => {
     if (annotating !== undefined) URL.revokeObjectURL(annotating)
     setAnnotating(undefined)
@@ -389,8 +382,6 @@ export function BrowserView({
                 zoom={tab.zoom}
                 onZoom={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
                 onFind={() => setFinding(true)}
-                pictureInPicture={pip.active}
-                onPictureInPicture={togglePictureInPicture}
                 onOpenOutside={() => openOutside(tabUrl)}
                 onClearData={() => {
                   void bridge?.clearData().then(() => control()?.reload(true))

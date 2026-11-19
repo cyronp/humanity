@@ -4,7 +4,6 @@ import {
   Camera,
   Crosshair,
   PenLine,
-  PictureInPicture2,
   Square,
   Video,
   ArrowRight,
@@ -119,8 +118,6 @@ export function PageTools({
   onFind,
   onClearData,
   onOpenOutside,
-  pictureInPicture,
-  onPictureInPicture,
 }: {
   readonly live: TabLive
   readonly control: () => TabController | undefined
@@ -130,8 +127,6 @@ export function PageTools({
   readonly onFind: () => void
   readonly onClearData: () => void
   readonly onOpenOutside: () => void
-  readonly pictureInPicture: boolean
-  readonly onPictureInPicture: () => void
 }) {
   const SchemeIcon = SCHEME_ICON[live.colorScheme]
   const changed = live.colorScheme !== "system" || live.muted || zoom !== 1
@@ -188,10 +183,6 @@ export function PageTools({
         <DropdownMenuItem onSelect={() => control()?.setMuted(!live.muted)}>
           {live.muted ? <VolumeX /> : <Volume2 />}
           {live.muted ? "Unmute" : "Mute"}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onPictureInPicture}>
-          <PictureInPicture2 />
-          {pictureInPicture ? "Close picture-in-picture" : "Picture-in-picture"}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => control()?.devTools()}>
           <Code />

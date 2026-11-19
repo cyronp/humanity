@@ -35,7 +35,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 | 9 | Panel: tabs, device sizes, zoom, link setting | ✅ checked in headless Edge |
 | 10 | Desktop: the webview, the preload bridge, navigation, find, DevTools, appearance, mute, clear data, popups, downloads, crash recovery | ✅ checked in the real desktop app |
 | 11 | Capture: pick element, screenshot and annotate into the composer | ✅ checked in the real desktop app |
-| 12 | Recording and picture-in-picture | ✅ checked in the real desktop app |
+| 12 | Recording | ✅ checked in the real desktop app (picture-in-picture was built, then removed at the human's request) |
 
 ---
 
@@ -80,7 +80,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 
 ## Phase 9: the panel
 
-- **Tabs:** any number per thread, each `{id, url, title}`, kept in `localStorage` (`humanity.browser.<sessionId>`, replacing `{url, seen}`). A middle click closes a tab. Only the active tab is mounted in a browser tab; the desktop app keeps every tab's webview alive, hidden, while the Browser shows. Switching to another shelf tool or hiding the panel unmounts the Browser: every page closes, a recording ends and is saved, picture-in-picture closes (decided with the human, 2026-11-18).
+- **Tabs:** any number per thread, each `{id, url, title}`, kept in `localStorage` (`humanity.browser.<sessionId>`, replacing `{url, seen}`). A middle click closes a tab. Only the active tab is mounted in a browser tab; the desktop app keeps every tab's webview alive, hidden, while the Browser shows. Switching to another shelf tool or hiding the panel unmounts the Browser: every page closes, a recording ends and is saved (decided with the human, 2026-11-18).
 - **Device sizes** (`packages/contracts`, `PREVIEW_VIEWPORT_PRESETS`, t3code's 18):
   - "Fill" (the default), a preset with portrait or landscape, or a freeform size dragged by handles.
   - The frame is centred and scaled down when it doesn't fit.
@@ -140,13 +140,12 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 - **Screenshot:** `capture(id)` → PNG → an image attachment in the composer (`ComposerHandle.attach`).
 - **Annotate:** the screenshot opens over the panel with a pen, an arrow, a box and text, in the theme's colours, plus Undo and Clear. "Add to message" attaches the drawn image.
 
-## Phase 12: recording and picture-in-picture
+## Phase 12: recording
 
 - **Recording:**
   - `prepareCapture(id)` → `getDisplayMedia({video: {frameRate: 30}})` → `MediaRecorder` (WebM, VP9, 30 fps). Tab capture through `getUserMedia` and a media source id was refused ("Permission denied") in the real app.
   - It stops at 50 MB or 10 minutes, then calls `saveRecording`.
   - The panel shows the saved file with Reveal.
-- **Picture-in-picture:** the same stream in a hidden `<video>` → `requestPictureInPicture()`. It mirrors the tab and stops with it.
 
 ---
 
@@ -165,7 +164,7 @@ Each phase must pass `npm run lint`, `npm run typecheck` and `npm run test`, the
    - A download opens outside.
    - Killing the guest's renderer reloads it.
 6. **Capture:** pick a button in a React app; the composer names its component and file. A screenshot and an annotated screenshot attach.
-7. **Recording:** record 5 s; the file is under `~/.humanity/recordings/` and plays. Picture-in-picture follows the page.
+7. **Recording:** record 5 s; the file is under `~/.humanity/recordings/` and plays.
 
 ## Risks
 

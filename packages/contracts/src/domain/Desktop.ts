@@ -26,7 +26,7 @@ export interface DesktopPreviewBridge {
   /** The visible page as a PNG. */
   readonly capture: (guest: number) => Promise<Uint8Array>
   /**
-   * Names the page the window's next `getDisplayMedia` call captures, to record or mirror it. The
+   * Names the page the window's next `getDisplayMedia` call captures, to record it. The
    * desktop app answers that call with the page, and only within a few seconds.
    */
   readonly prepareCapture: (guest: number) => Promise<void>

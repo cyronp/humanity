@@ -116,9 +116,8 @@ The Browser on the shelf grows from a localhost preview into a browser, modelled
   - Picking an element into the composer (selector, HTML, styles, React component and source).
   - A screenshot or an annotated screenshot as an attachment.
   - A recording of the page, saved under `~/.humanity/recordings/`.
-  - Picture-in-picture.
 - **Downloads never write to disk:** a page's download is cancelled and its address opens in the human's browser, because nothing of Humanity's writes outside `~/.humanity/` or the session's folder.
-- **Not yet:** the agent's browser tools, importing cookies from other browsers, browser profiles, voice notes, Humanity as the default browser.
+- **Not yet:** picture-in-picture (built, then removed at the human's request), the agent's browser tools, importing cookies from other browsers, browser profiles, voice notes, Humanity as the default browser.
 
 ## 1. Product vision
 
