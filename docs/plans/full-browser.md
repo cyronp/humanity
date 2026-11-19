@@ -61,7 +61,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
   - It probes HTTP once per `pid:port`, with a 500 ms timeout.
   - It ties each server to a terminal through `PtyProcess.pid`, which the fake host gives too.
 - **`PreviewService.ts`:** `servers`, `stopServer`, `probe` and `fileUrl`.
-- **The file server:** a second `HttpServer` on `127.0.0.1:0` serves `/<token>/<path>` with GET only and no directory listing. The real path must stay inside the session's folder, and the content type follows the extension. Tokens live in memory and die with the session.
+- **The file server:** a second `HttpServer` on `127.0.0.1:0` serves `/<token>/<path>` with GET only and no directory listing. The real path must stay inside the session's folder and have no part that starts with a dot (no `.env`, no `.git/`), and the content type follows the extension. Tokens live in memory and die with the session: once it has ended, its old addresses answer 404.
 
 ### Web
 
@@ -76,7 +76,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 - `framingOf`, `isPreviewFile`.
 - `PortScanner`, with a fake process runner: attribution, the HTTP filter, Humanity's ports.
 - `stopServer` refuses a pair the scan doesn't list.
-- The file server: path traversal, a symlink out of the folder, an unknown token, the content type.
+- The file server: path traversal, a symlink out of the folder, an unknown token, the content type, dotfiles and dot folders, a thread that has ended.
 
 ## Phase 9: the panel
 

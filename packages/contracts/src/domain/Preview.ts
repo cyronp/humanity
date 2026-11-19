@@ -69,6 +69,23 @@ export const portOf = (url: URL): number =>
   url.port !== "" ? Number(url.port) : url.protocol === "https:" ? 443 : 80
 
 /**
+ * Whether a URL's host name (as `URL` writes it) names this machine without DNS: `localhost` and
+ * its subdomains, `127.0.0.0/8`, `0.0.0.0`, `[::1]`, `[::]` and their IPv4-mapped forms.
+ */
+export const isLoopbackHost = (hostname: string): boolean => {
+  const host = hostname.toLowerCase().replace(/\.$/, "")
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    host === "0.0.0.0" ||
+    host === "[::1]" ||
+    host === "[::]" ||
+    /^\[::ffff:(?:7f[\da-f]{2}:[\da-f]{1,4}|0:0)\]$/.test(host)
+  )
+}
+
+/**
  * What the Browser loads for an address the human typed or clicked: `localhost:3000` and `3000`
  * become `http://localhost:3000/`. Only `localhost`, `127.0.0.1` and `[::1]` over http and https are
  * previewed, and never Humanity's own ports, so a framed page can never be Humanity itself.
@@ -116,7 +133,7 @@ export const previewTarget = (
     return refused("Only localhost, 127.0.0.1 and [::1] can be previewed here.")
   }
   if (url.hostname === "0.0.0.0") url.hostname = "localhost"
-  if (local && refusedPorts.has(portOf(url))) {
+  if ((local || isLoopbackHost(url.hostname)) && refusedPorts.has(portOf(url))) {
     return refused(`Port ${portOf(url)} is Humanity's own, so it can't be previewed here.`)
   }
   return { _tag: "Url", url: url.href }

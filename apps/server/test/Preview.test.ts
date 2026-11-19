@@ -194,4 +194,49 @@ describe("PreviewFiles", () => {
       }).pipe(Effect.provide(layerFor(home, machine)))
     }),
   )
+
+  it.live("never serves a dotfile or what a dot folder holds", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const machine: Machine = { netstat: "", processes: "", answering: new Set(), ran: [] }
+      yield* Effect.gen(function* () {
+        const files = yield* PreviewFiles
+        const session = yield* startThread(repo)
+        const folder = session.worktreePath
+        mkdirSync(join(folder, ".hidden"), { recursive: true })
+        writeFileSync(join(folder, "index.html"), "<p>hi</p>")
+        writeFileSync(join(folder, ".env"), "TOKEN=secret")
+        writeFileSync(join(folder, ".hidden", "page.html"), "hidden")
+
+        const url = yield* files.urlFor(session.id, "index.html")
+        for (const path of [".env", ".git/config", ".git%2Fconfig", ".hidden/page.html"]) {
+          const response = yield* Effect.promise(() => fetch(new URL(path, url)))
+          assert.strictEqual(response.status, 404, path)
+        }
+        assert.isTrue(
+          Exit.isFailure(yield* Effect.exit(files.urlFor(session.id, ".hidden/page.html"))),
+        )
+      }).pipe(Effect.provide(layerFor(home, machine)))
+    }),
+  )
+
+  it.live("forgets a thread's address once the thread has ended", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const machine: Machine = { netstat: "", processes: "", answering: new Set(), ran: [] }
+      yield* Effect.gen(function* () {
+        const files = yield* PreviewFiles
+        const sessions = yield* SessionService
+        const session = yield* startThread(repo)
+        writeFileSync(join(session.worktreePath, "index.html"), "<p>hi</p>")
+
+        const url = yield* files.urlFor(session.id, "index.html")
+        assert.strictEqual((yield* Effect.promise(() => fetch(url))).status, 200)
+
+        yield* sessions.end(session.id, { removeWorktree: false })
+        assert.strictEqual((yield* Effect.promise(() => fetch(url))).status, 404)
+        assert.isTrue(Exit.isFailure(yield* Effect.exit(files.urlFor(session.id, "index.html"))))
+      }).pipe(Effect.provide(layerFor(home, machine)))
+    }),
+  )
 })

@@ -48,9 +48,20 @@ export const isInside = (folder: string, child: string): boolean => {
 }
 
 /**
+ * Whether the real path `file` may be served from the real folder `root`: inside it, and with no
+ * part that starts with a dot, so `.env`, `.git/config` and the like never reach a page.
+ */
+export const isServable = (root: string, file: string): boolean =>
+  isInside(root, file) &&
+  !relative(root, file)
+    .split(sep)
+    .some((part) => part.startsWith("."))
+
+/**
  * Serves the HTML and PDF files of a thread's folder, with what they load beside them, on a port of
  * its own: never the daemon's, so a framed file is never same-origin with Humanity. Each thread
- * gets a random token that lives in memory; nothing outside its folder is ever served.
+ * gets a random token that lives in memory and dies with the thread; nothing outside its folder,
+ * and no dotfile or dot folder in it, is ever served.
  */
 export class PreviewFiles extends Context.Service<
   PreviewFiles,
@@ -69,18 +80,24 @@ export class PreviewFiles extends Context.Service<
       const tokens = new Map<string, string>()
       const bySession = new Map<string, string>()
 
-      const folderOf = (sessionId: string) =>
+      const sessionOf = (sessionId: string) =>
         Effect.flatMap(repo.get(sessionId), (found) =>
           Option.match(found, {
             onNone: () => Effect.fail(new SessionNotFound({ sessionId })),
-            onSome: (session) => Effect.succeed(session.worktreePath),
+            onSome: (session) => Effect.succeed(session),
           }),
         )
+
+      const forget = (sessionId: string) => {
+        const token = bySession.get(sessionId)
+        if (token !== undefined) tokens.delete(token)
+        bySession.delete(sessionId)
+      }
 
       const fileFor = async (folder: string, relativePath: string) => {
         const root = await realpath(folder)
         const file = await realpath(resolve(root, relativePath))
-        if (!isInside(root, file)) return undefined
+        if (!isServable(root, file)) return undefined
         const info = await stat(file)
         return info.isFile() ? { file, size: info.size } : undefined
       }
@@ -100,15 +117,18 @@ export class PreviewFiles extends Context.Service<
           .split("/")
         const sessionId = tokens.get(token)
         if (sessionId === undefined || segments.length === 0) return notFound()
-        const folder = await Effect.runPromise(Effect.option(folderOf(sessionId)))
-        if (Option.isNone(folder)) return notFound()
+        const session = await Effect.runPromise(Effect.option(sessionOf(sessionId)))
+        if (Option.isNone(session) || session.value.status === "ended") {
+          forget(sessionId)
+          return notFound()
+        }
         let relativePath: string
         try {
           relativePath = segments.map(decodeURIComponent).join(sep)
         } catch {
           return notFound()
         }
-        const found = await fileFor(folder.value, relativePath).catch(() => undefined)
+        const found = await fileFor(session.value.worktreePath, relativePath).catch(() => undefined)
         if (found === undefined) return notFound()
         response.writeHead(200, {
           "content-type": contentTypeOf(found.file),
@@ -151,21 +171,25 @@ export class PreviewFiles extends Context.Service<
 
       const urlFor = (sessionId: string, path: string) =>
         Effect.gen(function* () {
-          const folder = yield* folderOf(sessionId)
+          const session = yield* sessionOf(sessionId)
+          if (session.status === "ended") {
+            forget(sessionId)
+            return yield* new PreviewFileRefused({ path, reason: "the thread has ended." })
+          }
           if (!isPreviewFile(path)) {
             return yield* new PreviewFileRefused({ path, reason: "only HTML and PDF files open." })
           }
           const located = yield* Effect.tryPromise(async () => {
-            const root = await realpath(folder)
+            const root = await realpath(session.worktreePath)
             const file = await realpath(resolve(root, path))
-            return isInside(root, file) && (await stat(file)).isFile()
+            return isServable(root, file) && (await stat(file)).isFile()
               ? relative(root, file)
               : undefined
           }).pipe(Effect.orElseSucceed(() => undefined))
           if (located === undefined) {
             return yield* new PreviewFileRefused({
               path,
-              reason: "it is not a file in this thread's folder.",
+              reason: "it is not a file in this thread's folder, or it is hidden.",
             })
           }
           const encoded = located.split(sep).map(encodeURIComponent).join("/")

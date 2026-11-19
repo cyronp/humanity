@@ -1,7 +1,5 @@
-import { DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT } from "@humanity/contracts"
+import { DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT, isLoopbackHost } from "@humanity/contracts"
 import { isAbsolute, join, relative, resolve } from "node:path"
-
-const LOOPBACK = /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\]|0\.0\.0\.0)$/i
 
 /** What a Browser page may do with an address it navigates to or opens. */
 export type GuestDestination = "page" | "own" | "external" | "blocked"
@@ -21,7 +19,7 @@ export const guestDestinationOf = (url: string, appOrigin: string): GuestDestina
   if (parsed.protocol === "mailto:") return "external"
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "blocked"
   if (parsed.origin === appOrigin) return "own"
-  if (LOOPBACK.test(parsed.hostname)) {
+  if (isLoopbackHost(parsed.hostname)) {
     const port = Number(parsed.port || (parsed.protocol === "https:" ? 443 : 80))
     const app = new URL(appOrigin)
     const own = new Set([DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT, Number(app.port || 80)])

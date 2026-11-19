@@ -16,6 +16,12 @@ describe("guestDestinationOf", () => {
       "http://localhost:7421/",
       "http://[::1]:7420/",
       "http://127.0.0.2:7420/",
+      "http://127.1:7421/",
+      "http://foo.localhost:7421/",
+      "http://localhost.:7421/",
+      "http://[::]:7421/",
+      "http://[::ffff:127.0.0.1]:7420/",
+      "http://[0:0:0:0:0:0:0:1]:7420/",
     ]) {
       expect(guestDestinationOf(url, app), url).toBe("own")
     }

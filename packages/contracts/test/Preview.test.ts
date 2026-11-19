@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   fitViewport,
   freeViewport,
+  isLoopbackHost,
   localUrlRanges,
   localUrls,
   mergeOffers,
@@ -179,6 +180,47 @@ describe("previewTarget in the desktop app", () => {
     expect(previewTarget("how to center a div", refused, any)._tag).toBe("Refused")
     expect(previewTarget("react", refused, any)._tag).toBe("Refused")
     expect(previewTarget("127.0.0.1:7421", refused, any)._tag).toBe("Refused")
+    for (const address of [
+      "http://foo.localhost:7421",
+      "http://[::]:7420",
+      "http://[::ffff:127.0.0.1]:7421",
+    ]) {
+      expect(previewTarget(address, refused, any)._tag, address).toBe("Refused")
+    }
     expect(previewTarget("example.com:7420", refused, any)._tag).toBe("Url")
+  })
+})
+
+describe("isLoopbackHost", () => {
+  const host = (url: string) => new URL(url).hostname
+
+  it("knows every way a URL names this machine without DNS", () => {
+    for (const url of [
+      "http://localhost",
+      "http://LOCALHOST./",
+      "http://app.localhost",
+      "http://127.0.0.1",
+      "http://127.1",
+      "http://2130706433",
+      "http://0.0.0.0",
+      "http://[::1]",
+      "http://[::]",
+      "http://[::ffff:127.0.0.1]",
+      "http://[::ffff:0.0.0.0]",
+    ]) {
+      expect(isLoopbackHost(host(url)), url).toBe(true)
+    }
+  })
+
+  it("leaves other hosts alone", () => {
+    for (const url of [
+      "http://example.com",
+      "http://localhost.example.com",
+      "http://192.168.1.5",
+      "http://[::ffff:192.168.1.5]",
+      "http://[2001:db8::1]",
+    ]) {
+      expect(isLoopbackHost(host(url)), url).toBe(false)
+    }
   })
 })
