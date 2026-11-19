@@ -35,7 +35,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 | 9 | Panel: tabs, device sizes, zoom, link setting | ✅ checked in headless Edge |
 | 10 | Desktop: the webview, the preload bridge, navigation, find, DevTools, appearance, mute, clear data, popups, downloads, crash recovery | ✅ checked in the real desktop app |
 | 11 | Capture: pick element, screenshot and annotate into the composer | ✅ checked in the real desktop app |
-| 12 | Recording and picture-in-picture | ⏳ next |
+| 12 | Recording and picture-in-picture | ✅ lint, typecheck and tests pass; not yet tried in the app |
 
 ---
 
@@ -56,7 +56,7 @@ The human compared our Browser with t3code's ([pingdotgg/t3code](https://github.
 ### Server (`apps/server/src/preview/`)
 
 - **`PortScanner.ts`:**
-  - Every 2 s while watched, it lists listeners: `netstat -ano -p TCP` (Windows), `lsof -nP -iTCP -sTCP:LISTEN -F pcn` (macOS), `/proc/net/tcp{,6}` with `/proc/*/fd` (Linux).
+  - Every 2 s while watched, it lists listeners: `netstat -ano -p TCP` (Windows), `lsof -nP -iTCP -sTCP:LISTEN -F pcn` (macOS), `ss -ltnpH` (Linux).
   - It reads parent PIDs (`Get-CimInstance Win32_Process` on Windows, `ps -A -o pid=,ppid=,comm=` elsewhere) only when a new PID appears.
   - It probes HTTP once per `pid:port`, with a 500 ms timeout.
   - It ties each server to a terminal through `PtyProcess.pid`, which the fake host gives too.

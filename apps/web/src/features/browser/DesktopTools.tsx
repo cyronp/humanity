@@ -4,6 +4,9 @@ import {
   Camera,
   Crosshair,
   PenLine,
+  PictureInPicture2,
+  Square,
+  Video,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -21,6 +24,7 @@ import {
   X,
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -115,6 +119,8 @@ export function PageTools({
   onFind,
   onClearData,
   onOpenOutside,
+  pictureInPicture,
+  onPictureInPicture,
 }: {
   readonly live: TabLive
   readonly control: () => TabController | undefined
@@ -124,6 +130,8 @@ export function PageTools({
   readonly onFind: () => void
   readonly onClearData: () => void
   readonly onOpenOutside: () => void
+  readonly pictureInPicture: boolean
+  readonly onPictureInPicture: () => void
 }) {
   const SchemeIcon = SCHEME_ICON[live.colorScheme]
   const changed = live.colorScheme !== "system" || live.muted || zoom !== 1
@@ -180,6 +188,10 @@ export function PageTools({
         <DropdownMenuItem onSelect={() => control()?.setMuted(!live.muted)}>
           {live.muted ? <VolumeX /> : <Volume2 />}
           {live.muted ? "Unmute" : "Mute"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onPictureInPicture}>
+          <PictureInPicture2 />
+          {pictureInPicture ? "Close picture-in-picture" : "Picture-in-picture"}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => control()?.devTools()}>
           <Code />
@@ -272,18 +284,42 @@ export function FindBar({
 
 /** Picks an element, or takes a screenshot (to attach, or to annotate first), for the message. */
 export function CaptureTools({
+  canAttach,
   picking,
   busy,
+  recording,
   onPick,
   onScreenshot,
   onAnnotate,
+  onRecord,
 }: {
+  /** Whether the thread takes a message now; recording works either way. */
+  readonly canAttach: boolean
   readonly picking: boolean
   readonly busy: boolean
+  /** How long the page has been recording, while it is. */
+  readonly recording: string | undefined
   readonly onPick: () => void
   readonly onScreenshot: () => void
   readonly onAnnotate: () => void
+  readonly onRecord: () => void
 }) {
+  const record = (
+    <Button
+      type="button"
+      variant={recording === undefined ? "ghost" : "secondary"}
+      size={recording === undefined ? "icon-sm" : "sm"}
+      aria-label={recording === undefined ? "Record the page" : "Stop recording"}
+      aria-pressed={recording !== undefined}
+      title={recording === undefined ? "Record the page as a video" : "Stop recording"}
+      onClick={onRecord}
+      className={cn(recording !== undefined && "text-destructive tabular-nums")}
+    >
+      {recording === undefined ? <Video /> : <Square className="fill-current" />}
+      {recording}
+    </Button>
+  )
+  if (!canAttach) return record
   return (
     <>
       <Button
@@ -319,6 +355,7 @@ export function CaptureTools({
       >
         <PenLine />
       </Button>
+      {record}
     </>
   )
 }

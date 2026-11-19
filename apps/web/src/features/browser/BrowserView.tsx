@@ -14,6 +14,7 @@ import {
   PanelRightClose,
   RotateCw,
   TriangleAlert,
+  Video,
   X,
 } from "lucide-react"
 import {
@@ -62,6 +63,7 @@ import {
   type PickedElement,
 } from "./capture.ts"
 import { CaptureTools, FindBar, NavigationButtons, PageTools } from "./DesktopTools.tsx"
+import { type RecorderState, usePagePictureInPicture, usePageRecorder } from "./recording.ts"
 import { ServerList, useLocalServers } from "./ServerList.tsx"
 import type { BrowserState } from "./useBrowser.ts"
 import { ViewportFrame } from "./ViewportFrame.tsx"
@@ -115,6 +117,8 @@ export function BrowserView({
   const [picking, setPicking] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [annotating, setAnnotating] = useState<string>()
+  const recorder = usePageRecorder(bridge, browser.sessionId)
+  const pip = usePagePictureInPicture(bridge)
   const controllers = useRef(new Map<string, TabController>())
   const probe = useAtomSet(probeAtom, { mode: "promiseExit" })
   const latest = useRef(memory)
@@ -269,6 +273,18 @@ export function BrowserView({
     }
   }
 
+  const record = () => {
+    if (recorder.state._tag === "Recording") return recorder.stop()
+    const guest = control()?.guestId()
+    if (guest !== undefined && tab !== undefined) void recorder.start(guest, tab.id)
+  }
+
+  const togglePictureInPicture = () => {
+    if (pip.active) return pip.close()
+    const guest = control()?.guestId()
+    if (guest !== undefined) void pip.open(guest).catch(fail)
+  }
+
   const closeAnnotation = () => {
     if (annotating !== undefined) URL.revokeObjectURL(annotating)
     setAnnotating(undefined)
@@ -355,8 +371,11 @@ export function BrowserView({
                 onChange={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
               />
             )}
-            {native && tabUrl !== null && onCapture !== undefined && (
+            {native && tabUrl !== null && (
               <CaptureTools
+                canAttach={onCapture !== undefined}
+                recording={recorder.elapsed}
+                onRecord={record}
                 picking={picking}
                 busy={capturing}
                 onPick={() => void pick()}
@@ -372,6 +391,8 @@ export function BrowserView({
                 zoom={tab.zoom}
                 onZoom={(zoom) => change((memory) => updateTab(memory, tab.id, { zoom }))}
                 onFind={() => setFinding(true)}
+                pictureInPicture={pip.active}
+                onPictureInPicture={togglePictureInPicture}
                 onOpenOutside={() => openOutside(tabUrl)}
                 onClearData={() => {
                   void bridge?.clearData().then(() => control()?.reload(true))
@@ -395,6 +416,11 @@ export function BrowserView({
           {error}
         </p>
       )}
+      <RecordingNotice
+        state={recorder.state}
+        onReveal={(path) => void bridge?.reveal(path)}
+        onDismiss={recorder.dismiss}
+      />
       {download !== undefined && (
         <p
           role="status"
@@ -489,6 +515,50 @@ export function BrowserView({
         </>
       )}
     </div>
+  )
+}
+
+/** What became of a recording: being saved, saved (with Reveal), or why it failed. */
+function RecordingNotice({
+  state,
+  onReveal,
+  onDismiss,
+}: {
+  readonly state: RecorderState
+  readonly onReveal: (path: string) => void
+  readonly onDismiss: () => void
+}) {
+  if (state._tag === "Idle" || state._tag === "Recording") return null
+  return (
+    <p
+      role="status"
+      className={cn(
+        "flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+        state._tag === "Failed" ? "bg-destructive/10" : "bg-muted/50",
+      )}
+    >
+      <Video className="size-3.5 shrink-0 text-muted-foreground" />
+      <span
+        className="min-w-0 flex-1 truncate"
+        title={state._tag === "Saved" ? state.path : undefined}
+      >
+        {state._tag === "Saving"
+          ? "Saving the recording…"
+          : state._tag === "Saved"
+            ? `Recording saved: ${state.path}`
+            : `The recording failed: ${state.reason}`}
+      </span>
+      {state._tag === "Saved" && (
+        <Button variant="ghost" size="xs" onClick={() => onReveal(state.path)}>
+          Reveal
+        </Button>
+      )}
+      {state._tag !== "Saving" && (
+        <Button variant="ghost" size="icon-xs" aria-label="Dismiss" onClick={onDismiss}>
+          <X />
+        </Button>
+      )}
+    </p>
   )
 }
 
