@@ -29,7 +29,7 @@ export function ToolsSettings() {
     <SettingsFrame
       id="settings-tools"
       title="Tools"
-      description="Extra tools Humanity gives the agent in every thread. Each one takes up room in the agent's context, so turn off the ones you don't need to save tokens. Changes apply to new threads."
+      description="Each tool takes up room in the agent's context. Changes apply to new threads."
     >
       <SettingsPane>
         <AsyncView result={result} errorTitle="Couldn't load the tool settings">
@@ -63,9 +63,8 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
           labelId={terminalsId}
           detail={
             <>
-              Agent uses the terminals below the chat: read what's on screen, type commands, and run
-              dev servers where you can see them. When it's off, the agent can't see your terminals
-              at all.
+              The agent reads and types in the terminals under the chat. When it's off, the agent
+              can't see them.
               <TokenCost tool="terminals" />
             </>
           }
@@ -81,7 +80,8 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
           labelId={openThreadId}
           detail={
             <>
-              Agent starts another thread in the same project when you ask it to, on any provider.
+              The agent starts another thread in the same project when you ask it to, on any
+              provider.
               <TokenCost tool="openThread" />
             </>
           }
