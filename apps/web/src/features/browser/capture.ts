@@ -1,3 +1,4 @@
+import { trimTrailing } from "@humanity/contracts"
 /** What the picker reports about the element the human clicked in a Browser page. */
 export interface PickedElement {
   readonly url: string
@@ -152,7 +153,10 @@ const INTERNAL =
  */
 export const sourceFromStack = (stack: string): SourceLocation | undefined => {
   for (const line of stack.split("\n").slice(1)) {
-    const match = /(?:\(|@|\s)((?:https?|file):\/\/[^\s)]+?):(\d+):(\d+)\)?\s*$/.exec(line)
+    const at = line.search(/(?:https?|file):\/\//)
+    if (at < 0) continue
+    const frame = trimTrailing(line.slice(at).trimEnd(), ")")
+    const match = /^(\S+):(\d+):(\d+)$/.exec(frame)
     if (match === null) continue
     const [, url, row, column] = match
     if (url === undefined || INTERNAL.test(url)) continue

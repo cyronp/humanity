@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { trimTrailing } from "../text.ts"
 import { ProjectId } from "./Project.ts"
 import { SessionId } from "./Session.ts"
 
@@ -96,9 +97,6 @@ export const terminalLabel = (
   terminal: Pick<TerminalInfo, "title" | "cwd" | "ordinal">,
 ): string => {
   if (terminal.title !== null && terminal.title.trim() !== "") return terminal.title
-  const folder = terminal.cwd
-    .replace(/[\\/]+$/, "")
-    .split(/[\\/]/)
-    .at(-1)
+  const folder = trimTrailing(terminal.cwd, "\\/").split(/[\\/]/).at(-1)
   return folder === undefined || folder === "" ? `Terminal ${terminal.ordinal}` : folder
 }

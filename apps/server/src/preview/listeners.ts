@@ -33,7 +33,7 @@ const splitAddress = (address: string): { host: string; port: number } | undefin
 export const parseNetstat = (text: string): ReadonlyArray<Listener> => {
   const listeners: Array<Listener> = []
   for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*TCP\s+(\S+)\s+(\S+)\s+\S+\s+(\d+)\s*$/i.exec(line)
+    const match = /^TCP\s+(\S+)\s+(\S+)\s+\S+\s+(\d+)$/i.exec(line.trim())
     if (match === null) continue
     const foreign = match[2] ?? ""
     if (!/^(?:0\.0\.0\.0|\[::\]|\*):(?:0|\*)$/.test(foreign)) continue
@@ -82,7 +82,7 @@ export const parseSs = (text: string): ReadonlyArray<Listener> => {
 export const parseProcesses = (text: string): ReadonlyArray<ProcessRow> => {
   const rows: Array<ProcessRow> = []
   for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/.exec(line)
+    const match = /^(\d+)\s+(\d+)\s+(.+)$/.exec(line.trim())
     if (match === null) continue
     const name = (match[3] ?? "").split(/[\\/]/).at(-1) ?? ""
     rows.push({ pid: Number(match[1]), ppid: Number(match[2]), name })
