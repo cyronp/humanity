@@ -107,7 +107,8 @@ describe("shellLaunch", () => {
   })
 
   it("keeps the prompt hook out of bash's command marks", () => {
-    assert.include(BASH_SCRIPT, '[ "$BASH_COMMAND" = "__humanity_prompt_start" ] && return')
+    assert.include(BASH_SCRIPT, "__humanity_prompt_start*|__humanity_prompt_end*) return")
+    assert.include(BASH_SCRIPT, '__humanity_precmd "$status"')
   })
 })
 

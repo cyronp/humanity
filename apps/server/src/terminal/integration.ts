@@ -69,7 +69,7 @@ if [ -z "\${__humanity_integration-}" ]; then
     __humanity_osc "133;C"
   }
   __humanity_precmd() {
-    local status=$?
+    local status=\${1-$?}
     if [ "$__humanity_running" = 1 ]; then __humanity_osc "133;D;$status"; fi
     __humanity_running=0
     if [ -n "\${MSYSTEM-}" ]; then
@@ -85,12 +85,14 @@ if [ -z "\${__humanity_integration-}" ]; then
     preexec_functions+=(__humanity_preexec)
   else
     __humanity_debug() {
-      [ "$BASH_COMMAND" = "__humanity_prompt_start" ] && return
+      case "$BASH_COMMAND" in
+        __humanity_prompt_start*|__humanity_prompt_end*) return ;;
+      esac
       [ -n "\${__humanity_in_prompt-}" ] && return
       [ -n "\${COMP_LINE-}" ] && return
       __humanity_preexec
     }
-    __humanity_prompt_start() { __humanity_in_prompt=1; __humanity_precmd; local status=$?; return $status; }
+    __humanity_prompt_start() { local status=$?; __humanity_in_prompt=1; __humanity_precmd "$status"; local result=$?; return $result; }
     __humanity_prompt_end() { unset __humanity_in_prompt; }
     PROMPT_COMMAND="__humanity_prompt_start\${PROMPT_COMMAND:+;$PROMPT_COMMAND};__humanity_prompt_end"
     trap '__humanity_debug' DEBUG
