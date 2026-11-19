@@ -1,13 +1,15 @@
 import { useAtomValue } from "@effect/atom-react"
-import { type Project, SessionId } from "@humanity/contracts"
+import { type Project, SessionId, type TerminalOwner } from "@humanity/contracts"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
+import { useMemo } from "react"
 import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
 import { useProject } from "@/features/projects/useProject"
 import { sessionViewAtom } from "@/features/session/atoms"
 import { Workspace } from "@/features/session/Workspace"
@@ -51,27 +53,29 @@ function LiveSession({
   const result = useAtomValue(sessionViewAtom(sessionId))
   const search = Route.useSearch()
   const view = AsyncResult.isSuccess(result) ? result.value : undefined
+  const terminalOwner = useMemo((): TerminalOwner => ({ _tag: "Session", sessionId }), [sessionId])
 
-  if (AsyncResult.isFailure(result) && view === undefined) {
-    return (
-      <div className="p-6 pt-14">
-        <AppHeader>
+  if (view !== undefined) return <Workspace project={project} view={view} search={search} />
+  const failed = AsyncResult.isFailure(result)
+  return (
+    <WorkspaceFrame
+      terminals={failed ? undefined : { owner: terminalOwner, unavailable: "Opening the thread…" }}
+      header={(actions) => (
+        <AppHeader actions={actions}>
           <ProjectBreadcrumb project={project} />
         </AppHeader>
-        <ErrorNote title="Could not open the session" message={describeCause(result.cause)} />
-      </div>
-    )
-  }
-  if (view === undefined) {
-    return (
-      <div className="flex flex-col gap-3 p-6 pt-14" aria-busy="true">
-        <AppHeader>
-          <ProjectBreadcrumb project={project} />
-        </AppHeader>
-        <Skeleton className="h-10 w-1/2" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    )
-  }
-  return <Workspace project={project} view={view} search={search} />
+      )}
+    >
+      {AsyncResult.isFailure(result) ? (
+        <div className="min-h-0 flex-1 p-6 pt-14">
+          <ErrorNote title="Could not open the session" message={describeCause(result.cause)} />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-6 pt-14" aria-busy="true">
+          <Skeleton className="h-10 w-1/2" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      )}
+    </WorkspaceFrame>
+  )
 }

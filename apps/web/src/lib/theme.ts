@@ -19,7 +19,7 @@ const storedTheme = (): Theme | undefined => {
 
 const currentTheme = (): Theme => storedTheme() ?? systemTheme()
 
-export const THEME_COLORS: Readonly<Record<Theme, string>> = { light: "#fafafa", dark: "#171717" }
+export const THEME_COLORS: Readonly<Record<Theme, string>> = { light: "#fafafa", dark: "#0a0a0a" }
 
 export const applyTheme = (): void => {
   const theme = currentTheme()

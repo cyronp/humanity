@@ -30,3 +30,25 @@ export const HistoryPreferences = Schema.Struct({
 export type HistoryPreferences = typeof HistoryPreferences.Type
 
 export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = { importFromCli: true }
+
+export const ToolsPreferences = Schema.Struct({
+  terminals: Schema.Boolean,
+  openThread: Schema.Boolean,
+})
+export type ToolsPreferences = typeof ToolsPreferences.Type
+
+export const DEFAULT_TOOLS_PREFERENCES: ToolsPreferences = { terminals: true, openThread: true }
+
+/** Where a local link clicked in a terminal or a command's output opens. */
+export const BrowserLinkTarget = Schema.Literals(["browser", "system"])
+export type BrowserLinkTarget = typeof BrowserLinkTarget.Type
+
+export const BrowserPreferences = Schema.Struct({ linkTarget: BrowserLinkTarget })
+export type BrowserPreferences = typeof BrowserPreferences.Type
+
+export const DEFAULT_BROWSER_PREFERENCES: BrowserPreferences = { linkTarget: "browser" }
+
+export const HUMANITY_TOOL_TOKENS: Readonly<Record<keyof ToolsPreferences, number>> = {
+  terminals: 1_400,
+  openThread: 600,
+}

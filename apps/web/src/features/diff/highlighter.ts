@@ -136,8 +136,7 @@ export const useHighlightedLines = (
       (tokens) => {
         if (!cancelled) setResult({ key, tokens })
       },
-      () => {
-      },
+      () => {},
     )
     return () => {
       cancelled = true

@@ -1,4 +1,4 @@
-export const backdropColor = (dark: boolean): string => (dark ? "#0a0a0a" : "#ffffff")
+export const backdropColor = (dark: boolean): string => (dark ? "#030303" : "#ffffff")
 
 export const splashUrl = (mark: string, dark: boolean): string =>
   `data:text/html;charset=utf-8,${encodeURIComponent(

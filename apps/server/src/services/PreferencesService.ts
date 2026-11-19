@@ -1,9 +1,15 @@
 import {
+  BrowserPreferences,
+  DEFAULT_BROWSER_PREFERENCES,
   DEFAULT_HISTORY_PREFERENCES,
+  DEFAULT_TERMINAL_PREFERENCES,
+  DEFAULT_TOOLS_PREFERENCES,
   DEFAULT_UPDATE_PREFERENCES,
   HistoryPreferences,
   NO_PINS,
   PinnedDefaults,
+  TerminalPreferences,
+  ToolsPreferences,
   UpdatePreferences,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
@@ -12,12 +18,18 @@ import { SqlClient, SqlSchema } from "effect/sql"
 const PINNED_DEFAULTS_KEY = "pinned_defaults"
 const UPDATES_KEY = "updates"
 const HISTORY_KEY = "history"
+const TERMINAL_KEY = "terminal"
+const TOOLS_KEY = "tools"
+const BROWSER_KEY = "browser"
 
 const PreferenceRow = Schema.Struct({ value_json: Schema.String })
 
 const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
 const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
 const HistoryPreferencesJson = Schema.fromJsonString(HistoryPreferences)
+const TerminalPreferencesJson = Schema.fromJsonString(TerminalPreferences)
+const ToolsPreferencesJson = Schema.fromJsonString(ToolsPreferences)
+const BrowserPreferencesJson = Schema.fromJsonString(BrowserPreferences)
 
 export class PreferencesService extends Context.Service<
   PreferencesService,
@@ -28,6 +40,12 @@ export class PreferencesService extends Context.Service<
     readonly setUpdates: (preferences: UpdatePreferences) => Effect.Effect<UpdatePreferences>
     readonly history: Effect.Effect<HistoryPreferences>
     readonly setHistory: (preferences: HistoryPreferences) => Effect.Effect<HistoryPreferences>
+    readonly terminal: Effect.Effect<TerminalPreferences>
+    readonly setTerminal: (preferences: TerminalPreferences) => Effect.Effect<TerminalPreferences>
+    readonly tools: Effect.Effect<ToolsPreferences>
+    readonly setTools: (preferences: ToolsPreferences) => Effect.Effect<ToolsPreferences>
+    readonly browser: Effect.Effect<BrowserPreferences>
+    readonly setBrowser: (preferences: BrowserPreferences) => Effect.Effect<BrowserPreferences>
   }
 >()("humanity/PreferencesService") {
   static readonly layer = Layer.effect(
@@ -119,6 +137,84 @@ export class PreferencesService extends Context.Service<
         return preferences
       })
 
+      const terminal = Effect.gen(function* () {
+        const row = yield* selectByKey(TERMINAL_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_TERMINAL_PREFERENCES
+        return yield* Schema.decodeEffect(TerminalPreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable terminal preferences", error.message),
+              DEFAULT_TERMINAL_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.terminal"))
+
+      const setTerminal = Effect.fn("PreferencesService.setTerminal")(function* (
+        preferences: TerminalPreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(TerminalPreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${TERMINAL_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
+      const tools = Effect.gen(function* () {
+        const row = yield* selectByKey(TOOLS_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_TOOLS_PREFERENCES
+        return yield* Schema.decodeEffect(ToolsPreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable tools preferences", error.message),
+              DEFAULT_TOOLS_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.tools"))
+
+      const setTools = Effect.fn("PreferencesService.setTools")(function* (
+        preferences: ToolsPreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(ToolsPreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${TOOLS_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
+      const browser = Effect.gen(function* () {
+        const row = yield* selectByKey(BROWSER_KEY).pipe(Effect.orDie)
+        if (Option.isNone(row)) return DEFAULT_BROWSER_PREFERENCES
+        return yield* Schema.decodeEffect(BrowserPreferencesJson)(row.value.value_json).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning("Ignoring unreadable browser preferences", error.message),
+              DEFAULT_BROWSER_PREFERENCES,
+            ),
+          ),
+        )
+      }).pipe(Effect.withSpan("PreferencesService.browser"))
+
+      const setBrowser = Effect.fn("PreferencesService.setBrowser")(function* (
+        preferences: BrowserPreferences,
+      ) {
+        const json = yield* Schema.encodeEffect(BrowserPreferencesJson)(preferences).pipe(
+          Effect.orDie,
+        )
+        yield* sql`
+          INSERT INTO preferences (key, value_json) VALUES (${BROWSER_KEY}, ${json})
+          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+        `.pipe(Effect.orDie)
+        return preferences
+      })
+
       return PreferencesService.of({
         pinnedDefaults,
         setPinnedDefaults,
@@ -126,6 +222,12 @@ export class PreferencesService extends Context.Service<
         setUpdates,
         history,
         setHistory,
+        terminal,
+        setTerminal,
+        tools,
+        setTools,
+        browser,
+        setBrowser,
       })
     }),
   )

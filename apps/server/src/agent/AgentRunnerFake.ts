@@ -1,7 +1,6 @@
 import {
   HUMANITY_MCP_SERVER,
-  OPEN_THREAD_TOOL,
-  OPEN_THREAD_TOOL_NAME,
+  parseMcpToolName,
   type ReasoningEffort,
   toolMode,
 } from "@humanity/contracts"
@@ -88,7 +87,11 @@ export const AgentRunnerFake = (script: FakeScript) =>
       const mcp = yield* HumanityMcp
       let runCounter = 0
 
-      const callHumanity = (options: AgentRunOptions, input: Record<string, unknown>) =>
+      const callHumanity = (
+        options: AgentRunOptions,
+        tool: string,
+        input: Record<string, unknown>,
+      ) =>
         Effect.gen(function* () {
           const server = options.extensions.mcpServers[HUMANITY_MCP_SERVER]
           const tools = mcp.toolsFor(server?.type === "http" ? server.headers["Authorization"] : "")
@@ -97,7 +100,7 @@ export const AgentRunnerFake = (script: FakeScript) =>
             jsonrpc: "2.0",
             id: 1,
             method: "tools/call",
-            params: { name: OPEN_THREAD_TOOL_NAME, arguments: input },
+            params: { name: tool, arguments: input },
           })
           const called = (reply.body as { readonly result?: ToolResult } | undefined)?.result
           return {
@@ -193,12 +196,14 @@ export const AgentRunnerFake = (script: FakeScript) =>
                   { type: "tool_use", id: toolUseId, name: step.tool, input: step.input },
                 ])
                 const decision = yield* decide(step, toolUseId)
+                const parsed = parseMcpToolName(step.tool)
+                const humanityTool =
+                  parsed?.server === HUMANITY_MCP_SERVER ? parsed.tool : undefined
                 const result =
                   decision.behavior !== "allow"
                     ? { content: decision.message, isError: true }
-                    : step.tool === OPEN_THREAD_TOOL
-                      ?
-                        yield* callHumanity(options, step.input)
+                    : humanityTool !== undefined
+                      ? yield* callHumanity(options, humanityTool, step.input)
                       : executeTool(options.cwd, step)
                 yield* emit({
                   type: "user",

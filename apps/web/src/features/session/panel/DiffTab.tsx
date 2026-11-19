@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react"
 import type { FileDiff, Session } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
+import { OpenInBrowserButton } from "@/features/browser/OpenInBrowserButton"
 import { FileDiffView } from "@/features/diff/FileDiffView"
 import { publicationAtom, sessionDiffAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
@@ -42,6 +43,11 @@ export function DiffTab({
                 editorRoot={session.worktreePath}
                 open={open.has(key)}
                 onOpenChange={(next) => onOpenChange(key, next)}
+                headerActions={
+                  file.kind === "delete" ? undefined : (
+                    <OpenInBrowserButton sessionId={session.id} path={file.filePath} />
+                  )
+                }
               />
             )
           })

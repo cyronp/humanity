@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest"
-import { NO_PINS, type PinnedDefaults } from "@humanity/contracts"
+import { DEFAULT_TOOLS_PREFERENCES, NO_PINS, type PinnedDefaults } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { SqlClient } from "effect/sql"
 import { PreferencesService } from "../src/services/PreferencesService.ts"
@@ -63,6 +63,25 @@ describe("PreferencesService", () => {
       }).pipe(Effect.provide(services(home)))
 
       assert.deepStrictEqual(pinned, NO_PINS)
+    }),
+  )
+
+  it.live("offers every Humanity tool until the human turns one off, and keeps the choice", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const initial = yield* PreferencesService.use((preferences) => preferences.tools).pipe(
+        Effect.provide(services(home)),
+      )
+      assert.deepStrictEqual(initial, DEFAULT_TOOLS_PREFERENCES)
+      assert.deepStrictEqual(initial, { terminals: true, openThread: true })
+
+      yield* PreferencesService.use((preferences) =>
+        preferences.setTools({ terminals: false, openThread: true }),
+      ).pipe(Effect.provide(services(home)))
+      const restored = yield* PreferencesService.use((preferences) => preferences.tools).pipe(
+        Effect.provide(services(home)),
+      )
+      assert.deepStrictEqual(restored, { terminals: false, openThread: true })
     }),
   )
 })

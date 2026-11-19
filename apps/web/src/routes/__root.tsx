@@ -7,6 +7,14 @@ import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
 import { AppSidebar } from "@/features/sidebar/AppSidebar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ResizeHandle } from "@/components/ResizeHandle"
+import { useStoredWidth } from "@/lib/resize"
+
+const SIDEBAR_DEFAULT_WIDTH = 320
+const SIDEBAR_MIN_WIDTH = 240
+const SIDEBAR_MAX_WIDTH = 520
+/** The sidebar never takes more than this share of the window. */
+const SIDEBAR_MAX_SHARE = 0.4
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -21,9 +29,29 @@ export const Route = createRootRoute({
 })
 
 function RootLayout() {
+  const [sidebarWidth, setSidebarWidth] = useStoredWidth("humanity.sidebarWidth")
+  const width = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH
   return (
-    <SidebarProvider className="h-svh" style={{ "--sidebar-width": "20rem" } as CSSProperties}>
-      <AppSidebar />
+    <SidebarProvider className="h-svh" style={{ "--sidebar-width": `${width}px` } as CSSProperties}>
+      <AppSidebar
+        resizeHandle={
+          <ResizeHandle
+            edge="end"
+            label="Resize the sidebar"
+            value={width}
+            min={SIDEBAR_MIN_WIDTH}
+            max={() =>
+              Math.max(
+                SIDEBAR_MIN_WIDTH,
+                Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth * SIDEBAR_MAX_SHARE),
+              )
+            }
+            measure={() => width}
+            onResize={setSidebarWidth}
+            onReset={() => setSidebarWidth(null)}
+          />
+        }
+      />
       <SidebarInset className="relative min-h-0 overflow-hidden [--background:var(--chat)]">
         <AppHeaderHost>
           <ScrollArea

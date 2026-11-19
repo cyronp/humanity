@@ -102,6 +102,20 @@ jobs:
           test -f "$daemon/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs"
           test ! -e "$daemon/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64"
           test ! -e "$daemon/node_modules/@openai"
+          pty="$daemon/node_modules/node-pty"
+          test -f "$pty/lib/index.js"
+          test -f "$pty/prebuilds/win32-x64/pty.node"
+          test -f "$pty/prebuilds/win32-x64/conpty.node"
+          test -f "$pty/prebuilds/win32-x64/conpty/conpty.dll"
+          test -f "$pty/prebuilds/win32-x64/conpty/OpenConsole.exe"
+          test -z "$(find "$pty" -name '*.pdb')"
+      # Without the window's preload, the Browser's desktop features vanish silently.
+      - name: Check the app's archive
+        shell: bash
+        run: |
+          files=$(npx asar list apps/desktop/release/win-unpacked/resources/app.asar)
+          echo "$files" | grep -qx '[\\/]dist[\\/]main.cjs'
+          echo "$files" | grep -qx '[\\/]dist[\\/]preload.cjs'
       - uses: actions/upload-artifact@v4
         with:
           name: humanity-desktop-windows

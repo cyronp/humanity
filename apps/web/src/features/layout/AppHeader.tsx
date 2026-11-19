@@ -44,10 +44,10 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
       >
         <ProgressiveBlur className="absolute inset-x-0 top-0 h-20" />
         <div
-          className={cn(
-            "titlebar pointer-events-auto relative flex h-12 items-center gap-2 px-3",
-            insetEnd === 0 && "pr-[calc(var(--titlebar-controls)+--spacing(3))]",
-          )}
+          className="titlebar pointer-events-auto relative flex h-12 items-center gap-2 px-3"
+          style={{
+            paddingRight: `calc(max(0px, var(--titlebar-controls) - ${insetEnd}px) + 0.75rem)`,
+          }}
         >
           {(state === "collapsed" || isFloating) && <SidebarTrigger />}
           <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />

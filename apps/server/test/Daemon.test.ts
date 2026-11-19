@@ -13,6 +13,7 @@ import { Codex } from "../src/codex/Codex.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { App } from "../src/Daemon.ts"
+import { makeFakePtyHost } from "../src/terminal/PtyHost.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
 const ScriptedClaude = ClaudeCode.layerTest(
@@ -31,6 +32,7 @@ const daemon = (home: string, script: FakeScript = () => []) =>
     Layer.provide(ClaudeHistory.layerTest()),
     Layer.provideMerge(AuthToken.layer),
     Layer.provide(AgentRunnerFake(script)),
+    Layer.provide(makeFakePtyHost().layer),
     Layer.provideMerge(HumanityMcp.layer),
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provide(baseLayer(home)),
@@ -297,7 +299,10 @@ describe("daemon", () => {
 
         const scope = yield* Scope.make()
         const server = yield* mcp
-          .serve({ openThread: () => Effect.die("not called") })
+          .serve({
+            openThread: () => Effect.die("not called"),
+            terminal: () => Effect.die("not called"),
+          })
           .pipe(Scope.provide(scope))
         const authorization = server.type === "http" ? server.headers["Authorization"] : undefined
 
@@ -307,7 +312,15 @@ describe("daemon", () => {
         const body = (yield* listed.json) as { result: { tools: ReadonlyArray<{ name: string }> } }
         assert.deepStrictEqual(
           body.result.tools.map((tool) => tool.name),
-          ["open_thread"],
+          [
+            "open_thread",
+            "terminal_list",
+            "terminal_read",
+            "terminal_send",
+            "terminal_wait",
+            "terminal_open",
+            "terminal_close",
+          ],
         )
         const notified = yield* post(
           authorization,

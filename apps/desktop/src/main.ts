@@ -19,6 +19,7 @@ import { resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { makeElectronUpdater } from "./electronUpdater.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
+import { installPreview } from "./preview.ts"
 import { backdropColor, splashUrl } from "./splash.ts"
 import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
 import { connectUpdates } from "./updatesClient.ts"
@@ -40,8 +41,7 @@ let dark = nativeTheme.shouldUseDarkColors
 try {
   const remembered = readFileSync(themePath, "utf8").trim()
   if (remembered === "dark" || remembered === "light") dark = remembered === "dark"
-} catch {
-}
+} catch {}
 
 const ownsTitleBar = process.platform !== "darwin"
 const frame = (): BrowserWindowConstructorOptions =>
@@ -74,7 +74,13 @@ const createWindow = () => {
     backgroundColor: backdropColor(dark),
     ...frame(),
     ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), "build", "icon.png") }),
-    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: true,
+      preload: join(app.getAppPath(), "dist", "preload.cjs"),
+    },
   })
   const created = window
   created.webContents.on("did-change-theme-color", (_event, color) => {
@@ -184,7 +190,15 @@ const start = () => {
     void stopDaemon().then(() => app.quit())
   })
 
-  app.on("web-contents-created", (_event, contents) => confine(contents))
+  let preview: ReturnType<typeof installPreview> | undefined
+  app.on("web-contents-created", (_event, contents) => {
+    if (contents.getType() === "webview") {
+      preview?.confineGuest(contents)
+      return
+    }
+    confine(contents)
+    preview?.hardenHost(contents)
+  })
   app.on("second-instance", () => {
     if (window === undefined) return
     if (window.isMinimized()) window.restore()
@@ -197,7 +211,14 @@ const start = () => {
     if (window === undefined) createWindow()
   })
 
-  void app.whenReady().then(createWindow)
+  void app.whenReady().then(() => {
+    preview = installPreview({
+      appOrigin: config.origin,
+      home: config.home,
+      isAppContents: (contents) => contents === window?.webContents,
+    })
+    createWindow()
+  })
 }
 
 if (app.requestSingleInstanceLock()) start()

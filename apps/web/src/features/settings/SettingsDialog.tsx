@@ -3,11 +3,14 @@ import {
   Blocks,
   FolderCog,
   FolderGit2,
+  Globe,
   Info,
   Plug,
   RefreshCw,
   Search,
   SlidersHorizontal,
+  SquareTerminal,
+  Wrench,
 } from "lucide-react"
 import { type ComponentType, Fragment, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -21,6 +24,9 @@ import { GeneralSettings } from "./GeneralSettings.tsx"
 import { ProjectsSettings } from "./ProjectsSettings.tsx"
 import { ProvidersSettings } from "./ProvidersSettings.tsx"
 import { RepositoriesSettings } from "./RepositoriesSettings.tsx"
+import { TerminalSettings } from "./TerminalSettings.tsx"
+import { BrowserSettings } from "./BrowserSettings.tsx"
+import { ToolsSettings } from "./ToolsSettings.tsx"
 import {
   closeSettings,
   matchSections,
@@ -40,7 +46,10 @@ const SECTION_VIEWS: Record<
   }
 > = {
   general: { icon: SlidersHorizontal, View: GeneralSettings },
+  terminal: { icon: SquareTerminal, View: TerminalSettings },
+  browser: { icon: Globe, View: BrowserSettings },
   providers: { icon: Plug, View: ProvidersSettings },
+  tools: { icon: Wrench, View: ToolsSettings },
   repositories: { icon: FolderGit2, View: RepositoriesSettings },
   projects: { icon: FolderCog, View: ProjectsSettings },
   mcp: { icon: McpIcon, View: McpSettings },

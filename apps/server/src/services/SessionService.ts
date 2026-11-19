@@ -30,6 +30,7 @@ import {
   type PlanUsage,
   PlanUsageUnavailable,
   type Project,
+  ProjectId,
   type ProjectNotFound,
   type ProposedChange,
   PROVIDER_NAMES,
@@ -76,6 +77,8 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
+import { makeTerminalTools } from "../terminal/agentTools.ts"
+import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
@@ -105,13 +108,19 @@ interface ActiveRun {
   readonly denied: Set<string>
   readonly usageLock: Semaphore.Semaphore
   extensionsVersion: number
-  readonly humanity: AgentMcpServer
+  readonly humanity: AgentMcpServer | undefined
 }
 
-const withHumanity = (added: AgentExtensions, humanity: AgentMcpServer): AgentExtensions => ({
-  mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
-  plugins: added.plugins,
-})
+const withHumanity = (
+  added: AgentExtensions,
+  humanity: AgentMcpServer | undefined,
+): AgentExtensions =>
+  humanity === undefined
+    ? added
+    : {
+        mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
+        plugins: added.plugins,
+      }
 
 export const slugify = (title: string): string => {
   const words = title
@@ -243,6 +252,14 @@ export class SessionService extends Context.Service<
       string,
       SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
     >
+    /**
+     * Shows `notice` in the thread and, when the agent has a conversation to resume, puts `agent`
+     * in front of the human's next message so the agent hears about it before it acts.
+     */
+    readonly tell: (
+      sessionId: string,
+      message: { readonly notice: string; readonly agent?: string | undefined },
+    ) => Effect.Effect<void, SessionNotFound>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     readonly earlierMessages: (
       sessionId: string,
@@ -259,6 +276,7 @@ export class SessionService extends Context.Service<
       const runner = yield* AgentRunner
       const projects = yield* ProjectService
       const git = yield* GitService
+      const terminals = yield* TerminalService
       const fileSearch = yield* FileSearchService
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
@@ -282,6 +300,7 @@ export class SessionService extends Context.Service<
           accountsOf(session.provider).configDirFor(accountId),
         )
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
+      const agentNotes = new Map<string, Array<string>>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -650,15 +669,31 @@ export class SessionService extends Context.Service<
 
             const added = yield* extensions.forAgent
             const scope = yield* Scope.fork(serviceScope)
-            const humanity = yield* mcp
-              .serve({ openThread: openThread(session) })
-              .pipe(Scope.provide(scope))
+            const denied = new Set<string>()
+            const offered = yield* preferences.tools
+            const humanity =
+              offered.openThread || offered.terminals
+                ? yield* mcp
+                    .serve({
+                      ...(offered.openThread ? { openThread: openThread(session) } : {}),
+                      ...(offered.terminals
+                        ? {
+                            terminal: makeTerminalTools({
+                              sessionId: session.id,
+                              terminals,
+                              decide: decide(session, { denied }),
+                            }),
+                          }
+                        : {}),
+                    })
+                    .pipe(Scope.provide(scope))
+                : undefined
             const state: ActiveRun = {
               run: undefined as unknown as AgentRun,
               scope,
               interrupted: false,
               initSeen: false,
-              denied: new Set(),
+              denied,
               usageLock: yield* Semaphore.make(1),
               extensionsVersion: added.version,
               humanity,
@@ -673,6 +708,7 @@ export class SessionService extends Context.Service<
                 effort: session.effort ?? undefined,
                 extensions: withHumanity(added, humanity),
                 allowedTools: AUTO_TOOLS,
+                offersOpenThread: offered.openThread,
                 canUseTool: decide(session, state),
               })
               .pipe(Scope.provide(scope))
@@ -771,10 +807,17 @@ export class SessionService extends Context.Service<
         Effect.gen(function* () {
           const moved = relocated.get(session.id)
           relocated.delete(session.id)
-          const forAgent =
-            moved === undefined
-              ? text
-              : `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.\n\n${text}`
+          const notes = agentNotes.get(session.id) ?? []
+          agentNotes.delete(session.id)
+          const forAgent = [
+            ...(moved === undefined
+              ? []
+              : [
+                  `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.`,
+                ]),
+            ...notes,
+            text,
+          ].join("\n\n")
           const stored = yield* storeAttachments(session.id, files)
           const mentioned = mentionedPaths(text, mentions)
           yield* addMessage(session.id, {
@@ -981,6 +1024,7 @@ export class SessionService extends Context.Service<
 
         yield* stopRun(sessionId)
         yield* repo.update(sessionId, { worktree: { branch, path }, updatedAt: session.updatedAt })
+        yield* terminals.moveSession(session.id, path)
         if (session.sdkSessionId !== null) {
           relocated.set(sessionId, { from: session.worktreePath, to: path })
         }
@@ -1102,6 +1146,7 @@ export class SessionService extends Context.Service<
       ) {
         const session = yield* get(sessionId)
         yield* stopRun(sessionId)
+        yield* terminals.closeOwner({ _tag: "Session", sessionId: session.id })
         if (options.removeWorktree && isInsideDir(config.worktreesDir, session.worktreePath)) {
           const project = yield* projects.get(session.projectId).pipe(Effect.option)
           if (Option.isSome(project)) {
@@ -1165,10 +1210,31 @@ export class SessionService extends Context.Service<
         return hash
       })
 
+      const tell = Effect.fn("SessionService.tell")(function* (
+        sessionId: string,
+        message: { readonly notice: string; readonly agent?: string | undefined },
+      ) {
+        const session = yield* get(sessionId)
+        yield* addMessage(sessionId, { _tag: "notice", level: "info", text: message.notice })
+        if (message.agent === undefined || session.sdkSessionId === null) return
+        const notes = agentNotes.get(sessionId) ?? []
+        notes.push(message.agent)
+        agentNotes.set(sessionId, notes)
+      })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
-          yield* Effect.forEach(sessions, (session) => stopRun(session.id), { discard: true })
+          yield* Effect.forEach(
+            sessions,
+            (session) =>
+              Effect.andThen(
+                stopRun(session.id),
+                terminals.closeOwner({ _tag: "Session", sessionId: session.id }),
+              ),
+            { discard: true },
+          )
+          yield* terminals.closeOwner({ _tag: "Project", projectId: ProjectId.make(projectId) })
         })
 
       const subscribe = (sessionId: string) =>
@@ -1241,6 +1307,7 @@ export class SessionService extends Context.Service<
         searchFiles,
         commits,
         commit,
+        tell,
         subscribe,
         earlierMessages,
         watchAll,

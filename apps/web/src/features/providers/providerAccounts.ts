@@ -7,7 +7,6 @@ import { kiroLine } from "@/features/kiro/summary"
 import { useKiroAccounts } from "@/features/kiro/useKiroAccounts"
 import type { ProviderId } from "./ProviderIcon.tsx"
 
-
 export type AccountState = "connected" | "signedOut" | "unavailable"
 
 export interface ProviderAccount {

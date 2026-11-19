@@ -9,8 +9,16 @@ export type PromptInsertion =
   | { readonly kind: "skill"; readonly invocation: string }
   | { readonly kind: "mcp"; readonly server: string }
   | { readonly kind: "reference"; readonly reference: string }
+  /** A paragraph of its own, such as an element picked in the Browser, after what is there. */
+  | { readonly kind: "block"; readonly text: string }
 
 export const mcpMention = (server: string) => `mcp__${server}`
+
+export const appendBlock = (text: string, block: string): PromptEdit => {
+  const before = text.trimEnd()
+  const next = `${before}${before === "" ? "" : "\n\n"}${block.trim()}\n\n`
+  return { text: next, caret: next.length }
+}
 
 export const insertSkill = (text: string, invocation: string): PromptEdit => {
   const rest = text.trimStart()
@@ -53,12 +61,14 @@ export const applyInsertion = (
 ): PromptEdit =>
   insertion.kind === "skill"
     ? insertSkill(text, insertion.invocation)
-    : insertAtSelection(
-        text,
-        insertion.kind === "mcp" ? mcpMention(insertion.server) : insertion.reference,
-        selection.start,
-        selection.end,
-      )
+    : insertion.kind === "block"
+      ? appendBlock(text, insertion.text)
+      : insertAtSelection(
+          text,
+          insertion.kind === "mcp" ? mcpMention(insertion.server) : insertion.reference,
+          selection.start,
+          selection.end,
+        )
 
 export const describeTransport = (transport: McpTransport): string => {
   switch (transport._tag) {

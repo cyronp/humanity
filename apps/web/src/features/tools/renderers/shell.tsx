@@ -38,12 +38,12 @@ export const shellRenderer: ToolRenderer = {
           <>
             {structured.stdout !== "" && (
               <Field label="Output">
-                <TerminalOutput text={structured.stdout} />
+                <TerminalOutput text={structured.stdout} links />
               </Field>
             )}
             {structured.stderr !== "" && (
               <Field label="Errors">
-                <TerminalOutput text={structured.stderr} className="border-destructive/40" />
+                <TerminalOutput text={structured.stderr} className="border-destructive/40" links />
               </Field>
             )}
             {structured.stdout === "" && structured.stderr === "" && (
@@ -55,6 +55,7 @@ export const shellRenderer: ToolRenderer = {
           <Field label={output.isError ? "Error" : "Output"}>
             <TerminalOutput
               text={output.content}
+              links
               {...(output.isError ? { className: "border-destructive/40" } : {})}
             />
           </Field>

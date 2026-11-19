@@ -11,6 +11,7 @@ import { Services } from "../src/Daemon.ts"
 import type { GitHubService } from "../src/services/GitHubService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
+import { makeFakePtyHost } from "../src/terminal/PtyHost.ts"
 import { baseLayer, tempDir, tempRepo } from "./helpers.ts"
 
 const noClaude = (planUsage?: PlanUsageProbe) =>
@@ -30,8 +31,10 @@ export const services = (
   planUsage?: PlanUsageProbe,
   github?: Layer.Layer<GitHubService>,
   kiro: Layer.Layer<Kiro> = Kiro.layerTest(),
+  ptyHost = makeFakePtyHost().layer,
 ) =>
   Services.pipe(
+    Layer.provideMerge(ptyHost),
     Layer.provideMerge(AgentRunnerFake(script)),
     Layer.provideMerge(HumanityMcp.layer),
     Layer.provide(noClaude(planUsage)),

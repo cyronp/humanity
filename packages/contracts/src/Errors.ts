@@ -244,19 +244,26 @@ export class PullRequestUnavailable extends Schema.TaggedError<PullRequestUnavai
   }
 }
 
-export class AccountNotFound extends Schema.TaggedError<AccountNotFound>()(
-  "AccountNotFound",
-  { accountId: Schema.String },
-) {
+export class SyncUnavailable extends Schema.TaggedError<SyncUnavailable>()("SyncUnavailable", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class AccountNotFound extends Schema.TaggedError<AccountNotFound>()("AccountNotFound", {
+  accountId: Schema.String,
+}) {
   override get message() {
     return "This account does not exist any more. Reload the list of accounts."
   }
 }
 
-export class AccountInUse extends Schema.TaggedError<AccountInUse>()(
-  "AccountInUse",
-  { accountId: Schema.String, sessions: Schema.Number },
-) {
+export class AccountInUse extends Schema.TaggedError<AccountInUse>()("AccountInUse", {
+  accountId: Schema.String,
+  sessions: Schema.Number,
+}) {
   override get message() {
     return this.sessions === 1
       ? "One open thread still runs as this account. End it before removing the account."
@@ -336,5 +343,49 @@ export class CliUpdateFailed extends Schema.TaggedError<CliUpdateFailed>()("CliU
   override get message() {
     const output = this.output.trim()
     return `\`${this.command}\` did not update ${this.product}.${output === "" ? "" : `\n${output}`}`
+  }
+}
+
+export class TerminalNotFound extends Schema.TaggedError<TerminalNotFound>()("TerminalNotFound", {
+  terminalId: Schema.String,
+}) {
+  override get message() {
+    return "This terminal was closed."
+  }
+}
+
+export class TerminalSpawnFailed extends Schema.TaggedError<TerminalSpawnFailed>()(
+  "TerminalSpawnFailed",
+  { shell: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return `${this.shell} could not be started: ${this.reason}`
+  }
+}
+
+export class LocalServerNotFound extends Schema.TaggedError<LocalServerNotFound>()(
+  "LocalServerNotFound",
+  { pid: Schema.Number, port: Schema.Number },
+) {
+  override get message() {
+    return `Nothing on port ${this.port} is running any more.`
+  }
+}
+
+export class LocalServerStopFailed extends Schema.TaggedError<LocalServerStopFailed>()(
+  "LocalServerStopFailed",
+  { port: Schema.Number, reason: Schema.String },
+) {
+  override get message() {
+    return `The server on port ${this.port} could not be stopped: ${this.reason}`
+  }
+}
+
+export class PreviewFileRefused extends Schema.TaggedError<PreviewFileRefused>()(
+  "PreviewFileRefused",
+  { path: Schema.String, reason: Schema.String },
+) {
+  override get message() {
+    return `${this.path} can't be previewed: ${this.reason}`
   }
 }

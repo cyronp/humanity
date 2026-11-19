@@ -42,8 +42,7 @@ export const shikiCodePlugin: CodeHighlighterPlugin = {
           if (!isIncomplete) remember(key, result)
           callback?.(result)
         },
-        () => {
-        },
+        () => {},
       )
     return null
   },

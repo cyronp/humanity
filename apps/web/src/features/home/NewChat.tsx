@@ -1,10 +1,17 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Autonomy, Project, ProjectId, ReasoningEffort, Session } from "@humanity/contracts"
+import type {
+  Autonomy,
+  Project,
+  ProjectId,
+  ReasoningEffort,
+  Session,
+  TerminalOwner,
+} from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { FolderPlus } from "lucide-react"
-import { type FormEvent, type KeyboardEvent, useId, useState } from "react"
+import { type FormEvent, type KeyboardEvent, useId, useMemo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,6 +27,7 @@ import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { openAddRepository } from "@/features/projects/addRepository"
@@ -56,29 +64,49 @@ export function NewChat({ projectId }: { readonly projectId: ProjectId | undefin
     project,
   )
 
+  const loaded = AsyncResult.isSuccess(projects)
+  const projectKey = project?.id
+  const terminalOwner = useMemo(
+    (): TerminalOwner | undefined =>
+      !loaded
+        ? undefined
+        : projectKey === undefined
+          ? { _tag: "Home" }
+          : { _tag: "Project", projectId: projectKey },
+    [loaded, projectKey],
+  )
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4 pt-14 pb-10">
-      <AppHeader>
-        <ProjectBreadcrumb project={project} />
-      </AppHeader>
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">What should we work on?</h1>
-      </div>
-      {AsyncResult.match(projects, {
-        onInitial: () => <Skeleton className="h-32 w-full max-w-2xl rounded-2xl" />,
-        onFailure: ({ cause }) => (
-          <div className="w-full max-w-2xl">
-            <ErrorNote title="Could not load projects" message={describeCause(cause)} />
+    <WorkspaceFrame
+      terminals={terminalOwner === undefined ? undefined : { owner: terminalOwner }}
+      header={(actions) => (
+        <AppHeader actions={actions}>
+          <ProjectBreadcrumb project={project} />
+        </AppHeader>
+      )}
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="my-auto flex flex-col items-center gap-6 px-4 pt-14 pb-10">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight">What should we work on?</h1>
           </div>
-        ),
-        onSuccess: () =>
-          project === undefined ? (
-            <NoProjects />
-          ) : (
-            <NewChatForm project={project} defaults={defaults} />
-          ),
-      })}
-    </div>
+          {AsyncResult.match(projects, {
+            onInitial: () => <Skeleton className="h-32 w-full max-w-2xl rounded-2xl" />,
+            onFailure: ({ cause }) => (
+              <div className="w-full max-w-2xl">
+                <ErrorNote title="Could not load projects" message={describeCause(cause)} />
+              </div>
+            ),
+            onSuccess: () =>
+              project === undefined ? (
+                <NoProjects />
+              ) : (
+                <NewChatForm project={project} defaults={defaults} />
+              ),
+          })}
+        </div>
+      </div>
+    </WorkspaceFrame>
   )
 }
 

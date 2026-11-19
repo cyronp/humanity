@@ -74,6 +74,7 @@ const runOptions = (
   effort: undefined,
   extensions: { mcpServers: {}, plugins: [] },
   allowedTools: [],
+  offersOpenThread: true,
   canUseTool: (request) => Effect.sync(() => canUseTool(request)),
   ...overrides,
 })
@@ -106,6 +107,7 @@ describe("a Codex run", () => {
                 type: "http",
                 url: "http://127.0.0.1:7420/mcp",
                 headers: { Authorization: "Bearer thread-token" },
+                timeoutMs: 86_400_000,
               },
             },
             plugins: [],
@@ -131,8 +133,17 @@ describe("a Codex run", () => {
           humanity: {
             url: "http://127.0.0.1:7420/mcp",
             http_headers: { Authorization: "Bearer thread-token" },
+            tool_timeout_sec: 86_400,
             default_tools_approval_mode: "prompt",
-            tools: { open_thread: { approval_mode: "approve" } },
+            tools: {
+              open_thread: { approval_mode: "approve" },
+              terminal_list: { approval_mode: "approve" },
+              terminal_read: { approval_mode: "approve" },
+              terminal_send: { approval_mode: "approve" },
+              terminal_wait: { approval_mode: "approve" },
+              terminal_open: { approval_mode: "approve" },
+              terminal_close: { approval_mode: "approve" },
+            },
           },
         },
       })

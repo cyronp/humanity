@@ -10,6 +10,12 @@ const server = here("../../server")
 const webDist = here("../../web/dist")
 const daemonDir = join(desktop, "dist", "daemon")
 
+const packageDir = (require, name) => {
+  let dir = dirname(require.resolve(name))
+  while (!existsSync(join(dir, "package.json"))) dir = dirname(dir)
+  return dir
+}
+
 const shared = {
   bundle: true,
   platform: "node",
@@ -28,6 +34,16 @@ await build({
   loader: { ".svg": "text" },
 })
 
+// The window's preload: sandboxed, so it is one file that needs nothing but Electron.
+await build({
+  ...shared,
+  platform: "browser",
+  entryPoints: [join(desktop, "src", "preload.ts")],
+  outfile: join(desktop, "dist", "preload.cjs"),
+  format: "cjs",
+  external: ["electron"],
+})
+
 if (!process.argv.includes("--main-only")) {
   if (!existsSync(join(webDist, "index.html"))) {
     throw new Error(`The web app is not built: ${webDist} is missing. Run "npm run build" first.`)
@@ -36,21 +52,39 @@ if (!process.argv.includes("--main-only")) {
   mkdirSync(daemonDir, { recursive: true })
 
   const sdk = "@anthropic-ai/claude-agent-sdk"
+  const pty = "node-pty"
   await build({
     ...shared,
     entryPoints: [join(server, "src", "main.ts")],
     outfile: join(daemonDir, "main.mjs"),
     format: "esm",
-    external: [sdk],
+    external: [sdk, pty],
     banner: {
       js: 'import { createRequire as __createRequire } from "node:module";\nconst require = __createRequire(import.meta.url);',
     },
   })
 
   const require = createRequire(join(server, "package.json"))
-  let sdkDir = dirname(require.resolve(sdk))
-  while (!existsSync(join(sdkDir, "package.json"))) sdkDir = dirname(sdkDir)
+  const sdkDir = packageDir(require, sdk)
   cpSync(sdkDir, join(daemonDir, "node_modules", sdk), { recursive: true, dereference: true })
+
+  const ptyDir = packageDir(require, pty)
+  const ptyTarget = join(daemonDir, "node_modules", pty)
+  const binaries = ["build/Release", `prebuilds/${process.platform}-${process.arch}`]
+  if (!binaries.some((folder) => existsSync(join(ptyDir, folder)))) {
+    throw new Error(`${pty} has no binary for ${process.platform}-${process.arch} in ${ptyDir}.`)
+  }
+  for (const part of ["package.json", "LICENSE", "lib", ...binaries]) {
+    if (!existsSync(join(ptyDir, part))) continue
+    cpSync(join(ptyDir, part), join(ptyTarget, part), {
+      recursive: true,
+      dereference: true,
+      filter: (source) =>
+        !/\.(pdb|map|ts|o|obj|lib|exp|ilk|iobj|ipdb|tlog)$/i.test(source) &&
+        !/\.test\.js$/i.test(source) &&
+        !/[\\/](obj|\.deps)[\\/]?/.test(source.slice(ptyDir.length)),
+    })
+  }
 
   cpSync(webDist, join(daemonDir, "web"), { recursive: true })
   console.log(`Staged the daemon in ${daemonDir}`)

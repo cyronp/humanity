@@ -1,11 +1,7 @@
 import { Schema } from "effect"
 import { DEFAULT_ACCOUNT } from "./Provider.ts"
 
-export const ClaudeAuthMethod = Schema.Literals([
-  "subscription",
-  "apiKey",
-  "cloudProvider",
-])
+export const ClaudeAuthMethod = Schema.Literals(["subscription", "apiKey", "cloudProvider"])
 export type ClaudeAuthMethod = typeof ClaudeAuthMethod.Type
 
 export const ClaudeConnection = Schema.TaggedUnion({

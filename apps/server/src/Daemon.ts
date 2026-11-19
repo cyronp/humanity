@@ -13,6 +13,8 @@ import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { HumanityMcp } from "./mcp/HumanityMcp.ts"
+import { PreviewFiles } from "./preview/PreviewFiles.ts"
+import { PreviewService } from "./preview/PreviewService.ts"
 import { AgentClisHandlers } from "./rpc/AgentClisHandlers.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
@@ -23,9 +25,11 @@ import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { GitLabHandlers } from "./rpc/GitLabHandlers.ts"
 import { PreferencesHandlers } from "./rpc/PreferencesHandlers.ts"
+import { PreviewHandlers } from "./rpc/PreviewHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
+import { TerminalsHandlers } from "./rpc/TerminalsHandlers.ts"
 import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { AgentCliService } from "./services/AgentCliService.ts"
@@ -48,11 +52,20 @@ import { PullRequestService } from "./services/PullRequestService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
 import { UpdateService } from "./services/UpdateService.ts"
+import { PtyHost } from "./terminal/PtyHost.ts"
+import { TerminalService } from "./terminal/TerminalService.ts"
 
 export const Services = Layer.mergeAll(
-  Layer.mergeAll(HistoryImport.layer, PullRequestService.layer, UpdateService.layer).pipe(
+  Layer.mergeAll(
+    HistoryImport.layer,
+    PullRequestService.layer,
+    UpdateService.layer,
+    PreviewService.layer(),
+    PreviewFiles.layer,
+  ).pipe(
     Layer.provideMerge(ForgeSync.layer),
     Layer.provideMerge(SessionService.layer),
+    Layer.provideMerge(TerminalService.layer()),
     Layer.provideMerge(ApprovalService.layer),
     Layer.provideMerge(PreferencesService.layer),
     Layer.provideMerge(ProjectService.layer),
@@ -83,6 +96,8 @@ export const RpcHandlers = Layer.mergeAll(
   PullRequestsHandlers,
   UpdatesHandlers,
   AgentClisHandlers,
+  TerminalsHandlers,
+  PreviewHandlers,
 )
 
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))
@@ -148,6 +163,7 @@ export const Daemon = HttpRouter.serve(
 ).pipe(
   Layer.provide(AuthToken.layer),
   Layer.provide(AgentRunnerLive),
+  Layer.provide(PtyHost.layer),
   Layer.provide(HumanityMcp.layer),
   Layer.provide(ClaudeCode.layer),
   Layer.provide(Codex.layer),

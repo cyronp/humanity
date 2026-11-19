@@ -1,10 +1,6 @@
 import { Schema } from "effect"
 
-export const CodexAuthMethod = Schema.Literals([
-  "chatgpt",
-  "apiKey",
-  "cloudProvider",
-])
+export const CodexAuthMethod = Schema.Literals(["chatgpt", "apiKey", "cloudProvider"])
 export type CodexAuthMethod = typeof CodexAuthMethod.Type
 
 export const CodexConnection = Schema.TaggedUnion({

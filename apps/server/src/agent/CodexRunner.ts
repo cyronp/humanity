@@ -48,8 +48,13 @@ export type CodexConnect = (options: {
 
 const INSTRUCTIONS = `You are running inside Humanity, an app where a human runs coding agents in threads.
 The human chooses how much each thread does on its own. Depending on that, a file change, shell command or MCP tool may wait for them to allow or deny it.
-When a command or file change is declined, the message that follows is the human's decision and feedback. Follow it instead of retrying the same call.
+When a command or file change is declined, the message that follows is the human's decision and feedback. Follow it instead of retrying the same call.`
+
+const OPEN_THREAD_INSTRUCTIONS = `
 When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOOL_NAME} tool of the ${HUMANITY_MCP_SERVER} MCP server. Do not use it on your own initiative.`
+
+export const codexInstructions = (offersOpenThread: boolean): string =>
+  offersOpenThread ? INSTRUCTIONS + OPEN_THREAD_INSTRUCTIONS : INSTRUCTIONS
 
 const APPROVAL_POLICY = "untrusted"
 const APPROVALS_REVIEWER = "user"
@@ -109,7 +114,13 @@ const mcpServerConfig = (
     servers[name] = {
       ...(server.type === "stdio"
         ? { command: server.command, args: [...server.args], env: { ...server.env } }
-        : { url: server.url, http_headers: { ...server.headers } }),
+        : {
+            url: server.url,
+            http_headers: { ...server.headers },
+            ...(server.timeoutMs === undefined
+              ? {}
+              : { tool_timeout_sec: server.timeoutMs / 1000 }),
+          }),
       default_tools_approval_mode: "prompt",
       ...(name === HUMANITY_MCP_SERVER ? { tools: humanityAutoTools } : {}),
     }
@@ -377,7 +388,7 @@ export const startCodexRun =
           approvalPolicy: APPROVAL_POLICY,
           approvalsReviewer: APPROVALS_REVIEWER,
           sandbox: "danger-full-access",
-          developerInstructions: INSTRUCTIONS,
+          developerInstructions: codexInstructions(options.offersOpenThread),
           ...(Object.keys(mcpServers).length === 0 ? {} : { config: { mcp_servers: mcpServers } }),
           ...(model === undefined ? {} : { model }),
         }

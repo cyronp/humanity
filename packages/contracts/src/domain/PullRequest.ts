@@ -33,6 +33,30 @@ export const BranchPublication = Schema.Struct({
 })
 export type BranchPublication = typeof BranchPublication.Type
 
+/**
+ * Where a thread's branch stands against the remote branch Sync updates it from: its upstream,
+ * else `origin/<default branch>`. Sync pushes only to an upstream of the same name on origin.
+ */
+export const SyncStatus = Schema.Struct({
+  branch: Schema.NullOr(Schema.String),
+  hasRemote: Schema.Boolean,
+  target: Schema.NullOr(Schema.String),
+  pushes: Schema.Boolean,
+  behind: Schema.Int,
+  ahead: Schema.Int,
+  fetchedAt: Schema.NullOr(Schema.String),
+  fetchError: Schema.NullOr(Schema.String),
+})
+export type SyncStatus = typeof SyncStatus.Type
+
+export const SyncResult = Schema.Struct({
+  status: SyncStatus,
+  pulled: Schema.Int,
+  pushed: Schema.Int,
+  files: Schema.Array(Schema.String),
+})
+export type SyncResult = typeof SyncResult.Type
+
 export const CheckStatus = Schema.Literals([
   "queued",
   "running",
@@ -54,11 +78,7 @@ export const PullRequestCheck = Schema.Struct({
 })
 export type PullRequestCheck = typeof PullRequestCheck.Type
 
-export const PullRequestCommentKind = Schema.Literals([
-  "comment",
-  "review",
-  "inline",
-])
+export const PullRequestCommentKind = Schema.Literals(["comment", "review", "inline"])
 export type PullRequestCommentKind = typeof PullRequestCommentKind.Type
 
 export const PullRequestComment = Schema.Struct({

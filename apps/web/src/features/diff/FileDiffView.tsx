@@ -7,7 +7,7 @@ import {
   FilePlus,
   FileSymlink,
 } from "lucide-react"
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { FILE_STATUS, fileNameClass, FileStatusLetter } from "./FileStatus.tsx"
 import { HunkButtons, HunkLines } from "./HunkView.tsx"
@@ -40,8 +40,10 @@ export function FileDiffView({
   editorRoot,
   open: openProp,
   onOpenChange,
+  headerActions,
 }: {
   readonly file: FileDiff
+  readonly headerActions?: ReactNode
   readonly onReference?: ((reference: string) => void) | undefined
   readonly editorRoot?: string | undefined
   readonly open?: boolean | undefined
@@ -88,9 +90,10 @@ export function FileDiffView({
               <FileStatusLetter kind={file.kind} className="ml-auto" />
             </button>
           </CollapsibleTrigger>
-          {first !== undefined && !file.binary && (
+          {(headerActions !== undefined || (first !== undefined && !file.binary)) && (
             <div className="flex shrink-0 items-center gap-1">
-              <HunkButtons hunk={first} {...links} />
+              {headerActions}
+              {first !== undefined && !file.binary && <HunkButtons hunk={first} {...links} />}
             </div>
           )}
         </header>

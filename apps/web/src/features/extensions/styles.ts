@@ -1,4 +1,3 @@
-
 export const LIST_ROW =
   "gap-x-3 gap-y-2 rounded-none border-0 border-b border-border p-3 last:border-b-0"
 

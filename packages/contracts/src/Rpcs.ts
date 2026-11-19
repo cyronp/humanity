@@ -8,9 +8,11 @@ import { GitHubRpcs } from "./rpc/GitHub.ts"
 import { GitLabRpcs } from "./rpc/GitLab.ts"
 import { KiroRpcs } from "./rpc/Kiro.ts"
 import { PreferencesRpcs } from "./rpc/Preferences.ts"
+import { PreviewRpcs } from "./rpc/Preview.ts"
 import { ProjectsRpcs } from "./rpc/Projects.ts"
 import { PullRequestsRpcs } from "./rpc/PullRequests.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
+import { TerminalsRpcs } from "./rpc/Terminals.ts"
 import { UpdatesRpcs } from "./rpc/Updates.ts"
 
 export const HumanityRpcs = ProjectsRpcs.merge(
@@ -27,6 +29,8 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   PullRequestsRpcs,
   UpdatesRpcs,
   AgentClisRpcs,
+  TerminalsRpcs,
+  PreviewRpcs,
 )
 
 export const RPC_PATH = "/rpc"

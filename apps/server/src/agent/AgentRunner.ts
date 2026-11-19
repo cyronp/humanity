@@ -25,6 +25,7 @@ export type AgentMcpServer =
       readonly type: "http" | "sse"
       readonly url: string
       readonly headers: Readonly<Record<string, string>>
+      readonly timeoutMs?: number | undefined
     }
 
 export interface AgentExtensions {
@@ -41,6 +42,7 @@ export interface AgentRunOptions {
   readonly effort: ReasoningEffort | undefined
   readonly extensions: AgentExtensions
   readonly allowedTools: ReadonlyArray<string>
+  readonly offersOpenThread: boolean
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
 }
 

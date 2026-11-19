@@ -8,7 +8,24 @@ export const HUMANITY_MCP_SERVER = "humanity"
 
 export const OPEN_THREAD_TOOL_NAME = "open_thread"
 
-export const OPEN_THREAD_TOOL = `mcp__${HUMANITY_MCP_SERVER}__${OPEN_THREAD_TOOL_NAME}`
+export const humanityTool = (name: string) => `mcp__${HUMANITY_MCP_SERVER}__${name}`
+
+export const OPEN_THREAD_TOOL = humanityTool(OPEN_THREAD_TOOL_NAME)
+
+export const TERMINAL_TOOL_NAMES = [
+  "terminal_list",
+  "terminal_read",
+  "terminal_send",
+  "terminal_wait",
+  "terminal_open",
+  "terminal_close",
+] as const
+export type TerminalToolName = (typeof TERMINAL_TOOL_NAMES)[number]
+
+export const TERMINAL_TOOLS: ReadonlyArray<string> = TERMINAL_TOOL_NAMES.map(humanityTool)
+
+export const isTerminalToolName = (name: string): name is TerminalToolName =>
+  TERMINAL_TOOL_NAMES.some((each) => each === name)
 
 export const AUTO_TOOLS: ReadonlyArray<string> = [
   "Read",
@@ -17,6 +34,7 @@ export const AUTO_TOOLS: ReadonlyArray<string> = [
   "TodoWrite",
   "Skill",
   OPEN_THREAD_TOOL,
+  ...TERMINAL_TOOLS,
 ]
 
 export const SHELL_TOOL = "Bash"
