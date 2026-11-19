@@ -18,6 +18,7 @@ export const TerminalsHandlers = TerminalsRpcs.toLayer(
       "Terminals.resize": ({ terminalId, cols, rows }) => terminals.resize(terminalId, cols, rows),
       "Terminals.ack": ({ terminalId, attachmentId, seq }) =>
         terminals.ack(terminalId, attachmentId, seq),
+      "Terminals.setColors": ({ colors }) => terminals.setColors(colors),
       "Terminals.shells": () => terminals.shells,
     })
   }),

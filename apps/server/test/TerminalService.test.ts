@@ -123,6 +123,35 @@ describe("TerminalService", () => {
     }),
   )
 
+  it.live("answers a program's color queries in the dock's colors, once it has them", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const host = makeFakePtyHost()
+      yield* Effect.gen(function* () {
+        const terminals = yield* TerminalService
+        const session = yield* startThread(repo)
+        yield* terminals.open(thread(session.id), { opener: "human" })
+        const pty = lastPty(host.spawned)
+        pty.print("\x1b]11;?\x07")
+        yield* Effect.sleep("30 millis")
+        assert.deepStrictEqual(pty.written, [], "no colors, no answer")
+
+        yield* terminals.setColors({
+          foreground: "#0a0a0a",
+          background: "#ffffff",
+          cursor: "#0a0a0a",
+          ansi: Array.from({ length: 16 }, () => "#000000"),
+        })
+        pty.print("\x1b]11;?\x1b\\")
+        yield* eventually(
+          "the answer",
+          Effect.sync(() => (pty.written.length > 0 ? pty.written : undefined)),
+        )
+        assert.deepStrictEqual(pty.written, ["\x1b]11;rgb:ffff/ffff/ffff\x1b\\"])
+      }).pipe(Effect.provide(layerFor(home, host)))
+    }),
+  )
+
   it.live("stops sending to a view that fell behind, then sends it the screen", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

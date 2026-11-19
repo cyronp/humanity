@@ -73,6 +73,21 @@ export const TerminalAttachEvent = Schema.TaggedUnion({
 })
 export type TerminalAttachEvent = typeof TerminalAttachEvent.Type
 
+const HexColor = Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))
+
+/**
+ * The colors the dock draws terminals in, which the daemon reports to a program that asks (OSC 4,
+ * 10, 11 and 12), so a program that picks its colors from the background picks the right ones.
+ * `ansi` is the 16-color palette, black to bright white.
+ */
+export const TerminalColors = Schema.Struct({
+  foreground: HexColor,
+  background: HexColor,
+  cursor: HexColor,
+  ansi: Schema.Array(HexColor).check(Schema.isMinLength(16), Schema.isMaxLength(16)),
+})
+export type TerminalColors = typeof TerminalColors.Type
+
 export const TERMINAL_FONT_SIZES = { min: 8, max: 32 } as const
 export const TERMINAL_SCROLLBACK = { min: 1_000, max: 50_000 } as const
 

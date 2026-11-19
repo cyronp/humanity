@@ -28,6 +28,30 @@ export const guestDestinationOf = (url: string, appOrigin: string): GuestDestina
   return "page"
 }
 
+/** A key as Electron's `before-input-event` describes it. */
+export interface GuestKey {
+  readonly type: string
+  readonly key: string
+  readonly code: string
+  readonly control: boolean
+  readonly shift: boolean
+  readonly alt: boolean
+  readonly meta: boolean
+}
+
+/**
+ * Whether a key pressed in a Browser page is one of the app's own shortcuts, taken from the page
+ * and handed to the window: Ctrl+` and Ctrl+Shift+` (the terminal dock, on every platform) and
+ * find (Ctrl+F, ⌘F on macOS), as a browser's own find would. Other keys stay the page's, such as
+ * Ctrl+B, which editors use for bold.
+ */
+export const isAppShortcut = (key: GuestKey, mac: boolean): boolean => {
+  if (key.type !== "keyDown") return false
+  if (key.code === "Backquote") return key.control && !key.alt && !key.meta
+  if (key.key.toLowerCase() !== "f" || key.shift || key.alt) return false
+  return mac ? key.meta && !key.control : key.control && !key.meta
+}
+
 const MAX_RECORDING_BYTES = 50 * 1024 * 1024
 
 /** Where a thread's recording goes, under `~/.humanity/recordings/<thread>/`, or why it can't. */

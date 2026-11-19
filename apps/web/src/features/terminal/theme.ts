@@ -1,3 +1,4 @@
+import type { TerminalColors } from "@humanity/contracts"
 import type { ITheme } from "@xterm/xterm"
 import { useSyncExternalStore } from "react"
 
@@ -107,6 +108,38 @@ export const terminalTheme = (element: Element, theme: ResolvedTheme): ITheme =>
     scrollbarSliderBackground: theme === "dark" ? "#ffffff26" : "#0000001f",
     scrollbarSliderHoverBackground: theme === "dark" ? "#ffffff40" : "#00000033",
     scrollbarSliderActiveBackground: theme === "dark" ? "#ffffff59" : "#00000047",
+  }
+}
+
+const ANSI_NAMES = [
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+] as const satisfies ReadonlyArray<keyof Palette>
+
+/** A theme's colors as the daemon reports them to programs: opaque `#rrggbb`. */
+export const terminalColors = (theme: ITheme): TerminalColors => {
+  const opaque = (color: string | undefined, fallback: string) =>
+    /^#[0-9a-f]{6}/i.test(color ?? "") ? (color as string).slice(0, 7) : fallback
+  const foreground = opaque(theme.foreground, "#ffffff")
+  return {
+    foreground,
+    background: opaque(theme.background, "#000000"),
+    cursor: opaque(theme.cursor, foreground),
+    ansi: ANSI_NAMES.map((name) => opaque(theme[name], "#000000")),
   }
 }
 

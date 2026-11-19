@@ -47,6 +47,7 @@ export const restartTerminalAtom = HumanityClient.mutation("Terminals.restart")
 export const writeTerminalAtom = HumanityClient.mutation("Terminals.write")
 export const resizeTerminalAtom = HumanityClient.mutation("Terminals.resize")
 export const ackTerminalAtom = HumanityClient.mutation("Terminals.ack")
+export const setTerminalColorsAtom = HumanityClient.mutation("Terminals.setColors")
 
 export const shellsAtom = HumanityClient.query("Terminals.shells", undefined)
 

@@ -4,6 +4,7 @@ import {
   PREVIEW_CHANNELS,
   type PreviewDownload,
   type PreviewOpenTab,
+  type PreviewShortcut,
 } from "@humanity/contracts"
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 
@@ -26,6 +27,7 @@ const preview: DesktopPreviewBridge = {
   reveal: (path) => ipcRenderer.invoke(PREVIEW_CHANNELS.reveal, path),
   onOpenTab: subscribe<PreviewOpenTab>(PREVIEW_CHANNELS.openTab),
   onDownload: subscribe<PreviewDownload>(PREVIEW_CHANNELS.download),
+  onShortcut: subscribe<PreviewShortcut>(PREVIEW_CHANNELS.shortcut),
 }
 
 const desktop: HumanityDesktop = { preview }

@@ -4,6 +4,7 @@ import {
   type PreviewColorScheme,
   type PreviewDownload,
   type PreviewOpenTab,
+  type PreviewShortcut,
 } from "@humanity/contracts"
 import {
   ipcMain,
@@ -15,7 +16,7 @@ import {
 } from "electron"
 import { mkdir, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
-import { guestDestinationOf, isRecording, recordingPath } from "./previewRules.ts"
+import { guestDestinationOf, isAppShortcut, isRecording, recordingPath } from "./previewRules.ts"
 
 /** Permissions a Browser page gets; everything else (camera, location, notifications…) is denied. */
 const ALLOWED_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"])
@@ -67,7 +68,10 @@ export const installPreview = (options: {
     })
   }
 
-  /** A Browser page: it stays off Humanity and other schemes, and opens new windows as tabs. */
+  /**
+   * A Browser page: it stays off Humanity and other schemes, opens new windows as tabs, and hands
+   * the app's own shortcuts to the window, which never sees a key pressed in a page.
+   */
   const confineGuest = (guest: WebContents) => {
     const refuse = (event: { preventDefault: () => void }, url: string) => {
       const destination = guestDestinationOf(url, appOrigin)
@@ -87,6 +91,20 @@ export const installPreview = (options: {
         void shell.openExternal(url)
       }
       return { action: "deny" }
+    })
+    guest.on("before-input-event", (event, input) => {
+      if (!isAppShortcut(input, process.platform === "darwin")) return
+      event.preventDefault()
+      const shortcut: PreviewShortcut = {
+        guest: guest.id,
+        key: input.key,
+        code: input.code,
+        ctrlKey: input.control,
+        shiftKey: input.shift,
+        altKey: input.alt,
+        metaKey: input.meta,
+      }
+      guest.hostWebContents?.send(PREVIEW_CHANNELS.shortcut, shortcut)
     })
   }
 

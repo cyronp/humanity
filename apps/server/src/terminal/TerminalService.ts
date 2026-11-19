@@ -7,6 +7,7 @@ import {
   SessionNotFound,
   type ShellInfo,
   type TerminalAttachEvent,
+  type TerminalColors,
   TerminalId,
   type TerminalInfo,
   TerminalNotFound,
@@ -191,6 +192,8 @@ export class TerminalService extends Context.Service<
     ) => Effect.Effect<void, TerminalNotFound>
     readonly ack: (terminalId: string, attachmentId: string, seq: number) => Effect.Effect<void>
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
+    /** The colors the dock draws terminals in, reported to programs that ask for them. */
+    readonly setColors: (colors: TerminalColors) => Effect.Effect<void>
     readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
     readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
     /** The process id of each running terminal's shell. */
@@ -236,6 +239,7 @@ export class TerminalService extends Context.Service<
         const host = yield* PtyHost
 
         const lives = new Map<string, Live>()
+        let colors: TerminalColors | undefined
         const loadedOwners = new Set<string>()
         const changes = yield* PubSub.unbounded<string>()
 
@@ -550,7 +554,7 @@ export class TerminalService extends Context.Service<
         ): Live => {
           const live: Live = {
             info,
-            screen: makeScreen(options),
+            screen: makeScreen({ ...options, colors: () => colors }),
             pty: undefined,
             exited: Promise.resolve(),
             generation: 0,
@@ -1081,6 +1085,10 @@ export class TerminalService extends Context.Service<
           shells: Effect.sync(() =>
             shellsNow().map(({ id, name, path }): ShellInfo => ({ id, name, path })),
           ),
+          setColors: (next) =>
+            Effect.sync(() => {
+              colors = next
+            }),
           closeOwner,
           moveSession,
           processIds: Effect.sync(() => {

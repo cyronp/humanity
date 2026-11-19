@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { guestDestinationOf, isRecording, recordingPath } from "../src/previewRules.ts"
+import {
+  guestDestinationOf,
+  isAppShortcut,
+  isRecording,
+  recordingPath,
+} from "../src/previewRules.ts"
 
 describe("guestDestinationOf", () => {
   const app = "http://127.0.0.1:7421"
@@ -34,6 +39,47 @@ describe("guestDestinationOf", () => {
     expect(guestDestinationOf("file:///C:/Windows/win.ini", app)).toBe("blocked")
     expect(guestDestinationOf("javascript:alert(1)", app)).toBe("blocked")
     expect(guestDestinationOf("not a url", app)).toBe("blocked")
+  })
+})
+
+describe("isAppShortcut", () => {
+  const key = (
+    pressed: Partial<Parameters<typeof isAppShortcut>[0]> & { readonly key: string },
+  ): Parameters<typeof isAppShortcut>[0] => ({
+    type: "keyDown",
+    code: "",
+    control: false,
+    shift: false,
+    alt: false,
+    meta: false,
+    ...pressed,
+  })
+
+  it("takes the terminal dock's shortcuts from a page, on every platform", () => {
+    for (const mac of [false, true]) {
+      expect(isAppShortcut(key({ key: "`", code: "Backquote", control: true }), mac)).toBe(true)
+      expect(
+        isAppShortcut(key({ key: "~", code: "Backquote", control: true, shift: true }), mac),
+      ).toBe(true)
+      expect(isAppShortcut(key({ key: "`", code: "Backquote" }), mac)).toBe(false)
+    }
+  })
+
+  it("takes find as the platform names it", () => {
+    expect(isAppShortcut(key({ key: "f", control: true }), false)).toBe(true)
+    expect(isAppShortcut(key({ key: "F", control: true }), false)).toBe(true)
+    expect(isAppShortcut(key({ key: "f", meta: true }), true)).toBe(true)
+    expect(isAppShortcut(key({ key: "f", meta: true }), false)).toBe(false)
+    expect(isAppShortcut(key({ key: "f", control: true }), true)).toBe(false)
+    expect(isAppShortcut(key({ key: "f", control: true, shift: true }), false)).toBe(false)
+  })
+
+  it("leaves the page its own keys, and key releases", () => {
+    expect(isAppShortcut(key({ key: "b", control: true }), false)).toBe(false)
+    expect(isAppShortcut(key({ key: "f" }), false)).toBe(false)
+    expect(
+      isAppShortcut(key({ type: "keyUp", key: "`", code: "Backquote", control: true }), false),
+    ).toBe(false)
   })
 })
 

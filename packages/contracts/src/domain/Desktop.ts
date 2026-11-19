@@ -15,6 +15,21 @@ export interface PreviewDownload {
 }
 
 /**
+ * A key pressed in a Browser page that is one of the app's own shortcuts (the terminal dock's,
+ * find): the desktop app keeps it from the page and hands it to the window, so the shortcut works
+ * wherever focus is. `guest` is the page's `getWebContentsId()`.
+ */
+export interface PreviewShortcut {
+  readonly guest: number
+  readonly key: string
+  readonly code: string
+  readonly ctrlKey: boolean
+  readonly shiftKey: boolean
+  readonly altKey: boolean
+  readonly metaKey: boolean
+}
+
+/**
  * What the desktop app's preload lends the web app for its Browser, as
  * `window.humanityDesktop.preview`. Every call that names a page (`guest`, a `<webview>`'s
  * `getWebContentsId()`) only works on a page of the calling window.
@@ -36,6 +51,7 @@ export interface DesktopPreviewBridge {
   readonly reveal: (path: string) => Promise<void>
   readonly onOpenTab: (listener: (request: PreviewOpenTab) => void) => () => void
   readonly onDownload: (listener: (download: PreviewDownload) => void) => () => void
+  readonly onShortcut: (listener: (shortcut: PreviewShortcut) => void) => () => void
 }
 
 export interface HumanityDesktop {
@@ -52,4 +68,5 @@ export const PREVIEW_CHANNELS = {
   reveal: "preview:reveal",
   openTab: "preview:open-tab",
   download: "preview:download",
+  shortcut: "preview:shortcut",
 } as const

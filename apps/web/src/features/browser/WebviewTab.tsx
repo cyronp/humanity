@@ -178,6 +178,14 @@ export function WebviewTab({
     for (const [name, listener] of Object.entries(listeners)) {
       webview.addEventListener(name, listener)
     }
+    // The window never sees a key pressed in the page: the desktop app hands the app's own
+    // shortcuts back, and they are pressed again here, where the panel and the window listen.
+    const stopShortcuts = desktopPreview()?.onShortcut(({ guest, ...key }) => {
+      if (!ready.current || guest !== webview.getWebContentsId()) return
+      webview.dispatchEvent(
+        new KeyboardEvent("keydown", { ...key, bubbles: true, cancelable: true, composed: true }),
+      )
+    })
 
     const whenReady = (action: () => void) => {
       if (ready.current) action()
@@ -232,6 +240,7 @@ export function WebviewTab({
     })
 
     return () => {
+      stopShortcuts?.()
       clearTimeout(crashTimer)
       register(tabId, undefined)
       for (const [name, listener] of Object.entries(listeners)) {

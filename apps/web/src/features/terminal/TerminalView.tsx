@@ -29,10 +29,11 @@ import {
   attachAtom,
   attachKey,
   resizeTerminalAtom,
+  setTerminalColorsAtom,
   writeTerminalAtom,
 } from "./atoms.ts"
 import { isMac, type TerminalCommand, terminalCommand } from "./keys.ts"
-import { TERMINAL_FONT_FAMILY, terminalTheme, useResolvedTheme } from "./theme.ts"
+import { TERMINAL_FONT_FAMILY, terminalColors, terminalTheme, useResolvedTheme } from "./theme.ts"
 
 const ACK_DELAY_MS = 40
 
@@ -101,6 +102,7 @@ export function TerminalView({
 
   const write = useAtomSet(writeTerminalAtom, { mode: "promiseExit" })
   const resize = useAtomSet(resizeTerminalAtom, { mode: "promiseExit" })
+  const setColors = useAtomSet(setTerminalColorsAtom, { mode: "promiseExit" })
   const terminalId = info.id
 
   const outbox = useRef({ pending: "", sending: false })
@@ -150,11 +152,6 @@ export function TerminalView({
       }),
     )
     terminal.open(element)
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      terminal.loadAddon(webgl)
-    } catch {}
     const mac = isMac()
     terminal.attachCustomKeyEventHandler((event) => {
       const command = terminalCommand(event, { mac, hasSelection: terminal.hasSelection() })
@@ -218,8 +215,27 @@ export function TerminalView({
 
   useEffect(() => {
     if (mounted === null || container.current === null) return
-    setOptions(mounted.terminal, { theme: terminalTheme(container.current, theme) })
-  }, [mounted, theme])
+    const colors = terminalTheme(container.current, theme)
+    setOptions(mounted.terminal, { theme: colors })
+    if (active) void setColors({ payload: { colors: terminalColors(colors) } })
+  }, [mounted, theme, active, setColors])
+
+  // Only the tab on show draws with WebGL: a browser keeps about 16 WebGL contexts and drops the
+  // oldest past that, so hidden tabs fall back to the DOM renderer and give theirs back.
+  useEffect(() => {
+    if (mounted === null || !active) return
+    let webgl: WebglAddon | undefined
+    try {
+      const addon = new WebglAddon()
+      addon.onContextLoss(() => {
+        addon.dispose()
+        webgl = undefined
+      })
+      mounted.terminal.loadAddon(addon)
+      webgl = addon
+    } catch {}
+    return () => webgl?.dispose()
+  }, [mounted, active])
 
   useEffect(() => {
     if (mounted === null) return
@@ -298,6 +314,7 @@ function Attachment({
   readonly replayingRef: { current: boolean }
 }) {
   const ack = useAtomSet(ackTerminalAtom, { mode: "promiseExit" })
+  const setColors = useAtomSet(setTerminalColorsAtom, { mode: "promiseExit" })
   const attachmentId = (JSON.parse(attachment) as { attachmentId: string }).attachmentId
   const pendingAck = useRef<{ seq: number; timer: ReturnType<typeof setTimeout> | undefined }>({
     seq: 0,
@@ -327,6 +344,10 @@ function Attachment({
       const event = result.value
       switch (event._tag) {
         case "Snapshot":
+          // A (re)attach, after a reload or a daemon restart: the daemon learns the colors again.
+          if (terminal.options.theme !== undefined) {
+            void setColors({ payload: { colors: terminalColors(terminal.options.theme) } })
+          }
           replayingRef.current = true
           terminal.reset()
           terminal.write(event.data, () => {
@@ -341,7 +362,7 @@ function Attachment({
           return
       }
     },
-    [terminal, acknowledge, replayingRef],
+    [terminal, acknowledge, replayingRef, setColors],
   )
 
   useAtomSubscribe(attachAtom(attachment), onEvent)
