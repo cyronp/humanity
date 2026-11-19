@@ -27,7 +27,9 @@ function global:prompt {
   }
   $location = $executionContext.SessionState.Path.CurrentLocation
   if ($location.Provider.Name -eq "FileSystem") {
-    $marks += "$e]7;file://$env:COMPUTERNAME/$($location.ProviderPath -replace '\\\\', '/')$b"
+    $path = $location.ProviderPath -replace '\\\\', '/'
+    if (-not $path.StartsWith('/')) { $path = "/$path" }
+    $marks += "$e]7;file://$([Environment]::MachineName)$path$b"
   }
   $marks += "$e]133;A$b"
   $shown = & $global:__HumanityPrompt

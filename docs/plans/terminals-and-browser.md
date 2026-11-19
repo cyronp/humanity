@@ -272,4 +272,5 @@ Each phase must pass `npm run lint`, `npm run typecheck` and `npm run test`, the
 - **WebGL contexts:** the browser limits how many it keeps (about 16). Many open tabs may need a cap on hidden WebGL views, as Orca has.
 - **Long waits in MCP calls:** human decisions and `terminal_wait` keep an HTTP request open, so provider timeouts must be raised where they exist.
 - **Color queries (OSC 10 and 11):** the daemon answers with default colors, so a TUI that checks the background may guess dark. Sending the view's colors to the daemon would fix it later.
-- **Flaky tests:** `Sync.test.ts` timed out once under a full parallel run, next to three dev servers, and passed alone.
+- **Slow tests:** each `Sync.test.ts` test starts some 25 git processes, 6–11 s on Windows alone and past 20 s under a full parallel run, so that file has a 60 s limit.
+- **PowerShell outside Windows:** CI's Ubuntu runners have `pwsh`, so the real-shell test runs it on Linux too. Its folder mark names the host with `[Environment]::MachineName`, since `$env:COMPUTERNAME` exists only on Windows.

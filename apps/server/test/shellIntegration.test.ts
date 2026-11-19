@@ -39,6 +39,7 @@ describe("OSC marks", () => {
   it("reads the folder of OSC 7 as the platform writes it", () => {
     assert.strictEqual(folderFromOsc7("file://box/home/me/a b", "linux"), "/home/me/a b")
     assert.strictEqual(folderFromOsc7("file:///tmp", "darwin"), "/tmp")
+    assert.strictEqual(folderFromOsc7("file:////tmp/a", "linux"), "/tmp/a")
     assert.strictEqual(folderFromOsc7("file://PC/C:/Users/me", "win32"), "C:\\Users\\me")
     assert.strictEqual(folderFromOsc7("file://PC/c/Users/me", "win32"), "C:\\Users\\me")
     assert.strictEqual(folderFromOsc7("file://PC/d", "win32"), "D:\\")
@@ -250,7 +251,9 @@ const realShells = detectShells(shellLocateOptions()).filter(
 )
 
 const failWith3 = (each: Shell) =>
-  each.kind === "pwsh" || each.kind === "powershell" ? "cmd /c exit 3" : "sh -c 'exit 3'"
+  process.platform === "win32" && (each.kind === "pwsh" || each.kind === "powershell")
+    ? "cmd /c exit 3"
+    : "sh -c 'exit 3'"
 
 describe.skipIf(realShells.length === 0)("shell integration in a real shell", () => {
   for (const realShell of realShells) {

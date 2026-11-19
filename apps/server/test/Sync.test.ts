@@ -48,7 +48,7 @@ const reasonOf = <A, E>(exit: Exit.Exit<A, E>) => {
   return String(exit.cause)
 }
 
-describe("Sync", () => {
+describe("Sync", { timeout: 60_000 }, () => {
   it.live("fetches, fast-forwards and tells the agent which files changed", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

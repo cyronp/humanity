@@ -23,7 +23,7 @@ export const folderFromOsc7 = (data: string, platform: NodeJS.Platform): string 
   const match = /^file:\/\/[^/]*(\/.*)$/.exec(data)
   const path = match?.[1]
   if (path === undefined || path === "") return undefined
-  if (platform !== "win32") return path
+  if (platform !== "win32") return path.replace(/^\/+/, "/")
   const drive = /^\/([A-Za-z]):?(\/.*)?$/.exec(path)
   if (drive === null) return undefined
   const letter = (drive[1] ?? "").toUpperCase()
