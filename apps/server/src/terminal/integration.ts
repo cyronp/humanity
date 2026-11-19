@@ -90,7 +90,7 @@ if [ -z "\${__humanity_integration-}" ]; then
       [ -n "\${COMP_LINE-}" ] && return
       __humanity_preexec
     }
-    __humanity_prompt_start() { __humanity_precmd; local status=$?; __humanity_in_prompt=1; return $status; }
+    __humanity_prompt_start() { __humanity_in_prompt=1; __humanity_precmd; local status=$?; return $status; }
     __humanity_prompt_end() { unset __humanity_in_prompt; }
     PROMPT_COMMAND="__humanity_prompt_start\${PROMPT_COMMAND:+;$PROMPT_COMMAND};__humanity_prompt_end"
     trap '__humanity_debug' DEBUG
