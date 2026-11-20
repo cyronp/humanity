@@ -182,6 +182,14 @@ export interface NewGitLabMergeRequest {
   readonly draft: boolean
 }
 
+/** The title prefixes GitLab reads as a draft, as many as lead the title. */
+const DRAFT_PREFIX = /^\s*(?:(?:\[draft\]|\(draft\)|draft:|draft\s+-|\[wip\]|wip:)\s*)+/i
+
+export const draftTitle = (title: string, draft: boolean): string => {
+  const bare = title.replace(DRAFT_PREFIX, "")
+  return draft ? `Draft: ${bare}` : bare
+}
+
 const REPOS_PAGE = "/projects?membership=true&archived=false&order_by=last_activity_at&per_page=100"
 
 export class GitLabService extends Context.Service<
@@ -207,6 +215,28 @@ export class GitLabService extends Context.Service<
     readonly createMergeRequest: (
       fullPath: string,
       mergeRequest: NewGitLabMergeRequest,
+    ) => Effect.Effect<PullRequest, GitLabError>
+    /** Merges at `sha` only, squashed or by the project's own merge method. */
+    readonly mergeMergeRequest: (
+      fullPath: string,
+      iid: number,
+      merge: { readonly squash: boolean; readonly sha: string },
+    ) => Effect.Effect<PullRequest, GitLabError>
+    readonly commentOnMergeRequest: (
+      fullPath: string,
+      iid: number,
+      body: string,
+    ) => Effect.Effect<void, GitLabError>
+    readonly setMergeRequestOpen: (
+      fullPath: string,
+      iid: number,
+      open: boolean,
+    ) => Effect.Effect<PullRequest, GitLabError>
+    /** GitLab keeps a merge request's draft state in its title. */
+    readonly setMergeRequestDraft: (
+      fullPath: string,
+      mergeRequest: PullRequest,
+      draft: boolean,
     ) => Effect.Effect<PullRequest, GitLabError>
     readonly checks: (
       fullPath: string,
@@ -341,13 +371,21 @@ ${path}`
           return { status: response.status, headers: { link }, json: Effect.succeed(json) }
         })
 
-      const post = (path: string, body: unknown, using: GitLabCredentials) =>
+      const write = (
+        method: "POST" | "PUT",
+        path: string,
+        body: unknown,
+        using: GitLabCredentials,
+      ) =>
         send(
-          HttpClientRequest.post(`${gitlabApi(using.host)}${path}`, {
+          HttpClientRequest.make(method)(`${gitlabApi(using.host)}${path}`, {
             headers: authorization(using.token),
           }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
           using,
         )
+
+      const post = (path: string, body: unknown, using: GitLabCredentials) =>
+        write("POST", path, body, using)
 
       const decode =
         <S extends Schema.Constraint>(schema: S) =>
@@ -487,6 +525,48 @@ ${path}`
           return toMergeRequest(created)
         })
 
+      const mergeMergeRequest = (
+        fullPath: string,
+        iid: number,
+        merge: { readonly squash: boolean; readonly sha: string },
+      ) =>
+        Effect.gen(function* () {
+          const using = yield* requireToken
+          const merged = yield* write(
+            "PUT",
+            `${project(fullPath)}/merge_requests/${iid}/merge`,
+            { squash: merge.squash, sha: merge.sha },
+            using,
+          ).pipe(Effect.flatMap(decode(MergeRequestJson)))
+          return toMergeRequest(merged)
+        })
+
+      const commentOnMergeRequest = (fullPath: string, iid: number, body: string) =>
+        Effect.gen(function* () {
+          const using = yield* requireToken
+          yield* post(`${project(fullPath)}/merge_requests/${iid}/notes`, { body }, using)
+        })
+
+      const updateMergeRequest = (fullPath: string, iid: number, body: unknown) =>
+        Effect.gen(function* () {
+          const using = yield* requireToken
+          const updated = yield* write(
+            "PUT",
+            `${project(fullPath)}/merge_requests/${iid}`,
+            body,
+            using,
+          ).pipe(Effect.flatMap(decode(MergeRequestJson)))
+          return toMergeRequest(updated)
+        })
+
+      const setMergeRequestOpen = (fullPath: string, iid: number, open: boolean) =>
+        updateMergeRequest(fullPath, iid, { state_event: open ? "reopen" : "close" })
+
+      const setMergeRequestDraft = (fullPath: string, mergeRequest: PullRequest, draft: boolean) =>
+        updateMergeRequest(fullPath, mergeRequest.number, {
+          title: draftTitle(mergeRequest.title, draft),
+        })
+
       const checks = (fullPath: string, iid: number) =>
         Effect.gen(function* () {
           const using = yield* credentials
@@ -551,6 +631,10 @@ ${path}`
         credentials,
         findMergeRequest,
         createMergeRequest,
+        mergeMergeRequest,
+        commentOnMergeRequest,
+        setMergeRequestOpen,
+        setMergeRequestDraft,
         checks,
         comments,
       })

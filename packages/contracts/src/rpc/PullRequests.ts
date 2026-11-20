@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import {
   BranchPublication,
+  MergePullRequest,
   NewPullRequest,
   PullRequest,
   PullRequestFeed,
@@ -54,6 +55,24 @@ export const PullRequestsRpcs = RpcGroup.make(
   }),
   Rpc.make("PullRequests.create", {
     payload: { sessionId: SessionId, pullRequest: NewPullRequest },
+    success: PullRequest,
+    error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
+  }),
+  /** Merges the thread's branch's open pull request, after posting the human's comment on it. */
+  Rpc.make("PullRequests.merge", {
+    payload: { sessionId: SessionId, merge: MergePullRequest },
+    success: PullRequest,
+    error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
+  }),
+  /** Closes the thread's branch's pull request, or reopens a closed one. */
+  Rpc.make("PullRequests.setOpen", {
+    payload: { sessionId: SessionId, open: Schema.Boolean },
+    success: PullRequest,
+    error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
+  }),
+  /** Converts the thread's branch's open pull request to a draft, or marks it ready for review. */
+  Rpc.make("PullRequests.setDraft", {
+    payload: { sessionId: SessionId, draft: Schema.Boolean },
     success: PullRequest,
     error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
   }),

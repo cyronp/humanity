@@ -10,6 +10,9 @@ export const PullRequestsHandlers = PullRequestsRpcs.toLayer(
       "PullRequests.push": ({ sessionId }) => pullRequests.push(sessionId),
       "PullRequests.create": ({ sessionId, pullRequest }) =>
         pullRequests.create(sessionId, pullRequest),
+      "PullRequests.merge": ({ sessionId, merge }) => pullRequests.merge(sessionId, merge),
+      "PullRequests.setOpen": ({ sessionId, open }) => pullRequests.setOpen(sessionId, open),
+      "PullRequests.setDraft": ({ sessionId, draft }) => pullRequests.setDraft(sessionId, draft),
       "PullRequests.watch": ({ sessionId }) => pullRequests.watch(sessionId),
       "PullRequests.refresh": ({ sessionId }) => pullRequests.refresh(sessionId),
       "PullRequests.syncStatus": ({ sessionId, fetch }) =>

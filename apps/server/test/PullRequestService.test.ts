@@ -47,7 +47,103 @@ const fakeGitHub = () => {
   return { requests, layer }
 }
 
+/** A GitHub whose pull request for the branch is `current`, recording every write. */
+const fakeForge = (current: () => Record<string, unknown>) => {
+  const writes: Array<{ method: string; url: string; body: unknown }> = []
+  const client = HttpClient.make((request) =>
+    Effect.sync(() => {
+      if (request.method !== "GET") {
+        const text = (request.body._tag === "Uint8Array" ? request.body.text : undefined) ?? "null"
+        writes.push({ method: request.method, url: request.url, body: JSON.parse(text) })
+      }
+      const body = request.url.includes("/merge")
+        ? { merged: true }
+        : request.url.includes("/pulls?head=")
+          ? [current()]
+          : request.url.endsWith("/pulls/7")
+            ? { ...current(), state: "closed", merged_at: "2026-11-19T10:00:00Z" }
+            : request.url.includes("/comments")
+              ? { id: 1 }
+              : request.url.includes("/check-runs")
+                ? { check_runs: [] }
+                : request.url.includes("/status")
+                  ? { statuses: [] }
+                  : []
+      return HttpClientResponse.fromWeb(
+        request,
+        new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }),
+      )
+    }),
+  )
+  const layer = GitHubService.layer.pipe(
+    Layer.provide(GitHubToken.layerTest("tok")),
+    Layer.provide(Layer.succeed(HttpClient.HttpClient, client)),
+  )
+  return { writes, layer }
+}
+
 describe("PullRequestService", () => {
+  it.live("merges only an open pull request at the commit the human saw, comment first", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      git(repo, "remote", "add", "origin", "https://github.com/acme/app.git")
+      git(repo, "checkout", "--quiet", "-b", "feat/login")
+      let current: Record<string, unknown> = { ...pull, draft: true }
+      const { writes, layer } = fakeForge(() => current)
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const pullRequests = yield* PullRequestService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
+        yield* waitForStatus(session.id, "idle")
+        const merge = (headSha: string) =>
+          pullRequests.merge(session.id, { method: "squash", comment: " Ship it ", headSha })
+
+        const draft = yield* Effect.flip(merge("abc123"))
+        assert.include(draft.message, "is a draft")
+
+        current = pull
+        const moved = yield* Effect.flip(merge("old999"))
+        assert.include(moved.message, "new commits since you looked")
+        assert.lengthOf(writes, 0)
+
+        const merged = yield* merge("abc123")
+        assert.strictEqual(merged.state, "merged")
+        assert.deepStrictEqual(
+          writes.map((write) => [write.method, write.body]),
+          [
+            ["POST", { body: "Ship it" }],
+            ["PUT", { merge_method: "squash", sha: "abc123" }],
+          ],
+        )
+      }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
+    }),
+  )
+
+  it.live("closes an open pull request, and refuses to close it twice", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      git(repo, "remote", "add", "origin", "https://github.com/acme/app.git")
+      git(repo, "checkout", "--quiet", "-b", "feat/login")
+      const { writes, layer } = fakeForge(() => ({ ...pull, state: "closed" }))
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const pullRequests = yield* PullRequestService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
+        yield* waitForStatus(session.id, "idle")
+
+        const error = yield* Effect.flip(pullRequests.setOpen(session.id, false))
+        assert.include(error.message, "already closed")
+        const draft = yield* Effect.flip(pullRequests.setDraft(session.id, true))
+        assert.include(draft.message, "closed")
+        assert.lengthOf(writes, 0)
+      }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
+    }),
+  )
+
   it.live("reads where the branch stands from git alone, and the pull request from the feed", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

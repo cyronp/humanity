@@ -2,6 +2,8 @@ import {
   type BranchPublication,
   type Forge,
   GITLAB_DEFAULT_HOST,
+  type MergeMethod,
+  type MergePullRequest,
   type NewPullRequest,
   type Project,
   type ProjectNotFound,
@@ -100,6 +102,24 @@ export class PullRequestService extends Context.Service<
     readonly create: (
       sessionId: string,
       pullRequest: NewPullRequest,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /**
+     * Merges the open pull request of the thread's branch at the head commit the human saw,
+     * posting their comment on it first.
+     */
+    readonly merge: (
+      sessionId: string,
+      merge: MergePullRequest,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /** Closes the pull request of the thread's branch, or reopens a closed one. */
+    readonly setOpen: (
+      sessionId: string,
+      open: boolean,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /** Converts the open pull request of the thread's branch to a draft, or marks it ready. */
+    readonly setDraft: (
+      sessionId: string,
+      draft: boolean,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
@@ -329,6 +349,137 @@ export class PullRequestService extends Context.Service<
         const target = targetOf(remote, branch)
         if (target !== null) yield* sync.opened(target, created)
         return created
+      })
+
+      const reachable = (remote: Remote | null) => {
+        if (remote === null) {
+          return Effect.fail(
+            new PullRequestUnavailable({
+              reason:
+                "This project's origin is not on GitHub or on a connected GitLab instance, so Humanity can't change its pull requests.",
+            }),
+          )
+        }
+        if (remote.forge === "gitlab" && remote.mismatch !== null) {
+          return Effect.fail(new PullRequestUnavailable({ reason: remote.mismatch }))
+        }
+        return Effect.succeed(remote)
+      }
+
+      /** The thread's branch's pull request as the forge has it now, not as the feed last saw it. */
+      const current = (sessionId: string) =>
+        Effect.gen(function* () {
+          const { session, remote: found, branch: own } = yield* load(sessionId)
+          const remote = yield* reachable(found)
+          const branch = yield* requireBranch(own)
+          const pullRequest = Option.getOrNull(yield* find(remote, branch))
+          if (pullRequest === null) {
+            return yield* new PullRequestUnavailable({
+              reason: `${branch} has no ${forgeName(remote.forge)}.`,
+            })
+          }
+          return { session, remote, pullRequest, target: targetOf(remote, branch) }
+        })
+
+      const notOpen = (pullRequest: PullRequest) => {
+        const noun = forgeName(pullRequest.forge)
+        return new PullRequestUnavailable({
+          reason:
+            pullRequest.state === "merged"
+              ? `This ${noun} is already merged.`
+              : `This ${noun} is closed. Reopen it first.`,
+        })
+      }
+
+      const MERGED_HOW: Record<MergeMethod, string> = {
+        squash: "squashed",
+        merge: "with a merge commit",
+        rebase: "rebased",
+      }
+
+      const merge = Effect.fn("PullRequestService.merge")(function* (
+        sessionId: string,
+        input: MergePullRequest,
+      ) {
+        const { session, remote, pullRequest, target } = yield* current(sessionId)
+        const noun = forgeName(remote.forge)
+        if (pullRequest.state === "draft") {
+          return yield* new PullRequestUnavailable({
+            reason: `This ${noun} is a draft. Mark it ready for review before merging it.`,
+          })
+        }
+        if (pullRequest.state !== "open") return yield* notOpen(pullRequest)
+        if (input.headSha === "" || pullRequest.headSha !== input.headSha) {
+          return yield* new PullRequestUnavailable({
+            reason: `This ${noun} has new commits since you looked at it, so nothing was merged. Look at them, then merge again.`,
+          })
+        }
+        if (remote.forge === "gitlab" && input.method === "rebase") {
+          return yield* new PullRequestUnavailable({
+            reason:
+              "GitLab merges by the project's own merge method. Pick Merge or Squash and merge.",
+          })
+        }
+        const comment = input.comment.trim()
+        if (comment !== "") {
+          yield* remote.forge === "github"
+            ? github.commentOnPullRequest(remote.fullName, pullRequest.number, comment)
+            : gitlab.commentOnMergeRequest(remote.fullPath, pullRequest.number, comment)
+        }
+        const merged =
+          remote.forge === "github"
+            ? yield* github.mergePullRequest(remote.fullName, pullRequest.number, {
+                method: input.method,
+                sha: pullRequest.headSha,
+              })
+            : yield* gitlab.mergeMergeRequest(remote.fullPath, pullRequest.number, {
+                squash: input.method === "squash",
+                sha: pullRequest.headSha,
+              })
+        if (target !== null) yield* sync.updated(target, merged)
+        const symbol = remote.forge === "github" ? "#" : "!"
+        yield* sessions.tell(session.id, {
+          notice: `Merged ${symbol}${merged.number} into ${merged.base}, ${MERGED_HOW[input.method]}.`,
+        })
+        return merged
+      })
+
+      const setOpen = Effect.fn("PullRequestService.setOpen")(function* (
+        sessionId: string,
+        open: boolean,
+      ) {
+        const { remote, pullRequest, target } = yield* current(sessionId)
+        const noun = forgeName(remote.forge)
+        if (pullRequest.state === "merged") return yield* notOpen(pullRequest)
+        if (open && pullRequest.state !== "closed") {
+          return yield* new PullRequestUnavailable({ reason: `This ${noun} is already open.` })
+        }
+        if (!open && pullRequest.state === "closed") {
+          return yield* new PullRequestUnavailable({ reason: `This ${noun} is already closed.` })
+        }
+        const updated =
+          remote.forge === "github"
+            ? yield* github.setPullRequestOpen(remote.fullName, pullRequest.number, open)
+            : yield* gitlab.setMergeRequestOpen(remote.fullPath, pullRequest.number, open)
+        if (target !== null) yield* sync.updated(target, updated)
+        return updated
+      })
+
+      const setDraft = Effect.fn("PullRequestService.setDraft")(function* (
+        sessionId: string,
+        draft: boolean,
+      ) {
+        const { remote, pullRequest, target } = yield* current(sessionId)
+        if (pullRequest.state !== "open" && pullRequest.state !== "draft") {
+          return yield* notOpen(pullRequest)
+        }
+        if ((pullRequest.state === "draft") === draft) return pullRequest
+        const updated =
+          remote.forge === "github"
+            ? yield* github.setPullRequestDraft(remote.fullName, pullRequest.number, draft)
+            : yield* gitlab.setMergeRequestDraft(remote.fullPath, pullRequest, draft)
+        if (target !== null) yield* sync.updated(target, updated)
+        return updated
       })
 
       const watch = (sessionId: string) =>
@@ -573,6 +724,9 @@ export class PullRequestService extends Context.Service<
         publication,
         push,
         create,
+        merge,
+        setOpen,
+        setDraft,
         watch,
         refresh,
         syncStatus,

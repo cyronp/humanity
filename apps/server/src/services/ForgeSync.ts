@@ -67,6 +67,8 @@ export class ForgeSync extends Context.Service<
     readonly refresh: (target: ForgeTarget) => Effect.Effect<void>
     readonly changed: (target: ForgeTarget) => Effect.Effect<void>
     readonly opened: (target: ForgeTarget, pullRequest: PullRequest) => Effect.Effect<void>
+    /** Shows a pull request the human just changed at once, then asks the forge again soon. */
+    readonly updated: (target: ForgeTarget, pullRequest: PullRequest) => Effect.Effect<void>
   }
 >()("humanity/ForgeSync") {
   static readonly layer = Layer.effect(
@@ -196,8 +198,7 @@ export class ForgeSync extends Context.Service<
           const resumeAt = typeof resetAt === "string" ? Date.parse(resetAt) : null
           entry.dueAt =
             resumeAt !== null && resumeAt > now
-              ?
-                resumeAt + 1_000
+              ? resumeAt + 1_000
               : now + Math.min(OPEN_POLL_MS * 2 ** (entry.failures - 1), SLOW_POLL_MS)
           yield* publish(entry, {
             ...known,
@@ -288,7 +289,20 @@ export class ForgeSync extends Context.Service<
           yield* hurry(entry, now + MIN_SPACING_MS)
         })
 
-      return ForgeSync.of({ watch, refresh, changed, opened })
+      const updated = (target: ForgeTarget, pullRequest: PullRequest) =>
+        Effect.gen(function* () {
+          const entry = yield* entryOf(target)
+          const now = yield* Clock.currentTimeMillis
+          yield* publish(entry, {
+            ...(entry.feed ?? EMPTY_FEED),
+            pullRequest,
+            fetchedAt: new Date(now).toISOString(),
+          })
+          entry.settling = true
+          yield* hurry(entry, now + MIN_SPACING_MS)
+        })
+
+      return ForgeSync.of({ watch, refresh, changed, opened, updated })
     }),
   )
 }
