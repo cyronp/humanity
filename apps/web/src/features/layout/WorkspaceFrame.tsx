@@ -38,7 +38,6 @@ const CHAT_MIN_WIDTH = 360
 
 export interface PanelProps {
   readonly tool: ShelfTool
-  readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
 }
 
@@ -222,7 +221,6 @@ export function WorkspaceFrame({
             )}
             {panel({
               tool: shelf.tool,
-              onToolChange: (tool) => setShelf({ open: true, tool }),
               onClose: () => setShelf({ ...shelf, open: false }),
             })}
           </aside>

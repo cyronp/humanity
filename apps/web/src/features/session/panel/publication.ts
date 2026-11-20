@@ -3,6 +3,7 @@ import type {
   BranchPublication,
   FileDiff,
   Forge,
+  MergeMethod,
   PullRequestCheck,
   PullRequestFeed,
 } from "@humanity/contracts"
@@ -119,3 +120,64 @@ export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | nu
   }
   return null
 }
+
+/**
+ * The one next step the Source control panel offers as its main button, or none. Uncommitted
+ * changes come first; then the pull request: pushing to it, marking it ready, merging it; then
+ * opening one, which pushes on its own; then a plain push.
+ */
+export type PrimaryAction =
+  | { readonly kind: "commit"; readonly files: number }
+  | { readonly kind: "push" }
+  | { readonly kind: "open-pull-request" }
+  | { readonly kind: "ready" }
+  | { readonly kind: "merge" }
+
+export const primaryAction = ({
+  publication,
+  changed,
+  feed,
+}: {
+  readonly publication: BranchPublication
+  readonly changed: number
+  /** `undefined` while the forge has not answered yet. */
+  readonly feed: PullRequestFeed | undefined
+}): PrimaryAction | null => {
+  if (checkoutMoved(publication)) return null
+  if (changed > 0) return { kind: "commit", files: changed }
+  if (publication.branch === null) return null
+  const pullRequest = feed?.pullRequest ?? null
+  const live =
+    pullRequest !== null && (pullRequest.state === "open" || pullRequest.state === "draft")
+  if (live) {
+    if (needsPush(publication)) return { kind: "push" }
+    return pullRequest.state === "draft" ? { kind: "ready" } : { kind: "merge" }
+  }
+  const canOpen =
+    publication.forge !== null &&
+    publication.branch !== publication.defaultBranch &&
+    feed !== undefined &&
+    feed.fetchedAt !== null &&
+    pullRequest?.state !== "merged"
+  if (canOpen) return { kind: "open-pull-request" }
+  return needsPush(publication) ? { kind: "push" } : null
+}
+
+export interface MergeOption {
+  readonly method: MergeMethod
+  readonly label: string
+  readonly description: string
+}
+
+/** The ways a pull request can be merged, as each forge offers them. */
+export const mergeOptions = (forge: Forge): ReadonlyArray<MergeOption> =>
+  forge === "github"
+    ? [
+        { method: "squash", label: "Squash and merge", description: "Combine all commits" },
+        { method: "merge", label: "Merge commit", description: "Preserve commit history" },
+        { method: "rebase", label: "Rebase and merge", description: "Reapply all commits" },
+      ]
+    : [
+        { method: "merge", label: "Merge", description: "By the project's merge method" },
+        { method: "squash", label: "Squash and merge", description: "Combine all commits" },
+      ]

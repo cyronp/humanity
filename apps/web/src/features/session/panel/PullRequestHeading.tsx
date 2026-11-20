@@ -10,26 +10,44 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { forgeTerms } from "./publication.ts"
 
-const STATE: Record<
+export const PULL_REQUEST_STATE: Record<
   PullRequestState,
-  { readonly label: string; readonly Icon: typeof GitMerge; readonly className: string }
+  {
+    readonly label: string
+    readonly Icon: typeof GitMerge
+    readonly className: string
+    /** The state's color as text, for its icon on its own. */
+    readonly tone: string
+  }
 > = {
-  open: { label: "Open", Icon: GitPullRequest, className: "bg-git-added text-background" },
+  open: {
+    label: "Open",
+    Icon: GitPullRequest,
+    className: "bg-git-added text-background",
+    tone: "text-git-added",
+  },
   draft: {
     label: "Draft",
     Icon: GitPullRequestDraft,
     className: "bg-git-draft text-background",
+    tone: "text-git-draft",
   },
-  merged: { label: "Merged", Icon: GitMerge, className: "bg-git-merged text-background" },
+  merged: {
+    label: "Merged",
+    Icon: GitMerge,
+    className: "bg-git-merged text-background",
+    tone: "text-git-merged",
+  },
   closed: {
     label: "Closed",
     Icon: GitPullRequestClosed,
     className: "bg-git-deleted text-background",
+    tone: "text-git-deleted",
   },
 }
 
 export function PullRequestStateBadge({ state }: { readonly state: PullRequestState }) {
-  const { label, Icon, className } = STATE[state]
+  const { label, Icon, className } = PULL_REQUEST_STATE[state]
   return (
     <Badge className={cn("shrink-0 font-semibold", className)}>
       <Icon strokeWidth={2.5} />

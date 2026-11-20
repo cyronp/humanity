@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react"
 import type {
+  BranchPublication,
   CheckStatus,
   Forge,
   PullRequest,
@@ -16,17 +17,17 @@ import {
   CircleSlash,
   CircleX,
   ExternalLink,
-  GitCommitHorizontal,
+  GitBranch,
   LoaderCircle,
 } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Markdown } from "@/features/chat/Markdown"
 import { feedKey, publicationAtom, pullRequestFeedAtom } from "../atoms.ts"
+import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { FeedNote } from "./FeedNote.tsx"
-import { forgeTerms, summarizeChecks } from "./publication.ts"
+import { checkoutMoved, forgeTerms, remoteStatus, summarizeChecks } from "./publication.ts"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 
 const CHECK_ICON: Record<
@@ -42,68 +43,78 @@ const CHECK_ICON: Record<
   neutral: { Icon: CircleMinus, className: "text-muted-foreground" },
 }
 
-export function PullRequestTab({
-  session,
-  onOpenCommit,
-}: {
-  readonly session: Session
-  readonly onOpenCommit: () => void
-}) {
+export function OverviewTab({ session }: { readonly session: Session }) {
   const publication = useAtomValue(publicationAtom(session.id))
   return (
     <AsyncView result={publication} errorTitle="Could not read the branch">
       {(value) =>
-        value.forge === null ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Pull requests need an origin on GitHub or a connected GitLab.
-          </p>
+        checkoutMoved(value) ? (
+          <CheckoutMovedNote session={session} publication={value} />
         ) : (
-          <Followed
-            session={session}
-            forge={value.forge}
-            branch={value.branch}
-            onOpenCommit={onOpenCommit}
-          />
+          <div className="flex flex-col gap-4">
+            <BranchSummary publication={value} />
+            {value.forge === null ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Pull requests need an origin on GitHub or a connected GitLab.
+              </p>
+            ) : (
+              <Followed session={session} publication={value} forge={value.forge} />
+            )}
+          </div>
         )
       }
     </AsyncView>
   )
 }
 
+function BranchSummary({ publication }: { readonly publication: BranchPublication }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border bg-card px-3 py-2">
+      <GitBranch className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <code className="truncate font-mono text-sm" title={publication.branch ?? undefined}>
+          {publication.branch ?? "detached HEAD"}
+        </code>
+        <p className="text-xs text-muted-foreground">{remoteStatus(publication)}</p>
+      </div>
+    </div>
+  )
+}
+
 function Followed({
   session,
+  publication,
   forge,
-  branch,
-  onOpenCommit,
 }: {
   readonly session: Session
+  readonly publication: BranchPublication
   readonly forge: Forge
-  readonly branch: string | null
-  readonly onOpenCommit: () => void
 }) {
+  const { branch } = publication
   const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, branch)))
+  const terms = forgeTerms(forge)
   return (
-    <AsyncView result={feed} errorTitle="Could not load the pull request">
+    <AsyncView result={feed} errorTitle={`Could not load the ${terms.noun}`}>
       {(value) => (
         <div className="flex flex-col gap-4">
           <FeedNote feed={value} forge={forge} />
           {value.pullRequest !== null ? (
             <PullRequestView pullRequest={value.pullRequest} feed={value} />
-          ) : branch === null ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No branch is checked out.
-            </p>
           ) : (
+            branch !== null &&
             value.fetchedAt !== null && (
-              <div className="flex flex-col items-center gap-3 py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {branch} has no {forgeTerms(forge).noun} yet.
-                </p>
-                <Button variant="outline" size="sm" onClick={onOpenCommit}>
-                  <GitCommitHorizontal />
-                  Commit and open one
-                </Button>
-              </div>
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {branch === publication.defaultBranch ? (
+                  <>
+                    This thread works on <code>{branch}</code>, the default branch. Set up a
+                    worktree to open a {terms.noun}.
+                  </>
+                ) : (
+                  <>
+                    <code>{branch}</code> has no {terms.noun} yet.
+                  </>
+                )}
+              </p>
             )
           )}
         </div>

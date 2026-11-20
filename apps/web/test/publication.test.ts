@@ -2,6 +2,7 @@ import type {
   Branch,
   BranchPublication,
   FileDiff,
+  PullRequest,
   PullRequestCheck,
   PullRequestFeed,
 } from "@humanity/contracts"
@@ -12,7 +13,9 @@ import {
   feedNotice,
   forgeTerms,
   checkoutMoved,
+  mergeOptions,
   needsPush,
+  primaryAction,
   remoteStatus,
   summarizeChecks,
 } from "@/features/session/panel/publication"
@@ -175,5 +178,93 @@ describe("feedNotice", () => {
     expect(notice?.tone).toBe("note")
     expect(notice?.title).toBe("No GitHub token connected")
     expect(notice?.message).toContain("only when you press Refresh")
+  })
+})
+
+const pull = (state: PullRequest["state"]): PullRequest => ({
+  forge: "github",
+  number: 7,
+  title: "Add login",
+  body: "",
+  url: "https://github.com/acme/app/pull/7",
+  state,
+  base: "main",
+  head: "feat/x",
+  headSha: "abc",
+  author: "octocat",
+  createdAt: "2026-11-10T00:00:00Z",
+})
+
+describe("primaryAction", () => {
+  const kind = (...args: Parameters<typeof primaryAction>) => primaryAction(...args)?.kind ?? null
+
+  it("commits first, whatever the pull request says", () => {
+    expect(primaryAction({ publication: publication(), changed: 2, feed: feed() })).toEqual({
+      kind: "commit",
+      files: 2,
+    })
+    expect(
+      kind({ publication: publication(), changed: 1, feed: feed({ pullRequest: pull("open") }) }),
+    ).toBe("commit")
+  })
+
+  it("pushes to an open pull request, then marks a draft ready or merges", () => {
+    const live = (state: PullRequest["state"]) => feed({ pullRequest: pull(state) })
+    expect(kind({ publication: publication({ ahead: 1 }), changed: 0, feed: live("open") })).toBe(
+      "push",
+    )
+    expect(kind({ publication: publication(), changed: 0, feed: live("draft") })).toBe("ready")
+    expect(kind({ publication: publication(), changed: 0, feed: live("open") })).toBe("merge")
+  })
+
+  it("opens a pull request once the forge said there is none, or only a closed one", () => {
+    expect(kind({ publication: publication({ upstream: null }), changed: 0, feed: feed() })).toBe(
+      "open-pull-request",
+    )
+    expect(
+      kind({ publication: publication(), changed: 0, feed: feed({ pullRequest: pull("closed") }) }),
+    ).toBe("open-pull-request")
+    expect(
+      kind({ publication: publication({ upstream: null }), changed: 0, feed: undefined }),
+    ).toBe("push")
+    expect(
+      kind({
+        publication: publication({ upstream: null }),
+        changed: 0,
+        feed: feed({ fetchedAt: null }),
+      }),
+    ).toBe("push")
+  })
+
+  it("offers nothing to open on the default branch, without a forge, or after a merge", () => {
+    const onMain = publication({ branch: "main", checkedOut: "main", upstream: "origin/main" })
+    expect(kind({ publication: onMain, changed: 0, feed: feed() })).toBe(null)
+    expect(kind({ publication: publication({ forge: null }), changed: 0, feed: feed() })).toBe(null)
+    expect(
+      kind({ publication: publication(), changed: 0, feed: feed({ pullRequest: pull("merged") }) }),
+    ).toBe(null)
+    expect(
+      kind({
+        publication: publication({ ahead: 2 }),
+        changed: 0,
+        feed: feed({ pullRequest: pull("merged") }),
+      }),
+    ).toBe("push")
+  })
+
+  it("offers nothing while the checkout is on another branch", () => {
+    const moved = publication({ checkedOut: "main" })
+    expect(kind({ publication: moved, changed: 3, feed: feed() })).toBe(null)
+  })
+})
+
+describe("mergeOptions", () => {
+  it("offers GitHub's three methods, and GitLab's merge with or without a squash", () => {
+    expect(mergeOptions("github").map((option) => option.method)).toEqual([
+      "squash",
+      "merge",
+      "rebase",
+    ])
+    expect(mergeOptions("gitlab").map((option) => option.method)).toEqual(["merge", "squash"])
   })
 })

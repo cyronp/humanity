@@ -119,6 +119,14 @@ The Browser on the shelf grows from a localhost preview into a browser, modelled
 - **Downloads never write to disk:** a page's download is cancelled and its address opens in the human's browser, because nothing of Humanity's writes outside `~/.humanity/` or the session's folder.
 - **Not yet:** picture-in-picture (built, then removed at the human's request), the agent's browser tools, importing cookies from other browsers, browser profiles, voice notes, Humanity as the default browser.
 
+## Amendment: Source control in one panel (2026-11-19)
+
+The shelf's four git tools (Changes, Commits, Commit and push, Pull request) become one, Source control. Where this section and the shelf amendment disagree, this section wins. It adds no library to the stack of section 3.
+
+- **One tool, three tabs.** The rail has one Source control icon, badged with the changed files, else the commits to push. Its panel shows the thread's branch and its pull request's number on top, with Sync, Refresh and Close; under it the tabs Overview (where the branch stands, the pull request, its checks and comments), Changes and Commits. The tab open is remembered in the browser.
+- **One main button: the next step.** Commit while files changed (a message, the files, and "Commit" or "Commit and push"); then Push while the pull request lacks commits; Ready for review for a draft; Merge for an open one; Open a pull request when the branch has none; else Push. Everything else is behind `…`: open on the forge, copy its link, a new thread about it, convert to draft or mark ready, close or reopen, and Set up worktree.
+- **Merging, from Humanity.** `PullRequests.merge` merges the branch's open pull request by squash, merge commit or rebase (GitLab: its project's own method, with or without a squash), only at the head commit the human saw: one that moved since is not merged. A draft is not merged. The human's optional comment is posted on the pull request first. `PullRequests.setOpen` closes or reopens it; `PullRequests.setDraft` converts it to a draft or marks it ready (GitHub through its GraphQL API, GitLab by the title's `Draft:` prefix). Each is the human's click; the agent has no tool for any of them.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

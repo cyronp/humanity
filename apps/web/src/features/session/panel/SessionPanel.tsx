@@ -1,45 +1,51 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Session } from "@humanity/contracts"
+import type { BranchPublication, FileDiff, PullRequest, Session } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import {
-  FileDiff,
-  GitCommitHorizontal,
-  GitPullRequest,
-  Globe,
-  History,
-  PanelRightClose,
-  RefreshCw,
-} from "lucide-react"
+import { GitBranch, GitPullRequestArrow, Globe, PanelRightClose, RefreshCw, X } from "lucide-react"
 import { type ReactNode, useEffect, useState } from "react"
+import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BrowserView } from "@/features/browser/BrowserView"
 import type { CaptureTarget } from "@/features/browser/BrowserView"
 import type { BrowserState } from "@/features/browser/useBrowser"
 import {
+  feedKey,
   publicationAtom,
+  pullRequestFeedAtom,
   refreshPullRequestAtom,
   sessionCommitsAtom,
   sessionDiffAtom,
 } from "../atoms.ts"
 import { SyncButton } from "../SyncButton.tsx"
 import { CommitsTab } from "./CommitsTab.tsx"
-import { CommitTab } from "./CommitTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
-import { PullRequestTab } from "./PullRequestTab.tsx"
-import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
-import { SHELF_LABELS, SHELF_TOOLS, type ShelfState, type ShelfTool, shelfBadges } from "./shelf.ts"
+import { MoreMenu } from "./MoreMenu.tsx"
+import { OverviewTab } from "./OverviewTab.tsx"
+import { type PanelError, PrimaryAction } from "./PrimaryAction.tsx"
+import { forgeTerms, primaryAction } from "./publication.ts"
+import { PULL_REQUEST_STATE } from "./PullRequestHeading.tsx"
+import {
+  GIT_VIEW_LABELS,
+  GIT_VIEWS,
+  type GitView,
+  readStoredGitView,
+  SHELF_LABELS,
+  SHELF_TOOLS,
+  type ShelfState,
+  type ShelfTool,
+  shelfBadges,
+  storeGitView,
+} from "./shelf.ts"
 
 /** The rail's width in pixels: the window's own buttons in the desktop app cover it first. */
 export const RAIL_WIDTH = 48
 
 const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
-  changes: <FileDiff />,
-  commits: <History />,
-  commit: <GitCommitHorizontal />,
-  "pull-request": <GitPullRequest />,
+  git: <GitPullRequestArrow />,
   browser: <Globe />,
 }
 
@@ -100,7 +106,7 @@ export function ToolRail({
                 {ICONS[tool]}
                 {badge !== undefined && (
                   <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">
-                    {badge > 99 ? "99+" : badge}
+                    {badge.count > 99 ? "99+" : badge.count}
                   </span>
                 )}
                 {dot && (
@@ -116,7 +122,7 @@ export function ToolRail({
                 ? `${SHELF_LABELS[tool]} (a new address)`
                 : badge === undefined
                   ? SHELF_LABELS[tool]
-                  : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
+                  : `${SHELF_LABELS[tool]} (${badge.label})`}
             </TooltipContent>
           </Tooltip>
         )
@@ -172,7 +178,6 @@ export function ToolPanel({
   activity,
   tool,
   browser,
-  onToolChange,
   onClose,
   onReference,
   onCapture,
@@ -181,7 +186,6 @@ export function ToolPanel({
   readonly activity: number
   readonly tool: ShelfTool
   readonly browser: BrowserState
-  readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
   readonly onCapture?: CaptureTarget | undefined
@@ -196,12 +200,10 @@ export function ToolPanel({
     })
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {tool !== "browser" && (
+      {tool === "git" && (
         <GitPanel
           session={session}
           activity={activity}
-          tool={tool}
-          onToolChange={onToolChange}
           onClose={onClose}
           onReference={onReference}
           openFiles={openFiles}
@@ -220,11 +222,13 @@ export function ToolPanel({
   )
 }
 
+/**
+ * Source control: the thread's branch and its pull request on top; under it the tabs, the one
+ * next step as the main button, and every other action behind `…`.
+ */
 function GitPanel({
   session,
   activity,
-  tool,
-  onToolChange,
   onClose,
   onReference,
   openFiles,
@@ -232,17 +236,19 @@ function GitPanel({
 }: {
   readonly session: Session
   readonly activity: number
-  readonly tool: ShelfTool
-  readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
   readonly onFileOpenChange: (key: string, open: boolean) => void
 }) {
+  const diff = useAtomValue(sessionDiffAtom(session.id))
+  const publication = useAtomValue(publicationAtom(session.id))
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
   const refreshCommits = useAtomRefresh(sessionCommitsAtom(session.id))
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
   const refreshPullRequest = useAtomSet(refreshPullRequestAtom)
+  const [view, setViewState] = useState<GitView>(readStoredGitView)
+  const [error, setError] = useState<PanelError>()
 
   useEffect(() => {
     refreshDiff()
@@ -257,16 +263,27 @@ function GitPanel({
     refreshPullRequest({ payload: { sessionId: session.id } })
   }
 
+  const setView = (next: GitView) => {
+    setViewState(next)
+    storeGitView(next)
+  }
+
+  const files = AsyncResult.isSuccess(diff) ? diff.value.files : []
+  const branch = AsyncResult.isSuccess(publication) ? publication.value : undefined
+
   return (
     <>
       <div
         className="titlebar flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3"
         style={{ paddingRight: titlebarPaddingEnd(RAIL_WIDTH) }}
       >
-        <h2 className="truncate text-sm font-medium">{SHELF_LABELS[tool]}</h2>
-        <div className="flex items-center gap-1">
+        {branch === undefined ? (
+          <BranchName name={session.branch} />
+        ) : (
+          <PanelHeading session={session} publication={branch} />
+        )}
+        <div className="flex shrink-0 items-center gap-1">
           <SyncButton session={session} />
-          <SetupWorktreeButton session={session} />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -287,9 +304,48 @@ function GitPanel({
           </Button>
         </div>
       </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+        <ToggleGroup
+          type="single"
+          value={view}
+          onValueChange={(next) => {
+            const found = GIT_VIEWS.find((each) => each === next)
+            if (found !== undefined) setView(found)
+          }}
+          aria-label="Source control"
+        >
+          {GIT_VIEWS.map((each) => (
+            <ToggleGroupItem key={each} value={each} size="sm">
+              {GIT_VIEW_LABELS[each]}
+              {each === "changes" && files.length > 0 && (
+                <span className="text-muted-foreground tabular-nums">{files.length}</span>
+              )}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {branch !== undefined && (
+          <Actions session={session} publication={branch} files={files} onError={setError} />
+        )}
+      </div>
+      {error !== undefined && (
+        <div className="relative shrink-0 border-b p-3">
+          <ErrorNote title={error.title} message={error.message} />
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="absolute top-4 right-4"
+            onClick={() => setError(undefined)}
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <X />
+          </Button>
+        </div>
+      )}
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-4 p-4">
-          {tool === "changes" && (
+          {view === "overview" && <OverviewTab session={session} />}
+          {view === "changes" && (
             <DiffTab
               session={session}
               onReference={onReference}
@@ -297,15 +353,87 @@ function GitPanel({
               onOpenChange={onFileOpenChange}
             />
           )}
-          {tool === "commits" && <CommitsTab session={session} />}
-          {tool === "commit" && (
-            <CommitTab session={session} onOpenPullRequest={() => onToolChange("pull-request")} />
-          )}
-          {tool === "pull-request" && (
-            <PullRequestTab session={session} onOpenCommit={() => onToolChange("commit")} />
-          )}
+          {view === "commits" && <CommitsTab session={session} />}
         </div>
       </ScrollArea>
     </>
+  )
+}
+
+function BranchName({ name }: { readonly name: string | null }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+      <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+      <span className="truncate" title={name ?? undefined}>
+        {name ?? "detached HEAD"}
+      </span>
+    </span>
+  )
+}
+
+/** The thread's branch, with its pull request's number and state once the forge has one. */
+function PanelHeading({
+  session,
+  publication,
+}: {
+  readonly session: Session
+  readonly publication: BranchPublication
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  const pullRequest = AsyncResult.isSuccess(feed) ? feed.value.pullRequest : null
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <BranchName name={publication.branch} />
+      {pullRequest !== null && <PullRequestChip pullRequest={pullRequest} />}
+    </div>
+  )
+}
+
+function PullRequestChip({ pullRequest }: { readonly pullRequest: PullRequest }) {
+  const { Icon, tone, label } = PULL_REQUEST_STATE[pullRequest.state]
+  const terms = forgeTerms(pullRequest.forge)
+  return (
+    <a
+      href={pullRequest.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium hover:bg-accent"
+      title={`${label}: ${pullRequest.title}`}
+    >
+      <Icon className={cn("size-3.5", tone)} />
+      {terms.symbol}
+      {pullRequest.number}
+    </a>
+  )
+}
+
+function Actions({
+  session,
+  publication,
+  files,
+  onError,
+}: {
+  readonly session: Session
+  readonly publication: BranchPublication
+  readonly files: ReadonlyArray<FileDiff>
+  readonly onError: (error: PanelError | undefined) => void
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  const known = AsyncResult.isSuccess(feed) ? feed.value : undefined
+  const action = primaryAction({ publication, changed: files.length, feed: known })
+  return (
+    <div className="ml-auto flex items-center gap-1">
+      {action !== null && (
+        <PrimaryAction
+          action={action}
+          session={session}
+          publication={publication}
+          files={files}
+          feed={known}
+          onError={onError}
+        />
+      )}
+      <MoreMenu session={session} pullRequest={known?.pullRequest ?? null} onError={onError} />
+    </div>
   )
 }
