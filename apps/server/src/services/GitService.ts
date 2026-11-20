@@ -1,5 +1,6 @@
 import {
   type Branch,
+  type ComparedFile,
   type FileDiff,
   GitBranchExists,
   GitCommandFailed,
@@ -20,6 +21,7 @@ import {
   LOG_FORMAT,
   type LoggedCommit,
   parseBranches,
+  parseChangedFiles,
   parseLog,
   parseStatus,
   parseWorktrees,
@@ -80,6 +82,12 @@ export class GitService extends Context.Service<
       exclude: string,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<string>, GitError>
+    /** The files `to` changes since it left `from` (`from...to`), with their line counts. */
+    readonly compareFiles: (
+      cwd: string,
+      from: string,
+      to: string,
+    ) => Effect.Effect<ReadonlyArray<ComparedFile>, GitError>
     readonly diff: (cwd: string, base?: string) => Effect.Effect<WorkingTreeDiff, GitError>
     readonly worktreeAdd: (
       cwd: string,
@@ -506,6 +514,25 @@ export class GitService extends Context.Service<
           ),
         )
 
+      const compareFiles = (cwd: string, from: string, to: string) =>
+        Effect.all(
+          ["--name-status", "--numstat"].map((format) =>
+            exec(cwd, [
+              ...STABLE_OUTPUT,
+              "diff",
+              "-z",
+              "-M",
+              format,
+              "--end-of-options",
+              `${from}...${to}`,
+              "--",
+            ]),
+          ),
+          { concurrency: 2 },
+        ).pipe(
+          Effect.map(([nameStatus = "", numstat = ""]) => parseChangedFiles(nameStatus, numstat)),
+        )
+
       const aheadBehind = (cwd: string, ref: string, target: string) =>
         exec(cwd, [
           "rev-list",
@@ -589,6 +616,7 @@ export class GitService extends Context.Service<
         hasCommit,
         log,
         commitsNotIn,
+        compareFiles,
         diff,
         worktreeAdd,
         worktreeRemove,

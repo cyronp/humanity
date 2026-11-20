@@ -8,6 +8,7 @@ export const PullRequestsHandlers = PullRequestsRpcs.toLayer(
     return PullRequestsRpcs.of({
       "PullRequests.publication": ({ sessionId }) => pullRequests.publication(sessionId),
       "PullRequests.push": ({ sessionId }) => pullRequests.push(sessionId),
+      "PullRequests.compare": ({ sessionId, base }) => pullRequests.compare(sessionId, base),
       "PullRequests.create": ({ sessionId, pullRequest }) =>
         pullRequests.create(sessionId, pullRequest),
       "PullRequests.merge": ({ sessionId, merge }) => pullRequests.merge(sessionId, merge),

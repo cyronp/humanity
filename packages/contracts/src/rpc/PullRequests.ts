@@ -9,6 +9,7 @@ import {
   SyncResult,
   SyncStatus,
 } from "../domain/PullRequest.ts"
+import { BranchComparison } from "../domain/Git.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
   GitCommandFailed,
@@ -20,6 +21,7 @@ import {
   GitLabRequestFailed,
   GitNotARepository,
   GitNotInstalled,
+  GitRefNotFound,
   ProjectNotFound,
   PullRequestUnavailable,
   SessionNotFound,
@@ -52,6 +54,12 @@ export const PullRequestsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId },
     success: BranchPublication,
     error: Schema.Union([...Base, PullRequestUnavailable]),
+  }),
+  /** What a pull request from the thread's branch into `base` would carry: commits and files. */
+  Rpc.make("PullRequests.compare", {
+    payload: { sessionId: SessionId, base: Schema.String },
+    success: BranchComparison,
+    error: Schema.Union([...Base, GitRefNotFound, PullRequestUnavailable]),
   }),
   Rpc.make("PullRequests.create", {
     payload: { sessionId: SessionId, pullRequest: NewPullRequest },

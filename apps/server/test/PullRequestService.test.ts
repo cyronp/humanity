@@ -283,6 +283,22 @@ describe("PullRequestService.commits", () => {
         assert.isTrue(
           requests.some((url) => url.includes("/repos/acme/app/commits?sha=feat%2Flogin")),
         )
+
+        const compared = yield* pullRequests.compare(session.id, "main")
+        assert.strictEqual(compared.base, "main")
+        assert.deepStrictEqual(
+          compared.commits.map((commit) => commit.hash),
+          [unpushed, pushed],
+        )
+        assert.deepStrictEqual(
+          compared.files.map(({ path, kind }) => ({ path, kind })),
+          [
+            { path: "a.txt", kind: "create" },
+            { path: "b.txt", kind: "create" },
+          ],
+        )
+        const missing = yield* Effect.flip(pullRequests.compare(session.id, "nope"))
+        assert.strictEqual(missing._tag, "PullRequestUnavailable")
       }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
     }),
   )

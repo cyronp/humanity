@@ -30,6 +30,7 @@ import { CHECK_ICON, ChecksTab } from "./ChecksTab.tsx"
 import { CommitsTab } from "./CommitsTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
 import { MoreMenu } from "./MoreMenu.tsx"
+import { OpenPullRequestPage } from "./OpenPullRequestPage.tsx"
 import { OverviewTab } from "./OverviewTab.tsx"
 import { CommitBar, type PanelError, PrimaryAction } from "./PrimaryAction.tsx"
 import { footerNote, forgeTerms, primaryAction, summarizeChecks } from "./publication.ts"
@@ -263,7 +264,28 @@ function GitPanel({
   }
 
   const branch = AsyncResult.isSuccess(publication) ? publication.value : undefined
-  const body = { session, onReference, openFiles, onFileOpenChange }
+  const [opening, setOpening] = useState(false)
+  const body = {
+    session,
+    onReference,
+    openFiles,
+    onFileOpenChange,
+    onOpenPullRequest: () => setOpening(true),
+  }
+
+  if (opening && branch?.forge != null && branch.branch !== null) {
+    return (
+      <OpenPullRequestPage
+        session={session}
+        publication={branch}
+        forge={branch.forge}
+        branch={branch.branch}
+        titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
+        onBack={() => setOpening(false)}
+        onClose={onClose}
+      />
+    )
+  }
 
   return (
     <>
@@ -312,6 +334,7 @@ interface GitBodyProps {
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
   readonly onFileOpenChange: (key: string, open: boolean) => void
+  readonly onOpenPullRequest: () => void
 }
 
 /** The panel once the branch is known, with what the forge says about its pull request. */
@@ -331,6 +354,7 @@ function GitBody({
   onReference,
   openFiles,
   onFileOpenChange,
+  onOpenPullRequest,
   publication,
   feed,
 }: GitBodyProps & {
@@ -467,6 +491,7 @@ function GitBody({
                   publication={publication}
                   feed={feed}
                   onError={setError}
+                  onOpenPullRequest={onOpenPullRequest}
                 />
               )}
             </div>

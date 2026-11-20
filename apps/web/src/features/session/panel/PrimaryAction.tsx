@@ -1,9 +1,7 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { useAtomSet } from "@effect/atom-react"
 import type {
-  Branch,
   BranchPublication,
   FileDiff,
-  Forge,
   MergeMethod,
   PullRequest,
   PullRequestFeed,
@@ -12,7 +10,6 @@ import type {
 import { countChanges } from "@humanity/diff"
 import { cn } from "cn"
 import { Exit } from "effect"
-import { AsyncResult } from "effect/reactivity"
 import {
   ArrowUpFromLine,
   ChevronDown,
@@ -25,44 +22,27 @@ import { type ReactNode, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChangeCount } from "@/features/diff/FileDiffView"
 import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
-import { branchesAtom } from "@/features/git/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
-import {
-  commitAtom,
-  createPullRequestAtom,
-  mergePullRequestAtom,
-  pushAtom,
-  setPullRequestDraftAtom,
-} from "../atoms.ts"
+import { commitAtom, mergePullRequestAtom, pushAtom, setPullRequestDraftAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 import {
-  baseBranches,
   commitPaths,
   forgeTerms,
   mergeOptions,
-  needsPush,
   type PrimaryAction as Action,
   summarizeChecks,
 } from "./publication.ts"
 
 const SMALL_CHECKBOX = "size-3.5 [&_svg]:size-3"
 
-const WAIT_FOR_AGENT = "Available when the agent finishes."
+export const WAIT_FOR_AGENT = "Available when the agent finishes."
 
 export interface PanelError {
   readonly title: string
@@ -76,12 +56,15 @@ export function PrimaryAction({
   publication,
   feed,
   onError,
+  onOpenPullRequest,
 }: {
   readonly action: Action
   readonly session: Session
   readonly publication: BranchPublication
   readonly feed: PullRequestFeed | undefined
   readonly onError: (error: PanelError | undefined) => void
+  /** Opens the panel's page for opening a pull request. */
+  readonly onOpenPullRequest: () => void
 }) {
   const pullRequest = feed?.pullRequest ?? null
   switch (action.kind) {
@@ -92,12 +75,12 @@ export function PrimaryAction({
       return <PushAction session={session} onError={onError} />
     case "open-pull-request":
       return publication.forge === null || publication.branch === null ? null : (
-        <OpenPullRequestAction
-          session={session}
-          publication={publication}
-          forge={publication.forge}
-          branch={publication.branch}
-        />
+        <Hinted hint={isBusy(session.status) ? WAIT_FOR_AGENT : null}>
+          <Button size="sm" disabled={isBusy(session.status)} onClick={onOpenPullRequest}>
+            <GitPullRequest />
+            {publication.forge === "github" ? "Open PR" : "Open MR"}
+          </Button>
+        </Hinted>
       )
     case "ready":
       return pullRequest === null ? null : (
@@ -111,7 +94,7 @@ export function PrimaryAction({
 }
 
 /** A button that explains, on hover, why it is disabled. */
-function Hinted({
+export function Hinted({
   hint,
   children,
 }: {
@@ -484,150 +467,6 @@ function ReadyAction({
       {pending ? <Spinner className="size-3.5" /> : <CircleCheck />}
       Ready for review
     </Button>
-  )
-}
-
-type OpenMethod = "ready" | "draft"
-
-function OpenPullRequestAction({
-  session,
-  publication,
-  forge,
-  branch,
-}: {
-  readonly session: Session
-  readonly publication: BranchPublication
-  readonly forge: Forge
-  readonly branch: string
-}) {
-  const branches = useAtomValue(branchesAtom(session.projectId))
-  const [open, setOpen] = useState(false)
-  const terms = forgeTerms(forge)
-  const busy = isBusy(session.status)
-  return (
-    <ActionPopover
-      icon={<GitPullRequest />}
-      label={forge === "github" ? "Open PR" : "Open MR"}
-      open={open}
-      onOpenChange={setOpen}
-      hint={busy ? WAIT_FOR_AGENT : null}
-    >
-      {AsyncResult.isSuccess(branches) ? (
-        <PullRequestForm
-          session={session}
-          publication={publication}
-          forge={forge}
-          branch={branch}
-          branches={branches.value}
-          onOpened={() => setOpen(false)}
-        />
-      ) : AsyncResult.isFailure(branches) ? (
-        <ErrorNote title="Could not list the branches" message={describeCause(branches.cause)} />
-      ) : (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Spinner className="size-3.5" /> Listing the branches to open a {terms.noun} into…
-        </p>
-      )}
-    </ActionPopover>
-  )
-}
-
-function PullRequestForm({
-  session,
-  publication,
-  forge,
-  branch,
-  branches,
-  onOpened,
-}: {
-  readonly session: Session
-  readonly publication: BranchPublication
-  readonly forge: Forge
-  readonly branch: string
-  readonly branches: ReadonlyArray<Branch>
-  readonly onOpened: () => void
-}) {
-  const create = useAtomSet(createPullRequestAtom, { mode: "promiseExit" })
-  const terms = forgeTerms(forge)
-  const bases = baseBranches(branches, branch, publication.defaultBranch)
-  const [title, setTitle] = useState(
-    () => branches.find((each) => !each.isRemote && each.name === branch)?.subject ?? "",
-  )
-  const [body, setBody] = useState("")
-  const [base, setBase] = useState(publication.defaultBranch)
-  const [pending, setPending] = useState<OpenMethod | null>(null)
-  const [error, setError] = useState<string>()
-
-  const run = async (method: OpenMethod) => {
-    if (title.trim() === "" || pending !== null) return
-    setPending(method)
-    setError(undefined)
-    const exit = await create({
-      payload: {
-        sessionId: session.id,
-        pullRequest: { title: title.trim(), body, base, draft: method === "draft" },
-      },
-      reactivityKeys: [
-        keys.publication(session.id),
-        keys.git(session.projectId),
-        keys.sync(session.id),
-      ],
-    })
-    setPending(null)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else onOpened()
-  }
-
-  return (
-    <>
-      <Input
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        placeholder="Title"
-        aria-label="Title"
-        autoFocus
-      />
-      <Textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        rows={4}
-        placeholder="Description (optional). Markdown works."
-        aria-label="Description"
-      />
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="shrink-0">Merge into</span>
-        <Select value={base} onValueChange={setBase}>
-          <SelectTrigger size="sm" className="min-w-0 flex-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {bases.map((name) => (
-              <SelectItem key={name} value={name}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
-      <MethodList<OpenMethod>
-        options={[
-          {
-            method: "ready",
-            label: `Open ${terms.noun}`,
-            description: needsPush(publication)
-              ? `Pushes ${branch} to ${terms.site} first`
-              : "Ready for review",
-          },
-          { method: "draft", label: "Open as draft", description: "Not ready for review yet" },
-        ]}
-        disabled={title.trim() === ""}
-        pending={pending}
-        onPick={(method) => void run(method)}
-      />
-      {error !== undefined && (
-        <ErrorNote title={`The ${terms.noun} was not opened`} message={error} />
-      )}
-    </>
   )
 }
 

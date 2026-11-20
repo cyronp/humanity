@@ -359,6 +359,12 @@ describe("GitService commits and pushes", () => {
             git(repo, "rev-list", "main..feat/log").trim().split("\n"),
           )
           assert.deepStrictEqual(yield* service.commitsNotIn(repo, "main", "feat/log", 10), [])
+          assert.deepStrictEqual(
+            (yield* service.compareFiles(repo, "main", "refs/heads/feat/log")).map(
+              ({ path, kind, insertions }) => ({ path, kind, insertions }),
+            ),
+            ["a.txt", "b.txt", "c.txt"].map((path) => ({ path, kind: "create", insertions: 1 })),
+          )
 
           const latest = yield* service.log(repo, "main", { limit: 10 })
           assert.deepStrictEqual(

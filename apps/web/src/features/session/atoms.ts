@@ -78,6 +78,19 @@ export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
+export const comparisonKey = (sessionId: SessionId, base: string): string => `${sessionId}\n${base}`
+
+/** What a pull request from the thread's branch into a base branch would carry. */
+export const comparisonAtom = Atom.family((key: string) => {
+  const [id = "", base = ""] = key.split("\n")
+  const sessionId = SessionId.make(id)
+  return HumanityClient.query(
+    "PullRequests.compare",
+    { sessionId, base },
+    { reactivityKeys: [keys.sessionCommits(sessionId), keys.publication(sessionId)] },
+  )
+})
+
 export const commitAtom = HumanityClient.mutation("Sessions.commit")
 
 export const publicationAtom = Atom.family((sessionId: SessionId) =>

@@ -1,5 +1,6 @@
 import {
   type BranchCommits,
+  type BranchComparison,
   type BranchPublication,
   type CommitSummary,
   type Forge,
@@ -120,6 +121,11 @@ export class PullRequestService extends Context.Service<
      * once pushed, and its author's picture when the forge knows them.
      */
     readonly commits: (sessionId: string) => Effect.Effect<BranchCommits, Base | GitRefNotFound>
+    /** What a pull request from the thread's branch into `base` would carry. */
+    readonly compare: (
+      sessionId: string,
+      base: string,
+    ) => Effect.Effect<BranchComparison, Base | GitRefNotFound | PullRequestUnavailable>
     readonly push: (
       sessionId: string,
     ) => Effect.Effect<BranchPublication, Base | PullRequestUnavailable>
@@ -809,24 +815,25 @@ export class PullRequestService extends Context.Service<
             ? `https://github.com/${remote.fullName}/commit/${hash}`
             : `https://${remote.host}/${remote.fullPath}/-/commit/${hash}`
 
-      const commitsOf = Effect.fn("PullRequestService.commits")(function* (sessionId: string) {
-        const listed = yield* sessions.commits(sessionId)
-        const { session, remote, tracking } = yield* load(sessionId)
-        const all = listed.commits.map((commit) => commit.hash)
-        const ref = listed.branch === "HEAD" ? "HEAD" : `refs/heads/${listed.branch}`
-        const unpushed = new Set(
-          tracking.upstream === null
-            ? all
-            : yield* git
-                .commitsNotIn(session.worktreePath, ref, tracking.upstream, COMMIT_LIST_LIMIT + 1)
-                .pipe(Effect.catch(() => Effect.succeed(all))),
-        )
-        const avatars = yield* picturesOf(remote, tracking.upstream, listed.commits, unpushed)
-        return {
-          branch: listed.branch,
-          base: listed.base,
-          more: listed.more,
-          commits: listed.commits.map(({ authorEmail: _, ...commit }): CommitSummary => {
+      /** Git's commits with what the forge adds: pushed or not, their page, their author's picture. */
+      const detail = (
+        cwd: string,
+        ref: string,
+        remote: Remote | null,
+        upstream: string | null,
+        listed: ReadonlyArray<LoggedCommit>,
+      ) =>
+        Effect.gen(function* () {
+          const all = listed.map((commit) => commit.hash)
+          const unpushed = new Set(
+            upstream === null
+              ? all
+              : yield* git
+                  .commitsNotIn(cwd, ref, upstream, COMMIT_LIST_LIMIT + 1)
+                  .pipe(Effect.catch(() => Effect.succeed(all))),
+          )
+          const avatars = yield* picturesOf(remote, upstream, listed, unpushed)
+          return listed.map(({ authorEmail: _, ...commit }): CommitSummary => {
             const pushed = !unpushed.has(commit.hash)
             return {
               ...commit,
@@ -834,13 +841,66 @@ export class PullRequestService extends Context.Service<
               url: pushed ? commitPage(remote, commit.hash) : null,
               avatarUrl: avatars.get(commit.hash) ?? null,
             }
-          }),
+          })
+        })
+
+      const commitsOf = Effect.fn("PullRequestService.commits")(function* (sessionId: string) {
+        const listed = yield* sessions.commits(sessionId)
+        const { session, remote, tracking } = yield* load(sessionId)
+        const ref = listed.branch === "HEAD" ? "HEAD" : `refs/heads/${listed.branch}`
+        return {
+          branch: listed.branch,
+          base: listed.base,
+          more: listed.more,
+          commits: yield* detail(
+            session.worktreePath,
+            ref,
+            remote,
+            tracking.upstream,
+            listed.commits,
+          ),
         } satisfies BranchCommits
+      })
+
+      const compare = Effect.fn("PullRequestService.compare")(function* (
+        sessionId: string,
+        base: string,
+      ) {
+        const { session, remote, tracking, branch: own } = yield* load(sessionId)
+        const branch = yield* requireBranch(own)
+        const cwd = session.worktreePath
+        let against: string | undefined
+        for (const candidate of [`origin/${base}`, base]) {
+          if (yield* git.hasCommit(cwd, candidate)) {
+            against = candidate
+            break
+          }
+        }
+        if (against === undefined) {
+          return yield* new PullRequestUnavailable({
+            reason: `There is no branch named ${base}, here or on origin. Pick another base branch.`,
+          })
+        }
+        const ref = `refs/heads/${branch}`
+        const [listed, files] = yield* Effect.all(
+          [
+            git.log(cwd, ref, { exclude: against, limit: COMMIT_LIST_LIMIT }),
+            git.compareFiles(cwd, against, ref),
+          ],
+          { concurrency: 2 },
+        )
+        return {
+          base: against,
+          commits: yield* detail(cwd, ref, remote, tracking.upstream, listed.commits),
+          more: listed.more,
+          files,
+        } satisfies BranchComparison
       })
 
       return PullRequestService.of({
         publication,
         commits: commitsOf,
+        compare,
         push,
         create,
         merge,

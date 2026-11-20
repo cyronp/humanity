@@ -1,4 +1,10 @@
-import type { Branch, RepoStatus, StatusEntry, StatusEntryKind } from "@humanity/contracts"
+import type {
+  Branch,
+  ComparedFile,
+  RepoStatus,
+  StatusEntry,
+  StatusEntryKind,
+} from "@humanity/contracts"
 
 export const FIELD = "\u001f"
 
@@ -76,6 +82,54 @@ export const parseLog = (output: string): Array<LoggedCommit> =>
         deletions,
       }
     })
+
+const STAT = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/
+
+/**
+ * The files between two refs, from `git diff -z --name-status -M` and `git diff -z --numstat -M`
+ * over the same range: what happened to each file, and how many lines it gained and lost.
+ */
+export const parseChangedFiles = (nameStatus: string, numstat: string): Array<ComparedFile> => {
+  const stats = new Map<string, { insertions: number; deletions: number; binary: boolean }>()
+  const counts = numstat.split("\0")
+  for (let index = 0; index < counts.length; index++) {
+    const match = STAT.exec(counts[index] ?? "")
+    if (match === null) continue
+    const [, added = "-", removed = "-", inline = ""] = match
+    let path = inline
+    if (path === "") {
+      path = counts[index + 2] ?? ""
+      index += 2
+    }
+    stats.set(path, {
+      insertions: added === "-" ? 0 : Number(added),
+      deletions: removed === "-" ? 0 : Number(removed),
+      binary: added === "-" && removed === "-",
+    })
+  }
+
+  const files: Array<ComparedFile> = []
+  const entries = nameStatus.split("\0")
+  for (let index = 0; index < entries.length; index++) {
+    const status = entries[index] ?? ""
+    if (status === "") continue
+    const moved = status.startsWith("R") || status.startsWith("C")
+    const previousPath = moved ? (entries[index + 1] ?? "") : null
+    const path = entries[index + (moved ? 2 : 1)] ?? ""
+    index += moved ? 2 : 1
+    const kind: ComparedFile["kind"] =
+      status.startsWith("A") || status.startsWith("C")
+        ? "create"
+        : status.startsWith("D")
+          ? "delete"
+          : status.startsWith("R")
+            ? "rename"
+            : "modify"
+    const stat = stats.get(path) ?? { insertions: 0, deletions: 0, binary: false }
+    files.push({ path, previousPath: kind === "rename" ? previousPath : null, kind, ...stat })
+  }
+  return files
+}
 
 const trackCount = (track: string, word: "ahead" | "behind") =>
   Number(new RegExp(`${word} (\\d+)`).exec(track)?.[1] ?? 0)

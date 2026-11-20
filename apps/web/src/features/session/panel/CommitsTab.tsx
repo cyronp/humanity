@@ -62,7 +62,7 @@ function CommitList({
   )
 }
 
-function CommitRow({
+export function CommitRow({
   commit,
   forge,
   now,
