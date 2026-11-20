@@ -41,7 +41,13 @@ import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
-export function NewChat({ projectId }: { readonly projectId: ProjectId | undefined }) {
+export function NewChat({
+  projectId,
+  initialPrompt,
+}: {
+  readonly projectId: ProjectId | undefined
+  readonly initialPrompt?: string | undefined
+}) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
   const claude = useAtomValue(claudeStatusAtom)
@@ -101,7 +107,7 @@ export function NewChat({ projectId }: { readonly projectId: ProjectId | undefin
               project === undefined ? (
                 <NoProjects />
               ) : (
-                <NewChatForm project={project} defaults={defaults} />
+                <NewChatForm project={project} defaults={defaults} initialPrompt={initialPrompt} />
               ),
           })}
         </div>
@@ -128,9 +134,11 @@ function NoProjects() {
 function NewChatForm({
   project,
   defaults,
+  initialPrompt,
 }: {
   readonly project: Project
   readonly defaults: ThreadDefaults
+  readonly initialPrompt: string | undefined
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
@@ -141,7 +149,7 @@ function NewChatForm({
   const effort = chosenEffort === undefined ? defaults.effort : chosenEffort
   const autonomy = chosenAutonomy ?? defaults.autonomy
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialPrompt ?? "")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
