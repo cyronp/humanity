@@ -71,6 +71,7 @@ describe("moving a thread to another provider", () => {
             _tag: "provider_switch",
             from: "claude-code",
             to: "kiro",
+            fromModel: null,
             model: "claude-sonnet-5.5",
             resumed: false,
             included: 2,

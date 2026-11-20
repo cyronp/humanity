@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
   formatTokens,
+  handoffTokens,
+  handoffWeight,
+  modelLabel,
   providerSwitchDetail,
+  providerSwitchStatus,
   providerSwitchSummary,
 } from "../src/features/chat/providerSwitch.ts"
 
@@ -9,7 +13,8 @@ const moved = {
   _tag: "provider_switch",
   from: "claude-code",
   to: "codex",
-  model: "gpt-test",
+  fromModel: "opus",
+  model: "gpt-6-luna",
   resumed: false,
   included: 12,
   omitted: 0,
@@ -25,24 +30,38 @@ describe("formatTokens", () => {
   })
 })
 
-describe("providerSwitchSummary", () => {
-  it("says the context will be transferred, and what it costs, until a message carries it", () => {
+describe("handoffWeight", () => {
+  it("is light under 4k tokens, medium under 10k, heavy from there", () => {
+    expect(handoffWeight(3_999)).toBe("light")
+    expect(handoffWeight(4_000)).toBe("medium")
+    expect(handoffWeight(9_999)).toBe("medium")
+    expect(handoffWeight(10_000)).toBe("heavy")
+  })
+})
+
+describe("the divider", () => {
+  it("names each side by its model, or by its provider on the default", () => {
+    expect(modelLabel("codex", "gpt-6-luna")).toBe("gpt-6-luna")
+    expect(modelLabel("claude-code", null)).toBe("Claude Code")
+    expect(modelLabel("claude-code", undefined)).toBe("Claude Code")
+  })
+
+  it("says the context will be transferred, then that it was", () => {
+    expect(providerSwitchStatus(moved)).toBe("Context will be transferred")
+    expect(providerSwitchStatus(moved, true)).toBe("Context transferred")
     expect(providerSwitchSummary(moved)).toBe(
-      "Continued on Codex · gpt-test · Context will be transferred with your next message (~12k tokens)",
+      "opus → gpt-6-luna · Context will be transferred · ~12k tokens",
     )
-    expect(providerSwitchSummary(moved, true)).toBe(
-      "Continued on Codex · gpt-test · Context transferred (~12k tokens)",
-    )
-    expect(providerSwitchSummary({ ...moved, model: null, included: 0, tokens: 0 })).toBe(
-      "Continued on Codex",
+    expect(providerSwitchSummary({ ...moved, fromModel: null, included: 0, tokens: 0 })).toBe(
+      "Claude Code → gpt-6-luna",
     )
   })
 
-  it("leaves out the cost of a switch recorded without one", () => {
+  it("has no cost when nothing was sent or none was recorded", () => {
     const { tokens: _tokens, ...unpriced } = moved
-    expect(providerSwitchSummary(unpriced, true)).toBe(
-      "Continued on Codex · gpt-test · Context transferred",
-    )
+    expect(handoffTokens(unpriced)).toBeUndefined()
+    expect(handoffTokens({ ...moved, included: 0 })).toBeUndefined()
+    expect(handoffTokens(moved)).toBe(12_400)
   })
 
   it("says when an agent comes back to its own conversation", () => {
@@ -50,17 +69,19 @@ describe("providerSwitchSummary", () => {
       ...moved,
       from: "codex",
       to: "claude-code",
+      fromModel: "gpt-6-luna",
       model: null,
       resumed: true,
       included: 2,
       tokens: 640,
     } as const
     expect(providerSwitchSummary(back)).toBe(
-      "Back on Claude Code · Resumes its own conversation · What it missed will be transferred with your next message (~640 tokens)",
+      "gpt-6-luna → Claude Code · Resumes its own conversation · What it missed will be transferred · ~640 tokens",
     )
-    expect(providerSwitchSummary({ ...back, included: 0, tokens: 0 })).toBe(
-      "Back on Claude Code · Resumes its own conversation",
+    expect(providerSwitchStatus(back, true)).toBe(
+      "Resumes its own conversation · What it missed was transferred",
     )
+    expect(providerSwitchStatus({ ...back, included: 0 })).toBe("Resumes its own conversation")
   })
 })
 

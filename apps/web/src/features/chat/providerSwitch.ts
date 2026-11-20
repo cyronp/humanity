@@ -1,4 +1,4 @@
-import { type MessageContent, PROVIDER_NAMES } from "@humanity/contracts"
+import { type AgentProvider, type MessageContent, PROVIDER_NAMES } from "@humanity/contracts"
 
 type ProviderSwitch = Extract<MessageContent, { _tag: "provider_switch" }>
 
@@ -9,29 +9,46 @@ export const formatTokens = (tokens: number): string => {
   return `${Math.round(tokens / 1_000)}k`
 }
 
-const cost = (content: ProviderSwitch) =>
-  content.tokens === undefined || content.tokens === 0
-    ? ""
-    : ` (~${formatTokens(content.tokens)} tokens)`
+/** How heavy a handoff is: under 4k tokens light, under 10k medium, else heavy. */
+export type HandoffWeight = "light" | "medium" | "heavy"
+
+export const handoffWeight = (tokens: number): HandoffWeight =>
+  tokens < 4_000 ? "light" : tokens < 10_000 ? "medium" : "heavy"
+
+/** A model as the divider names it: its own name, else its provider's for the default. */
+export const modelLabel = (provider: AgentProvider, model: string | null | undefined): string =>
+  model ?? PROVIDER_NAMES[provider]
+
+/** The handoff's cost, when one was recorded and there was anything to send. */
+export const handoffTokens = (content: ProviderSwitch): number | undefined =>
+  content.included === 0 || content.tokens === undefined || content.tokens === 0
+    ? undefined
+    : content.tokens
 
 /**
- * The divider where a thread moved to another provider. `delivered` once the human's next message
- * has carried the context to the new agent.
+ * What happened to the conversation at the switch. `delivered` once the human's next message has
+ * carried the context to the new agent.
  */
-export const providerSwitchSummary = (content: ProviderSwitch, delivered = false): string => {
-  const to = PROVIDER_NAMES[content.to]
-  const model = content.model === null ? "" : ` · ${content.model}`
+export const providerSwitchStatus = (content: ProviderSwitch, delivered = false): string => {
   if (content.resumed) {
-    const back = `Back on ${to}${model} · Resumes its own conversation`
+    const back = "Resumes its own conversation"
     if (content.included === 0) return back
-    return delivered
-      ? `${back} · What it missed was transferred${cost(content)}`
-      : `${back} · What it missed will be transferred with your next message${cost(content)}`
+    return `${back} · What it missed ${delivered ? "was" : "will be"} transferred`
   }
-  if (content.included === 0) return `Continued on ${to}${model}`
-  return delivered
-    ? `Continued on ${to}${model} · Context transferred${cost(content)}`
-    : `Continued on ${to}${model} · Context will be transferred with your next message${cost(content)}`
+  if (content.included === 0) return ""
+  return delivered ? "Context transferred" : "Context will be transferred"
+}
+
+/** The whole divider as one line of text, for its tooltip and for screen readers. */
+export const providerSwitchSummary = (content: ProviderSwitch, delivered = false): string => {
+  const tokens = handoffTokens(content)
+  return [
+    `${modelLabel(content.from, content.fromModel)} → ${modelLabel(content.to, content.model)}`,
+    providerSwitchStatus(content, delivered),
+    tokens === undefined ? "" : `~${formatTokens(tokens)} tokens`,
+  ]
+    .filter((part) => part !== "")
+    .join(" · ")
 }
 
 /** What the divider's tooltip adds: how much of the conversation went, and how cost is counted. */
@@ -44,7 +61,7 @@ export const providerSwitchDetail = (content: ProviderSwitch): string => {
       ? ""
       : `, ${entries(content.omitted, true)} the agent can read when it needs ${content.omitted === 1 ? "it" : "them"}`
   const estimate =
-    content.tokens === undefined || content.tokens === 0
+    handoffTokens(content) === undefined
       ? ""
       : ` Tokens are estimated at about 4 characters each; the provider's own count may differ.`
   return `${entries(content.included)} of the conversation in full${left}.${estimate}`

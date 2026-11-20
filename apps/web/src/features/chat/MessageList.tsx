@@ -6,7 +6,8 @@ import type {
   SessionId,
   ToolCall,
 } from "@humanity/contracts"
-import { Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import { ArrowRight, Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import { cn } from "cn"
 import { memo, type ReactNode, useMemo } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -34,7 +35,16 @@ import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
-import { providerSwitchDetail, providerSwitchSummary } from "./providerSwitch.ts"
+import {
+  formatTokens,
+  type HandoffWeight,
+  handoffTokens,
+  handoffWeight,
+  modelLabel,
+  providerSwitchDetail,
+  providerSwitchStatus,
+  providerSwitchSummary,
+} from "./providerSwitch.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
@@ -358,6 +368,12 @@ function InitLine({ content }: { readonly content: Content<"system_init"> }) {
   )
 }
 
+const WEIGHT_CLASS: Record<HandoffWeight, string> = {
+  light: "bg-success/10 text-success",
+  medium: "bg-warning/10 text-warning",
+  heavy: "bg-destructive/10 text-destructive",
+}
+
 function ProviderSwitchLine({
   content,
   delivered,
@@ -366,6 +382,8 @@ function ProviderSwitchLine({
   readonly delivered: boolean
 }) {
   const summary = providerSwitchSummary(content, delivered)
+  const status = providerSwitchStatus(content, delivered)
+  const tokens = handoffTokens(content)
   return (
     <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
       <span className="h-px flex-1 bg-border" />
@@ -373,9 +391,26 @@ function ProviderSwitchLine({
         className="flex min-w-0 items-center gap-1.5"
         title={`${summary}
 ${providerSwitchDetail(content)}`}
+        aria-label={summary}
       >
+        <ProviderIcon provider={content.from} className="size-3.5 shrink-0" />
+        <span className="truncate">{modelLabel(content.from, content.fromModel)}</span>
+        <ArrowRight className="size-3 shrink-0" aria-hidden />
         <ProviderIcon provider={content.to} className="size-3.5 shrink-0" />
-        <span className="truncate">{summary}</span>
+        <span className="truncate font-medium text-foreground">
+          {modelLabel(content.to, content.model)}
+        </span>
+        {status !== "" && <span className="truncate">· {status}</span>}
+        {tokens !== undefined && (
+          <span
+            className={cn(
+              "shrink-0 rounded px-1.5 py-0.5 font-medium tabular-nums",
+              WEIGHT_CLASS[handoffWeight(tokens)],
+            )}
+          >
+            ~{formatTokens(tokens)} tokens
+          </span>
+        )}
       </span>
       <span className="h-px flex-1 bg-border" />
     </div>

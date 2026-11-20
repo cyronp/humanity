@@ -141,10 +141,12 @@ export const MessageContent = Schema.Union([
    * The thread moved to another provider (or account). `resumed` when the target picked up its own
    * earlier conversation; otherwise it got the conversation as context, `included` of its entries
    * in full and `omitted` left for `thread_history`. `tokens` estimates what the handoff costs.
+   * `fromModel` and `model` are the models before and after (`null`: the provider's default).
    */
   Schema.TaggedStruct("provider_switch", {
     from: AgentProvider,
     to: AgentProvider,
+    fromModel: Schema.optional(Schema.NullOr(Schema.String)),
     model: Schema.NullOr(Schema.String),
     resumed: Schema.Boolean,
     included: Schema.Number,

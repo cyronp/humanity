@@ -1350,6 +1350,7 @@ export class SessionService extends Context.Service<
           _tag: "provider_switch",
           from: session.provider,
           to: provider,
+          fromModel: session.model,
           model,
           resumed: Option.isSome(parked),
           included: handoff?.included ?? 0,
