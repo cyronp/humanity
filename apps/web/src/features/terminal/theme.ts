@@ -6,7 +6,10 @@ export type ResolvedTheme = "light" | "dark"
 
 const subscribe = (listener: () => void) => {
   const observer = new MutationObserver(listener)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "data-color-theme"],
+  })
   return () => observer.disconnect()
 }
 
@@ -14,6 +17,10 @@ const current = (): ResolvedTheme =>
   document.documentElement.classList.contains("dark") ? "dark" : "light"
 
 export const useResolvedTheme = (): ResolvedTheme => useSyncExternalStore(subscribe, current)
+
+const appliedColorTheme = (): string => document.documentElement.dataset.colorTheme ?? ""
+
+export const useAppliedColorTheme = (): string => useSyncExternalStore(subscribe, appliedColorTheme)
 
 type Palette = Pick<
   ITheme,

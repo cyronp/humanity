@@ -15,6 +15,7 @@
   --color-git-draft: var(--git-draft);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-mark: var(--brand-mark);
   --color-file-ref: var(--file-ref);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -98,6 +99,7 @@
   --git-draft: #0284c7;
   --brand: #2563eb;
   --brand-foreground: #ffffff;
+  --brand-mark: #3b82f6;
   --file-ref: #2563eb;
   --success: #059669;
   --warning: #d97706;
@@ -147,6 +149,7 @@
   --git-draft: #38bdf8;
   --brand: #60a5fa;
   --brand-foreground: oklch(0.145 0 0);
+  --brand-mark: #3b82f6;
   --file-ref: #60a5fa;
   --success: #34d399;
   --warning: #fbbf24;

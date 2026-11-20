@@ -33,7 +33,13 @@ import {
   writeTerminalAtom,
 } from "./atoms.ts"
 import { isMac, type TerminalCommand, terminalCommand } from "./keys.ts"
-import { TERMINAL_FONT_FAMILY, terminalColors, terminalTheme, useResolvedTheme } from "./theme.ts"
+import {
+  TERMINAL_FONT_FAMILY,
+  terminalColors,
+  terminalTheme,
+  useAppliedColorTheme,
+  useResolvedTheme,
+} from "./theme.ts"
 
 const ACK_DELAY_MS = 40
 
@@ -95,6 +101,7 @@ export function TerminalView({
   const [mounted, setMounted] = useState<Mounted | null>(null)
   const [key, setKey] = useState<string | null>(null)
   const theme = useResolvedTheme()
+  const colorTheme = useAppliedColorTheme()
   const onCommandRef = useRef(onCommand)
   useLayoutEffect(() => {
     onCommandRef.current = onCommand
@@ -218,7 +225,7 @@ export function TerminalView({
     const colors = terminalTheme(container.current, theme)
     setOptions(mounted.terminal, { theme: colors })
     if (active) void setColors({ payload: { colors: terminalColors(colors) } })
-  }, [mounted, theme, active, setColors])
+  }, [mounted, theme, colorTheme, active, setColors])
 
   useEffect(() => {
     if (mounted === null || !active) return
