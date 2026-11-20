@@ -1,9 +1,9 @@
 import { useAtomValue } from "@effect/atom-react"
 import { AsyncResult } from "effect/reactivity"
-import { antigravityStatusAtom } from "@/features/antigravity/atoms"
-import { claudeStatusAtom } from "@/features/claude/atoms"
-import { codexStatusAtom } from "@/features/codex/atoms"
-import { kiroStatusAtom } from "@/features/kiro/atoms"
+import { antigravityAccountsAtom, antigravityStatusAtom } from "@/features/antigravity/atoms"
+import { claudeAccountsAtom, claudeStatusAtom } from "@/features/claude/atoms"
+import { codexAccountsAtom, codexStatusAtom } from "@/features/codex/atoms"
+import { kiroAccountsAtom, kiroStatusAtom } from "@/features/kiro/atoms"
 import { type PickerModel, pickerModels, type ReportedModel } from "./models.ts"
 import type { ProviderId } from "./ProviderIcon.tsx"
 
@@ -47,5 +47,53 @@ export const useProviderModels = (): ProviderModels => {
       kiro: AsyncResult.isSuccess(kiro),
       antigravity: AsyncResult.isSuccess(antigravity),
     },
+  }
+}
+
+/** An account of a provider, with the models it offers, for the thread's model picker. */
+export interface PickerAccount {
+  readonly id: string
+  readonly name: string
+  readonly active: boolean
+  readonly connected: boolean
+  readonly models: ReadonlyArray<PickerModel>
+}
+
+interface ListedAccount {
+  readonly id: string
+  readonly name: string
+  readonly active: boolean
+  readonly status: {
+    readonly connection: { readonly _tag: string }
+    readonly models: ReadonlyArray<ReportedModel>
+  }
+}
+
+/** Every provider's accounts: a thread can move to any signed-in one. */
+export const useProviderAccounts = (): Readonly<
+  Record<ProviderId, ReadonlyArray<PickerAccount>>
+> => {
+  const claude = useAtomValue(claudeAccountsAtom)
+  const codex = useAtomValue(codexAccountsAtom)
+  const kiro = useAtomValue(kiroAccountsAtom)
+  const antigravity = useAtomValue(antigravityAccountsAtom)
+  const accounts = (
+    provider: ProviderId,
+    result: AsyncResult.AsyncResult<ReadonlyArray<ListedAccount>, unknown>,
+  ): ReadonlyArray<PickerAccount> =>
+    AsyncResult.isSuccess(result)
+      ? result.value.map((account) => ({
+          id: account.id,
+          name: account.name,
+          active: account.active,
+          connected: account.status.connection._tag === "Connected",
+          models: pickerModels(provider, account.status.models),
+        }))
+      : []
+  return {
+    "claude-code": accounts("claude-code", claude),
+    codex: accounts("codex", codex),
+    kiro: accounts("kiro", kiro),
+    antigravity: accounts("antigravity", antigravity),
   }
 }

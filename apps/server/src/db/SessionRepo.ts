@@ -33,6 +33,7 @@ const SessionRow = Schema.Struct({
   in_worktree: Schema.Number,
   model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(ReasoningEffort),
+  account_id: Schema.optional(Schema.NullOr(Schema.String)),
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
@@ -51,6 +52,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   inWorktree: row.in_worktree !== 0,
   model: row.model,
   effort: row.effort,
+  accountId: row.account_id ?? null,
   autonomy: row.autonomy,
   status: row.status,
   origin: row.origin,
@@ -228,17 +230,13 @@ export class SessionRepo extends Context.Service<
       provider: AgentProvider,
       accountId: string | null,
     ) => Effect.Effect<Option.Option<ParkedProvider>>
-    readonly dropParked: (
-      sessionId: string,
-      provider: AgentProvider,
-      accountId: string | null,
-    ) => Effect.Effect<void>
     readonly getPendingHandoff: (sessionId: string) => Effect.Effect<string | null>
     readonly setPendingHandoff: (sessionId: string, text: string | null) => Effect.Effect<void>
     readonly hasProviderSwitch: (sessionId: string) => Effect.Effect<boolean>
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
+    readonly deleteMessage: (sessionId: string, messageId: string) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly transcriptPage: (
       sessionId: string,
@@ -507,12 +505,6 @@ export class SessionRepo extends Context.Service<
           Effect.orDie,
         )
 
-      const dropParked = (sessionId: string, provider: AgentProvider, accountId: string | null) =>
-        sql`DELETE FROM session_providers WHERE session_id = ${sessionId} AND provider = ${provider} AND account_key = ${accountKey(accountId)}`.pipe(
-          Effect.asVoid,
-          Effect.orDie,
-        )
-
       const findPendingHandoff = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: Schema.Struct({ pending_handoff: Schema.NullOr(Schema.String) }),
@@ -581,6 +573,12 @@ export class SessionRepo extends Context.Service<
             })}
           `
         }).pipe(Effect.orDie)
+
+      const deleteMessage = (sessionId: string, messageId: string) =>
+        sql`DELETE FROM messages WHERE session_id = ${sessionId} AND id = ${messageId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
 
       const toMessage = (row: typeof MessageRow.Type): ChatMessage => ({
         id: row.id,
@@ -771,13 +769,13 @@ export class SessionRepo extends Context.Service<
         setAccountId,
         parkProvider,
         findParked,
-        dropParked,
         getPendingHandoff,
         setPendingHandoff,
         hasProviderSwitch,
         getUsage,
         setUsage,
         insertMessage,
+        deleteMessage,
         listMessages,
         transcriptPage,
         insertToolCall,

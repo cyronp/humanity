@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   contextPercentUsed,
   formatTokens,
+  hitUsageLimit,
   planHeadline,
   planRows,
   usageLevel,
@@ -98,5 +99,24 @@ describe("formatTokens", () => {
     expect(formatTokens(84_300)).toBe("84k")
     expect(formatTokens(1_000_000)).toBe("1M")
     expect(formatTokens(1_250_000)).toBe("1.3M")
+  })
+})
+
+describe("hitUsageLimit", () => {
+  const now = new Date("2026-11-20T12:00:00.000Z")
+  const window = (utilization: number) => ({ utilization, resetsAt: "2026-11-20T15:00:00.000Z" })
+
+  it("reads a limit from the agent's error", () => {
+    expect(hitUsageLimit("Claude AI usage limit reached|1763600000", null, now)).toBe(true)
+    expect(hitUsageLimit("429 Too Many Requests", null, now)).toBe(true)
+    expect(hitUsageLimit("You exceeded your current quota", null, now)).toBe(true)
+    expect(hitUsageLimit("The agent process stopped unexpectedly.", null, now)).toBe(false)
+  })
+
+  it("or from a full window of the plan", () => {
+    const full = { fiveHour: window(100), sevenDay: window(40), models: [] }
+    expect(hitUsageLimit("Request failed", full, now)).toBe(true)
+    const room = { fiveHour: window(80), sevenDay: window(40), models: [] }
+    expect(hitUsageLimit("Request failed", room, now)).toBe(false)
   })
 })

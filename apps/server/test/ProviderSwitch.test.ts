@@ -1,11 +1,13 @@
 import { assert, describe, it } from "@effect/vitest"
 import { HUMANITY_MCP_SERVER, THREAD_HISTORY_TOOL_NAME } from "@humanity/contracts"
 import { Effect, Ref } from "effect"
+import { join } from "node:path"
 import { FakeAgentLog } from "../src/agent/AgentRunnerFake.ts"
 import { estimateTokens } from "../src/agent/handoff.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { SessionRepo } from "../src/db/SessionRepo.ts"
+import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import {
   addProject,
@@ -189,6 +191,88 @@ describe("moving a thread to another provider", () => {
       }).pipe(
         Effect.provide(
           services(home, () => [{ hang: true }], undefined, undefined, undefined, signedOutKiro),
+        ),
+      )
+    }),
+  )
+
+  it.live("moves a thread to another account of the same provider, with the conversation", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const accounts = yield* ClaudeAccountService
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const work = yield* accounts.add("Work")
+        const created = yield* sessions.create({ projectId: project.id, prompt: "Begin" })
+        yield* waitForStatus(created.id, "idle")
+        assert.isNull((yield* sessions.get(created.id)).accountId)
+
+        const same = yield* sessions.switchProvider(created.id, "claude-code", null, "default")
+        assert.strictEqual(same.sdkSessionId, "fake-sdk-session-1")
+
+        const moved = yield* sessions.switchProvider(created.id, "claude-code", null, work.id)
+        assert.strictEqual(moved.provider, "claude-code")
+        assert.strictEqual(moved.accountId, work.id)
+        assert.isNull(moved.sdkSessionId)
+        const divider = (yield* contents(created.id)).messages.at(-1)?.content
+        assert.strictEqual(divider?._tag, "provider_switch")
+        if (divider?._tag === "provider_switch") {
+          assert.strictEqual(divider.fromAccount, "Default login")
+          assert.strictEqual(divider.account, "Work")
+          assert.isFalse(divider.resumed)
+        }
+
+        yield* sessions.sendMessage(created.id, "Carry on")
+        yield* waitForStatus(created.id, "idle")
+        const run = (yield* Ref.get(log.runs))[1]
+        assert.strictEqual(run?.configDir, join(home, "accounts", work.id))
+        assert.isUndefined(run?.resume)
+        assert.include((yield* sentTexts)[1] ?? "", "#1 Human: Begin")
+
+        const unknown = yield* Effect.flip(
+          sessions.switchProvider(created.id, "claude-code", null, "gone"),
+        )
+        assert.strictEqual(unknown._tag, "ProviderSwitchUnavailable")
+      }).pipe(Effect.provide(services(home, () => [{ text: "ok" }])))
+    }),
+  )
+
+  it.live("replaces a switch that carried nothing, and undoes one taken back", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const sessionRepo = yield* SessionRepo
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({ projectId: project.id, prompt: "Begin" })
+        yield* waitForStatus(created.id, "idle")
+        const switches = Effect.map(contents(created.id), (snapshot) =>
+          snapshot.messages.flatMap((message) =>
+            message.content._tag === "provider_switch" ? [message.content] : [],
+          ),
+        )
+
+        yield* sessions.switchProvider(created.id, "kiro", null)
+        yield* sessions.switchProvider(created.id, "codex", null)
+        const replaced = yield* switches
+        assert.strictEqual(replaced.length, 1)
+        assert.strictEqual(replaced[0]?.from, "claude-code")
+        assert.strictEqual(replaced[0]?.to, "codex")
+        assert.include(
+          (yield* sessionRepo.getPendingHandoff(created.id)) ?? "",
+          "This thread ran on Claude Code",
+        )
+
+        const back = yield* sessions.switchProvider(created.id, "claude-code", null)
+        assert.strictEqual(back.provider, "claude-code")
+        assert.strictEqual(back.sdkSessionId, "fake-sdk-session-1")
+        assert.deepStrictEqual(yield* switches, [])
+        assert.isNull(yield* sessionRepo.getPendingHandoff(created.id))
+      }).pipe(
+        Effect.provide(
+          services(home, () => [{ text: "ok" }], undefined, undefined, undefined, signedInKiro),
         ),
       )
     }),

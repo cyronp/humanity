@@ -84,6 +84,11 @@ export const reduceSessionEvent = (
       return { ...view, session: event.session }
     case "UsageUpdated":
       return { ...view, usage: event.usage }
+    case "MessageRemoved":
+      return {
+        ...view,
+        messages: view.messages.filter((message) => message.id !== event.messageId),
+      }
     case "AgentMessage": {
       if (view.messages.some((message) => message.id === event.message.id)) return view
       const content = event.message.content

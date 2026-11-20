@@ -16,6 +16,8 @@ export interface PickerModel extends ReportedModel {
 export interface ModelChoice {
   readonly provider: AgentProvider
   readonly model: string | null
+  /** The account picked with it, when the picker offers accounts (a thread's picker). */
+  readonly accountId?: string | undefined
 }
 
 const DEFAULT_ROW: Record<AgentProvider, ReportedModel> = {

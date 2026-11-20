@@ -139,6 +139,24 @@ describe("reduceSessionEvent", () => {
     expect(view?.messages).toHaveLength(1)
   })
 
+  it("drops a message the daemon removed, such as a provider switch that was replaced", () => {
+    const user = message("m1", { _tag: "user", text: "hi" })
+    const moved = message("m2", {
+      _tag: "provider_switch",
+      from: "claude-code",
+      to: "kiro",
+      model: null,
+      resumed: false,
+      included: 1,
+      omitted: 0,
+    })
+    const view = fold([
+      snapshot({ messages: [user, moved] }),
+      { _tag: "MessageRemoved", messageId: "m2" },
+    ])
+    expect(view?.messages.map((each) => each.id)).toEqual(["m1"])
+  })
+
   it("updates tool calls as they start and finish", () => {
     const view = fold([
       snapshot(),

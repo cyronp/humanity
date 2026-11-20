@@ -384,12 +384,16 @@ function ProviderSwitchLine({
   readonly delivered: boolean
 }) {
   const { models } = useProviderModels()
+  const withAccount = (name: string, account: string | undefined) =>
+    account === undefined ? name : `${name} (${account})`
   const names = {
-    from:
+    from: withAccount(
       content.fromModel === undefined
         ? PROVIDER_NAMES[content.from]
         : modelDisplayName(models[content.from], content.fromModel),
-    to: modelDisplayName(models[content.to], content.model),
+      content.fromAccount,
+    ),
+    to: withAccount(modelDisplayName(models[content.to], content.model), content.account),
   }
   const summary = providerSwitchSummary(content, names, delivered)
   const status = providerSwitchStatus(content, delivered)

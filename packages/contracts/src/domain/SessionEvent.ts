@@ -27,6 +27,7 @@ export const SessionEvent = Schema.Union([
   }),
   Schema.TaggedStruct("SessionUpdated", { session: Session }),
   Schema.TaggedStruct("AgentMessage", { message: ChatMessage }),
+  Schema.TaggedStruct("MessageRemoved", { messageId: Schema.String }),
   Schema.TaggedStruct("TextDelta", { text: Schema.String }),
   Schema.TaggedStruct("ToolCallStarted", { toolCall: ToolCall }),
   Schema.TaggedStruct("ToolCallFinished", { toolCall: ToolCall }),
