@@ -149,7 +149,13 @@ const until = (
       yield* Effect.sleep("50 millis")
     }
     const last = (yield* terminals.list(owner)).find((each) => each.id === terminalId)
-    return assert.fail(`timed out waiting for ${description}: ${JSON.stringify(last)}`)
+    const screen = yield* terminals
+      .agentRead(terminalId, { view: "screen", since: undefined, maxLines: 50 })
+      .pipe(
+        Effect.map((read) => read.text),
+        Effect.orElseSucceed(() => "(no screen)"),
+      )
+    return assert.fail(`timed out waiting for ${description}: ${JSON.stringify(last)}\n${screen}`)
   })
 
 const osc = (payload: string) => `\x1b]${payload}\x07`

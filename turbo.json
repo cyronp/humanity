@@ -26,7 +26,8 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "env": ["HUMANITY_HOME"]
+      "env": ["HUMANITY_HOME"],
+      "passThroughEnv": ["PSModulePath", "PSModuleAnalysisCachePath"]
     }
   }
 }
