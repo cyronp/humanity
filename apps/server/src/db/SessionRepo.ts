@@ -237,6 +237,8 @@ export class SessionRepo extends Context.Service<
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
     readonly deleteMessage: (sessionId: string, messageId: string) => Effect.Effect<void>
+    /** Replaces what a message says; only Humanity's own messages (a switch's divider) change. */
+    readonly updateMessage: (message: ChatMessage) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly transcriptPage: (
       sessionId: string,
@@ -574,6 +576,18 @@ export class SessionRepo extends Context.Service<
           `
         }).pipe(Effect.orDie)
 
+      const updateMessage = (message: ChatMessage) =>
+        Effect.gen(function* () {
+          const normalized = yield* encodeMessage(message.content)
+          yield* sql`
+            UPDATE messages SET ${sql.update({
+              role: message.content._tag,
+              normalized_json: normalized,
+            })}
+            WHERE session_id = ${message.sessionId} AND id = ${message.id}
+          `
+        }).pipe(Effect.orDie)
+
       const deleteMessage = (sessionId: string, messageId: string) =>
         sql`DELETE FROM messages WHERE session_id = ${sessionId} AND id = ${messageId}`.pipe(
           Effect.asVoid,
@@ -776,6 +790,7 @@ export class SessionRepo extends Context.Service<
         setUsage,
         insertMessage,
         deleteMessage,
+        updateMessage,
         listMessages,
         transcriptPage,
         insertToolCall,

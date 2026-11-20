@@ -277,4 +277,34 @@ describe("moving a thread to another provider", () => {
       )
     }),
   )
+
+  it.live("names the model picked after a switch, until a message is sent", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({ projectId: project.id, prompt: "Begin" })
+        yield* waitForStatus(created.id, "idle")
+        const lastSwitch = Effect.map(contents(created.id), (snapshot) =>
+          snapshot.messages.findLast((message) => message.content._tag === "provider_switch"),
+        )
+
+        yield* sessions.switchProvider(created.id, "kiro", "claude-sonnet-5.5")
+        yield* sessions.setModel(created.id, "auto")
+        const renamed = (yield* lastSwitch)?.content
+        assert.isTrue(renamed?._tag === "provider_switch" && renamed.model === "auto")
+
+        yield* sessions.sendMessage(created.id, "Go on")
+        yield* sessions.interrupt(created.id)
+        yield* sessions.setModel(created.id, "claude-sonnet-5.5")
+        const sent = (yield* lastSwitch)?.content
+        assert.isTrue(sent?._tag === "provider_switch" && sent.model === "auto")
+      }).pipe(
+        Effect.provide(
+          services(home, () => [{ text: "ok" }], undefined, undefined, undefined, signedInKiro),
+        ),
+      )
+    }),
+  )
 })

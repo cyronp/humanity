@@ -157,6 +157,24 @@ describe("reduceSessionEvent", () => {
     expect(view?.messages.map((each) => each.id)).toEqual(["m1"])
   })
 
+  it("shows a message the daemon changed in place, such as a switch's new model", () => {
+    const content = {
+      _tag: "provider_switch",
+      from: "claude-code",
+      to: "codex",
+      model: "gpt-6-luna",
+      resumed: false,
+      included: 1,
+      omitted: 0,
+    } as const
+    const view = fold([
+      snapshot({ messages: [message("m1", content)] }),
+      { _tag: "MessageUpdated", message: message("m1", { ...content, model: "gpt-5.6-terra" }) },
+    ])
+    const [only] = view?.messages ?? []
+    expect(only?.content._tag === "provider_switch" && only.content.model).toBe("gpt-5.6-terra")
+  })
+
   it("updates tool calls as they start and finish", () => {
     const view = fold([
       snapshot(),

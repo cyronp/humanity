@@ -184,6 +184,19 @@ export const matchModel = (
   )?.value
 }
 
+/** The thread's last provider switch, while no message of the human has followed it. */
+export const unsentSwitch = (
+  messages: ReadonlyArray<ChatMessage>,
+):
+  | (ChatMessage & { readonly content: Extract<MessageContent, { _tag: "provider_switch" }> })
+  | undefined => {
+  const at = messages.findLastIndex((message) => message.content._tag === "provider_switch")
+  const found = messages[at]
+  if (found?.content._tag !== "provider_switch") return undefined
+  if (messages.slice(at + 1).some((message) => message.content._tag === "user")) return undefined
+  return { ...found, content: found.content }
+}
+
 export const COMMIT_LIST_LIMIT = 50
 
 /** A thread's branch's commits as git lists them, before the forge adds what it knows. */
@@ -1183,6 +1196,13 @@ export class SessionService extends Context.Service<
         const model = requested?.trim() || null
         if (session.model === model) return session
         yield* repo.update(sessionId, { model, updatedAt: session.updatedAt })
+        // The divider of a switch nothing was sent after yet names the model the thread goes on.
+        const unsent = unsentSwitch(yield* repo.listMessages(sessionId))
+        if (unsent !== undefined && unsent.content.model !== model) {
+          const message: ChatMessage = { ...unsent, content: { ...unsent.content, model } }
+          yield* repo.updateMessage(message)
+          yield* events.publish(sessionId, { _tag: "MessageUpdated", message })
+        }
         const state = active.get(sessionId)
         if (state !== undefined) {
           yield* state.run.setModel(model ?? undefined).pipe(
@@ -1329,15 +1349,7 @@ export class SessionService extends Context.Service<
 
         // A switch that carried nothing yet (no message of the human since) is replaced, not
         // stacked: the thread goes on from where it was before that switch.
-        const lastSwitchAt = messages.findLastIndex(
-          (message) => message.content._tag === "provider_switch",
-        )
-        const unsent = messages[lastSwitchAt]
-        const replaced =
-          unsent?.content._tag === "provider_switch" &&
-          !messages.slice(lastSwitchAt + 1).some((message) => message.content._tag === "user")
-            ? { id: unsent.id, content: unsent.content }
-            : undefined
+        const replaced = unsentSwitch(messages)
         const origin =
           replaced === undefined
             ? { provider: session.provider, model: session.model, account: fromAccountName }

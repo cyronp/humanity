@@ -84,6 +84,13 @@ export const reduceSessionEvent = (
       return { ...view, session: event.session }
     case "UsageUpdated":
       return { ...view, usage: event.usage }
+    case "MessageUpdated":
+      return {
+        ...view,
+        messages: view.messages.map((message) =>
+          message.id === event.message.id ? event.message : message,
+        ),
+      }
     case "MessageRemoved":
       return {
         ...view,
