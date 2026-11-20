@@ -1,4 +1,4 @@
-import { type AgentProvider, type MessageContent, PROVIDER_NAMES } from "@humanity/contracts"
+import type { MessageContent } from "@humanity/contracts"
 
 type ProviderSwitch = Extract<MessageContent, { _tag: "provider_switch" }>
 
@@ -15,9 +15,11 @@ export type HandoffWeight = "light" | "medium" | "heavy"
 export const handoffWeight = (tokens: number): HandoffWeight =>
   tokens < 4_000 ? "light" : tokens < 10_000 ? "medium" : "heavy"
 
-/** A model as the divider names it: its own name, else its provider's for the default. */
-export const modelLabel = (provider: AgentProvider, model: string | null | undefined): string =>
-  model ?? PROVIDER_NAMES[provider]
+/** The names of the models before and after, as the model picker shows them. */
+export interface SwitchNames {
+  readonly from: string
+  readonly to: string
+}
 
 /** The handoff's cost, when one was recorded and there was anything to send. */
 export const handoffTokens = (content: ProviderSwitch): number | undefined =>
@@ -40,10 +42,14 @@ export const providerSwitchStatus = (content: ProviderSwitch, delivered = false)
 }
 
 /** The whole divider as one line of text, for its tooltip and for screen readers. */
-export const providerSwitchSummary = (content: ProviderSwitch, delivered = false): string => {
+export const providerSwitchSummary = (
+  content: ProviderSwitch,
+  names: SwitchNames,
+  delivered = false,
+): string => {
   const tokens = handoffTokens(content)
   return [
-    `${modelLabel(content.from, content.fromModel)} → ${modelLabel(content.to, content.model)}`,
+    `${names.from} → ${names.to}`,
     providerSwitchStatus(content, delivered),
     tokens === undefined ? "" : `~${formatTokens(tokens)} tokens`,
   ]

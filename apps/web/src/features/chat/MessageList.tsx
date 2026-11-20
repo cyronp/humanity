@@ -1,10 +1,11 @@
-import type {
-  Approval,
-  Attachment,
-  ChatMessage,
-  MessageContent,
-  SessionId,
-  ToolCall,
+import {
+  type Approval,
+  type Attachment,
+  type ChatMessage,
+  type MessageContent,
+  PROVIDER_NAMES,
+  type SessionId,
+  type ToolCall,
 } from "@humanity/contracts"
 import { ArrowRight, Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
 import { cn } from "cn"
@@ -30,7 +31,9 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
+import { useProviderModels } from "@/features/providers/useProviderModels"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
@@ -40,7 +43,6 @@ import {
   type HandoffWeight,
   handoffTokens,
   handoffWeight,
-  modelLabel,
   providerSwitchDetail,
   providerSwitchStatus,
   providerSwitchSummary,
@@ -381,38 +383,47 @@ function ProviderSwitchLine({
   readonly content: Content<"provider_switch">
   readonly delivered: boolean
 }) {
-  const summary = providerSwitchSummary(content, delivered)
+  const { models } = useProviderModels()
+  const names = {
+    from:
+      content.fromModel === undefined
+        ? PROVIDER_NAMES[content.from]
+        : modelDisplayName(models[content.from], content.fromModel),
+    to: modelDisplayName(models[content.to], content.model),
+  }
+  const summary = providerSwitchSummary(content, names, delivered)
   const status = providerSwitchStatus(content, delivered)
   const tokens = handoffTokens(content)
+  const icon = "inline-block size-3.5 align-[-0.2em]"
   return (
     <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
-      <span className="h-px flex-1 bg-border" />
+      <span className="h-px min-w-4 flex-1 bg-border" />
       <span
-        className="flex min-w-0 items-center gap-1.5"
+        className="min-w-0 truncate whitespace-nowrap"
         title={`${summary}
 ${providerSwitchDetail(content)}`}
         aria-label={summary}
       >
-        <ProviderIcon provider={content.from} className="size-3.5 shrink-0" />
-        <span className="truncate">{modelLabel(content.from, content.fromModel)}</span>
-        <ArrowRight className="size-3 shrink-0" aria-hidden />
-        <ProviderIcon provider={content.to} className="size-3.5 shrink-0" />
-        <span className="truncate font-medium text-foreground">
-          {modelLabel(content.to, content.model)}
-        </span>
-        {status !== "" && <span className="truncate">· {status}</span>}
+        <ProviderIcon provider={content.from} className={icon} /> {names.from}{" "}
+        <ArrowRight className="inline-block size-3 align-[-0.15em]" aria-hidden />{" "}
+        <ProviderIcon provider={content.to} className={icon} />{" "}
+        <span className="font-medium text-foreground">{names.to}</span>
+        {status !== "" && ` · ${status}`}
         {tokens !== undefined && (
-          <span
-            className={cn(
-              "shrink-0 rounded px-1.5 py-0.5 font-medium tabular-nums",
-              WEIGHT_CLASS[handoffWeight(tokens)],
-            )}
-          >
-            ~{formatTokens(tokens)} tokens
-          </span>
+          <>
+            {" · "}
+            <span
+              className={cn(
+                "inline-block rounded px-1.5 py-0.5 font-medium tabular-nums",
+                WEIGHT_CLASS[handoffWeight(tokens)],
+              )}
+            >
+              ~{formatTokens(tokens)} tokens
+            </span>
+          </>
         )}
       </span>
-      <span className="h-px flex-1 bg-border" />
+      <span className="h-px min-w-4 flex-1 bg-border" />
     </div>
   )
 }

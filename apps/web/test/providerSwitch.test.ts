@@ -3,11 +3,11 @@ import {
   formatTokens,
   handoffTokens,
   handoffWeight,
-  modelLabel,
   providerSwitchDetail,
   providerSwitchStatus,
   providerSwitchSummary,
 } from "../src/features/chat/providerSwitch.ts"
+import { modelDisplayName, pickerModels } from "../src/features/providers/models.ts"
 
 const moved = {
   _tag: "provider_switch",
@@ -40,20 +40,15 @@ describe("handoffWeight", () => {
 })
 
 describe("the divider", () => {
-  it("names each side by its model, or by its provider on the default", () => {
-    expect(modelLabel("codex", "gpt-6-luna")).toBe("gpt-6-luna")
-    expect(modelLabel("claude-code", null)).toBe("Claude Code")
-    expect(modelLabel("claude-code", undefined)).toBe("Claude Code")
-  })
-
   it("says the context will be transferred, then that it was", () => {
     expect(providerSwitchStatus(moved)).toBe("Context will be transferred")
     expect(providerSwitchStatus(moved, true)).toBe("Context transferred")
-    expect(providerSwitchSummary(moved)).toBe(
-      "opus → gpt-6-luna · Context will be transferred · ~12k tokens",
+    const names = { from: "Opus 5.5", to: "GPT-6 Luna" }
+    expect(providerSwitchSummary(moved, names)).toBe(
+      "Opus 5.5 → GPT-6 Luna · Context will be transferred · ~12k tokens",
     )
-    expect(providerSwitchSummary({ ...moved, fromModel: null, included: 0, tokens: 0 })).toBe(
-      "Claude Code → gpt-6-luna",
+    expect(providerSwitchSummary({ ...moved, included: 0, tokens: 0 }, names)).toBe(
+      "Opus 5.5 → GPT-6 Luna",
     )
   })
 
@@ -75,8 +70,8 @@ describe("the divider", () => {
       included: 2,
       tokens: 640,
     } as const
-    expect(providerSwitchSummary(back)).toBe(
-      "gpt-6-luna → Claude Code · Resumes its own conversation · What it missed will be transferred · ~640 tokens",
+    expect(providerSwitchSummary(back, { from: "GPT-6 Luna", to: "Default" })).toBe(
+      "GPT-6 Luna → Default · Resumes its own conversation · What it missed will be transferred · ~640 tokens",
     )
     expect(providerSwitchStatus(back, true)).toBe(
       "Resumes its own conversation · What it missed was transferred",
@@ -91,5 +86,29 @@ describe("providerSwitchDetail", () => {
       "12 entries of the conversation in full, 3 older entries the agent can read when it needs them. Tokens are estimated at about 4 characters each; the provider's own count may differ.",
     )
     expect(providerSwitchDetail({ ...moved, included: 0 })).toBe("Nothing to transfer.")
+  })
+})
+
+describe("modelDisplayName", () => {
+  const claude = pickerModels("claude-code", [
+    { value: "opus", displayName: "Opus 5.5 (recommended)", description: "" },
+  ])
+  const codex = pickerModels("codex", [
+    { value: "gpt-6-luna", displayName: "GPT-6 Luna", description: "" },
+  ])
+
+  it("names a model as the picker does", () => {
+    expect(modelDisplayName(claude, "opus")).toBe("Opus 5.5")
+    expect(modelDisplayName(codex, "gpt-6-luna")).toBe("GPT-6 Luna")
+  })
+
+  it("names the default by the picker's default row", () => {
+    expect(modelDisplayName(claude, null)).toBe("Default")
+    expect(modelDisplayName(codex, undefined)).toBe("Default")
+  })
+
+  it("falls back to the model's id when the provider no longer lists it", () => {
+    expect(modelDisplayName(codex, "gpt-5-old")).toBe("gpt-5-old")
+    expect(modelDisplayName([], null)).toBe("Default")
   })
 })

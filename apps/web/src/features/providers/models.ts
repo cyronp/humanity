@@ -70,3 +70,17 @@ export const modelKey = (model: Pick<PickerModel, "provider" | "value">): string
 
 export const shortModelName = (model: ReportedModel): string =>
   model.displayName.replace(/\s*\(recommended\)$/i, "")
+
+/**
+ * A model as the picker names it: its reported name without "(recommended)", the default row's
+ * for `null`, else the value itself when the provider no longer lists it.
+ */
+export const modelDisplayName = (
+  models: ReadonlyArray<PickerModel>,
+  value: string | null | undefined,
+): string => {
+  const wanted = value ?? DEFAULT_MODEL
+  const found = models.find((model) => model.value === wanted)
+  if (found !== undefined) return shortModelName(found)
+  return wanted === DEFAULT_MODEL ? "Default" : wanted
+}
