@@ -2,7 +2,6 @@ import { Schema } from "effect"
 import { trimTrailing } from "../text.ts"
 import { TerminalId } from "./Terminal.ts"
 
-/** An address the Browser offers: a local URL a terminal or a `Bash` call printed, and when. */
 export interface OfferedUrl {
   readonly url: string
   readonly seenAt: string
@@ -20,7 +19,6 @@ const LOCAL_URL =
 
 const TRAILING = ".,;:!?)]}'\"*"
 
-/** Rewrites a matched local URL the way it is offered: `0.0.0.0` becomes `localhost`. */
 const normalize = (raw: string): string | undefined => {
   try {
     const url = new URL(raw)
@@ -38,7 +36,6 @@ export interface UrlRange {
   readonly url: string
 }
 
-/** Where `text` (without ANSI) names a local URL, and that URL normalized. */
 export const localUrlRanges = (text: string): ReadonlyArray<UrlRange> => {
   const ranges: Array<UrlRange> = []
   for (const match of text.matchAll(LOCAL_URL)) {
@@ -49,11 +46,6 @@ export const localUrlRanges = (text: string): ReadonlyArray<UrlRange> => {
   return ranges
 }
 
-/**
- * The local URLs `text` prints, once each, in order: `http(s)` on `localhost`, `127.0.0.1`, `[::1]`
- * or `0.0.0.0` (offered as `localhost`). LAN addresses, such as a dev server's "Network:" line,
- * are not offered.
- */
 export const localUrls = (text: string): ReadonlyArray<string> => [
   ...new Set(localUrlRanges(stripAnsi(text)).map((range) => range.url)),
 ]
@@ -64,14 +56,9 @@ export type PreviewTarget =
 
 const refused = (reason: string): PreviewTarget => ({ _tag: "Refused", reason })
 
-/** The port a URL reaches, with the scheme's default when it names none. */
 export const portOf = (url: URL): number =>
   url.port !== "" ? Number(url.port) : url.protocol === "https:" ? 443 : 80
 
-/**
- * Whether a URL's host name (as `URL` writes it) names this machine without DNS: `localhost` and
- * its subdomains, `127.0.0.0/8`, `0.0.0.0`, `[::1]`, `[::]` and their IPv4-mapped forms.
- */
 export const isLoopbackHost = (hostname: string): boolean => {
   const host = hostname.toLowerCase().replace(/\.$/, "")
   return (
@@ -85,16 +72,10 @@ export const isLoopbackHost = (hostname: string): boolean => {
   )
 }
 
-/**
- * What the Browser loads for an address the human typed or clicked: `localhost:3000` and `3000`
- * become `http://localhost:3000/`. Only `localhost`, `127.0.0.1` and `[::1]` over http and https are
- * previewed, and never Humanity's own ports, so a framed page can never be Humanity itself.
- */
 export const previewTarget = (
   input: string,
   refusedPorts: ReadonlySet<number>,
   options: {
-    /** The desktop app's Browser shows any site; a browser tab's only local ones. */
     readonly anyHost?: boolean
   } = {},
 ): PreviewTarget => {
@@ -139,10 +120,6 @@ export const previewTarget = (
   return { _tag: "Url", url: url.href }
 }
 
-/**
- * Merges what each source offers into one list, newest first and once per URL, keeping the latest
- * time a URL was seen.
- */
 export const mergeOffers = (
   ...sources: ReadonlyArray<ReadonlyArray<OfferedUrl>>
 ): ReadonlyArray<OfferedUrl> => {
@@ -156,7 +133,6 @@ export const mergeOffers = (
     .sort((a, b) => (a.seenAt < b.seenAt ? 1 : a.seenAt > b.seenAt ? -1 : 0))
 }
 
-/** A server listening on this machine that answers HTTP, and the terminal that started it. */
 export const LocalServer = Schema.Struct({
   port: Schema.Int,
   url: Schema.String,
@@ -166,7 +142,6 @@ export const LocalServer = Schema.Struct({
 })
 export type LocalServer = typeof LocalServer.Type
 
-/** What the daemon found when it loaded a framed address itself. */
 export const PreviewProbe = Schema.TaggedUnion({
   Ok: { status: Schema.Int },
   Unreachable: { reason: Schema.String },
@@ -174,7 +149,6 @@ export const PreviewProbe = Schema.TaggedUnion({
 })
 export type PreviewProbe = typeof PreviewProbe.Type
 
-/** Files the Browser shows from a thread's folder. */
 export const isPreviewFile = (path: string): boolean => /\.(?:html?|pdf)$/i.test(path)
 
 export interface PreviewDevice {
@@ -185,7 +159,6 @@ export interface PreviewDevice {
   readonly height: number
 }
 
-/** Chrome DevTools' devices, in its order, with their CSS viewport sizes (portrait). */
 export const PREVIEW_DEVICES: ReadonlyArray<PreviewDevice> = [
   { id: "iphone-se", label: "iPhone SE", category: "Phone", width: 375, height: 667 },
   { id: "iphone-xr", label: "iPhone XR", category: "Phone", width: 414, height: 896 },
@@ -222,7 +195,6 @@ export const PREVIEW_DEVICES: ReadonlyArray<PreviewDevice> = [
 
 export const VIEWPORT_LIMITS = { min: 240, max: 3840 } as const
 
-/** How a Browser tab sizes its page: the panel's size, a device's, or a free size. */
 export type PreviewViewport =
   | { readonly _tag: "fill" }
   | { readonly _tag: "device"; readonly id: string; readonly landscape: boolean }
@@ -233,14 +205,12 @@ export const FILL_VIEWPORT: PreviewViewport = { _tag: "fill" }
 const clampDimension = (value: number) =>
   Math.round(Math.min(VIEWPORT_LIMITS.max, Math.max(VIEWPORT_LIMITS.min, value)))
 
-/** A free size within the limits. */
 export const freeViewport = (width: number, height: number): PreviewViewport => ({
   _tag: "free",
   width: clampDimension(width),
   height: clampDimension(height),
 })
 
-/** The CSS size a viewport gives its page, or undefined when it fills the panel. */
 export const viewportSize = (
   viewport: PreviewViewport,
 ): { readonly width: number; readonly height: number } | undefined => {
@@ -259,7 +229,6 @@ export const viewportSize = (
   }
 }
 
-/** Reads a stored viewport, falling back to filling the panel. */
 export const parseViewport = (value: unknown): PreviewViewport => {
   if (typeof value !== "object" || value === null) return FILL_VIEWPORT
   const record = value as Record<string, unknown>
@@ -276,12 +245,10 @@ export const parseViewport = (value: unknown): PreviewViewport => {
   return FILL_VIEWPORT
 }
 
-/** Chromium's zoom steps, up to 300 %. */
 export const ZOOM_LEVELS = [
   0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3,
 ] as const
 
-/** The next zoom step in a direction, from any zoom. */
 export const stepZoom = (zoom: number, direction: 1 | -1): number => {
   if (direction > 0) return ZOOM_LEVELS.find((level) => level > zoom + 0.001) ?? zoom
   return [...ZOOM_LEVELS].reverse().find((level) => level < zoom - 0.001) ?? zoom
@@ -290,11 +257,6 @@ export const stepZoom = (zoom: number, direction: 1 | -1): number => {
 export const parseZoom = (value: unknown): number =>
   typeof value === "number" && ZOOM_LEVELS.some((level) => level === value) ? value : 1
 
-/**
- * How a page of `size` CSS pixels at `zoom` is shown in `available` pixels: the frame's CSS size
- * and the scale it is drawn at. A page that fills the panel takes its size; a fixed size is scaled
- * down, never up, to fit.
- */
 export const fitViewport = (
   size: { readonly width: number; readonly height: number } | undefined,
   available: { readonly width: number; readonly height: number },

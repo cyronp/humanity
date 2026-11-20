@@ -156,7 +156,6 @@ const listNames = (providers: ReadonlyArray<AgentProvider>): string => {
     : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 }
 
-/** Who reads the skill itself, and who gets it from Humanity's `load_skill`. */
 const sharing = (skill: Skill): string => {
   const others = AgentProvider.literals.filter((provider) => !skill.nativeTo.includes(provider))
   if (others.length === 0) return `Every agent reads it itself.`

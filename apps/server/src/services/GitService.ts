@@ -73,14 +73,12 @@ export class GitService extends Context.Service<
       { readonly commits: ReadonlyArray<LoggedCommit>; readonly more: boolean },
       GitError | GitRefNotFound
     >
-    /** The hashes of up to `limit` commits that `ref` has and `exclude` lacks, newest first. */
     readonly commitsNotIn: (
       cwd: string,
       ref: string,
       exclude: string,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<string>, GitError>
-    /** What `to` changes since it left `from` (`from...to`), file by file with its hunks. */
     readonly diffRange: (
       cwd: string,
       from: string,
@@ -113,18 +111,12 @@ export class GitService extends Context.Service<
       env?: Readonly<Record<string, string>>,
     ) => Effect.Effect<void, GitError>
     readonly revParse: (cwd: string, ref: string) => Effect.Effect<string | undefined, GitError>
-    /** Commits only in `ref` (ahead) and only in `target` (behind). */
     readonly aheadBehind: (
       cwd: string,
       ref: string,
       target: string,
     ) => Effect.Effect<{ readonly ahead: number; readonly behind: number }, GitError>
-    /** Fails, touching nothing, when uncommitted changes would be overwritten. */
     readonly fastForward: (cwd: string, target: string) => Effect.Effect<void, GitError>
-    /**
-     * Replays the checked-out branch onto `target`. On a conflict it aborts, leaving the branch
-     * as it was, and returns the conflicted paths; an empty list means it was rebased.
-     */
     readonly rebase: (cwd: string, target: string) => Effect.Effect<ReadonlyArray<string>, GitError>
     readonly changedFiles: (
       cwd: string,

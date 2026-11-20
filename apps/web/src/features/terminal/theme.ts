@@ -130,7 +130,6 @@ const ANSI_NAMES = [
   "brightWhite",
 ] as const satisfies ReadonlyArray<keyof Palette>
 
-/** A theme's colors as the daemon reports them to programs: opaque `#rrggbb`. */
 export const terminalColors = (theme: ITheme): TerminalColors => {
   const opaque = (color: string | undefined, fallback: string) =>
     /^#[0-9a-f]{6}/i.test(color ?? "") ? (color as string).slice(0, 7) : fallback

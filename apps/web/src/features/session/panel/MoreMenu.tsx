@@ -29,7 +29,6 @@ import type { PanelError } from "./PrimaryAction.tsx"
 import { forgeTerms } from "./publication.ts"
 import { useSetupWorktree } from "./useSetupWorktree.ts"
 
-/** What a new thread about a pull request starts with in its composer. */
 export const pullRequestPrompt = (pullRequest: PullRequest): string => {
   const terms = forgeTerms(pullRequest.forge)
   return `About ${terms.noun} ${terms.symbol}${pullRequest.number}, "${pullRequest.title}" (${pullRequest.url}), from ${pullRequest.head} into ${pullRequest.base}:\n\n`
@@ -46,7 +45,6 @@ function Labelled({ label, detail }: { readonly label: string; readonly detail?:
   )
 }
 
-/** The Source control panel's other actions, behind its `…` button. */
 export function MoreMenu({
   session,
   pullRequest,

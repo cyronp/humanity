@@ -1,4 +1,11 @@
-import type { ContextUsage, PlanUsage, PlanWindow } from "@humanity/contracts"
+import {
+  type AccountUsage,
+  type AgentProvider,
+  type ContextUsage,
+  type PlanUsage,
+  type PlanWindow,
+  PROVIDER_NAMES,
+} from "@humanity/contracts"
 
 export type UsageLevel = "ok" | "notice" | "warning" | "critical"
 
@@ -29,13 +36,68 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
       : [{ label: "5-hour limit", blocking: true, ...plan.fiveHour }]),
     ...(plan.sevenDay === null ? [] : [{ label: "7-day limit", blocking: true, ...plan.sevenDay }]),
     ...plan.models.map(({ name, ...window }) => ({
-      label: `${name} 7-day limit`,
+      label: /\blimit$/i.test(name) ? name : `${name} 7-day limit`,
       blocking: false,
       ...window,
     })),
   ]
   return rows.filter((row) => stillOpen(row, now))
 }
+
+export const windowUsed = (window: PlanWindow | null, now: Date): number | null =>
+  window === null ? null : stillOpen(window, now) ? window.utilization : 0
+
+export interface CompactWindow {
+  readonly short: string
+  readonly label: string
+  readonly used: number
+  readonly resetsAt: string | null
+}
+
+const shortName = (name: string): string => {
+  const length = /^(\d+)-(day|hour|minute) limit$/.exec(name)
+  return length === null ? name : `${length[1]}${length[2]?.charAt(0)}`
+}
+
+export const compactWindows = (plan: PlanUsage, now: Date): ReadonlyArray<CompactWindow> => {
+  const main = [
+    { short: "5h", label: "5-hour limit", window: plan.fiveHour },
+    { short: "7d", label: "7-day limit", window: plan.sevenDay },
+  ]
+  const named = plan.models.map(({ name, ...window }) => ({
+    short: shortName(name),
+    label: name,
+    window,
+  }))
+  const reported = main.filter((entry) => entry.window !== null)
+  return (reported.length > 0 ? reported : named).slice(0, 2).flatMap(({ window, ...entry }) => {
+    const used = windowUsed(window, now)
+    return used === null || window === null ? [] : [{ ...entry, used, resetsAt: window.resetsAt }]
+  })
+}
+
+export const accountLabel = (
+  provider: AgentProvider,
+  name: string | undefined,
+  accountsOfProvider: number,
+): string =>
+  name === undefined || accountsOfProvider < 2
+    ? PROVIDER_NAMES[provider]
+    : `${PROVIDER_NAMES[provider]} · ${name}`
+
+export const OTHER_ACCOUNTS_SHOWN = 3
+
+export const otherAccountRows = (
+  accounts: ReadonlyArray<AccountUsage>,
+): ReadonlyArray<AccountUsage & { readonly label: string }> =>
+  accounts.map((account) => ({
+    ...account,
+    label: accountLabel(
+      account.provider,
+      account.name,
+      accounts.filter((other) => other.provider === account.provider).length,
+    ),
+  }))
 
 export const planHeadline = (rows: ReadonlyArray<PlanRow>): PlanRow | undefined =>
   rows.reduce<PlanRow | undefined>(
@@ -56,10 +118,6 @@ export const formatTokens = (tokens: number): string =>
 const LIMIT_WORDS =
   /usage limit|rate limit|rate_limit|quota|limit reached|limit exceeded|out of credits|too many requests|\b429\b/i
 
-/**
- * Whether the agent stopped on its plan's limit: its error says so, or a limit the provider
- * reported is full.
- */
 export const hitUsageLimit = (error: string, plan: PlanUsage | null, now: Date): boolean =>
   LIMIT_WORDS.test(error) ||
   planRows(plan, now).some((row) => row.blocking && row.utilization >= 100)

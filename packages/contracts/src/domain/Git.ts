@@ -51,15 +51,11 @@ export const CommitSummary = Schema.Struct({
   subject: Schema.String,
   author: Schema.String,
   committedAt: Schema.String,
-  /** What the commit changed: files, and lines added and removed (0 for binary files). */
   files: Schema.Int,
   insertions: Schema.Int,
   deletions: Schema.Int,
-  /** Whether the branch's upstream has it; only a pushed commit has a page on the forge. */
   pushed: Schema.Boolean,
-  /** The commit's page on GitHub or GitLab, once it is pushed there. */
   url: Schema.NullOr(Schema.String),
-  /** The author's picture on the forge, when the forge knows them. */
   avatarUrl: Schema.NullOr(Schema.String),
 })
 export type CommitSummary = typeof CommitSummary.Type
@@ -72,13 +68,10 @@ export const BranchCommits = Schema.Struct({
 })
 export type BranchCommits = typeof BranchCommits.Type
 
-/** What a pull request from the thread's branch into `base` would carry. */
 export const BranchComparison = Schema.Struct({
-  /** The ref compared against: `origin/<base>` when origin has it, else the local branch. */
   base: Schema.String,
   commits: Schema.Array(CommitSummary),
   more: Schema.Boolean,
-  /** Every file the branch changes since it left the base, with its hunks. */
   files: Schema.Array(FileDiff),
 })
 export type BranchComparison = typeof BranchComparison.Type

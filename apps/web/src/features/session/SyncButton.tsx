@@ -14,7 +14,6 @@ import { keys } from "@/lib/rpc"
 import { fetchOriginAtom, syncAtom, syncStatusAtom } from "./atoms.ts"
 import { isBusy } from "./state.ts"
 
-/** How often an open thread fetches origin in the background, while the page is visible. */
 const FETCH_EVERY_MS = 5 * 60_000
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
@@ -83,7 +82,6 @@ export function SyncButton({ session }: { readonly session: Session }) {
   const status = result.value
   const outgoing = status.pushes ? status.ahead : 0
   const unavailable = status.branch === null || status.target === null
-  // Like VS Code's status bar: arrows alone when in step, both counts once either is not.
   const counted = !pending && !settled && (status.behind > 0 || outgoing > 0)
 
   const onSync = async () => {

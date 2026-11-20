@@ -8,7 +8,6 @@ import {
   type WebviewElement,
 } from "./desktop.ts"
 
-/** What a desktop Browser tab shows about its page, beyond what the tab remembers. */
 export interface TabLive {
   readonly loading: boolean
   readonly canGoBack: boolean
@@ -33,7 +32,6 @@ export const IDLE_TAB: TabLive = {
   found: undefined,
 }
 
-/** What the toolbar does to a desktop Browser tab's page. */
 export interface TabController {
   readonly back: () => void
   readonly forward: () => void
@@ -47,7 +45,6 @@ export interface TabController {
   readonly devTools: () => void
   readonly setMuted: (muted: boolean) => void
   readonly setColorScheme: (scheme: PreviewColorScheme) => void
-  /** The page's id for the desktop bridge, once it is attached. */
   readonly guestId: () => number | undefined
   readonly execute: (code: string) => Promise<unknown>
   readonly focus: () => void
@@ -64,13 +61,8 @@ interface WebviewEvent extends Event {
   readonly result?: { readonly activeMatchOrdinal: number; readonly matches: number }
 }
 
-/** Chromium's "the load was aborted", which a new navigation or Stop causes. */
 const ABORTED = -3
 
-/**
- * One tab's page in a `<webview>`, made once per tab so React never touches its address: the
- * address bar navigates it with `loadURL`, and what it navigates to on its own comes back up.
- */
 export function WebviewTab({
   tabId,
   url,
@@ -178,8 +170,6 @@ export function WebviewTab({
     for (const [name, listener] of Object.entries(listeners)) {
       webview.addEventListener(name, listener)
     }
-    // The window never sees a key pressed in the page: the desktop app hands the app's own
-    // shortcuts back, and they are pressed again here, where the panel and the window listen.
     const stopShortcuts = desktopPreview()?.onShortcut(({ guest, ...key }) => {
       if (!ready.current || guest !== webview.getWebContentsId()) return
       webview.dispatchEvent(

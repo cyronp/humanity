@@ -63,17 +63,10 @@ interface ModelPickerProps {
   readonly provider: ProviderId
   readonly value: string | null
   readonly onChange: (choice: ModelChoice) => void
-  /** Offers only the current provider's models. */
   readonly locked?: boolean
-  /**
-   * The picker of an open thread: picking another provider's model, or another account's, moves
-   * the thread there, and the picker says so.
-   */
   readonly movesThread?: boolean
-  /** The account the thread runs as (`default` for the default login). */
   readonly accountId?: string | undefined
   readonly disabled?: boolean
-  /** Opens and closes the picker from outside, when given. */
   readonly open?: boolean
   readonly onOpenChange?: (open: boolean) => void
 }
@@ -326,7 +319,6 @@ function AccountChooser({
 }: {
   readonly accounts: ReadonlyArray<PickerAccount>
   readonly value: string
-  /** The account the thread runs as, when this is its provider. */
   readonly current: string | undefined
   readonly onChange: (accountId: string) => void
 }) {

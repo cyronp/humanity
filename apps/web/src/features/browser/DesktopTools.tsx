@@ -43,7 +43,6 @@ import { ZoomControl } from "./BrowserControls.tsx"
 import { Input } from "@/components/ui/input"
 import type { TabController, TabLive } from "./WebviewTab.tsx"
 
-/** Back, forward, and reload (Shift: ignoring the cache) or stop while the page loads. */
 export function NavigationButtons({
   live,
   control,
@@ -104,11 +103,6 @@ export function NavigationButtons({
 
 const SCHEME_ICON = { system: SunMoon, light: Sun, dark: Moon } as const
 
-/**
- * The page's rarer tools in one menu, so the address bar keeps its room: zoom, find, appearance,
- * mute, DevTools, a reload that skips the cache, the human's browser, and clearing the Browser's
- * data.
- */
 export function PageTools({
   live,
   control,
@@ -206,7 +200,6 @@ export function PageTools({
   )
 }
 
-/** Find in the page: Enter for the next match, Shift+Enter for the previous one, Esc to close. */
 export function FindBar({
   live,
   control,
@@ -273,7 +266,6 @@ export function FindBar({
   )
 }
 
-/** Picks an element, or takes a screenshot (to attach, or to annotate first), for the message. */
 export function CaptureTools({
   canAttach,
   picking,
@@ -284,11 +276,9 @@ export function CaptureTools({
   onAnnotate,
   onRecord,
 }: {
-  /** Whether the thread takes a message now; recording works either way. */
   readonly canAttach: boolean
   readonly picking: boolean
   readonly busy: boolean
-  /** How long the page has been recording, while it is. */
   readonly recording: string | undefined
   readonly onPick: () => void
   readonly onScreenshot: () => void

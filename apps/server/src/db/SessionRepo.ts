@@ -176,7 +176,6 @@ export interface ParkedProvider {
   readonly accountId: string | null
   readonly sdkSessionId: string
   readonly cwd: string
-  /** How many entries of the thread's history the provider had seen when it left. */
   readonly seenEntries: number
   readonly parkedAt: string
 }
@@ -191,7 +190,6 @@ const ParkedRow = Schema.Struct({
   parked_at: Schema.String,
 })
 
-/** The default login has no account id; the table's key needs a value for it. */
 const accountKey = (accountId: string | null) => accountId ?? ""
 
 export class SessionRepo extends Context.Service<
@@ -223,7 +221,6 @@ export class SessionRepo extends Context.Service<
     readonly writeImported: (imported: ImportedThreadRows) => Effect.Effect<boolean>
     readonly getAccountId: (sessionId: string) => Effect.Effect<string | null>
     readonly setAccountId: (sessionId: string, accountId: string | null) => Effect.Effect<void>
-    /** Keeps the conversation a provider had in this thread, for when the thread comes back. */
     readonly parkProvider: (parked: ParkedProvider) => Effect.Effect<void>
     readonly findParked: (
       sessionId: string,
@@ -237,7 +234,6 @@ export class SessionRepo extends Context.Service<
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
     readonly deleteMessage: (sessionId: string, messageId: string) => Effect.Effect<void>
-    /** Replaces what a message says; only Humanity's own messages (a switch's divider) change. */
     readonly updateMessage: (message: ChatMessage) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly transcriptPage: (

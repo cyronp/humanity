@@ -16,7 +16,6 @@ export interface PickerModel extends ReportedModel {
 export interface ModelChoice {
   readonly provider: AgentProvider
   readonly model: string | null
-  /** The account picked with it, when the picker offers accounts (a thread's picker). */
   readonly accountId?: string | undefined
 }
 
@@ -73,10 +72,6 @@ export const modelKey = (model: Pick<PickerModel, "provider" | "value">): string
 export const shortModelName = (model: ReportedModel): string =>
   model.displayName.replace(/\s*\(recommended\)$/i, "")
 
-/**
- * A model as the picker names it: its reported name without "(recommended)", the default row's
- * for `null`, else the value itself when the provider no longer lists it.
- */
 export const modelDisplayName = (
   models: ReadonlyArray<PickerModel>,
   value: string | null | undefined,

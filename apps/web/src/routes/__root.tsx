@@ -13,7 +13,6 @@ import { useStoredWidth } from "@/lib/resize"
 const SIDEBAR_DEFAULT_WIDTH = 320
 const SIDEBAR_MIN_WIDTH = 240
 const SIDEBAR_MAX_WIDTH = 520
-/** The sidebar never takes more than this share of the window. */
 const SIDEBAR_MAX_SHARE = 0.4
 
 export const Route = createRootRoute({

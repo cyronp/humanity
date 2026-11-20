@@ -8,15 +8,11 @@ import { type PickerModel, pickerModels, type ReportedModel } from "./models.ts"
 import type { ProviderId } from "./ProviderIcon.tsx"
 
 export interface ProviderModels {
-  /** Each provider's models, as the model picker lists them. */
   readonly models: Readonly<Record<ProviderId, ReadonlyArray<PickerModel>>>
-  /** Whether a provider is signed in. */
   readonly connected: Readonly<Record<ProviderId, boolean>>
-  /** Whether a provider's status has been read yet. */
   readonly answered: Readonly<Record<ProviderId, boolean>>
 }
 
-/** What every provider offers the active account: the model picker's source, and its names'. */
 export const useProviderModels = (): ProviderModels => {
   const claude = useAtomValue(claudeStatusAtom)
   const codex = useAtomValue(codexStatusAtom)
@@ -50,7 +46,6 @@ export const useProviderModels = (): ProviderModels => {
   }
 }
 
-/** An account of a provider, with the models it offers, for the thread's model picker. */
 export interface PickerAccount {
   readonly id: string
   readonly name: string
@@ -69,7 +64,6 @@ interface ListedAccount {
   }
 }
 
-/** Every provider's accounts: a thread can move to any signed-in one. */
 export const useProviderAccounts = (): Readonly<
   Record<ProviderId, ReadonlyArray<PickerAccount>>
 > => {

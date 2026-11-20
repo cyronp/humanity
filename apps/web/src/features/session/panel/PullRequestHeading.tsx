@@ -16,7 +16,6 @@ export const PULL_REQUEST_STATE: Record<
     readonly label: string
     readonly Icon: typeof GitMerge
     readonly className: string
-    /** The state's color as text, for its icon on its own. */
     readonly tone: string
   }
 > = {

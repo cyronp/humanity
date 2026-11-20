@@ -34,7 +34,6 @@ export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = { importFromCli: 
 export const ToolsPreferences = Schema.Struct({
   terminals: Schema.Boolean,
   openThread: Schema.Boolean,
-  /** The skills of the human's other agents, given through `load_skill` (2026-11-20; on when unset). */
   skills: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
 })
 export type ToolsPreferences = typeof ToolsPreferences.Type
@@ -45,7 +44,6 @@ export const DEFAULT_TOOLS_PREFERENCES: ToolsPreferences = {
   skills: true,
 }
 
-/** Where a local link clicked in a terminal or a command's output opens. */
 export const BrowserLinkTarget = Schema.Literals(["browser", "system"])
 export type BrowserLinkTarget = typeof BrowserLinkTarget.Type
 
@@ -60,5 +58,4 @@ export const HUMANITY_TOOL_TOKENS: Readonly<Record<keyof ToolsPreferences, numbe
   skills: 250,
 }
 
-/** What each skill `load_skill` lists adds to `HUMANITY_TOOL_TOKENS.skills`, about. */
 export const HUMANITY_TOKENS_PER_SKILL = 60

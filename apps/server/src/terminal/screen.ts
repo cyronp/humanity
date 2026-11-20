@@ -20,7 +20,6 @@ export interface Screen {
   readonly dispose: () => void
 }
 
-/** The xterm palette's color `index` past the first 16: the 6×6×6 cube, then 24 grays. */
 const extendedColor = (index: number): readonly [number, number, number] => {
   if (index >= 232) {
     const gray = 8 + (index - 232) * 10
@@ -37,7 +36,6 @@ const channels = (hex: string): readonly [number, number, number] => [
   Number.parseInt(hex.slice(5, 7), 16),
 ]
 
-/** A color as xterm reports it: `rgb:rrrr/gggg/bbbb`, each channel on 16 bits. */
 const rgb = ([r, g, b]: readonly [number, number, number]) => {
   const channel = (value: number) => value.toString(16).padStart(2, "0").repeat(2)
   return `rgb:${channel(r)}/${channel(g)}/${channel(b)}`
@@ -45,11 +43,6 @@ const rgb = ([r, g, b]: readonly [number, number, number]) => {
 
 const reply = (body: string) => `\x1b]${body}\x1b\\`
 
-/**
- * What a terminal answers to a color query, as xterm does, in the colors the dock draws it in:
- * OSC 10, 11 and 12 (foreground, background, cursor; `?;?` after 10 asks for 10 and 11) and OSC 4
- * (palette entries). Parts that set a color are left alone; nothing is answered without colors.
- */
 export const colorReplies = (
   ident: number,
   data: string,
@@ -81,7 +74,6 @@ export const makeScreen = (options: {
   readonly cols: number
   readonly rows: number
   readonly scrollback: number
-  /** The colors to report to a program that asks, once the dock has said them. */
   readonly colors?: () => TerminalColors | undefined
 }): Screen => {
   const terminal = new headless.Terminal({

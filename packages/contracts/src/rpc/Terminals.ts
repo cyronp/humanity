@@ -67,7 +67,6 @@ export const TerminalsRpcs = RpcGroup.make(
   Rpc.make("Terminals.ack", {
     payload: { terminalId: TerminalId, attachmentId: Schema.String, seq: Schema.Number },
   }),
-  /** The colors terminals are drawn in now, reported to the programs that ask for them. */
   Rpc.make("Terminals.setColors", {
     payload: { colors: TerminalColors },
   }),

@@ -8,7 +8,6 @@ import { describeCause } from "@/lib/errors"
 import { fileUrlAtom } from "./atoms.ts"
 import { requestPreview } from "./browser.ts"
 
-/** Opens an HTML or PDF file of the thread's folder in its Browser. Renders nothing for others. */
 export function OpenInBrowserButton({
   sessionId,
   path,

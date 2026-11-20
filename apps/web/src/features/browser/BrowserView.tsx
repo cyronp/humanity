@@ -76,18 +76,11 @@ const openOutside = (url: string) => void window.open(url, "_blank", "noopener,n
 
 const DOWNLOAD_NOTICE_MS = 6_000
 
-/** Where the Browser sends what it captures: the thread's composer. */
 export interface CaptureTarget {
   readonly block: (text: string) => void
   readonly attach: (files: ReadonlyArray<File>) => void
 }
 
-/**
- * The Browser tool: tabs of pages, each at the panel's size or a device's. In the desktop app each
- * tab is a `<webview>` that shows any site; in a browser tab, the shown tab is a frame of a local
- * address. It only lives while it is the tool on screen: hiding it closes every page, ends a
- * recording (saving what was recorded). The tabs and their addresses stay.
- */
 export function BrowserView({
   browser,
   onClose,
@@ -97,7 +90,6 @@ export function BrowserView({
   readonly browser: BrowserState
   readonly onClose: () => void
   readonly titlebarPadding: string
-  /** Absent while the thread takes no message. */
   readonly onCapture?: CaptureTarget | undefined
 }) {
   const { memory, change, offers, terminalNames, onSeen } = browser
@@ -150,7 +142,6 @@ export function BrowserView({
     setReloads((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }))
   }
 
-  /** Loads what the human typed into the shown tab, or into a new one. */
   const navigate = (input: string) => {
     const result = target(input)
     if (result._tag === "Refused") {
@@ -168,7 +159,6 @@ export function BrowserView({
     if (!native) reload(current.id)
   }
 
-  /** Shows an address a link or a button asked for, reloading a tab that already shows it. */
   const show = (input: string) => {
     const result = target(input)
     if (result._tag === "Refused") {
@@ -507,7 +497,6 @@ export function BrowserView({
   )
 }
 
-/** What became of a recording: being saved, saved (with Reveal), or why it failed. */
 function RecordingNotice({
   state,
   onReveal,
@@ -551,7 +540,6 @@ function RecordingNotice({
   )
 }
 
-/** A desktop page that failed to load or crashed for good, over the page, with a way back. */
 function PageTrouble({ live, onRetry }: { readonly live: TabLive; readonly onRetry: () => void }) {
   if (live.failure === undefined && !live.crashed) return null
   return (

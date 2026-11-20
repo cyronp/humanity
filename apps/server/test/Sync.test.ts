@@ -8,7 +8,6 @@ import { SessionService } from "../src/services/SessionService.ts"
 import { git, tempDir } from "./helpers.ts"
 import { addProject, contents, services, setup, waitForStatus } from "./sessionHelpers.ts"
 
-/** A bare origin with the repo's main on it, and a teammate's clone of it. */
 const withOrigin = (repo: string) =>
   Effect.gen(function* () {
     const origin = yield* tempDir("humanity-origin-")

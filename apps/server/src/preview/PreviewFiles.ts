@@ -41,28 +41,17 @@ const TYPES: Readonly<Record<string, string>> = {
 export const contentTypeOf = (path: string): string =>
   TYPES[extname(path).toLowerCase()] ?? "application/octet-stream"
 
-/** Whether `child` is `folder` or inside it. Both must already be real paths. */
 export const isInside = (folder: string, child: string): boolean => {
   const path = relative(folder, child)
   return path === "" || (!path.startsWith("..") && !isAbsolute(path))
 }
 
-/**
- * Whether the real path `file` may be served from the real folder `root`: inside it, and with no
- * part that starts with a dot, so `.env`, `.git/config` and the like never reach a page.
- */
 export const isServable = (root: string, file: string): boolean =>
   isInside(root, file) &&
   !relative(root, file)
     .split(sep)
     .some((part) => part.startsWith("."))
 
-/**
- * Serves the HTML and PDF files of a thread's folder, with what they load beside them, on a port of
- * its own: never the daemon's, so a framed file is never same-origin with Humanity. Each thread
- * gets a random token that lives in memory and dies with the thread; nothing outside its folder,
- * and no dotfile or dot folder in it, is ever served.
- */
 export class PreviewFiles extends Context.Service<
   PreviewFiles,
   {

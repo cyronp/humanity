@@ -4,7 +4,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { hitUsageLimit } from "./usage.ts"
 
-/** Why the agent stopped, with a way to carry on with another model, provider or account. */
 export function StoppedNote({
   error,
   plan,
@@ -12,7 +11,6 @@ export function StoppedNote({
 }: {
   readonly error: string
   readonly plan: PlanUsage | null
-  /** Opens the model picker; left out when the thread takes no more messages. */
   readonly onSwitch?: (() => void) | undefined
 }) {
   const limit = hitUsageLimit(error, plan, new Date())

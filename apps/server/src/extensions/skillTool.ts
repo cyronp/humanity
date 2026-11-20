@@ -45,7 +45,6 @@ const said = (text: string, isError = false): ToolText => ({ text, isError })
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
-/** The files of a skill's folder, relative to it, without hidden or dependency folders. */
 const listFiles = (fs: FileSystem.FileSystem, dir: string) =>
   fs.readDirectory(dir, { recursive: true }).pipe(
     Effect.map((entries) =>
@@ -86,10 +85,6 @@ const readText = (fs: FileSystem.FileSystem, path: string) =>
     return said(new TextDecoder().decode(bytes).replace(/^\uFEFF/, ""))
   }).pipe(Effect.catch(() => Effect.succeed(said(`Could not read ${path}.`, true))))
 
-/**
- * `load_skill` for one thread: reads the skills it was given at its start, from where they are,
- * and nothing outside their folders.
- */
 export const makeSkillTool =
   (fs: FileSystem.FileSystem, skills: ReadonlyArray<ServedSkill>) =>
   (args: unknown): Effect.Effect<ToolText> =>

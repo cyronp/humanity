@@ -48,7 +48,6 @@ interface Tracking {
   readonly behind: number
 }
 
-/** A fetch younger than this answers a background status check without fetching again. */
 const FETCH_FRESH_MS = 60_000
 
 const AGENT_FILE_LIST_LIMIT = 20
@@ -61,12 +60,10 @@ interface Fetched {
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
 
-/** GitLab finds a picture per email: at most this many new emails are looked up per listing. */
 const AVATAR_LOOKUPS = 10
 
 const NOREPLY = /^(?:(\d+)\+)?([^@]+)@users\.noreply\.github\.com$/i
 
-/** GitHub's private commit emails name the account, so its picture needs no request. */
 export const noreplyAvatar = (email: string): string | null => {
   const match = NOREPLY.exec(email)
   if (match === null) return null
@@ -87,7 +84,6 @@ const gitProblem = (error: GitError) =>
         .join(" ") || error.message
     : error.message
 
-/** The paths git lists, one per tab-indented line, when it refuses to overwrite them. */
 const overwrittenPaths = (stderr: string) =>
   stderr
     .split("\n")
@@ -116,12 +112,7 @@ export class PullRequestService extends Context.Service<
   PullRequestService,
   {
     readonly publication: (sessionId: string) => Effect.Effect<BranchPublication, Base>
-    /**
-     * The thread's branch's commits, each with whether its upstream has it, its page on the forge
-     * once pushed, and its author's picture when the forge knows them.
-     */
     readonly commits: (sessionId: string) => Effect.Effect<BranchCommits, Base | GitRefNotFound>
-    /** What a pull request from the thread's branch into `base` would carry. */
     readonly compare: (
       sessionId: string,
       base: string,
@@ -133,33 +124,21 @@ export class PullRequestService extends Context.Service<
       sessionId: string,
       pullRequest: NewPullRequest,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
-    /**
-     * Merges the open pull request of the thread's branch at the head commit the human saw,
-     * posting their comment on it first.
-     */
     readonly merge: (
       sessionId: string,
       merge: MergePullRequest,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
-    /** Closes the pull request of the thread's branch, or reopens a closed one. */
     readonly setOpen: (
       sessionId: string,
       open: boolean,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
-    /** Converts the open pull request of the thread's branch to a draft, or marks it ready. */
     readonly setDraft: (
       sessionId: string,
       draft: boolean,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
-    /** With `fetch`, fetches origin first unless that was done in the last minute. */
     readonly syncStatus: (sessionId: string, fetch: boolean) => Effect.Effect<SyncStatus, Base>
-    /**
-     * Fetches origin, brings the thread's branch up to date with its sync target (fast-forward,
-     * else a rebase of its own commits when the folder is clean), then pushes to an upstream of
-     * the same name. Anything it cannot do safely fails before the folder is changed.
-     */
     readonly sync: (sessionId: string) => Effect.Effect<SyncResult, Base | SyncUnavailable>
   }
 >()("humanity/PullRequestService") {
@@ -396,7 +375,6 @@ export class PullRequestService extends Context.Service<
         return Effect.succeed(remote)
       }
 
-      /** The thread's branch's pull request as the forge has it now, not as the feed last saw it. */
       const current = (sessionId: string) =>
         Effect.gen(function* () {
           const { session, remote: found, branch: own } = yield* load(sessionId)
@@ -538,7 +516,6 @@ export class PullRequestService extends Context.Service<
           Effect.gen(function* () {
             const last = fetched.get(project.localPath)
             if (!force && last !== undefined && Date.now() - last.ms < FETCH_FRESH_MS) return last
-            // Only a click may open a credential helper's sign-in window; a background fetch fails.
             const quiet = force ? {} : { GCM_INTERACTIVE: "never" }
             const env = { ...(yield* pushEnv(remote)), ...quiet }
             const error = yield* git.fetch(project.localPath, env).pipe(
@@ -750,7 +727,6 @@ export class PullRequestService extends Context.Service<
         } satisfies SyncResult
       })
 
-      /** Pictures found by email, per forge, for this daemon's life: `null` when it has none. */
       const pictures = new Map<string, string | null>()
 
       const picturesOf = (
@@ -815,7 +791,6 @@ export class PullRequestService extends Context.Service<
             ? `https://github.com/${remote.fullName}/commit/${hash}`
             : `https://${remote.host}/${remote.fullPath}/-/commit/${hash}`
 
-      /** Git's commits with what the forge adds: pushed or not, their page, their author's picture. */
       const detail = (
         cwd: string,
         ref: string,

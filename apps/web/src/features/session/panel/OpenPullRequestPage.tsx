@@ -32,10 +32,6 @@ import { fileKey } from "./DiffTab.tsx"
 import { Hinted, WAIT_FOR_AGENT } from "./PrimaryAction.tsx"
 import { baseBranches, forgeTerms } from "./publication.ts"
 
-/**
- * The Source control panel turned into the form for opening a pull request: the base branch, the
- * title and description, then what it will carry. Draft and the button sit along the bottom.
- */
 export function OpenPullRequestPage({
   session,
   publication,
@@ -50,7 +46,6 @@ export function OpenPullRequestPage({
   readonly forge: Forge
   readonly branch: string
   readonly titlebarPadding: string
-  /** Back to Source control, after opening it or without. */
   readonly onBack: () => void
   readonly onClose: () => void
 }) {
@@ -207,7 +202,6 @@ export function OpenPullRequestPage({
   )
 }
 
-/** What the pull request will carry: its commits, then the files they change, each with its diff. */
 function Carries({
   comparison,
   forge,

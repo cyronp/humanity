@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
 import {
+  accountLabel,
+  compactWindows,
   contextPercentUsed,
   formatTokens,
   hitUsageLimit,
+  otherAccountRows,
   planHeadline,
   planRows,
   usageLevel,
+  windowUsed,
 } from "@/features/session/usage"
 
 describe("usageLevel", () => {
@@ -67,6 +71,18 @@ describe("planRows", () => {
     )
     expect(rows.map((row) => row.label)).toEqual(["7-day limit"])
   })
+
+  it("keeps the name of a window that names its own length", () => {
+    const rows = planRows(
+      {
+        fiveHour: null,
+        sevenDay: null,
+        models: [{ name: "30-day limit", utilization: 3, resetsAt: later }],
+      },
+      now,
+    )
+    expect(rows.map((row) => row.label)).toEqual(["30-day limit"])
+  })
 })
 
 describe("planHeadline", () => {
@@ -118,5 +134,95 @@ describe("hitUsageLimit", () => {
     expect(hitUsageLimit("Request failed", full, now)).toBe(true)
     const room = { fiveHour: window(80), sevenDay: window(40), models: [] }
     expect(hitUsageLimit("Request failed", room, now)).toBe(false)
+  })
+})
+
+describe("windowUsed", () => {
+  const now = new Date("2026-01-01T12:00:00.000Z")
+  it("reads a window that is still open, and counts one that reset as empty", () => {
+    expect(windowUsed(null, now)).toBeNull()
+    expect(windowUsed({ utilization: 81, resetsAt: "2026-01-01T15:00:00.000Z" }, now)).toBe(81)
+    expect(windowUsed({ utilization: 81, resetsAt: null }, now)).toBe(81)
+    expect(windowUsed({ utilization: 81, resetsAt: "2026-01-01T11:00:00.000Z" }, now)).toBe(0)
+  })
+})
+
+describe("otherAccountRows", () => {
+  const account = (
+    provider: "claude-code" | "codex" | "kiro",
+    accountId: string,
+    name: string,
+  ) => ({
+    provider,
+    accountId,
+    name,
+    plan: null,
+    unavailable: null,
+  })
+
+  it("names an account only where its provider has several", () => {
+    const rows = otherAccountRows([
+      account("codex", "default", "Default login"),
+      account("codex", "work", "Work"),
+      account("kiro", "default", "Default login"),
+    ])
+    expect(rows.map((row) => row.label)).toEqual(["Codex · Default login", "Codex · Work", "Kiro"])
+  })
+
+  it("names the thread's own account the same way", () => {
+    expect(accountLabel("claude-code", "Personal", 2)).toBe("Claude Code · Personal")
+    expect(accountLabel("claude-code", "Personal", 1)).toBe("Claude Code")
+    expect(accountLabel("claude-code", undefined, 3)).toBe("Claude Code")
+  })
+})
+
+describe("compactWindows", () => {
+  const now = new Date("2026-01-01T12:00:00.000Z")
+  const later = "2026-01-02T00:00:00.000Z"
+
+  it("shows the 5-hour and 7-day limits when the plan has them", () => {
+    const windows = compactWindows(
+      {
+        fiveHour: { utilization: 81, resetsAt: later },
+        sevenDay: { utilization: 40, resetsAt: null },
+        models: [{ name: "Opus", utilization: 90, resetsAt: null }],
+      },
+      now,
+    )
+    expect(windows.map((window) => [window.short, window.used])).toEqual([
+      ["5h", 81],
+      ["7d", 40],
+    ])
+  })
+
+  it("falls back to the windows a plan reports under other names", () => {
+    const windows = compactWindows(
+      {
+        fiveHour: null,
+        sevenDay: null,
+        models: [
+          { name: "30-day limit", utilization: 12, resetsAt: later },
+          { name: "Limit", utilization: 5, resetsAt: null },
+          { name: "1-hour limit", utilization: 1, resetsAt: null },
+        ],
+      },
+      now,
+    )
+    expect(windows.map((window) => [window.short, window.label, window.used])).toEqual([
+      ["30d", "30-day limit", 12],
+      ["Limit", "Limit", 5],
+    ])
+  })
+
+  it("counts a window that reset as empty", () => {
+    const windows = compactWindows(
+      {
+        fiveHour: { utilization: 81, resetsAt: "2026-01-01T11:00:00.000Z" },
+        sevenDay: null,
+        models: [],
+      },
+      now,
+    )
+    expect(windows.map((window) => window.used)).toEqual([0])
   })
 })

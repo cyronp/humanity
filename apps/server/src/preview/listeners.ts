@@ -1,4 +1,3 @@
-/** A TCP socket listening on this machine, as the OS lists it. */
 export interface Listener {
   readonly host: string
   readonly port: number
@@ -14,7 +13,6 @@ export interface ProcessRow {
 
 const LOOPBACK_OR_ANY = new Set(["127.0.0.1", "0.0.0.0", "::1", "::", "*"])
 
-/** Whether a page in the Browser can reach a socket bound to `host` through a loopback address. */
 export const reachableLocally = (host: string): boolean =>
   LOOPBACK_OR_ANY.has(host) || host.startsWith("127.")
 
@@ -26,10 +24,6 @@ const splitAddress = (address: string): { host: string; port: number } | undefin
   return { host: match[1] === "" ? "*" : (match[1] ?? "*"), port }
 }
 
-/**
- * `netstat -ano -p TCP` (and `-p TCPv6`) on Windows. The state's name is localized, so a
- * listening row is told by its foreign address, which is all zeros.
- */
 export const parseNetstat = (text: string): ReadonlyArray<Listener> => {
   const listeners: Array<Listener> = []
   for (const line of text.split(/\r?\n/)) {
@@ -44,7 +38,6 @@ export const parseNetstat = (text: string): ReadonlyArray<Listener> => {
   return listeners
 }
 
-/** `lsof -nP -iTCP -sTCP:LISTEN -F pcn` on macOS (and Linux, where it is installed). */
 export const parseLsof = (text: string): ReadonlyArray<Listener> => {
   const listeners: Array<Listener> = []
   let pid: number | undefined
@@ -65,7 +58,6 @@ export const parseLsof = (text: string): ReadonlyArray<Listener> => {
   return listeners
 }
 
-/** `ss -ltnpH` on Linux. */
 export const parseSs = (text: string): ReadonlyArray<Listener> => {
   const listeners: Array<Listener> = []
   for (const line of text.split(/\r?\n/)) {
@@ -78,7 +70,6 @@ export const parseSs = (text: string): ReadonlyArray<Listener> => {
   return listeners
 }
 
-/** One process per line: its id, its parent's id and its name (`ps -A -o pid=,ppid=,comm=`). */
 export const parseProcesses = (text: string): ReadonlyArray<ProcessRow> => {
   const rows: Array<ProcessRow> = []
   for (const line of text.split(/\r?\n/)) {
@@ -90,7 +81,6 @@ export const parseProcesses = (text: string): ReadonlyArray<ProcessRow> => {
   return rows
 }
 
-/** The first of `roots` that `pid` descends from (or is), walking up at most 64 parents. */
 export const ancestorIn = <T>(
   pid: number,
   parents: ReadonlyMap<number, number>,
@@ -107,7 +97,6 @@ export const ancestorIn = <T>(
   return undefined
 }
 
-/** `pid` and every process under it. */
 export const descendantsOf = (
   pid: number,
   processes: ReadonlyArray<ProcessRow>,
@@ -147,10 +136,6 @@ const matchesSource = (source: string, embedder: URL): boolean => {
   return port === "*" || (port ?? (embedder.protocol === "https:" ? "443" : "80")) === embedderPort
 }
 
-/**
- * Why a page with these response headers refuses to be framed by `embedder` (the app's origin), or
- * undefined when it lets it.
- */
 export const framingOf = (
   headers: { readonly get: (name: string) => string | null },
   embedder: string,

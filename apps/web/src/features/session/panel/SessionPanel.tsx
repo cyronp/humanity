@@ -48,7 +48,6 @@ import {
   storeGitView,
 } from "./shelf.ts"
 
-/** The rail's width in pixels: the window's own buttons in the desktop app cover it first. */
 export const RAIL_WIDTH = 48
 
 const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
@@ -56,17 +55,9 @@ const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
   browser: <Globe />,
 }
 
-/**
- * Right padding for a bar along the window's top whose right end is `covered` pixels from the
- * window's edge: what the desktop app's window buttons still cover of it, plus the usual gutter.
- */
 export const titlebarPaddingEnd = (covered: number) =>
   `calc(max(0px, var(--titlebar-controls) - ${covered}px) + 0.75rem)`
 
-/**
- * The rail of tool icons along a thread's right edge: full height and always shown. Its top is
- * left free, and draggable, where the desktop app draws the window's own buttons.
- */
 export function ToolRail({
   session,
   shelf,
@@ -176,10 +167,6 @@ function RailFrame({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/**
- * The open tool's panel, between the chat and the rail. The Browser only lives while it shows:
- * switching to another tool or hiding the panel closes its pages, so nothing runs out of sight.
- */
 export function ToolPanel({
   session,
   activity,
@@ -337,7 +324,6 @@ interface GitBodyProps {
   readonly onOpenPullRequest: () => void
 }
 
-/** The panel once the branch is known, with what the forge says about its pull request. */
 function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPublication }) {
   const feed = useAtomValue(
     pullRequestFeedAtom(feedKey(props.session.id, props.publication.branch)),
@@ -345,10 +331,6 @@ function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPub
   return <GitBody {...props} feed={AsyncResult.isSuccess(feed) ? feed.value : undefined} />
 }
 
-/**
- * Source control under its header: the tabs, the open tab's content sitting flat on the panel,
- * and along the bottom the one next step with every other action behind `…`.
- */
 function GitBody({
   session,
   onReference,
@@ -510,7 +492,6 @@ function TabCount({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/** The checks tab's mark: how the checks stand, in their color. */
 function ChecksMark({ checks }: { readonly checks: ReadonlyArray<PullRequestCheck> }) {
   const { overall } = summarizeChecks(checks)
   if (overall === "none") return null
@@ -530,7 +511,6 @@ function BranchName({ name }: { readonly name: string | null }) {
   )
 }
 
-/** The thread's branch, with its pull request's number and state once the forge has one. */
 function PanelHeading({
   session,
   publication,

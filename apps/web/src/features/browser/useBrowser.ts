@@ -25,18 +25,15 @@ import { useLocalServers } from "./ServerList.tsx"
 export interface BrowserState {
   readonly sessionId: SessionId
   readonly offers: ReadonlyArray<OfferedUrl>
-  /** The name of each of the thread's terminals, by id. */
   readonly terminalNames: ReadonlyMap<string, string>
   readonly memory: BrowserMemory
   readonly unseen: boolean
-  /** Changes the remembered tabs; the change is stored at once. */
   readonly change: (next: (memory: BrowserMemory) => BrowserMemory) => void
   readonly onSeen: () => void
 }
 
 const NO_TERMINALS: ReadonlyArray<TerminalInfo> = []
 
-/** The servers the thread's own terminals started, as offers to see. */
 const threadServers = (
   servers: ReadonlyArray<LocalServer>,
   names: ReadonlyMap<string, string>,
@@ -45,11 +42,6 @@ const threadServers = (
     .filter((server) => server.terminalId !== null && names.has(server.terminalId))
     .map((server) => ({ url: server.url, seenAt: "" }))
 
-/**
- * A thread's Browser: the local addresses its terminals and `Bash` calls offer, newest first, the
- * address it last showed, and whether an offer, or a server its terminals started, is new since the
- * human last looked.
- */
 export const useBrowser = (
   sessionId: SessionId,
   toolCalls: Readonly<Record<string, ToolCall>>,

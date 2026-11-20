@@ -44,9 +44,7 @@ import { useFileMention } from "./useFileMention.ts"
 
 export interface ComposerHandle {
   readonly insert: (insertion: PromptInsertion) => void
-  /** Adds files to the message, as a drop or a paste does. */
   readonly attach: (files: ReadonlyArray<File>) => void
-  /** Opens the model picker, to move the thread to another model, provider or account. */
   readonly openModelPicker: () => void
 }
 
@@ -70,11 +68,9 @@ export const Composer = memo(function Composer({
   readonly provider: AgentProvider
   readonly model: string | null
   readonly effort: ReasoningEffort | null
-  /** The account the thread runs as; `null` for the provider's default login. */
   readonly accountId: string | null
   readonly disabled: boolean
   readonly busy: boolean
-  /** Told when the box starts or stops holding something to send. */
   readonly onTypingChange?: ((typing: boolean) => void) | undefined
 }) {
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })

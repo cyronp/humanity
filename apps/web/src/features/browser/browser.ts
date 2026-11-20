@@ -13,10 +13,6 @@ import {
 } from "@humanity/contracts"
 import { bashOutput } from "@/features/tools/inputs"
 
-/**
- * Humanity's own ports, whatever host names them: the page's, the daemon's and the defaults. A
- * framed page with scripts and its own origin is only safe because it can never be Humanity.
- */
 export const refusedPorts = (location: Pick<Location, "port" | "protocol">, daemon: string) => {
   const ports = new Set<number>([DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT])
   ports.add(
@@ -29,7 +25,6 @@ export const refusedPorts = (location: Pick<Location, "port" | "protocol">, daem
 
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"])
 
-/** What a thread's `Bash` calls printed that the Browser can offer. */
 export const bashOffers = (toolCalls: Iterable<ToolCall>): ReadonlyArray<OfferedUrl> => {
   const offers: Array<OfferedUrl> = []
   for (const call of toolCalls) {
@@ -45,7 +40,6 @@ export const bashOffers = (toolCalls: Iterable<ToolCall>): ReadonlyArray<Offered
   return offers
 }
 
-/** One tab of a thread's Browser. A tab with no address shows what it can open. */
 export interface BrowserTab {
   readonly id: string
   readonly url: string | null
@@ -54,7 +48,6 @@ export interface BrowserTab {
   readonly zoom: number
 }
 
-/** What the Browser remembers of a thread: its tabs, the one shown, and the offers already seen. */
 export interface BrowserMemory {
   readonly tabs: ReadonlyArray<BrowserTab>
   readonly active: string | null
@@ -122,18 +115,12 @@ export const readMemory = (sessionId: string): BrowserMemory => {
 export const storeMemory = (sessionId: string, memory: BrowserMemory) => {
   try {
     localStorage.setItem(browserKey(sessionId), JSON.stringify(memory))
-  } catch {
-    // Storage can be unavailable (private windows, blocked site data); the Browser still works.
-  }
+  } catch {}
 }
 
 export const activeTab = (memory: BrowserMemory): BrowserTab | undefined =>
   memory.tabs.find((tab) => tab.id === memory.active)
 
-/**
- * Shows `url`: in the tab that already shows it, else in the shown tab while it is empty, else in a
- * new tab.
- */
 export const openUrl = (memory: BrowserMemory, url: string): BrowserMemory => {
   const showing = memory.tabs.find((tab) => tab.url === url)
   if (showing !== undefined) return { ...memory, active: showing.id }
@@ -149,7 +136,6 @@ export const openTab = (memory: BrowserMemory, url: string | null = null): Brows
   return { ...memory, tabs: [...memory.tabs, tab].slice(-TABS_KEPT), active: tab.id }
 }
 
-/** Closes a tab; the one after it shows, else the one before. */
 export const closeTab = (memory: BrowserMemory, id: string): BrowserMemory => {
   const index = memory.tabs.findIndex((tab) => tab.id === id)
   if (index < 0) return memory
@@ -168,7 +154,6 @@ export const updateTab = (
   tabs: memory.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)),
 })
 
-/** What a tab is called: its page's title, else its address without the scheme. */
 export const tabLabel = (tab: BrowserTab): string => {
   if (tab.title !== null && tab.title.trim() !== "") return tab.title
   if (tab.url === null) return "New tab"
@@ -181,7 +166,6 @@ export const tabLabel = (tab: BrowserTab): string => {
   }
 }
 
-/** The memory with every offer marked seen, or the same memory when none is new. */
 export const markSeen = (
   memory: BrowserMemory,
   offers: ReadonlyArray<OfferedUrl>,
@@ -195,17 +179,12 @@ export const markSeen = (
 export const hasUnseen = (memory: BrowserMemory, offers: ReadonlyArray<OfferedUrl>) =>
   offers.some((offer) => !memory.seen.includes(offer.url))
 
-/** A piece of a text, with the local URL it belongs to, if any. */
 export interface LinkPiece<T> {
   readonly segment: T
   readonly text: string
   readonly url: string | undefined
 }
 
-/**
- * Splits styled segments where local URLs start and end, across segments: a dev server that colors
- * its port still prints one address.
- */
 export const linkLocalUrls = <T extends { readonly text: string }>(
   segments: ReadonlyArray<T>,
 ): ReadonlyArray<ReadonlyArray<LinkPiece<T>>> => {
@@ -250,16 +229,10 @@ let linkTarget: BrowserLinkTarget = "browser"
 const openers = new Set<() => void>()
 const takers = new Set<() => void>()
 
-/** Follows Settings → Browser: where clicked local links open. */
 export const setLinkTarget = (target: BrowserLinkTarget) => {
   linkTarget = target
 }
 
-/**
- * Asks the open thread's Browser to show `url`. Returns false when the page has no Browser, or when
- * links open in the human's browser and this one was only clicked (not `explicit`), so the caller
- * opens it elsewhere.
- */
 export const requestPreview = (
   url: string,
   options: { readonly explicit?: boolean } = {},
@@ -272,19 +245,16 @@ export const requestPreview = (
   return true
 }
 
-/** Registers what opens the Browser's panel for a request: the page that has a Browser. */
 export const onPreviewOpen = (listener: () => void) => {
   openers.add(listener)
   return () => void openers.delete(listener)
 }
 
-/** Registers a mounted Browser, which takes each request. */
 export const onPreviewPending = (listener: () => void) => {
   takers.add(listener)
   return () => void takers.delete(listener)
 }
 
-/** The request no Browser took yet, taken: a Browser that opens for it shows it. */
 export const takePreviewRequest = (): PreviewRequest | undefined => {
   const request = pending
   pending = undefined

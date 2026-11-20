@@ -4,7 +4,13 @@ import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
-import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
+import {
+  AccountUsage,
+  ReasoningEffort,
+  Session,
+  SessionId,
+  SessionUsage,
+} from "../domain/Session.ts"
 import { BranchCommits, FileEntry, WorkingTreeDiff } from "../domain/Git.ts"
 import { FileMentions } from "../domain/Mention.ts"
 import { SessionEvent, TranscriptPage } from "../domain/SessionEvent.ts"
@@ -98,7 +104,6 @@ export const SessionsRpcs = RpcGroup.make(
       sessionId: SessionId,
       provider: AgentProvider,
       model: Schema.NullOr(Schema.String),
-      /** The account to run as; the provider's active account when left out. */
       accountId: Schema.optional(Schema.String),
     },
     success: Session,
@@ -179,6 +184,11 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId },
     success: SessionUsage,
     error: Schema.Union([SessionNotFound, PlanUsageUnavailable]),
+  }),
+  Rpc.make("Sessions.otherAccountsUsage", {
+    payload: { sessionId: SessionId, refresh: Schema.Boolean },
+    success: Schema.Array(AccountUsage),
+    error: SessionNotFound,
   }),
   Rpc.make("Sessions.earlierMessages", {
     payload: { sessionId: SessionId, before: Schema.String },

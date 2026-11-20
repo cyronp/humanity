@@ -1,6 +1,5 @@
 import type { BranchPublication, WorkingTreeDiff } from "@humanity/contracts"
 
-/** The tools of the shelf on the right of a thread, in the order of its rail. */
 export const SHELF_TOOLS = ["git", "browser"] as const
 export type ShelfTool = (typeof SHELF_TOOLS)[number]
 
@@ -9,7 +8,6 @@ export const SHELF_LABELS: Readonly<Record<ShelfTool, string>> = {
   browser: "Browser",
 }
 
-/** The tabs of the Source control tool. */
 export const GIT_VIEWS = ["overview", "changes", "commits", "checks"] as const
 export type GitView = (typeof GIT_VIEWS)[number]
 
@@ -32,7 +30,6 @@ const GIT_VIEW_KEY = "humanity.git-view"
 
 const isTool = (value: unknown): value is ShelfTool => SHELF_TOOLS.some((tool) => tool === value)
 
-/** The git tools the rail had before they became tabs of Source control. */
 const FORMER_GIT_TOOLS: ReadonlyArray<unknown> = ["changes", "commits", "commit", "pull-request"]
 
 export const parseShelf = (raw: string | null): ShelfState => {
@@ -49,10 +46,6 @@ export const parseShelf = (raw: string | null): ShelfState => {
   }
 }
 
-/**
- * The shelf as the human last left it. On a window too narrow to show it beside the chat it starts
- * closed, so opening a thread shows the thread.
- */
 export const readStoredShelf = (wide: boolean): ShelfState => {
   try {
     const stored = parseShelf(localStorage.getItem(STORAGE_KEY))
@@ -65,9 +58,7 @@ export const readStoredShelf = (wide: boolean): ShelfState => {
 export const storeShelf = (shelf: ShelfState) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shelf))
-  } catch {
-    // Storage can be unavailable (private windows, blocked site data); the shelf still works.
-  }
+  } catch {}
 }
 
 export const parseGitView = (raw: string | null): GitView =>
@@ -84,25 +75,17 @@ export const readStoredGitView = (): GitView => {
 export const storeGitView = (view: GitView) => {
   try {
     localStorage.setItem(GIT_VIEW_KEY, view)
-  } catch {
-    // As above: the tab is only remembered when storage works.
-  }
+  } catch {}
 }
 
-/** Clicking the open tool closes the shelf; any other tool opens on it. */
 export const toggleTool = (shelf: ShelfState, tool: ShelfTool): ShelfState =>
   shelf.open && shelf.tool === tool ? { ...shelf, open: false } : { open: true, tool }
 
 export interface ShelfBadge {
   readonly count: number
-  /** What the count is, for the icon's tooltip. */
   readonly label: string
 }
 
-/**
- * What each tool's rail icon shows without being opened, or nothing. Source control counts the
- * changed files, else the commits waiting for a push.
- */
 export const shelfBadges = (
   diff: WorkingTreeDiff | undefined,
   publication: BranchPublication | undefined,

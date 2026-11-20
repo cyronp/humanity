@@ -11,7 +11,6 @@ import {
 
 export const PreviewRpcs = RpcGroup.make(
   Rpc.make("Preview.servers", {
-    /** Scanned every 2 s while fast, else every 10 s. */
     payload: { fast: Schema.Boolean },
     success: Schema.Array(LocalServer),
     stream: true,

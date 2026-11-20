@@ -9,7 +9,6 @@ export type PromptInsertion =
   | { readonly kind: "skill"; readonly invocation: string }
   | { readonly kind: "mcp"; readonly server: string }
   | { readonly kind: "reference"; readonly reference: string }
-  /** A paragraph of its own, such as an element picked in the Browser, after what is there. */
   | { readonly kind: "block"; readonly text: string }
 
 export const mcpMention = (server: string) => `mcp__${server}`

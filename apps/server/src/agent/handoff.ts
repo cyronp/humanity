@@ -9,29 +9,18 @@ import {
   type ToolCall,
 } from "@humanity/contracts"
 
-/**
- * A thread's conversation as text another agent can read: what Humanity hands an agent that
- * picks up a thread from another provider, and what `thread_history` answers with. Pure: it reads
- * the messages and tool calls Humanity stored, which look alike whatever provider wrote them.
- */
-
 export interface HistoryEntry {
-  /** 1-based, stable: the entries of a thread only ever grow at the end. */
   readonly index: number
   readonly kind: "human" | "agent" | "event"
   readonly text: string
 }
 
-/** How much of the conversation the handoff carries, in characters (about 12k tokens). */
 export const HANDOFF_BUDGET = 48_000
-/** The most of one entry the handoff carries; a longer one is cut in the middle. */
 export const HANDOFF_ENTRY_LIMIT = 4_000
 const PLAN_LIMIT = 3_000
 const OUTPUT_EXCERPT = 300
 const INPUT_EXCERPT = 200
-/** A sub-agent's report is often what its work was for, so more of it goes along. */
 const REPORT_EXCERPT = 1_500
-/** Claude Code's tools that hand work to a sub-agent. */
 const SUB_AGENT_TOOLS: ReadonlyArray<string> = ["Task", "Agent"]
 
 const TAG = "humanity-handoff"
@@ -47,7 +36,6 @@ const head = (text: string, limit: number) =>
 const tail = (text: string, limit: number) =>
   text.length <= limit ? text : `[${text.length - limit} characters before] …${text.slice(-limit)}`
 
-/** Keeps the start and the end of a long text, which say the most, and cuts the middle. */
 export const cutMiddle = (text: string, limit: number): string => {
   if (text.length <= limit) return text
   const keepHead = Math.floor(limit * 0.6)
@@ -56,7 +44,6 @@ export const cutMiddle = (text: string, limit: number): string => {
   return `${text.slice(0, keepHead)}\n[… ${cut} characters cut …]\n${text.slice(text.length - keepTail)}`
 }
 
-/** Text from the conversation never closes the block it is quoted in. */
 const quoted = (text: string) => text.replaceAll(TAG, "humanity handoff")
 
 const stringField = (input: Record<string, unknown>, ...keys: ReadonlyArray<string>) => {
@@ -89,7 +76,6 @@ const jsonOf = (value: unknown): string => {
   }
 }
 
-/** What a call did, in one line, as the human would say it. */
 export const describeCall = (name: string, input: unknown): string => {
   const fields = isRecord(input) ? input : {}
   switch (name) {
@@ -153,11 +139,6 @@ const describeOutcome = (call: ToolCall | undefined): string => {
   }
 }
 
-/**
- * The thread as entries: each message of the human, each top-level message of an agent with the
- * calls it made, and what Humanity told the thread (commits, worktrees, provider switches).
- * Thinking, sub-agents' messages and raw tool output are left out.
- */
 export const historyEntries = (
   messages: ReadonlyArray<ChatMessage>,
   toolCalls: ReadonlyArray<ToolCall>,
@@ -225,7 +206,6 @@ export const historyEntries = (
 const planStatus = (status: unknown) =>
   status === "completed" ? "[x]" : status === "in_progress" ? "[~]" : "[ ]"
 
-/** The last plan an agent of the thread kept with its todo tool, if any. */
 export const latestPlan = (toolCalls: ReadonlyArray<ToolCall>): string | undefined => {
   for (let index = toolCalls.length - 1; index >= 0; index--) {
     const call = toolCalls[index]
@@ -243,10 +223,6 @@ export const latestPlan = (toolCalls: ReadonlyArray<ToolCall>): string | undefin
   return undefined
 }
 
-/**
- * Which entries fit the budget: always the first and the last message of the human and the last
- * of an agent, then the newest that still fit. Each entry is cut to `entryLimit` first.
- */
 export const selectEntries = (
   entries: ReadonlyArray<HistoryEntry>,
   budget: number,
@@ -297,25 +273,15 @@ const renderEntries = (
   return lines.join("\n\n")
 }
 
-/**
- * About how many input tokens a text costs: ~4 characters a token for English and code, the
- * usual rule of thumb across Claude's, OpenAI's and Gemini's tokenizers. An estimate, not a count.
- */
 export const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
 
 export interface Handoff {
   readonly text: string
   readonly included: number
   readonly omitted: number
-  /** What the handoff costs the new agent, estimated with `estimateTokens`. */
   readonly tokens: number
 }
 
-/**
- * What an agent that picks up the thread reads before the human's next message. `since` is the
- * index of the first entry it has not seen (1 when it saw none): `resumed` agents get only what
- * happened while they were away.
- */
 export const buildHandoff = (options: {
   readonly entries: ReadonlyArray<HistoryEntry>
   readonly since: number
@@ -361,7 +327,6 @@ const HISTORY_ENTRY_LIMIT = 8_000
 const positiveInteger = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isInteger(value) && value >= 1 ? value : undefined
 
-/** `thread_history`: a range of entries, or those that mention a text, newest last. */
 export const readThreadHistory = (
   entries: ReadonlyArray<HistoryEntry>,
   args: unknown,

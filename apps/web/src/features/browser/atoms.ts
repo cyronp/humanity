@@ -2,7 +2,6 @@ import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 
-/** The local servers on this machine, scanned every 2 s while `fast`, else every 10 s. */
 export const localServersAtom = Atom.family((fast: boolean) =>
   HumanityClient.runtime.atom(
     Stream.unwrap(

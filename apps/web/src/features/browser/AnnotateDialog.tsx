@@ -31,7 +31,6 @@ export type Mark =
 
 const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#22c55e", "#ffffff", "#111827"] as const
 
-/** Draws the marks over the screenshot, at the image's own size. */
 export const drawMarks = (
   context: CanvasRenderingContext2D,
   image: CanvasImageSource,
@@ -97,16 +96,11 @@ export const drawMarks = (
   }
 }
 
-/**
- * A screenshot to draw on before it goes into the message: a pen, an arrow, a box and text, in a
- * few colours, with Undo and Clear.
- */
 export function AnnotateDialog({
   image,
   onAttach,
   onClose,
 }: {
-  /** The screenshot, as an object URL. */
   readonly image: string | undefined
   readonly onAttach: (file: File) => void
   readonly onClose: () => void
@@ -115,13 +109,11 @@ export function AnnotateDialog({
   const [bitmap, setBitmap] = useState<HTMLImageElement>()
   const [marks, setMarks] = useState<ReadonlyArray<Mark>>([])
   const [drawing, setDrawing] = useState<Mark>()
-  // The stroke being drawn, read by pointer events that may come faster than renders.
   const stroke = useRef<Mark | undefined>(undefined)
   const [tool, setTool] = useState<Tool>("arrow")
   const [color, setColor] = useState<string>(COLORS[0])
   const [typing, setTyping] = useState<{ at: Point; screen: Point; text: string }>()
 
-  // Each screenshot gets a dialog of its own (keyed by its image), so its marks start empty.
   useEffect(() => {
     if (image === undefined) return
     const element = new Image()
