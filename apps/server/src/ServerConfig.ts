@@ -14,6 +14,7 @@ export interface ServerConfigShape {
   readonly accountsDir: string
   readonly codexAccountsDir: string
   readonly kiroAccountsDir: string
+  readonly antigravityAccountsDir: string
   readonly authTokenPath: string
   readonly githubTokenPath: string
   readonly gitlabTokenPath: string
@@ -44,6 +45,7 @@ const make = (options: {
     accountsDir: join(home, "accounts"),
     codexAccountsDir: join(home, "codex-accounts"),
     kiroAccountsDir: join(home, "kiro-accounts"),
+    antigravityAccountsDir: join(home, "antigravity-accounts"),
     authTokenPath: join(home, "auth-token"),
     githubTokenPath: join(home, "github-token"),
     gitlabTokenPath: join(home, "gitlab-token"),
@@ -72,6 +74,7 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
         yield* fs.makeDirectory(config.accountsDir, { recursive: true })
         yield* fs.makeDirectory(config.codexAccountsDir, { recursive: true })
         yield* fs.makeDirectory(config.kiroAccountsDir, { recursive: true })
+        yield* fs.makeDirectory(config.antigravityAccountsDir, { recursive: true })
         return config
       }).pipe(Effect.orDie),
     )

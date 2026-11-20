@@ -130,6 +130,7 @@ describe("Humanity's MCP server", () => {
         "claude-code",
         "codex",
         "kiro",
+        "antigravity",
       ])
       assert.deepStrictEqual(tool?.inputSchema.properties["effort"]?.enum, [
         "low",
@@ -247,7 +248,7 @@ describe("Humanity's MCP server", () => {
       }
       assert.match(
         errorText(yield* answerMcp(tools, openThread({ prompt: "x", provider: "gemini" }))),
-        /provider` \(claude-code, codex, kiro\)/,
+        /provider` \(claude-code, codex, kiro, antigravity\)/,
       )
       assert.match(errorText(yield* answerMcp(tools, openThread({}))), /Pass `prompt`/)
       assert.strictEqual(

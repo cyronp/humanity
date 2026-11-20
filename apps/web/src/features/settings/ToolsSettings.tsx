@@ -1,5 +1,9 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { HUMANITY_TOOL_TOKENS, type ToolsPreferences } from "@humanity/contracts"
+import {
+  HUMANITY_TOKENS_PER_SKILL,
+  HUMANITY_TOOL_TOKENS,
+  type ToolsPreferences,
+} from "@humanity/contracts"
 import { Exit } from "effect"
 import { useId, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
@@ -18,7 +22,9 @@ const setToolsPreferencesAtom = HumanityClient.mutation("Preferences.setTools")
 function TokenCost({ tool }: { readonly tool: keyof ToolsPreferences }) {
   return (
     <span className="mt-2 block font-medium text-warning">
-      Adds about {HUMANITY_TOOL_TOKENS[tool].toLocaleString()} tokens to every thread.
+      {tool === "skills"
+        ? `Adds about ${HUMANITY_TOOL_TOKENS.skills.toLocaleString()} tokens, and ${HUMANITY_TOKENS_PER_SKILL} per skill, to every thread that gets one.`
+        : `Adds about ${HUMANITY_TOOL_TOKENS[tool].toLocaleString()} tokens to every thread.`}
     </span>
   )
 }
@@ -45,6 +51,7 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
   const [error, setError] = useState<string>()
   const terminalsId = useId()
   const openThreadId = useId()
+  const skillsId = useId()
 
   const change = async (patch: Partial<ToolsPreferences>) => {
     setError(undefined)
@@ -90,6 +97,24 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
             aria-labelledby={openThreadId}
             checked={preferences.openThread}
             onCheckedChange={(openThread) => void change({ openThread })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Skills from your other agents"
+          labelId={skillsId}
+          detail={
+            <>
+              Every agent gets the skills it doesn't load itself: Claude Code's for Codex, Codex's
+              for Claude Code, and so on, with the repository's and Humanity's own. The agent loads
+              one when a task matches it.
+              <TokenCost tool="skills" />
+            </>
+          }
+        >
+          <Switch
+            aria-labelledby={skillsId}
+            checked={preferences.skills}
+            onCheckedChange={(skills) => void change({ skills })}
           />
         </SettingsRow>
       </SettingsRows>

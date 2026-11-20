@@ -1,4 +1,4 @@
-import { parseMcpToolName, parseQuestions, QUESTION_TOOL } from "@humanity/contracts"
+import { parseMcpToolName, parseQuestions, QUESTION_TOOL, SKILL_TOOL } from "@humanity/contracts"
 import { MessageCircleQuestion, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Markdown } from "@/features/chat/Markdown"
@@ -16,26 +16,45 @@ function Output({ call }: ToolCallProps) {
   )
 }
 
+/** Claude Code's own `Skill`, or Humanity's `load_skill` (a skill's instructions, or one of its files). */
+const loadedSkill = (input: unknown) => ({
+  skill: stringField(input, "skill") ?? stringField(input, "name") ?? "unknown",
+  file: stringField(input, "file"),
+})
+
 export const skillRenderer: ToolRenderer = {
   name: "Skill",
-  match: (toolName) => toolName === "Skill",
-  Summary: ({ input }) => (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <Sparkles className="size-3.5 shrink-0 text-violet-500" />
-      <span className="text-muted-foreground">Loaded skill</span>
-      <Badge variant="secondary" className="font-mono">
-        {stringField(input, "skill") ?? "unknown"}
-      </Badge>
-    </span>
-  ),
+  match: (toolName) => toolName === "Skill" || toolName === SKILL_TOOL,
+  Summary: ({ input }) => {
+    const { skill, file } = loadedSkill(input)
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Sparkles className="size-3.5 shrink-0 text-violet-500" />
+        <span className="text-muted-foreground">
+          {file === undefined ? "Loaded skill" : "Read from skill"}
+        </span>
+        <Badge variant="secondary" className="font-mono">
+          {skill}
+        </Badge>
+        {file !== undefined && <span className="truncate font-mono text-xs">{file}</span>}
+      </span>
+    )
+  },
   Detail: (props) => {
+    const { skill, file } = loadedSkill(props.input)
     const args = stringField(props.input, "args")
     return (
       <div className="flex flex-col gap-2">
-        <p>
-          The agent loaded the <code>{stringField(props.input, "skill") ?? "unknown"}</code> skill:
-          its instructions are now part of the conversation.
-        </p>
+        {file === undefined ? (
+          <p>
+            The agent loaded the <code>{skill}</code> skill: its instructions are now part of the
+            conversation.
+          </p>
+        ) : (
+          <p>
+            The agent read <code>{file}</code> from the <code>{skill}</code> skill.
+          </p>
+        )}
         {args !== undefined && (
           <Field label="Why / arguments">
             <p className="whitespace-pre-wrap">{args}</p>

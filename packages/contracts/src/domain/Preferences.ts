@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Autonomy, DEFAULT_AUTONOMY } from "./Policy.ts"
 import { ReasoningEffort } from "./Session.ts"
 
@@ -34,10 +34,16 @@ export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = { importFromCli: 
 export const ToolsPreferences = Schema.Struct({
   terminals: Schema.Boolean,
   openThread: Schema.Boolean,
+  /** The skills of the human's other agents, given through `load_skill` (2026-11-20; on when unset). */
+  skills: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
 })
 export type ToolsPreferences = typeof ToolsPreferences.Type
 
-export const DEFAULT_TOOLS_PREFERENCES: ToolsPreferences = { terminals: true, openThread: true }
+export const DEFAULT_TOOLS_PREFERENCES: ToolsPreferences = {
+  terminals: true,
+  openThread: true,
+  skills: true,
+}
 
 /** Where a local link clicked in a terminal or a command's output opens. */
 export const BrowserLinkTarget = Schema.Literals(["browser", "system"])
@@ -51,4 +57,8 @@ export const DEFAULT_BROWSER_PREFERENCES: BrowserPreferences = { linkTarget: "br
 export const HUMANITY_TOOL_TOKENS: Readonly<Record<keyof ToolsPreferences, number>> = {
   terminals: 1_400,
   openThread: 600,
+  skills: 250,
 }
+
+/** What each skill `load_skill` lists adds to `HUMANITY_TOOL_TOKENS.skills`, about. */
+export const HUMANITY_TOKENS_PER_SKILL = 60

@@ -20,6 +20,7 @@ const FOLDERS: Record<ProviderId, { readonly variable: string; readonly example:
   "claude-code": { variable: "CLAUDE_CONFIG_DIR", example: "~/.claude-personal" },
   codex: { variable: "CODEX_HOME", example: "~/.codex-work" },
   kiro: { variable: "KIRO_HOME", example: "~/.kiro-work" },
+  antigravity: { variable: "GEMINI_HOME", example: "~/.gemini-work" },
 }
 
 type Source = "new" | "folder"

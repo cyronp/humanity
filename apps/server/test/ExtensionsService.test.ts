@@ -153,6 +153,8 @@ describe("ExtensionsService", () => {
           source: "humanity",
           invocation: "/humanity:review-sql",
           instructions: "Check every join.\n",
+          location: "Humanity",
+          nativeTo: ["claude-code"],
         })
         assert.isAbove((yield* extensions.forAgent).version, before)
 
@@ -165,6 +167,8 @@ describe("ExtensionsService", () => {
             source: "project",
             invocation: "/deploy",
             instructions: null,
+            location: ".claude/skills",
+            nativeTo: ["claude-code"],
           },
         ])
         assert.deepStrictEqual(listed.mcpServers, [
@@ -201,5 +205,145 @@ describe("ExtensionsService", () => {
       )
       assert.strictEqual(manifest.name, "humanity")
     }),
+  )
+
+  it.live(
+    "finds the human's skills in every agent's folders and serves each thread the others",
+    () =>
+      Effect.gen(function* () {
+        const home = yield* tempDir()
+        const repo = yield* tempDir("humanity-repo-")
+        const user = join(home, "user-home")
+        const skill = (dir: string, folder: string, frontmatter: ReadonlyArray<string>) => {
+          mkdirSync(join(dir, folder), { recursive: true })
+          writeFileSync(
+            join(dir, folder, "SKILL.md"),
+            ["---", ...frontmatter, "---", "Do it.", ""].join("\n"),
+          )
+        }
+        const claudeSkills = join(user, ".claude", "skills")
+        const codexSkills = join(user, ".codex", "skills")
+        const pluginDir = join(user, ".claude", "plugins", "cache", "official", "design", "1.0.0")
+        skill(claudeSkills, "frontend", ["name: frontend", "description: Builds UIs"])
+        skill(claudeSkills, "shared", ["name: shared", "description: Claude copy"])
+        skill(codexSkills, "architecture", ["description: |", "  Improves", "  architecture"])
+        skill(codexSkills, ".system", ["name: system", "description: Built in"])
+        skill(codexSkills, "shared", ["name: shared", "description: Codex copy"])
+        skill(join(user, ".agents", "skills"), "foundry", ["name: foundry", "description: Azure"])
+        skill(join(user, ".gemini", "config", "skills"), "slides", [
+          "name: slides",
+          "description: Decks",
+        ])
+        skill(join(user, ".kiro", "skills"), "specs", ["name: specs", "description: Writes specs"])
+        skill(join(pluginDir, "skills"), "design", ["name: design", "description: From a plugin"])
+        writeFileSync(
+          join(user, ".claude", "settings.json"),
+          JSON.stringify({ enabledPlugins: { "design@official": true, "off@official": false } }),
+        )
+        writeFileSync(
+          join(user, ".claude", "plugins", "installed_plugins.json"),
+          JSON.stringify({
+            version: 2,
+            plugins: {
+              "design@official": [
+                {
+                  scope: "user",
+                  installPath: pluginDir,
+                },
+              ],
+            },
+          }),
+        )
+        skill(join(repo, ".agents", "skills"), "release", ["name: release", "description: Ships"])
+
+        yield* Effect.gen(function* () {
+          const extensions = yield* ExtensionsService
+          yield* extensions.saveSkill(null, {
+            name: "review-sql",
+            description: "Reviews SQL",
+            instructions: "Check joins.",
+          })
+
+          const listed = (yield* extensions.list(repo)).skills
+          assert.deepStrictEqual(
+            listed.map((each) => [each.name, each.source, each.location, each.nativeTo]),
+            [
+              ["review-sql", "humanity", "Humanity", ["claude-code"]],
+              ["release", "project", ".agents/skills", ["codex", "antigravity"]],
+              ["frontend", "user", "~/.claude/skills", ["claude-code"]],
+              ["shared", "user", "~/.claude/skills", ["claude-code"]],
+              ["design", "user", "Claude Code plugin design", ["claude-code"]],
+              ["foundry", "user", "~/.agents/skills", ["codex"]],
+              ["architecture", "user", "~/.codex/skills", ["codex"]],
+              ["shared", "user", "~/.codex/skills", ["codex"]],
+              ["slides", "user", "~/.gemini/config/skills", ["antigravity"]],
+              ["specs", "user", "~/.kiro/skills", ["kiro"]],
+            ],
+          )
+          assert.strictEqual(
+            listed.find((each) => each.name === "architecture")?.description,
+            "Improves architecture",
+          )
+          assert.deepStrictEqual(
+            ["review-sql", "release", "frontend"].map(
+              (name) => listed.find((each) => each.name === name)?.invocation,
+            ),
+            ["/humanity:review-sql", "Use the release skill.", "Use the frontend skill."],
+          )
+
+          const served = (
+            provider: "claude-code" | "codex" | "kiro" | "antigravity",
+            onDefaultLogin = true,
+          ) =>
+            Effect.map(
+              extensions.skillsForThread({ provider, onDefaultLogin, cwd: repo }),
+              (skills) => skills.map((each) => each.name),
+            )
+          assert.deepStrictEqual(yield* served("claude-code"), [
+            "release",
+            "foundry",
+            "architecture",
+            "slides",
+            "specs",
+          ])
+          assert.deepStrictEqual(yield* served("codex"), [
+            "review-sql",
+            "frontend",
+            "design",
+            "slides",
+            "specs",
+          ])
+          assert.deepStrictEqual(yield* served("codex", false), [
+            "review-sql",
+            "frontend",
+            "shared",
+            "design",
+            "architecture",
+            "slides",
+            "specs",
+          ])
+          const forClaudeAccount = yield* extensions.skillsForThread({
+            provider: "claude-code",
+            onDefaultLogin: false,
+            cwd: repo,
+          })
+          assert.deepStrictEqual(
+            forClaudeAccount.map((each) => [each.name, each.location]),
+            [
+              ["release", ".agents/skills"],
+              ["frontend", "~/.claude/skills"],
+              ["shared", "~/.claude/skills"],
+              ["design", "Claude Code plugin design"],
+              ["foundry", "~/.agents/skills"],
+              ["architecture", "~/.codex/skills"],
+              ["slides", "~/.gemini/config/skills"],
+              ["specs", "~/.kiro/skills"],
+            ],
+          )
+          assert.notInclude(yield* served("antigravity"), "slides")
+          assert.notInclude(yield* served("antigravity"), "release")
+          assert.notInclude(yield* served("kiro"), "specs")
+        }).pipe(Effect.provide(services(home)))
+      }),
   )
 })

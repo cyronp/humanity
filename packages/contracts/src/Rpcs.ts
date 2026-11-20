@@ -6,6 +6,7 @@ import { ExtensionsRpcs } from "./rpc/Extensions.ts"
 import { GitRpcs } from "./rpc/Git.ts"
 import { GitHubRpcs } from "./rpc/GitHub.ts"
 import { GitLabRpcs } from "./rpc/GitLab.ts"
+import { AntigravityRpcs } from "./rpc/Antigravity.ts"
 import { KiroRpcs } from "./rpc/Kiro.ts"
 import { PreferencesRpcs } from "./rpc/Preferences.ts"
 import { PreviewRpcs } from "./rpc/Preview.ts"
@@ -24,6 +25,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   ClaudeRpcs,
   CodexRpcs,
   KiroRpcs,
+  AntigravityRpcs,
   PreferencesRpcs,
   ExtensionsRpcs,
   PullRequestsRpcs,

@@ -8,7 +8,7 @@ import {
 } from "@humanity/contracts"
 import { Effect, Fiber, Ref, Stream } from "effect"
 import { SqlClient } from "effect/sql"
-import { existsSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
@@ -472,7 +472,7 @@ describe("SessionService", () => {
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
 
-        yield* preferences.setTools({ terminals: true, openThread: false })
+        yield* preferences.setTools({ terminals: true, openThread: false, skills: false })
         const terminalsOnly = yield* sessions.create({ projectId: project.id, prompt: "hi" })
         yield* waitForStatus(terminalsOnly.id, "idle")
         const [first] = yield* Ref.get(log.runs)
@@ -487,12 +487,71 @@ describe("SessionService", () => {
         assert.notInclude(names, "open_thread")
         assert.include(names, "terminal_read")
 
-        yield* preferences.setTools({ terminals: false, openThread: false })
+        yield* preferences.setTools({ terminals: false, openThread: false, skills: false })
         const neither = yield* sessions.create({ projectId: project.id, prompt: "hi" })
         yield* waitForStatus(neither.id, "idle")
         const second = (yield* Ref.get(log.runs))[1]
         assert.isFalse(second?.offersOpenThread)
         assert.notProperty(second?.extensions.mcpServers ?? {}, "humanity")
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("gives a thread the skills of the human's other agents through load_skill", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const codexSkill = join(home, "user-home", ".codex", "skills", "architecture")
+      const claudeSkill = join(home, "user-home", ".claude", "skills", "frontend")
+      mkdirSync(codexSkill, { recursive: true })
+      mkdirSync(claudeSkill, { recursive: true })
+      writeFileSync(
+        join(codexSkill, "SKILL.md"),
+        ["---", "name: architecture", "description: Deepens modules", "---", "Find seams."].join(
+          "\n",
+        ),
+      )
+      writeFileSync(
+        join(claudeSkill, "SKILL.md"),
+        ["---", "name: frontend", "description: Builds UIs", "---", "Use tokens."].join("\n"),
+      )
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const preferences = yield* PreferencesService
+        const mcp = yield* HumanityMcp
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+
+        yield* preferences.setTools({ terminals: false, openThread: false, skills: true })
+        const thread = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(thread.id, "idle")
+        const [run] = yield* Ref.get(log.runs)
+        const server = run?.extensions.mcpServers["humanity"]
+        const tools = mcp.toolsFor(server?.type === "http" ? server.headers["Authorization"] : "")
+        assert.isDefined(tools)
+        const listed = yield* answerMcp(tools!, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+        const [tool] = (
+          listed.body as {
+            result: { tools: ReadonlyArray<{ name: string; description: string }> }
+          }
+        ).result.tools
+        assert.strictEqual(tool?.name, "load_skill")
+        assert.include(tool?.description, "- architecture: Deepens modules")
+        assert.notInclude(tool?.description, "frontend")
+
+        const loaded = yield* answerMcp(tools!, {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "load_skill", arguments: { name: "architecture" } },
+        })
+        const text = (loaded.body as { result: { content: ReadonlyArray<{ text: string }> } })
+          .result.content[0]?.text
+        assert.include(text, "Find seams.")
+
+        yield* preferences.setTools({ terminals: false, openThread: false, skills: false })
+        const off = yield* sessions.create({ projectId: project.id, prompt: "hi" })
+        yield* waitForStatus(off.id, "idle")
+        assert.notProperty((yield* Ref.get(log.runs))[1]?.extensions.mcpServers ?? {}, "humanity")
       }).pipe(Effect.provide(services(home, () => [])))
     }),
   )

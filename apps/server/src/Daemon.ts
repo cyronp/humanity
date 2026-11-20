@@ -9,6 +9,7 @@ import { ClaudeCode } from "./claude/ClaudeCode.ts"
 import { ClaudeHistory } from "./claude/ClaudeHistory.ts"
 import { Codex } from "./codex/Codex.ts"
 import { Kiro } from "./kiro/Kiro.ts"
+import { Antigravity } from "./antigravity/Antigravity.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
@@ -20,6 +21,7 @@ import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
 import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
 import { CodexHandlers } from "./rpc/CodexHandlers.ts"
 import { KiroHandlers } from "./rpc/KiroHandlers.ts"
+import { AntigravityHandlers } from "./rpc/AntigravityHandlers.ts"
 import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
@@ -37,6 +39,7 @@ import { ApprovalService } from "./services/ApprovalService.ts"
 import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
 import { CodexAccountService } from "./services/CodexAccountService.ts"
 import { KiroAccountService } from "./services/KiroAccountService.ts"
+import { AntigravityAccountService } from "./services/AntigravityAccountService.ts"
 import { ExtensionsService } from "./services/ExtensionsService.ts"
 import { ForgeSync } from "./services/ForgeSync.ts"
 import { GitHubService } from "./services/GitHubService.ts"
@@ -76,6 +79,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(ClaudeAccountService.layer),
     Layer.provideMerge(CodexAccountService.layer),
     Layer.provideMerge(KiroAccountService.layer),
+    Layer.provideMerge(AntigravityAccountService.layer),
     Layer.provideMerge(ExtensionsService.layer),
     Layer.provideMerge(AgentCliService.layer),
   ),
@@ -91,6 +95,7 @@ export const RpcHandlers = Layer.mergeAll(
   ClaudeHandlers,
   CodexHandlers,
   KiroHandlers,
+  AntigravityHandlers,
   PreferencesHandlers,
   ExtensionsHandlers,
   PullRequestsHandlers,
@@ -168,6 +173,7 @@ export const Daemon = HttpRouter.serve(
   Layer.provide(ClaudeCode.layer),
   Layer.provide(Codex.layer),
   Layer.provide(Kiro.layer),
+  Layer.provide(Antigravity.layer),
   Layer.provide(ClaudeHistory.layer),
   Layer.provide(GitHubLive),
   Layer.provide(GitLabLive),

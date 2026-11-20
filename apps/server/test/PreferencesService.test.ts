@@ -73,15 +73,31 @@ describe("PreferencesService", () => {
         Effect.provide(services(home)),
       )
       assert.deepStrictEqual(initial, DEFAULT_TOOLS_PREFERENCES)
-      assert.deepStrictEqual(initial, { terminals: true, openThread: true })
+      assert.deepStrictEqual(initial, { terminals: true, openThread: true, skills: true })
 
       yield* PreferencesService.use((preferences) =>
-        preferences.setTools({ terminals: false, openThread: true }),
+        preferences.setTools({ terminals: false, openThread: true, skills: true }),
       ).pipe(Effect.provide(services(home)))
       const restored = yield* PreferencesService.use((preferences) => preferences.tools).pipe(
         Effect.provide(services(home)),
       )
-      assert.deepStrictEqual(restored, { terminals: false, openThread: true })
+      assert.deepStrictEqual(restored, { terminals: false, openThread: true, skills: true })
+    }),
+  )
+
+  it.live("keeps the tools saved before skills had a switch, with skills on", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const tools = yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`
+          INSERT INTO preferences (key, value_json)
+          VALUES ('tools', '{"terminals":false,"openThread":true}')
+        `
+        return yield* PreferencesService.use((preferences) => preferences.tools)
+      }).pipe(Effect.provide(services(home)))
+
+      assert.deepStrictEqual(tools, { terminals: false, openThread: true, skills: true })
     }),
   )
 })

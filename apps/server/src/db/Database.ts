@@ -24,6 +24,7 @@ import kiroAccounts from "./migrations/0019_kiro_accounts.ts"
 import messagesBySession from "./migrations/0020_messages_by_session.ts"
 import terminals from "./migrations/0021_terminals.ts"
 import terminalOwners from "./migrations/0022_terminal_owners.ts"
+import antigravityAccounts from "./migrations/0023_antigravity_accounts.ts"
 
 const migrations = {
   "0001_initial": initial,
@@ -48,6 +49,7 @@ const migrations = {
   "0020_messages_by_session": messagesBySession,
   "0021_terminals": terminals,
   "0022_terminal_owners": terminalOwners,
+  "0023_antigravity_accounts": antigravityAccounts,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

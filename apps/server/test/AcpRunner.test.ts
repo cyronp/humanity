@@ -767,6 +767,129 @@ describe("an ACP run", () => {
       )
     }),
   )
+
+  const withModes = (currentModeId: string, ids = ["default", "auto_edit", "yolo"]) => ({
+    sessionId: SESSION,
+    modes: { currentModeId, availableModes: ids.map((id) => ({ id })) },
+  })
+  const asking = (): AcpProfile => ({ product: "Test agent", mode: "default" })
+
+  it.live("switches a session that starts in another mode to the one that asks", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => withModes("auto_edit")
+      const run = yield* startAcpRun(agent.connect, asking)(runOptions(allow))
+      const [ready] = yield* take(run, 1)
+      assert.strictEqual(ready?.method, ACP_READY)
+      assert.deepStrictEqual(
+        agent.called("session/set_mode").map((call) => call.params),
+        [{ sessionId: SESSION, modeId: "default" }],
+      )
+
+      yield* agent.update("current_mode_update", { currentModeId: "yolo" })
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      assert.strictEqual(agent.called("session/set_mode").length, 2)
+    }),
+  )
+
+  it.live("leaves a session alone that already asks", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => withModes("default")
+      const run = yield* startAcpRun(agent.connect, asking)(runOptions(allow))
+      yield* take(run, 1)
+      assert.strictEqual(agent.called("session/set_mode").length, 0)
+    }),
+  )
+
+  it.live("does not run a session that has no mode that asks", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      agent.answers["session/new"] = () => withModes("yolo", ["yolo"])
+      const run = yield* startAcpRun(agent.connect, asking)(runOptions(allow))
+      const failure = yield* Effect.flip(Stream.runDrain(run.messages))
+      assert.include(failure.message, "no mode that asks before it acts")
+    }),
+  )
+
+  it.live("gives the agent what its profile adds to a new session", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const run = yield* startAcpRun(agent.connect, (context) => ({
+        product: "Test agent",
+        sessionMeta: () => ({ note: context.offersOpenThread }),
+      }))(runOptions(allow))
+      yield* take(run, 1)
+      assert.deepStrictEqual(agent.called("session/new")[0]?.params["_meta"], { note: true })
+    }),
+  )
+
+  const questioning = (): AcpProfile => ({
+    product: "Test agent",
+    question: (call) => call.toolCallId.startsWith("interaction_"),
+  })
+  const QUESTION = {
+    toolCall: { toolCallId: "interaction_1", title: "Which database?", status: "pending" },
+    options: [
+      { optionId: "opt-a", name: "Postgres", kind: "allow_once" },
+      { optionId: "opt-b", name: "SQLite", kind: "allow_once" },
+    ],
+  }
+
+  it.live("asks the human the agent's question and answers with the option picked", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const asked: Array<ToolPermissionRequest> = []
+      const run = yield* startAcpRun(
+        agent.connect,
+        questioning,
+      )(
+        runOptions((request) => {
+          asked.push(request)
+          return { behavior: "allow", updatedInput: { answers: { "Which database?": "SQLite" } } }
+        }),
+      )
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      const answer = yield* agent.ask("session/request_permission", QUESTION)
+      assert.deepStrictEqual(answer, { outcome: { outcome: "selected", optionId: "opt-b" } })
+      assert.strictEqual(asked[0]?.toolName, "AskUserQuestion")
+      assert.deepStrictEqual(asked[0]?.input, {
+        questions: [
+          {
+            question: "Which database?",
+            header: "Question",
+            options: [{ label: "Postgres" }, { label: "SQLite" }],
+          },
+        ],
+      })
+    }),
+  )
+
+  it.live("passes on an answer in the human's own words with the next message", () =>
+    Effect.gen(function* () {
+      const agent = yield* fakeAgent()
+      const run = yield* startAcpRun(
+        agent.connect,
+        questioning,
+      )(
+        runOptions(() => ({
+          behavior: "allow",
+          updatedInput: { answers: { "Which database?": "Neither, use files" } },
+        })),
+      )
+      yield* run.send({ text: "Go", attachments: [] })
+      yield* waitFor(agent)("session/prompt")
+      const answer = yield* agent.ask("session/request_permission", QUESTION)
+      assert.deepStrictEqual(answer, { outcome: { outcome: "cancelled" } })
+      yield* agent.endTurn()
+      yield* run.send({ text: "Go on", attachments: [] })
+      const second = yield* waitFor(agent)("session/prompt", 2)
+      const prompt = second?.params["prompt"] as ReadonlyArray<{ readonly text: string }>
+      assert.include(prompt[0]?.text, "Neither, use files")
+    }),
+  )
 })
 
 describe("acpPrompt", () => {

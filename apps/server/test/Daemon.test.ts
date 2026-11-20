@@ -10,6 +10,7 @@ import { AuthToken } from "../src/AuthToken.ts"
 import { ClaudeCode } from "../src/claude/ClaudeCode.ts"
 import { ClaudeHistory } from "../src/claude/ClaudeHistory.ts"
 import { Codex } from "../src/codex/Codex.ts"
+import { Antigravity } from "../src/antigravity/Antigravity.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { App } from "../src/Daemon.ts"
@@ -29,6 +30,7 @@ const daemon = (home: string, script: FakeScript = () => []) =>
     Layer.provide(ScriptedClaude),
     Layer.provide(Codex.layerTest()),
     Layer.provide(Kiro.layerTest()),
+    Layer.provide(Antigravity.layerTest()),
     Layer.provide(ClaudeHistory.layerTest()),
     Layer.provideMerge(AuthToken.layer),
     Layer.provide(AgentRunnerFake(script)),
