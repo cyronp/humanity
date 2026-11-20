@@ -72,24 +72,14 @@ export const BranchCommits = Schema.Struct({
 })
 export type BranchCommits = typeof BranchCommits.Type
 
-/** A file a branch changes against the branch it would merge into. */
-export const ComparedFile = Schema.Struct({
-  path: Schema.String,
-  previousPath: Schema.NullOr(Schema.String),
-  kind: Schema.Literals(["create", "modify", "delete", "rename"]),
-  insertions: Schema.Int,
-  deletions: Schema.Int,
-  binary: Schema.Boolean,
-})
-export type ComparedFile = typeof ComparedFile.Type
-
 /** What a pull request from the thread's branch into `base` would carry. */
 export const BranchComparison = Schema.Struct({
   /** The ref compared against: `origin/<base>` when origin has it, else the local branch. */
   base: Schema.String,
   commits: Schema.Array(CommitSummary),
   more: Schema.Boolean,
-  files: Schema.Array(ComparedFile),
+  /** Every file the branch changes since it left the base, with its hunks. */
+  files: Schema.Array(FileDiff),
 })
 export type BranchComparison = typeof BranchComparison.Type
 

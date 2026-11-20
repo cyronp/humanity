@@ -885,7 +885,7 @@ export class PullRequestService extends Context.Service<
         const [listed, files] = yield* Effect.all(
           [
             git.log(cwd, ref, { exclude: against, limit: COMMIT_LIST_LIMIT }),
-            git.compareFiles(cwd, against, ref),
+            git.diffRange(cwd, against, ref),
           ],
           { concurrency: 2 },
         )

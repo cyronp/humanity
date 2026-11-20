@@ -1,6 +1,5 @@
 import {
   type Branch,
-  type ComparedFile,
   type FileDiff,
   GitBranchExists,
   GitCommandFailed,
@@ -21,7 +20,6 @@ import {
   LOG_FORMAT,
   type LoggedCommit,
   parseBranches,
-  parseChangedFiles,
   parseLog,
   parseStatus,
   parseWorktrees,
@@ -82,12 +80,12 @@ export class GitService extends Context.Service<
       exclude: string,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<string>, GitError>
-    /** The files `to` changes since it left `from` (`from...to`), with their line counts. */
-    readonly compareFiles: (
+    /** What `to` changes since it left `from` (`from...to`), file by file with its hunks. */
+    readonly diffRange: (
       cwd: string,
       from: string,
       to: string,
-    ) => Effect.Effect<ReadonlyArray<ComparedFile>, GitError>
+    ) => Effect.Effect<ReadonlyArray<FileDiff>, GitError>
     readonly diff: (cwd: string, base?: string) => Effect.Effect<WorkingTreeDiff, GitError>
     readonly worktreeAdd: (
       cwd: string,
@@ -514,24 +512,17 @@ export class GitService extends Context.Service<
           ),
         )
 
-      const compareFiles = (cwd: string, from: string, to: string) =>
-        Effect.all(
-          ["--name-status", "--numstat"].map((format) =>
-            exec(cwd, [
-              ...STABLE_OUTPUT,
-              "diff",
-              "-z",
-              "-M",
-              format,
-              "--end-of-options",
-              `${from}...${to}`,
-              "--",
-            ]),
-          ),
-          { concurrency: 2 },
-        ).pipe(
-          Effect.map(([nameStatus = "", numstat = ""]) => parseChangedFiles(nameStatus, numstat)),
-        )
+      const diffRange = (cwd: string, from: string, to: string) =>
+        exec(cwd, [
+          ...STABLE_OUTPUT,
+          "diff",
+          "--no-color",
+          "--no-ext-diff",
+          "--find-renames",
+          "--end-of-options",
+          `${from}...${to}`,
+          "--",
+        ]).pipe(Effect.map(parseUnifiedDiff))
 
       const aheadBehind = (cwd: string, ref: string, target: string) =>
         exec(cwd, [
@@ -616,7 +607,7 @@ export class GitService extends Context.Service<
         hasCommit,
         log,
         commitsNotIn,
-        compareFiles,
+        diffRange,
         diff,
         worktreeAdd,
         worktreeRemove,

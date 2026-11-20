@@ -1,12 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type {
-  BranchComparison,
-  BranchPublication,
-  ComparedFile,
-  Forge,
-  Session,
-} from "@humanity/contracts"
-import { cn } from "cn"
+import { countChanges } from "@humanity/diff"
+import type { BranchComparison, BranchPublication, Forge, Session } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { ChevronLeft, GitPullRequest, PanelRightClose } from "lucide-react"
@@ -26,8 +20,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { ChangeCount } from "@/features/diff/FileDiffView"
-import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
+import { ChangeCount, FileDiffView } from "@/features/diff/FileDiffView"
 import { branchesAtom } from "@/features/git/atoms"
 import { describeCause } from "@/lib/errors"
 import { useNow } from "@/lib/elapsed"
@@ -35,6 +28,7 @@ import { keys } from "@/lib/rpc"
 import { comparisonAtom, comparisonKey, createPullRequestAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 import { CommitRow } from "./CommitsTab.tsx"
+import { fileKey } from "./DiffTab.tsx"
 import { Hinted, WAIT_FOR_AGENT } from "./PrimaryAction.tsx"
 import { baseBranches, forgeTerms } from "./publication.ts"
 
@@ -179,7 +173,13 @@ export function OpenPullRequestPage({
             <ErrorNote title={`The ${terms.noun} was not opened`} message={error} />
           )}
           <AsyncView result={comparison} errorTitle={`Could not compare ${branch} with ${base}`}>
-            {(value) => <Carries comparison={value} forge={publication.forge} />}
+            {(value) => (
+              <Carries
+                comparison={value}
+                forge={publication.forge}
+                editorRoot={session.worktreePath}
+              />
+            )}
           </AsyncView>
         </div>
       </ScrollArea>
@@ -207,17 +207,19 @@ export function OpenPullRequestPage({
   )
 }
 
-/** What the pull request will carry: its commits, then the files they change. */
+/** What the pull request will carry: its commits, then the files they change, each with its diff. */
 function Carries({
   comparison,
   forge,
+  editorRoot,
 }: {
   readonly comparison: BranchComparison
   readonly forge: Forge | null
+  readonly editorRoot: string
 }) {
   const now = useNow(60_000)
-  const added = comparison.files.reduce((sum, file) => sum + file.insertions, 0)
-  const removed = comparison.files.reduce((sum, file) => sum + file.deletions, 0)
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  const total = countChanges(comparison.files.flatMap((file) => file.hunks))
   if (comparison.commits.length === 0) {
     return (
       <p className="py-4 text-center text-sm text-muted-foreground">
@@ -225,6 +227,13 @@ function Carries({
       </p>
     )
   }
+  const toggle = (key: string, next: boolean) =>
+    setOpen((current) => {
+      const updated = new Set(current)
+      if (next) updated.add(key)
+      else updated.delete(key)
+      return updated
+    })
   return (
     <>
       <section className="flex flex-col gap-2" aria-label="Commits">
@@ -246,37 +255,25 @@ function Carries({
           Files changed
           <span className="flex items-baseline gap-1.5 text-xs font-normal text-muted-foreground">
             {comparison.files.length}
-            <ChangeCount added={added} removed={removed} />
+            <ChangeCount {...total} />
           </span>
         </h3>
-        <ul className="-mx-4 divide-y border-y">
-          {comparison.files.map((file) => (
-            <FileRow key={file.path} file={file} />
-          ))}
-        </ul>
+        <div className="-mx-4 border-t">
+          {comparison.files.map((file) => {
+            const key = fileKey(file)
+            return (
+              <FileDiffView
+                key={key}
+                file={file}
+                flat
+                editorRoot={editorRoot}
+                open={open.has(key)}
+                onOpenChange={(next) => toggle(key, next)}
+              />
+            )
+          })}
+        </div>
       </section>
     </>
-  )
-}
-
-function FileRow({ file }: { readonly file: ComparedFile }) {
-  const slash = file.path.lastIndexOf("/") + 1
-  return (
-    <li className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/40">
-      <FileStatusLetter kind={file.kind} />
-      <span className="min-w-0 flex-1 truncate" title={file.path}>
-        <span className={cn(fileNameClass(file.kind))}>{file.path.slice(slash)}</span>
-        {slash > 0 && (
-          <span className="ml-1.5 text-xs text-muted-foreground">
-            {file.path.slice(0, slash - 1)}
-          </span>
-        )}
-      </span>
-      {file.binary ? (
-        <span className="text-xs text-muted-foreground">binary</span>
-      ) : (
-        <ChangeCount added={file.insertions} removed={file.deletions} />
-      )}
-    </li>
   )
 }

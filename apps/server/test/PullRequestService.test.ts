@@ -291,10 +291,10 @@ describe("PullRequestService.commits", () => {
           [unpushed, pushed],
         )
         assert.deepStrictEqual(
-          compared.files.map(({ path, kind }) => ({ path, kind })),
+          compared.files.map(({ filePath, kind }) => ({ filePath, kind })),
           [
-            { path: "a.txt", kind: "create" },
-            { path: "b.txt", kind: "create" },
+            { filePath: "a.txt", kind: "create" },
+            { filePath: "b.txt", kind: "create" },
           ],
         )
         const missing = yield* Effect.flip(pullRequests.compare(session.id, "nope"))

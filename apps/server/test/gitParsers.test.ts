@@ -3,7 +3,6 @@ import { parseGitHubFullName, parseGitLabRemote } from "../src/services/GitServi
 import {
   FIELD,
   parseBranches,
-  parseChangedFiles,
   parseLog,
   parseStatus,
   parseWorktrees,
@@ -261,76 +260,5 @@ describe("parseGitLabRemote", () => {
     expect(parseGitLabRemote("/home/me/widgets", hosts)).toBeUndefined()
     expect(parseGitLabRemote("https://gitlab.com/widgets", hosts)).toBeUndefined()
     expect(parseGitLabRemote(undefined, hosts)).toBeUndefined()
-  })
-})
-
-describe("parseChangedFiles", () => {
-  it("pairs what happened to each file with its line counts, renames and binaries too", () => {
-    const nameStatus = [
-      "M",
-      "src/a.ts",
-      "A",
-      "new.ts",
-      "D",
-      "gone.ts",
-      "R087",
-      "old.md",
-      "docs/new.md",
-      "M",
-      "logo.png",
-      "",
-    ].join("\0")
-    const numstat = [
-      "12\t3\tsrc/a.ts",
-      "5\t0\tnew.ts",
-      "0\t9\tgone.ts",
-      "2\t1\t",
-      "old.md",
-      "docs/new.md",
-      "-\t-\tlogo.png",
-      "",
-    ].join("\0")
-    expect(parseChangedFiles(nameStatus, numstat)).toEqual([
-      {
-        path: "src/a.ts",
-        previousPath: null,
-        kind: "modify",
-        insertions: 12,
-        deletions: 3,
-        binary: false,
-      },
-      {
-        path: "new.ts",
-        previousPath: null,
-        kind: "create",
-        insertions: 5,
-        deletions: 0,
-        binary: false,
-      },
-      {
-        path: "gone.ts",
-        previousPath: null,
-        kind: "delete",
-        insertions: 0,
-        deletions: 9,
-        binary: false,
-      },
-      {
-        path: "docs/new.md",
-        previousPath: "old.md",
-        kind: "rename",
-        insertions: 2,
-        deletions: 1,
-        binary: false,
-      },
-      {
-        path: "logo.png",
-        previousPath: null,
-        kind: "modify",
-        insertions: 0,
-        deletions: 0,
-        binary: true,
-      },
-    ])
   })
 })
