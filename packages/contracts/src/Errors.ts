@@ -289,6 +289,15 @@ export class AccountFolderInvalid extends Schema.TaggedError<AccountFolderInvali
   }
 }
 
+export class ProviderSwitchUnavailable extends Schema.TaggedError<ProviderSwitchUnavailable>()(
+  "ProviderSwitchUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
 export class PlanUsageUnavailable extends Schema.TaggedError<PlanUsageUnavailable>()(
   "PlanUsageUnavailable",
   { reason: Schema.String },

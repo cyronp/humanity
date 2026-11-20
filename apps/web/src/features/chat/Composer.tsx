@@ -1,10 +1,11 @@
 import { useAtomSet } from "@effect/atom-react"
-import type {
-  AgentProvider,
-  Autonomy,
-  ProjectId,
-  ReasoningEffort,
-  SessionId,
+import {
+  type AgentProvider,
+  type Autonomy,
+  DEFAULT_ACCOUNT,
+  type ProjectId,
+  type ReasoningEffort,
+  type SessionId,
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import {
@@ -22,6 +23,7 @@ import type { PromptInsertion } from "@/features/extensions/prompt"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
+import type { ModelChoice } from "@/features/providers/models"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import {
   interruptAtom,
@@ -30,6 +32,7 @@ import {
   setAutonomyAtom,
   setEffortAtom,
   setModelAtom,
+  switchProviderAtom,
 } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
@@ -43,6 +46,8 @@ export interface ComposerHandle {
   readonly insert: (insertion: PromptInsertion) => void
   /** Adds files to the message, as a drop or a paste does. */
   readonly attach: (files: ReadonlyArray<File>) => void
+  /** Opens the model picker, to move the thread to another model, provider or account. */
+  readonly openModelPicker: () => void
 }
 
 export const Composer = memo(function Composer({
@@ -52,6 +57,7 @@ export const Composer = memo(function Composer({
   provider,
   model,
   effort,
+  accountId,
   disabled,
   busy,
   onTypingChange,
@@ -64,6 +70,8 @@ export const Composer = memo(function Composer({
   readonly provider: AgentProvider
   readonly model: string | null
   readonly effort: ReasoningEffort | null
+  /** The account the thread runs as; `null` for the provider's default login. */
+  readonly accountId: string | null
   readonly disabled: boolean
   readonly busy: boolean
   /** Told when the box starts or stops holding something to send. */
@@ -72,6 +80,7 @@ export const Composer = memo(function Composer({
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
   const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
+  const moveThread = useAtomSet(switchProviderAtom, { mode: "promiseExit" })
   const updateEffort = useAtomSet(setEffortAtom, { mode: "promiseExit" })
   const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
   const [stopping, setStopping] = useState(false)
@@ -84,7 +93,12 @@ export const Composer = memo(function Composer({
   const [effortError, setEffortError] = useState<string>()
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
-  useImperativeHandle(ref, () => ({ insert, attach: (added) => void files.add(added) }))
+  const [pickerOpen, setPickerOpen] = useState(false)
+  useImperativeHandle(ref, () => ({
+    insert,
+    attach: (added) => void files.add(added),
+    openModelPicker: () => setPickerOpen(true),
+  }))
   const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
   const mentions = useFileMention({
     text,
@@ -137,9 +151,21 @@ export const Composer = memo(function Composer({
     if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
   }
 
-  const changeModel = async (next: string | null) => {
+  const changeModel = async (choice: ModelChoice) => {
     setModelError(undefined)
-    const exit = await updateModel({ payload: { sessionId, model: next } })
+    const sameAgent =
+      choice.provider === provider &&
+      (choice.accountId === undefined || choice.accountId === (accountId ?? DEFAULT_ACCOUNT))
+    const exit = sameAgent
+      ? await updateModel({ payload: { sessionId, model: choice.model } })
+      : await moveThread({
+          payload: {
+            sessionId,
+            provider: choice.provider,
+            model: choice.model,
+            ...(choice.accountId === undefined ? {} : { accountId: choice.accountId }),
+          },
+        })
     if (Exit.isFailure(exit)) setModelError(describeCause(exit.cause))
   }
 
@@ -215,8 +241,12 @@ export const Composer = memo(function Composer({
             <ModelPicker
               provider={provider}
               value={model}
-              onChange={(choice) => void changeModel(choice.model)}
-              locked
+              onChange={(choice) => void changeModel(choice)}
+              locked={busy}
+              movesThread
+              accountId={accountId ?? DEFAULT_ACCOUNT}
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
               disabled={disabled}
             />
             {canStop ? (

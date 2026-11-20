@@ -139,6 +139,42 @@ describe("reduceSessionEvent", () => {
     expect(view?.messages).toHaveLength(1)
   })
 
+  it("drops a message the daemon removed, such as a provider switch that was replaced", () => {
+    const user = message("m1", { _tag: "user", text: "hi" })
+    const moved = message("m2", {
+      _tag: "provider_switch",
+      from: "claude-code",
+      to: "kiro",
+      model: null,
+      resumed: false,
+      included: 1,
+      omitted: 0,
+    })
+    const view = fold([
+      snapshot({ messages: [user, moved] }),
+      { _tag: "MessageRemoved", messageId: "m2" },
+    ])
+    expect(view?.messages.map((each) => each.id)).toEqual(["m1"])
+  })
+
+  it("shows a message the daemon changed in place, such as a switch's new model", () => {
+    const content = {
+      _tag: "provider_switch",
+      from: "claude-code",
+      to: "codex",
+      model: "gpt-6-luna",
+      resumed: false,
+      included: 1,
+      omitted: 0,
+    } as const
+    const view = fold([
+      snapshot({ messages: [message("m1", content)] }),
+      { _tag: "MessageUpdated", message: message("m1", { ...content, model: "gpt-5.6-terra" }) },
+    ])
+    const [only] = view?.messages ?? []
+    expect(only?.content._tag === "provider_switch" && only.content.model).toBe("gpt-5.6-terra")
+  })
+
   it("updates tool calls as they start and finish", () => {
     const view = fold([
       snapshot(),

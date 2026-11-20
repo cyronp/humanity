@@ -1,12 +1,14 @@
-import type {
-  Approval,
-  Attachment,
-  ChatMessage,
-  MessageContent,
-  SessionId,
-  ToolCall,
+import {
+  type Approval,
+  type Attachment,
+  type ChatMessage,
+  type MessageContent,
+  PROVIDER_NAMES,
+  type SessionId,
+  type ToolCall,
 } from "@humanity/contracts"
-import { Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import { ArrowRight, Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import { cn } from "cn"
 import { memo, type ReactNode, useMemo } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -29,10 +31,22 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import { modelDisplayName } from "@/features/providers/models"
+import { ProviderIcon } from "@/features/providers/ProviderIcon"
+import { useProviderModels } from "@/features/providers/useProviderModels"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
+import {
+  formatTokens,
+  type HandoffWeight,
+  handoffTokens,
+  handoffWeight,
+  providerSwitchDetail,
+  providerSwitchStatus,
+  providerSwitchSummary,
+} from "./providerSwitch.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
@@ -63,6 +77,7 @@ export function MessageList({
   readonly bottomInset?: number
 }) {
   const items = useMemo(() => messages.filter(isShown), [messages])
+  const delivered = useMemo(() => deliveredSwitches(messages), [messages])
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
@@ -87,6 +102,7 @@ export function MessageList({
               >
                 <TranscriptEntry
                   message={message}
+                  delivered={delivered.has(message.id)}
                   toolCalls={toolCalls}
                   approvals={approvals}
                   worktreePath={worktreePath}
@@ -122,18 +138,41 @@ export function MessageList({
   )
 }
 
+/** The provider switches whose context a later message of the human has carried. */
+const deliveredSwitches = (messages: ReadonlyArray<ChatMessage>): ReadonlySet<string> => {
+  const delivered = new Set<string>()
+  let waiting: Array<string> = []
+  for (const message of messages) {
+    if (message.content._tag === "provider_switch") waiting.push(message.id)
+    if (message.content._tag === "user") {
+      for (const id of waiting) delivered.add(id)
+      waiting = []
+    }
+  }
+  return delivered
+}
+
 const TranscriptEntry = memo(function TranscriptEntry({
   message,
+  delivered,
   toolCalls,
   approvals,
   worktreePath,
 }: {
   readonly message: ChatMessage
+  readonly delivered: boolean
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
 }) {
-  return renderContent(message.sessionId, message.content, toolCalls, approvals, worktreePath)
+  return renderContent(
+    message.sessionId,
+    message.content,
+    toolCalls,
+    approvals,
+    worktreePath,
+    delivered,
+  )
 })
 
 const renderContent = (
@@ -142,6 +181,7 @@ const renderContent = (
   toolCalls: Readonly<Record<string, ToolCall>>,
   approvals: ReadonlyMap<string, Approval>,
   worktreePath: string,
+  delivered: boolean,
 ) => {
   switch (content._tag) {
     case "user":
@@ -168,6 +208,8 @@ const renderContent = (
       return <InitLine content={content} />
     case "notice":
       return <Notice content={content} />
+    case "provider_switch":
+      return <ProviderSwitchLine content={content} delivered={delivered} />
     case "tool_results":
     case "other":
       return null
@@ -325,6 +367,68 @@ function InitLine({ content }: { readonly content: Content<"system_init"> }) {
         <TraceTitle title={summary}>{summary}</TraceTitle>
       </TraceLine>
     </Trace>
+  )
+}
+
+const WEIGHT_CLASS: Record<HandoffWeight, string> = {
+  light: "bg-success/10 text-success",
+  medium: "bg-warning/10 text-warning",
+  heavy: "bg-destructive/10 text-destructive",
+}
+
+function ProviderSwitchLine({
+  content,
+  delivered,
+}: {
+  readonly content: Content<"provider_switch">
+  readonly delivered: boolean
+}) {
+  const { models } = useProviderModels()
+  const withAccount = (name: string, account: string | undefined) =>
+    account === undefined ? name : `${name} (${account})`
+  const names = {
+    from: withAccount(
+      content.fromModel === undefined
+        ? PROVIDER_NAMES[content.from]
+        : modelDisplayName(models[content.from], content.fromModel),
+      content.fromAccount,
+    ),
+    to: withAccount(modelDisplayName(models[content.to], content.model), content.account),
+  }
+  const summary = providerSwitchSummary(content, names, delivered)
+  const status = providerSwitchStatus(content, delivered)
+  const tokens = handoffTokens(content)
+  const icon = "inline-block size-3.5 align-[-0.2em]"
+  return (
+    <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
+      <span className="h-px min-w-4 flex-1 bg-border" />
+      <span
+        className="min-w-0 truncate whitespace-nowrap"
+        title={`${summary}
+${providerSwitchDetail(content)}`}
+        aria-label={summary}
+      >
+        <ProviderIcon provider={content.from} className={icon} /> {names.from}{" "}
+        <ArrowRight className="inline-block size-3 align-[-0.15em]" aria-hidden />{" "}
+        <ProviderIcon provider={content.to} className={icon} />{" "}
+        <span className="font-medium text-foreground">{names.to}</span>
+        {status !== "" && ` · ${status}`}
+        {tokens !== undefined && (
+          <>
+            {" · "}
+            <span
+              className={cn(
+                "inline-block rounded px-1.5 py-0.5 font-medium tabular-nums",
+                WEIGHT_CLASS[handoffWeight(tokens)],
+              )}
+            >
+              ~{formatTokens(tokens)} tokens
+            </span>
+          </>
+        )}
+      </span>
+      <span className="h-px min-w-4 flex-1 bg-border" />
+    </div>
   )
 }
 

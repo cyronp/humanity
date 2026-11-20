@@ -6,7 +6,6 @@ import {
   type TerminalOwner,
 } from "@humanity/contracts"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useBrowser } from "@/features/browser/useBrowser"
@@ -19,6 +18,7 @@ import { ChangeCards } from "@/features/review/ChangeCards"
 import { ConfirmationCard } from "@/features/review/ConfirmationCard"
 import { ToolPanel, ToolRail } from "./panel/SessionPanel.tsx"
 import { SessionHeader } from "./SessionHeader.tsx"
+import { StoppedNote } from "./StoppedNote.tsx"
 import {
   approvalsByToolUse,
   isBusy,
@@ -157,7 +157,13 @@ export function Workspace({
             }
             footer={
               view.error !== null ? (
-                <ErrorNote title="The agent stopped" message={view.error} />
+                <StoppedNote
+                  error={view.error}
+                  plan={view.usage.plan}
+                  onSwitch={
+                    acceptsMessages(session) ? () => composer.current?.openModelPicker() : undefined
+                  }
+                />
               ) : undefined
             }
           />
@@ -201,6 +207,7 @@ export function Workspace({
                   provider={session.provider}
                   model={session.model}
                   effort={session.effort}
+                  accountId={session.accountId ?? null}
                   disabled={!acceptsMessages(session)}
                   busy={isBusy(session.status)}
                   onTypingChange={setTyping}

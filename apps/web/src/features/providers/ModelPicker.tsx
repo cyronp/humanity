@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react"
 import { cn } from "cn"
+import { DEFAULT_ACCOUNT } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronLeft, ChevronRight, Star, TriangleAlert } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useState } from "react"
@@ -15,20 +16,16 @@ import { InputGroupButton } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { claudeStatusAtom } from "@/features/claude/atoms"
-import { codexStatusAtom } from "@/features/codex/atoms"
-import { antigravityStatusAtom } from "@/features/antigravity/atoms"
-import { kiroStatusAtom } from "@/features/kiro/atoms"
 import {
   DEFAULT_MODEL,
   type ModelChoice,
   modelKey,
   offeredProviders,
   type PickerModel,
-  pickerModels,
   shortModelName,
 } from "./models.ts"
 import { agentCliAtom, cliProblem } from "./cli.ts"
+import { type PickerAccount, useProviderAccounts, useProviderModels } from "./useProviderModels.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -62,67 +59,92 @@ const useFavoriteModels = () => {
 
 type Section = "favorites" | ProviderId
 
-export function ModelPicker({
+interface ModelPickerProps {
+  readonly provider: ProviderId
+  readonly value: string | null
+  readonly onChange: (choice: ModelChoice) => void
+  /** Offers only the current provider's models. */
+  readonly locked?: boolean
+  /**
+   * The picker of an open thread: picking another provider's model, or another account's, moves
+   * the thread there, and the picker says so.
+   */
+  readonly movesThread?: boolean
+  /** The account the thread runs as (`default` for the default login). */
+  readonly accountId?: string | undefined
+  readonly disabled?: boolean
+  /** Opens and closes the picker from outside, when given. */
+  readonly open?: boolean
+  readonly onOpenChange?: (open: boolean) => void
+}
+
+export function ModelPicker(props: ModelPickerProps) {
+  return props.movesThread === true ? (
+    <ThreadModelPicker {...props} />
+  ) : (
+    <PickerBody {...props} accounts={undefined} />
+  )
+}
+
+function ThreadModelPicker(props: ModelPickerProps) {
+  const accounts = useProviderAccounts()
+  return <PickerBody {...props} accounts={accounts} />
+}
+
+function PickerBody({
   provider,
   value,
   onChange,
   locked = false,
+  movesThread = false,
+  accountId = DEFAULT_ACCOUNT,
   disabled = false,
-}: {
-  readonly provider: ProviderId
-  readonly value: string | null
-  readonly onChange: (choice: ModelChoice) => void
-  readonly locked?: boolean
-  readonly disabled?: boolean
+  open: openFromOutside,
+  onOpenChange: tellOpen,
+  accounts,
+}: ModelPickerProps & {
+  readonly accounts: Readonly<Record<ProviderId, ReadonlyArray<PickerAccount>>> | undefined
 }) {
-  const claude = useAtomValue(claudeStatusAtom)
-  const codex = useAtomValue(codexStatusAtom)
-  const kiro = useAtomValue(kiroStatusAtom)
-  const antigravity = useAtomValue(antigravityStatusAtom)
-  const connected: Record<ProviderId, boolean> = {
-    "claude-code": AsyncResult.isSuccess(claude) && claude.value.connection._tag === "Connected",
-    codex: AsyncResult.isSuccess(codex) && codex.value.connection._tag === "Connected",
-    kiro: AsyncResult.isSuccess(kiro) && kiro.value.connection._tag === "Connected",
-    antigravity:
-      AsyncResult.isSuccess(antigravity) && antigravity.value.connection._tag === "Connected",
-  }
-  const answered: Record<ProviderId, boolean> = {
-    "claude-code": AsyncResult.isSuccess(claude),
-    codex: AsyncResult.isSuccess(codex),
-    kiro: AsyncResult.isSuccess(kiro),
-    antigravity: AsyncResult.isSuccess(antigravity),
-  }
+  const { models: reported, connected, answered } = useProviderModels()
   const providers = offeredProviders(
     Object.keys(PROVIDERS) as Array<ProviderId>,
     provider,
     connected,
     locked,
   )
-  const reported: Record<ProviderId, ReadonlyArray<PickerModel>> = {
-    "claude-code": pickerModels(
-      "claude-code",
-      AsyncResult.isSuccess(claude) ? claude.value.models : [],
-    ),
-    codex: pickerModels("codex", AsyncResult.isSuccess(codex) ? codex.value.models : []),
-    kiro: pickerModels("kiro", AsyncResult.isSuccess(kiro) ? kiro.value.models : []),
-    antigravity: pickerModels(
-      "antigravity",
-      AsyncResult.isSuccess(antigravity) ? antigravity.value.models : [],
-    ),
-  }
-  const models = providers.flatMap((id) => reported[id])
+  const [chosenAccounts, setChosenAccounts] = useState<Partial<Record<ProviderId, string>>>({})
+  const signedInAccounts = (id: ProviderId) =>
+    (accounts?.[id] ?? []).filter((account) => account.connected)
+  const accountFor = (id: ProviderId) =>
+    chosenAccounts[id] ??
+    (id === provider
+      ? accountId
+      : (signedInAccounts(id).find((account) => account.active)?.id ?? DEFAULT_ACCOUNT))
+  const modelsOf = (id: ProviderId): ReadonlyArray<PickerModel> =>
+    signedInAccounts(id).find((account) => account.id === accountFor(id))?.models ?? reported[id]
+  const models = providers.flatMap((id) => modelsOf(id))
   const selected = value ?? DEFAULT_MODEL
-  const isSelected = (model: PickerModel) => model.provider === provider && model.value === selected
-  const current = models.find(isSelected)
+  const isSelected = (model: PickerModel) =>
+    model.provider === provider &&
+    model.value === selected &&
+    (accounts === undefined || accountFor(provider) === accountId)
+  const current = modelsOf(provider).find(
+    (model) => model.provider === provider && model.value === selected,
+  )
 
-  const [open, setOpen] = useState(false)
+  const [openInside, setOpenInside] = useState(false)
+  const open = openFromOutside ?? openInside
+  const setOpen = (next: boolean) => {
+    setOpenInside(next)
+    tellOpen?.(next)
+  }
   const [section, setSection] = useState<Section>(provider)
   const [legacyOpen, setLegacyOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [favorites, toggleFavorite] = useFavoriteModels()
 
   const searching = search.trim() !== ""
-  const inSection = section === "favorites" ? [] : reported[section]
+  const inSection = section === "favorites" ? [] : modelsOf(section)
   const legacy = inSection.filter((model) => model.legacy)
   const rows = searching
     ? models
@@ -136,6 +158,7 @@ export function ModelPicker({
     onChange({
       provider: model.provider,
       model: model.value === DEFAULT_MODEL ? null : model.value,
+      ...(accounts === undefined ? {} : { accountId: accountFor(model.provider) }),
     })
     setOpen(false)
   }
@@ -144,6 +167,7 @@ export function ModelPicker({
     setOpen(next)
     if (next) {
       setSection(provider)
+      setChosenAccounts({})
     } else {
       setSearch("")
       setLegacyOpen(false)
@@ -216,6 +240,27 @@ export function ModelPicker({
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
           <CommandList className="h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))] max-h-none">
             <CommandEmpty>No model matches.</CommandEmpty>
+            {section !== "favorites" &&
+              !searching &&
+              !locked &&
+              signedInAccounts(section).length > 1 && (
+                <AccountChooser
+                  accounts={signedInAccounts(section)}
+                  value={accountFor(section)}
+                  current={section === provider ? accountId : undefined}
+                  onChange={(id) => setChosenAccounts((chosen) => ({ ...chosen, [section]: id }))}
+                />
+              )}
+            {movesThread &&
+              section !== "favorites" &&
+              !searching &&
+              (section !== provider || accountFor(section) !== accountId) && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  Picking a model here moves this thread to{" "}
+                  {section === provider ? "this account" : PROVIDERS[section].name}. It gets this
+                  conversation as context with your next message.
+                </p>
+              )}
             {legacyOpen && !searching && section !== "favorites" && (
               <CommandItem
                 value="back"
@@ -238,6 +283,11 @@ export function ModelPicker({
               />
             ))}
             {section !== "favorites" && !searching && <CliPickerNote provider={section} />}
+            {movesThread && locked && section === provider && !searching && (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Other providers show here once the agent is idle.
+              </p>
+            )}
             {section !== "favorites" && !searching && answered[section] && !connected[section] && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
                 {PROVIDERS[section].name} is not signed in. Settings, under Providers, shows how.
@@ -265,6 +315,47 @@ export function ModelPicker({
         </Command>
       </PopoverContent>
     </Popover>
+  )
+}
+
+function AccountChooser({
+  accounts,
+  value,
+  current,
+  onChange,
+}: {
+  readonly accounts: ReadonlyArray<PickerAccount>
+  readonly value: string
+  /** The account the thread runs as, when this is its provider. */
+  readonly current: string | undefined
+  readonly onChange: (accountId: string) => void
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Account"
+      className="flex flex-wrap items-center gap-1 px-2 py-2"
+    >
+      <span className="px-1 text-xs text-muted-foreground">Account</span>
+      {accounts.map((account) => (
+        <button
+          key={account.id}
+          type="button"
+          role="radio"
+          aria-checked={account.id === value}
+          onClick={() => onChange(account.id)}
+          title={account.id === current ? `${account.name} (this thread's account)` : account.name}
+          className={cn(
+            "max-w-32 truncate rounded-md border px-2 py-0.5 text-xs transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
+            account.id === value
+              ? "border-foreground/30 bg-muted font-medium text-foreground"
+              : "border-transparent text-muted-foreground",
+          )}
+        >
+          {account.name}
+        </button>
+      ))}
+    </div>
   )
 }
 

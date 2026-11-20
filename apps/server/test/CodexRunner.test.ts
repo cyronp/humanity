@@ -138,6 +138,7 @@ describe("a Codex run", () => {
             tools: {
               open_thread: { approval_mode: "approve" },
               load_skill: { approval_mode: "approve" },
+              thread_history: { approval_mode: "approve" },
               terminal_list: { approval_mode: "approve" },
               terminal_read: { approval_mode: "approve" },
               terminal_send: { approval_mode: "approve" },

@@ -43,6 +43,7 @@ export const sendMessageAtom = HumanityClient.mutation("Sessions.sendMessage")
 export const setupWorktreeAtom = HumanityClient.mutation("Sessions.setupWorktree")
 export const setAutonomyAtom = HumanityClient.mutation("Sessions.setAutonomy")
 export const setModelAtom = HumanityClient.mutation("Sessions.setModel")
+export const switchProviderAtom = HumanityClient.mutation("Sessions.switchProvider")
 export const setEffortAtom = HumanityClient.mutation("Sessions.setEffort")
 
 export const attachmentAtom = Atom.family((key: string) => {

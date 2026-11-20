@@ -33,6 +33,7 @@ const SessionRow = Schema.Struct({
   in_worktree: Schema.Number,
   model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(ReasoningEffort),
+  account_id: Schema.optional(Schema.NullOr(Schema.String)),
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
@@ -51,6 +52,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   inWorktree: row.in_worktree !== 0,
   model: row.model,
   effort: row.effort,
+  accountId: row.account_id ?? null,
   autonomy: row.autonomy,
   status: row.status,
   origin: row.origin,
@@ -168,6 +170,30 @@ const ImportIndexRow = Schema.Struct({
   import_mtime: Schema.NullOr(Schema.Number),
 })
 
+export interface ParkedProvider {
+  readonly sessionId: string
+  readonly provider: AgentProvider
+  readonly accountId: string | null
+  readonly sdkSessionId: string
+  readonly cwd: string
+  /** How many entries of the thread's history the provider had seen when it left. */
+  readonly seenEntries: number
+  readonly parkedAt: string
+}
+
+const ParkedRow = Schema.Struct({
+  session_id: Schema.String,
+  provider: AgentProvider,
+  account_key: Schema.String,
+  sdk_session_id: Schema.String,
+  cwd: Schema.String,
+  seen_entries: Schema.Number,
+  parked_at: Schema.String,
+})
+
+/** The default login has no account id; the table's key needs a value for it. */
+const accountKey = (accountId: string | null) => accountId ?? ""
+
 export class SessionRepo extends Context.Service<
   SessionRepo,
   {
@@ -182,7 +208,8 @@ export class SessionRepo extends Context.Service<
       sessionId: string,
       changes: {
         readonly status?: SessionStatus
-        readonly sdkSessionId?: string
+        readonly provider?: AgentProvider
+        readonly sdkSessionId?: string | null
         readonly autonomy?: Autonomy
         readonly model?: string | null
         readonly effort?: ReasoningEffort | null
@@ -196,9 +223,22 @@ export class SessionRepo extends Context.Service<
     readonly writeImported: (imported: ImportedThreadRows) => Effect.Effect<boolean>
     readonly getAccountId: (sessionId: string) => Effect.Effect<string | null>
     readonly setAccountId: (sessionId: string, accountId: string | null) => Effect.Effect<void>
+    /** Keeps the conversation a provider had in this thread, for when the thread comes back. */
+    readonly parkProvider: (parked: ParkedProvider) => Effect.Effect<void>
+    readonly findParked: (
+      sessionId: string,
+      provider: AgentProvider,
+      accountId: string | null,
+    ) => Effect.Effect<Option.Option<ParkedProvider>>
+    readonly getPendingHandoff: (sessionId: string) => Effect.Effect<string | null>
+    readonly setPendingHandoff: (sessionId: string, text: string | null) => Effect.Effect<void>
+    readonly hasProviderSwitch: (sessionId: string) => Effect.Effect<boolean>
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
     readonly insertMessage: (message: ChatMessage, raw: unknown) => Effect.Effect<void>
+    readonly deleteMessage: (sessionId: string, messageId: string) => Effect.Effect<void>
+    /** Replaces what a message says; only Humanity's own messages (a switch's divider) change. */
+    readonly updateMessage: (message: ChatMessage) => Effect.Effect<void>
     readonly listMessages: (sessionId: string) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly transcriptPage: (
       sessionId: string,
@@ -346,7 +386,8 @@ export class SessionRepo extends Context.Service<
         sessionId: string,
         changes: {
           readonly status?: SessionStatus
-          readonly sdkSessionId?: string
+          readonly provider?: AgentProvider
+          readonly sdkSessionId?: string | null
           readonly autonomy?: Autonomy
           readonly model?: string | null
           readonly effort?: ReasoningEffort | null
@@ -361,6 +402,7 @@ export class SessionRepo extends Context.Service<
             updated_at: changes.updatedAt,
             ...(changes.detachImport === undefined ? {} : { import_mtime: null }),
             ...(changes.status === undefined ? {} : { status: changes.status }),
+            ...(changes.provider === undefined ? {} : { provider: changes.provider }),
             ...(changes.sdkSessionId === undefined ? {} : { sdk_session_id: changes.sdkSessionId }),
             ...(changes.autonomy === undefined ? {} : { autonomy: changes.autonomy }),
             ...(changes.model === undefined ? {} : { model: changes.model }),
@@ -420,6 +462,79 @@ export class SessionRepo extends Context.Service<
           Effect.orDie,
         )
 
+      const findParkedRow = SqlSchema.findOneOption({
+        Request: Schema.Struct({
+          sessionId: Schema.String,
+          provider: Schema.String,
+          accountKey: Schema.String,
+        }),
+        Result: ParkedRow,
+        execute: ({ sessionId, provider, accountKey: key }) =>
+          sql`SELECT * FROM session_providers WHERE session_id = ${sessionId} AND provider = ${provider} AND account_key = ${key}`,
+      })
+
+      const parkProvider = (parked: ParkedProvider) =>
+        sql`
+          INSERT INTO session_providers ${sql.insert({
+            session_id: parked.sessionId,
+            provider: parked.provider,
+            account_key: accountKey(parked.accountId),
+            sdk_session_id: parked.sdkSessionId,
+            cwd: parked.cwd,
+            seen_entries: parked.seenEntries,
+            parked_at: parked.parkedAt,
+          })}
+          ON CONFLICT (session_id, provider, account_key) DO UPDATE SET
+            sdk_session_id = excluded.sdk_session_id,
+            cwd = excluded.cwd,
+            seen_entries = excluded.seen_entries,
+            parked_at = excluded.parked_at
+        `.pipe(Effect.asVoid, Effect.orDie)
+
+      const findParked = (sessionId: string, provider: AgentProvider, accountId: string | null) =>
+        findParkedRow({ sessionId, provider, accountKey: accountKey(accountId) }).pipe(
+          Effect.map(
+            Option.map((row): ParkedProvider => ({
+              sessionId: row.session_id,
+              provider: row.provider,
+              accountId: row.account_key === "" ? null : row.account_key,
+              sdkSessionId: row.sdk_session_id,
+              cwd: row.cwd,
+              seenEntries: row.seen_entries,
+              parkedAt: row.parked_at,
+            })),
+          ),
+          Effect.orDie,
+        )
+
+      const findPendingHandoff = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ pending_handoff: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT pending_handoff FROM sessions WHERE id = ${id}`,
+      })
+
+      const getPendingHandoff = (sessionId: string) =>
+        findPendingHandoff(sessionId).pipe(
+          Effect.map((row) => (Option.isSome(row) ? row.value.pending_handoff : null)),
+          Effect.orDie,
+        )
+
+      const setPendingHandoff = (sessionId: string, text: string | null) =>
+        sql`UPDATE sessions SET pending_handoff = ${text} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const findSwitch = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ id: Schema.String }),
+        execute: (id) =>
+          sql`SELECT id FROM messages WHERE session_id = ${id} AND role = 'provider_switch' LIMIT 1`,
+      })
+
+      const hasProviderSwitch = (sessionId: string) =>
+        findSwitch(sessionId).pipe(Effect.map(Option.isSome), Effect.orDie)
+
       const findAttachment = SqlSchema.findOneOption({
         Request: Schema.Struct({ sessionId: Schema.String, attachmentId: Schema.String }),
         Result: AttachmentRow,
@@ -460,6 +575,24 @@ export class SessionRepo extends Context.Service<
             })}
           `
         }).pipe(Effect.orDie)
+
+      const updateMessage = (message: ChatMessage) =>
+        Effect.gen(function* () {
+          const normalized = yield* encodeMessage(message.content)
+          yield* sql`
+            UPDATE messages SET ${sql.update({
+              role: message.content._tag,
+              normalized_json: normalized,
+            })}
+            WHERE session_id = ${message.sessionId} AND id = ${message.id}
+          `
+        }).pipe(Effect.orDie)
+
+      const deleteMessage = (sessionId: string, messageId: string) =>
+        sql`DELETE FROM messages WHERE session_id = ${sessionId} AND id = ${messageId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
 
       const toMessage = (row: typeof MessageRow.Type): ChatMessage => ({
         id: row.id,
@@ -531,9 +664,7 @@ export class SessionRepo extends Context.Service<
             ...(changes.structuredOutput === undefined
               ? {}
               : { structured: changes.structuredOutput }),
-          }).pipe(
-            Effect.catch(() => encodeOutput({ result: changes.output })),
-          )
+          }).pipe(Effect.catch(() => encodeOutput({ result: changes.output })))
           yield* sql`
             UPDATE tool_calls SET ${sql.update({
               status: changes.status,
@@ -650,9 +781,16 @@ export class SessionRepo extends Context.Service<
         writeImported,
         getAccountId,
         setAccountId,
+        parkProvider,
+        findParked,
+        getPendingHandoff,
+        setPendingHandoff,
+        hasProviderSwitch,
         getUsage,
         setUsage,
         insertMessage,
+        deleteMessage,
+        updateMessage,
         listMessages,
         transcriptPage,
         insertToolCall,
