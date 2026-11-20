@@ -34,7 +34,7 @@ import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
-import { providerSwitchSummary } from "./providerSwitch.ts"
+import { providerSwitchDetail, providerSwitchSummary } from "./providerSwitch.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
@@ -65,6 +65,7 @@ export function MessageList({
   readonly bottomInset?: number
 }) {
   const items = useMemo(() => messages.filter(isShown), [messages])
+  const delivered = useMemo(() => deliveredSwitches(messages), [messages])
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
@@ -89,6 +90,7 @@ export function MessageList({
               >
                 <TranscriptEntry
                   message={message}
+                  delivered={delivered.has(message.id)}
                   toolCalls={toolCalls}
                   approvals={approvals}
                   worktreePath={worktreePath}
@@ -124,18 +126,41 @@ export function MessageList({
   )
 }
 
+/** The provider switches whose context a later message of the human has carried. */
+const deliveredSwitches = (messages: ReadonlyArray<ChatMessage>): ReadonlySet<string> => {
+  const delivered = new Set<string>()
+  let waiting: Array<string> = []
+  for (const message of messages) {
+    if (message.content._tag === "provider_switch") waiting.push(message.id)
+    if (message.content._tag === "user") {
+      for (const id of waiting) delivered.add(id)
+      waiting = []
+    }
+  }
+  return delivered
+}
+
 const TranscriptEntry = memo(function TranscriptEntry({
   message,
+  delivered,
   toolCalls,
   approvals,
   worktreePath,
 }: {
   readonly message: ChatMessage
+  readonly delivered: boolean
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
 }) {
-  return renderContent(message.sessionId, message.content, toolCalls, approvals, worktreePath)
+  return renderContent(
+    message.sessionId,
+    message.content,
+    toolCalls,
+    approvals,
+    worktreePath,
+    delivered,
+  )
 })
 
 const renderContent = (
@@ -144,6 +169,7 @@ const renderContent = (
   toolCalls: Readonly<Record<string, ToolCall>>,
   approvals: ReadonlyMap<string, Approval>,
   worktreePath: string,
+  delivered: boolean,
 ) => {
   switch (content._tag) {
     case "user":
@@ -171,7 +197,7 @@ const renderContent = (
     case "notice":
       return <Notice content={content} />
     case "provider_switch":
-      return <ProviderSwitchLine content={content} />
+      return <ProviderSwitchLine content={content} delivered={delivered} />
     case "tool_results":
     case "other":
       return null
@@ -332,12 +358,22 @@ function InitLine({ content }: { readonly content: Content<"system_init"> }) {
   )
 }
 
-function ProviderSwitchLine({ content }: { readonly content: Content<"provider_switch"> }) {
-  const summary = providerSwitchSummary(content)
+function ProviderSwitchLine({
+  content,
+  delivered,
+}: {
+  readonly content: Content<"provider_switch">
+  readonly delivered: boolean
+}) {
+  const summary = providerSwitchSummary(content, delivered)
   return (
     <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
       <span className="h-px flex-1 bg-border" />
-      <span className="flex min-w-0 items-center gap-1.5" title={summary}>
+      <span
+        className="flex min-w-0 items-center gap-1.5"
+        title={`${summary}
+${providerSwitchDetail(content)}`}
+      >
         <ProviderIcon provider={content.to} className="size-3.5 shrink-0" />
         <span className="truncate">{summary}</span>
       </span>

@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest"
 import { HUMANITY_MCP_SERVER, THREAD_HISTORY_TOOL_NAME } from "@humanity/contracts"
 import { Effect, Ref } from "effect"
 import { FakeAgentLog } from "../src/agent/AgentRunnerFake.ts"
+import { estimateTokens } from "../src/agent/handoff.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { SessionRepo } from "../src/db/SessionRepo.ts"
@@ -65,6 +66,7 @@ describe("moving a thread to another provider", () => {
           assert.strictEqual(moved.model, "claude-sonnet-5.5")
           assert.isNull(moved.sdkSessionId)
           const divider = (yield* contents(created.id)).messages.at(-1)?.content
+          const pending = (yield* sessionRepo.getPendingHandoff(created.id)) ?? ""
           assert.deepStrictEqual(divider, {
             _tag: "provider_switch",
             from: "claude-code",
@@ -73,7 +75,9 @@ describe("moving a thread to another provider", () => {
             resumed: false,
             included: 2,
             omitted: 0,
+            tokens: estimateTokens(pending),
           })
+          assert.isAbove(estimateTokens(pending), 0)
 
           yield* sessions.sendMessage(created.id, "Now add a test")
           const run = yield* eventually(

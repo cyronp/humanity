@@ -218,6 +218,7 @@ describe("buildHandoff", () => {
     })
     expect(handoff?.included).toBe(4)
     expect(handoff?.omitted).toBe(2)
+    expect(handoff?.tokens).toBe(Math.ceil((handoff?.text.length ?? 0) / 4))
     const text = handoff?.text ?? ""
     expect(text.startsWith("<humanity-handoff>\n[Humanity] This thread ran on Claude Code")).toBe(
       true,

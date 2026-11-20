@@ -276,10 +276,18 @@ const renderEntries = (
   return lines.join("\n\n")
 }
 
+/**
+ * About how many input tokens a text costs: ~4 characters a token for English and code, the
+ * usual rule of thumb across Claude's, OpenAI's and Gemini's tokenizers. An estimate, not a count.
+ */
+export const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
+
 export interface Handoff {
   readonly text: string
   readonly included: number
   readonly omitted: number
+  /** What the handoff costs the new agent, estimated with `estimateTokens`. */
+  readonly tokens: number
 }
 
 /**
@@ -320,7 +328,7 @@ export const buildHandoff = (options: {
     renderEntries(candidates, chosen),
     `</${TAG}>`,
   ].join("\n")
-  return { text, included: chosen.length, omitted }
+  return { text, included: chosen.length, omitted, tokens: estimateTokens(text) }
 }
 
 const HISTORY_PAGE = 20

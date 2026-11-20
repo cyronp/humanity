@@ -1354,6 +1354,7 @@ export class SessionService extends Context.Service<
           resumed: Option.isSome(parked),
           included: handoff?.included ?? 0,
           omitted: handoff?.omitted ?? 0,
+          tokens: handoff?.tokens ?? 0,
         })
         const updated = yield* get(sessionId)
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
