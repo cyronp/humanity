@@ -91,8 +91,17 @@ export const acpToolCall = (call: ToolCallFields): NamedTool => {
   const path = call.locations?.[0]?.path
   switch (call.kind) {
     case "execute": {
-      const cwd = stringOf(raw, ["cwd", "workdir", "working_directory"])
-      const command = stringOf(raw, ["command", "cmd"]) ?? title
+      const cwd = stringOf(raw, [
+        "cwd",
+        "workdir",
+        "working_directory",
+        "Cwd",
+        "WorkingDirectory",
+        "workingDir",
+        "working_dir",
+      ])
+      const command =
+        stringOf(raw, ["command", "cmd", "CommandLine", "commandLine", "command_line"]) ?? title
       return {
         toolName: SHELL_TOOL,
         input: {

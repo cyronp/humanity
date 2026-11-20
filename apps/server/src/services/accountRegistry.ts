@@ -59,7 +59,7 @@ export interface AccountRegistry<Status> {
 
 export interface AccountRegistryOptions<Status> {
   readonly provider: AgentProvider
-  readonly table: "claude_accounts" | "codex_accounts" | "kiro_accounts"
+  readonly table: "claude_accounts" | "codex_accounts" | "kiro_accounts" | "antigravity_accounts"
   readonly activeKey: string
   readonly accountsDir: string
   readonly defaultDir: string

@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { claudeStatusAtom } from "@/features/claude/atoms"
 import { codexStatusAtom } from "@/features/codex/atoms"
+import { antigravityStatusAtom } from "@/features/antigravity/atoms"
 import { kiroStatusAtom } from "@/features/kiro/atoms"
 import {
   DEFAULT_MODEL,
@@ -77,15 +78,19 @@ export function ModelPicker({
   const claude = useAtomValue(claudeStatusAtom)
   const codex = useAtomValue(codexStatusAtom)
   const kiro = useAtomValue(kiroStatusAtom)
+  const antigravity = useAtomValue(antigravityStatusAtom)
   const connected: Record<ProviderId, boolean> = {
     "claude-code": AsyncResult.isSuccess(claude) && claude.value.connection._tag === "Connected",
     codex: AsyncResult.isSuccess(codex) && codex.value.connection._tag === "Connected",
     kiro: AsyncResult.isSuccess(kiro) && kiro.value.connection._tag === "Connected",
+    antigravity:
+      AsyncResult.isSuccess(antigravity) && antigravity.value.connection._tag === "Connected",
   }
   const answered: Record<ProviderId, boolean> = {
     "claude-code": AsyncResult.isSuccess(claude),
     codex: AsyncResult.isSuccess(codex),
     kiro: AsyncResult.isSuccess(kiro),
+    antigravity: AsyncResult.isSuccess(antigravity),
   }
   const providers = offeredProviders(
     Object.keys(PROVIDERS) as Array<ProviderId>,
@@ -100,6 +105,10 @@ export function ModelPicker({
     ),
     codex: pickerModels("codex", AsyncResult.isSuccess(codex) ? codex.value.models : []),
     kiro: pickerModels("kiro", AsyncResult.isSuccess(kiro) ? kiro.value.models : []),
+    antigravity: pickerModels(
+      "antigravity",
+      AsyncResult.isSuccess(antigravity) ? antigravity.value.models : [],
+    ),
   }
   const models = providers.flatMap((id) => reported[id])
   const selected = value ?? DEFAULT_MODEL

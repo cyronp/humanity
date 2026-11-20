@@ -6,12 +6,7 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import {
-  type ContextUsage,
-  OPEN_THREAD_TOOL,
-  type ReasoningEffort,
-  toolMode,
-} from "@humanity/contracts"
+import { type ContextUsage, type ReasoningEffort, toolMode } from "@humanity/contracts"
 import { Effect, Layer, Option, Stream } from "effect"
 import { ClaudeCode, claudeExecutable, notInstalled } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
@@ -26,7 +21,9 @@ import {
 } from "./AgentRunner.ts"
 import { startCodexRun } from "./CodexRunner.ts"
 import { startAcpRun } from "./AcpRunner.ts"
+import { systemPromptAppend } from "./instructions.ts"
 import { Kiro } from "../kiro/Kiro.ts"
+import { Antigravity } from "../antigravity/Antigravity.ts"
 
 class Inbox<T> implements AsyncIterable<T> {
   private readonly items: Array<T> = []
@@ -64,15 +61,7 @@ class Inbox<T> implements AsyncIterable<T> {
   }
 }
 
-const SYSTEM_PROMPT_APPEND = `You are running inside Humanity, an app where a human runs coding agents in threads.
-The human chooses how much each thread does on its own. Depending on that, a file change, shell command or MCP tool may wait for them to allow or deny it.
-When a tool call is denied, the message you receive is the human's decision and feedback. Follow it instead of retrying the same call.`
-
-const OPEN_THREAD_APPEND = `
-When the human asks you to open or start a new thread, use the ${OPEN_THREAD_TOOL} tool. Do not use it on your own initiative.`
-
-export const systemPromptAppend = (offersOpenThread: boolean): string =>
-  offersOpenThread ? SYSTEM_PROMPT_APPEND + OPEN_THREAD_APPEND : SYSTEM_PROMPT_APPEND
+export { systemPromptAppend }
 
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : String(cause)
@@ -166,6 +155,8 @@ export const AgentRunnerLive = Layer.effect(
     const startCodex = startCodexRun(codex.connect)
     const kiro = yield* Kiro
     const startKiro = startAcpRun(kiro.connect, kiro.profile)
+    const antigravity = yield* Antigravity
+    const startAntigravity = startAcpRun(antigravity.connect, antigravity.profile)
 
     const startClaude = (options: AgentRunOptions) =>
       Effect.gen(function* () {
@@ -288,6 +279,8 @@ export const AgentRunnerLive = Layer.effect(
             return startCodex(options)
           case "kiro":
             return startKiro(options)
+          case "antigravity":
+            return startAntigravity(options)
           default:
             return startClaude(options)
         }

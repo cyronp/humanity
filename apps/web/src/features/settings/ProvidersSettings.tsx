@@ -1,3 +1,4 @@
+import { AntigravitySection } from "@/features/antigravity/AntigravitySection"
 import { ClaudeSection } from "@/features/claude/ClaudeSection"
 import { CodexSection } from "@/features/codex/CodexSection"
 import { KiroSection } from "@/features/kiro/KiroSection"
@@ -26,6 +27,8 @@ export function ProvidersSettings() {
           <CodexSection />
         ) : selected === "kiro" ? (
           <KiroSection />
+        ) : selected === "antigravity" ? (
+          <AntigravitySection />
         ) : (
           <ClaudeSection />
         )}

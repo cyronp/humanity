@@ -5,6 +5,7 @@ import { AgentRunnerFake, type FakeScript } from "../src/agent/AgentRunnerFake.t
 import { ClaudeCode, ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { ClaudeHistory, type TestConversation } from "../src/claude/ClaudeHistory.ts"
 import { Codex } from "../src/codex/Codex.ts"
+import { Antigravity } from "../src/antigravity/Antigravity.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { Services } from "../src/Daemon.ts"
@@ -40,6 +41,7 @@ export const services = (
     Layer.provide(noClaude(planUsage)),
     Layer.provide(Codex.layerTest()),
     Layer.provide(kiro),
+    Layer.provide(Antigravity.layerTest()),
     Layer.provide(ClaudeHistory.layerTest(claudeHistory)),
     Layer.provideMerge(baseLayer(home, github)),
   )

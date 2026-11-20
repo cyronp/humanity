@@ -16,6 +16,10 @@ import { type CliLaunch, isOutdated, locateCli, parseCliVersion } from "../agent
 const VERSION_TIMEOUT = "15 seconds"
 const UPDATE_TIMEOUT = "10 minutes"
 
+const QUIET_ENV: Readonly<Partial<Record<AgentProvider, Readonly<Record<string, string>>>>> = {
+  antigravity: { AGY_CLI_DISABLE_AUTO_UPDATE: "1" },
+}
+
 interface Ran {
   readonly output: string
   readonly exitCode: number
@@ -50,11 +54,16 @@ export class AgentCliService extends Context.Service<
       const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
         stream.pipe(Stream.decodeText(), Stream.mkString)
 
-      const run = (launch: CliLaunch, args: ReadonlyArray<string>) =>
+      const run = (
+        launch: CliLaunch,
+        args: ReadonlyArray<string>,
+        env?: Readonly<Record<string, string>>,
+      ) =>
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(
             ChildProcess.make(launch.command, [...launch.args, ...args], {
               extendEnv: true,
+              ...(env === undefined ? {} : { env: { ...env } }),
               stdin: "ignore",
             }),
           )
@@ -74,7 +83,7 @@ export class AgentCliService extends Context.Service<
           const version =
             launch === undefined
               ? null
-              : yield* run(launch, ["--version"]).pipe(
+              : yield* run(launch, ["--version"], QUIET_ENV[provider]).pipe(
                   Effect.map((ran) => parseCliVersion(ran.output) ?? null),
                   Effect.timeoutOrElse({
                     duration: VERSION_TIMEOUT,

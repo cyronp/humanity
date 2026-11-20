@@ -15,6 +15,7 @@ export const InitializeResponse = Schema.Struct({
         Schema.Struct({ http: nullable(Schema.Boolean), sse: nullable(Schema.Boolean) }),
       ),
       sessionCapabilities: nullable(Schema.Struct({ resume: Schema.optional(Schema.Unknown) })),
+      _meta: Schema.optional(Schema.Unknown),
     }),
   ),
   agentInfo: nullable(Schema.Struct({ name: Schema.String, version: nullable(Schema.String) })),
@@ -31,10 +32,19 @@ export type ConfigOption = typeof ConfigOption.Type
 
 export const ConfigOptions = Schema.Array(ConfigOption)
 
+export const SessionModes = Schema.Struct({
+  currentModeId: Schema.String,
+  availableModes: Schema.Array(Schema.Struct({ id: Schema.String })),
+})
+export type SessionModes = typeof SessionModes.Type
+
 export const SessionResponse = Schema.Struct({
   sessionId: nullable(Schema.String),
   configOptions: nullable(ConfigOptions),
+  modes: nullable(SessionModes),
 })
+
+export const ModeUpdate = Schema.Struct({ currentModeId: Schema.String })
 
 export const ContentBlock = Schema.Struct({
   type: Schema.String,
@@ -77,6 +87,7 @@ export const ConfigOptionUpdate = Schema.Struct({ configOptions: ConfigOptions }
 
 export const PermissionOption = Schema.Struct({
   optionId: Schema.String,
+  name: nullable(Schema.String),
   kind: Schema.String,
 })
 export type PermissionOption = typeof PermissionOption.Type

@@ -94,6 +94,7 @@ import type { LoggedCommit } from "./gitParsers.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
+import { AntigravityAccountService } from "./AntigravityAccountService.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
@@ -295,6 +296,7 @@ export class SessionService extends Context.Service<
       const accounts = yield* ClaudeAccountService
       const codexAccounts = yield* CodexAccountService
       const kiroAccounts = yield* KiroAccountService
+      const antigravityAccounts = yield* AntigravityAccountService
       const extensions = yield* ExtensionsService
       const mcp = yield* HumanityMcp
       const claude = yield* ClaudeCode
@@ -304,8 +306,18 @@ export class SessionService extends Context.Service<
 
       const active = new Map<string, ActiveRun>()
 
-      const accountsOf = (provider: AgentProvider) =>
-        provider === "codex" ? codexAccounts : provider === "kiro" ? kiroAccounts : accounts
+      const accountsOf = (provider: AgentProvider) => {
+        switch (provider) {
+          case "codex":
+            return codexAccounts
+          case "kiro":
+            return kiroAccounts
+          case "antigravity":
+            return antigravityAccounts
+          default:
+            return accounts
+        }
+      }
       const accountDir = (session: Session) =>
         Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
           accountsOf(session.provider).configDirFor(accountId),
@@ -586,8 +598,10 @@ export class SessionService extends Context.Service<
           }
           return usage
         }
-        if (session.provider === "kiro") {
-          return yield* unavailable("Kiro does not report plan limits here.")
+        if (session.provider === "kiro" || session.provider === "antigravity") {
+          return yield* unavailable(
+            `${PROVIDER_NAMES[session.provider]} does not report plan limits here.`,
+          )
         }
         const plan =
           session.provider === "codex"
@@ -608,7 +622,7 @@ export class SessionService extends Context.Service<
           const normalized =
             session.provider === "codex"
               ? normalizeCodexEvent(raw)
-              : session.provider === "kiro"
+              : session.provider === "kiro" || session.provider === "antigravity"
                 ? normalizeAcpEvent(raw)
                 : normalizeSdkMessage(raw)
           if (normalized._tag === "Skip") return

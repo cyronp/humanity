@@ -31,6 +31,7 @@ export const keys = {
   claude: "claude",
   codex: "codex",
   kiro: "kiro",
+  antigravity: "antigravity",
   agentCli: (provider: string) => `agent-cli:${provider}`,
   github: "github",
   gitlab: "gitlab",

@@ -57,7 +57,9 @@ export const searchFolders = (options: LocateOptions): ReadonlyArray<string> => 
             appData === undefined ? [] : [path.join(appData, "npm")],
           ),
           ...[envValue(env, "LOCALAPPDATA", platform)].flatMap((local) =>
-            local === undefined ? [] : [path.join(local, "Kiro-Cli")],
+            local === undefined
+              ? []
+              : [path.join(local, "Kiro-Cli"), path.join(local, "agy", "bin")],
           ),
         ]
       : [

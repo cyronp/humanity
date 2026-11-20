@@ -3,6 +3,8 @@ import { accountLine } from "@/features/claude/summary"
 import { useClaudeAccounts } from "@/features/claude/useClaudeAccounts"
 import { codexLine } from "@/features/codex/summary"
 import { useCodexAccounts } from "@/features/codex/useCodexAccounts"
+import { antigravityLine } from "@/features/antigravity/summary"
+import { useAntigravityAccounts } from "@/features/antigravity/useAntigravityAccounts"
 import { kiroLine } from "@/features/kiro/summary"
 import { useKiroAccounts } from "@/features/kiro/useKiroAccounts"
 import type { ProviderId } from "./ProviderIcon.tsx"
@@ -65,10 +67,16 @@ const useKiro = (): ProviderAccounts => {
   return { ...actions, result: AsyncResult.map(result, (all) => toAccounts(all, kiroLine)) }
 }
 
+const useAntigravity = (): ProviderAccounts => {
+  const { result, ...actions } = useAntigravityAccounts()
+  return { ...actions, result: AsyncResult.map(result, (all) => toAccounts(all, antigravityLine)) }
+}
+
 const ACCOUNT_HOOKS: Record<ProviderId, () => ProviderAccounts> = {
   "claude-code": useClaude,
   codex: useCodex,
   kiro: useKiro,
+  antigravity: useAntigravity,
 }
 
 export const useProviderAccounts = (provider: ProviderId): ProviderAccounts =>

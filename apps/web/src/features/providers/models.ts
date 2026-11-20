@@ -34,6 +34,11 @@ const DEFAULT_ROW: Record<AgentProvider, ReportedModel> = {
     displayName: "Default",
     description: "The model your Kiro settings pick",
   },
+  antigravity: {
+    value: DEFAULT_MODEL,
+    displayName: "Default",
+    description: "The model your Antigravity settings pick",
+  },
 }
 
 export const pickerModels = (

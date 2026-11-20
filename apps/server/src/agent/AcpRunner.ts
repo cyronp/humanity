@@ -1,4 +1,4 @@
-import type { ContextUsage, ReasoningEffort } from "@humanity/contracts"
+import { type ContextUsage, QUESTION_TOOL, type ReasoningEffort } from "@humanity/contracts"
 import {
   type Cause,
   Clock,
@@ -21,9 +21,12 @@ import {
   ConfigOptionUpdate,
   decode,
   type InitializeResponse,
+  ModeUpdate,
+  type PermissionOption,
   PermissionRequest,
   PromptResponse,
   SessionResponse,
+  type SessionModes,
   SessionUpdate,
   ToolCallFields,
   UsageUpdate,
@@ -60,6 +63,12 @@ export type AcpConnect = (options: {
 
 export type AcpUpdate = Readonly<Record<string, unknown>> & { readonly sessionUpdate: string }
 
+export interface AcpRunContext {
+  readonly cwd: string
+  readonly mcpServers: ReadonlyArray<string>
+  readonly offersOpenThread: boolean
+}
+
 export interface AcpProfile {
   readonly product: string
   readonly toolCall?: (call: ToolCallFields) => Effect.Effect<NamedTool | undefined>
@@ -79,6 +88,9 @@ export interface AcpProfile {
     readonly atMost: Duration.Input
   }
   readonly review?: (request: unknown) => ReadonlyArray<string> | undefined
+  readonly mode?: string
+  readonly sessionMeta?: (agent: InitializeResponse) => Record<string, unknown> | undefined
+  readonly question?: (call: ToolCallFields) => boolean
 }
 
 interface OptionKind {
@@ -100,6 +112,7 @@ const decodeUsage = decode(UsageUpdate)
 const decodeConfigUpdate = decode(ConfigOptionUpdate)
 const decodePermission = decode(PermissionRequest)
 const decodePrompt = decode(PromptResponse)
+const decodeModeUpdate = decode(ModeUpdate)
 
 const CANCELLED = { outcome: { outcome: "cancelled" } }
 const selected = (optionId: string) => ({ outcome: { outcome: "selected", optionId } })
@@ -243,10 +256,14 @@ interface Turn {
 }
 
 export const startAcpRun =
-  (connect: AcpConnect, makeProfile: (run: { readonly cwd: string }) => AcpProfile) =>
+  (connect: AcpConnect, makeProfile: (run: AcpRunContext) => AcpProfile) =>
   (options: AgentRunOptions): Effect.Effect<AgentRun, never, Scope.Scope> =>
     Effect.gen(function* () {
-      const profile = makeProfile({ cwd: options.cwd })
+      const profile = makeProfile({
+        cwd: options.cwd,
+        mcpServers: Object.keys(options.extensions.mcpServers),
+        offersOpenThread: options.offersOpenThread,
+      })
       const { product } = profile
       const outer = yield* Effect.scope
       const own = yield* Scope.fork(outer)
@@ -266,6 +283,7 @@ export const startAcpRun =
       let sessionId: string | undefined
       let replaying = false
       let configOptions: ReadonlyArray<ConfigOption> = []
+      let modes: SessionModes | undefined
       let configWaiters: Array<Deferred.Deferred<void>> = []
       let context: ContextUsage | undefined
       let turn: Turn | undefined
@@ -357,11 +375,58 @@ export const startAcpRun =
             .pipe(Effect.catch(() => Effect.sync(() => void notes.push(message))))
         })
 
+      const cancelledTurn = Effect.suspend(() =>
+        turn === undefined ? Effect.never : Effect.as(Deferred.await(turn.cancelled), undefined),
+      )
+
+      const askQuestion = (toolCall: ToolCallFields, offered: ReadonlyArray<PermissionOption>) =>
+        Effect.gen(function* () {
+          const question = toolCall.title?.trim() || "Choose an option."
+          const choices = offered
+            .filter((entry) => entry.optionId !== "")
+            .map((entry) => ({
+              optionId: entry.optionId,
+              label: entry.name?.trim() || entry.optionId,
+            }))
+          const decision = yield* Effect.raceFirst(
+            options.canUseTool({
+              toolName: QUESTION_TOOL,
+              input: {
+                questions: [
+                  {
+                    question,
+                    header: "Question",
+                    options: choices.map((choice) => ({ label: choice.label })),
+                  },
+                ],
+              },
+              toolUseId: toolCall.toolCallId,
+            }),
+            cancelledTurn,
+          )
+          if (decision === undefined) return CANCELLED
+          if (decision.behavior === "deny") {
+            yield* explain(decision.message)
+            return CANCELLED
+          }
+          const given = decision.updatedInput?.["answers"]
+          const answer = isRecord(given) ? given[question] : undefined
+          const picked = choices.find((choice) => choice.label === answer)
+          if (picked !== undefined) return selected(picked.optionId)
+          if (typeof answer === "string" && answer.trim() !== "") {
+            yield* explain(
+              `The human answered your question "${question}" in their own words, since ${product} only takes one of its choices: ${answer}`,
+            )
+          }
+          return CANCELLED
+        })
+
       const onPermission = (params: unknown) =>
         Effect.gen(function* () {
           const asked = decodePermission(params)
           if (Option.isNone(asked) || asked.value.sessionId !== sessionId) return CANCELLED
           const { toolCall, options: offered } = asked.value
+          if (profile.question?.(toolCall) === true) return yield* askQuestion(toolCall, offered)
           const option = (kind: string) => offered.find((entry) => entry.kind === kind)?.optionId
 
           const reviewed = profile.review?.(params)
@@ -382,9 +447,7 @@ export const startAcpRun =
             Effect.flatMap(named(tool.fields), (call) =>
               options.canUseTool({ ...call, toolUseId: toolCall.toolCallId }),
             ),
-            turn === undefined
-              ? Effect.never
-              : Effect.as(Deferred.await(turn.cancelled), undefined),
+            cancelledTurn,
           )
           if (decision === undefined) return CANCELLED
           const settle = (outcome: string) =>
@@ -423,6 +486,13 @@ export const startAcpRun =
           const notified = decodeUpdate(params)
           if (Option.isNone(notified) || notified.value.sessionId !== sessionId) return
           const raw = (params as { readonly update: AcpUpdate }).update
+          if (raw.sessionUpdate === "current_mode_update") {
+            const changed = decodeModeUpdate(raw)
+            if (Option.isSome(changed) && modes !== undefined) {
+              modes = { ...modes, currentModeId: changed.value.currentModeId }
+            }
+            return
+          }
           if (raw.sessionUpdate === "config_option_update") {
             const changed = decodeConfigUpdate(raw)
             if (Option.isSome(changed)) yield* setConfigOptions(changed.value.configOptions)
@@ -545,6 +615,33 @@ export const startAcpRun =
           { discard: true },
         )
 
+      const holdMode = (connected: AcpConnection, session: string) =>
+        Effect.gen(function* () {
+          const wanted = profile.mode
+          if (wanted === undefined || modes === undefined || modes.currentModeId === wanted) return
+          const asOption = configOptions.find(
+            (option) => option.category === "mode" || option.id === "mode",
+          )
+          if (asOption?.currentValue === wanted) return
+          if (!modes.availableModes.some((mode) => mode.id === wanted)) {
+            return yield* new AcpFailed({
+              reason: `${product} offers no mode that asks before it acts (${wanted}).`,
+            })
+          }
+          yield* connected.request("session/set_mode", { sessionId: session, modeId: wanted }).pipe(
+            Effect.mapError(
+              (error) =>
+                new AcpFailed({
+                  reason: `${product} could not be set to ask before it acts (${wanted}): ${error.reason}`,
+                }),
+            ),
+          )
+          modes = { ...modes, currentModeId: wanted }
+        })
+
+      const holdAll = (connected: AcpConnection, session: string) =>
+        Effect.andThen(holdSettings(connected, session), holdMode(connected, session))
+
       const interruptTurn = Effect.suspend(() => {
         const current = turn
         if (current === undefined) return Effect.void
@@ -576,7 +673,7 @@ export const startAcpRun =
           const told = notes.splice(0)
           const answered = yield* Effect.result(
             Effect.gen(function* () {
-              yield* holdSettings(connected, session)
+              yield* holdAll(connected, session)
               const modelWritten = yield* chooseModel(connected, session)
               yield* Effect.ignore(chooseEffort(connected, session, modelWritten))
               const links = yield* acpFileLinks(options.cwd, message.mentions ?? [])
@@ -650,9 +747,11 @@ export const startAcpRun =
           onNotification,
         })
         connection = connected
+        const meta = profile.sessionMeta?.(connected.agent)
         const settings = {
           cwd: options.cwd,
           mcpServers: acpMcpServers(options.extensions, connected.agent),
+          ...(meta === undefined ? {} : { _meta: meta }),
         }
         const opened =
           options.resume === undefined
@@ -667,7 +766,8 @@ export const startAcpRun =
         sessionId = session
         const listed = opened?.configOptions
         if (listed !== null && listed !== undefined) yield* setConfigOptions(listed)
-        yield* holdSettings(connected, session)
+        modes = opened?.modes ?? undefined
+        yield* holdAll(connected, session)
         const running = optionFor(MODEL_OPTION)?.currentValue
         yield* emit(ACP_READY, {
           sessionId: session,
