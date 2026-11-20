@@ -1,4 +1,5 @@
 import {
+  type AgentProvider,
   ExtensionInvalid,
   ExtensionNotFound,
   type Extensions,
@@ -20,6 +21,23 @@ import {
   toAgentMcpServer,
   writeMcpConfig,
 } from "../extensions/mcpConfig.ts"
+import {
+  claudeDir,
+  CliHomes,
+  enabledClaudePlugins,
+  type FoundSkill,
+  humanitySkillRoot,
+  MAX_DESCRIPTION,
+  nativeProviders,
+  oneLine,
+  projectSkillRoots,
+  type ServedSkill,
+  servedSkills,
+  skillInvocation,
+  type SkillRoot,
+  skillName,
+  userSkillRoots,
+} from "../extensions/skillCatalog.ts"
 import { parseSkillFile, renderSkillFile } from "../extensions/skillFile.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -58,6 +76,15 @@ export class ExtensionsService extends Context.Service<
     ) => Effect.Effect<Skill, ExtensionInvalid | ExtensionNotFound>
     readonly removeSkill: (name: string) => Effect.Effect<void, ExtensionNotFound>
     readonly forAgent: Effect.Effect<AgentExtensionsSnapshot>
+    /**
+     * The skills a thread's agent gets through `load_skill`: every skill found, Humanity's, the
+     * folder's and the human's own, but those its CLI reads itself. Read again at each start.
+     */
+    readonly skillsForThread: (thread: {
+      readonly provider: AgentProvider
+      readonly onDefaultLogin: boolean
+      readonly cwd: string
+    }) => Effect.Effect<ReadonlyArray<ServedSkill>>
   }
 >()("humanity/ExtensionsService") {
   static readonly layer = Layer.effect(
@@ -121,10 +148,7 @@ export class ExtensionsService extends Context.Service<
             )}\n`,
             { mode: 0o600 },
           )
-          .pipe(
-            Effect.orDie,
-            Effect.andThen(Ref.update(version, (n) => n + 1)),
-          )
+          .pipe(Effect.orDie, Effect.andThen(Ref.update(version, (n) => n + 1)))
 
       const humanityServers = Effect.map(readMcpFile, (file) =>
         file.servers.map(([name, server]) =>
@@ -139,54 +163,98 @@ export class ExtensionsService extends Context.Service<
           ),
         )
 
-      const readSkills = (dir: string, source: Skill["source"]) =>
+      const homes = yield* CliHomes
+      const humanityRoot = humanitySkillRoot(config.pluginDir)
+
+      const readRoot = (root: SkillRoot) =>
         Effect.gen(function* () {
           const folders = yield* fs
-            .readDirectory(dir)
+            .readDirectory(root.dir)
             .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<string>>([])))
-          const skills = yield* Effect.forEach(folders, (folder) =>
-            fs.readFileString(join(dir, folder, SKILL_FILE)).pipe(
-              Effect.map((text): Array<Skill> => {
-                const file = parseSkillFile(text)
-                return [
-                  {
-                    name: source === "humanity" ? folder : (file.name ?? folder),
-                    description: file.description ?? "",
-                    source,
-                    invocation:
-                      source === "humanity"
-                        ? `/${HUMANITY_PLUGIN_NAME}:${folder}`
-                        : `/${file.name ?? folder}`,
-                    instructions: source === "humanity" ? file.body : null,
-                  },
-                ]
-              }),
-              Effect.catch(() => Effect.succeed<Array<Skill>>([])),
-            ),
+          const skills = yield* Effect.forEach(
+            folders.filter((folder) => !folder.startsWith(".")).sort(),
+            (folder) =>
+              fs.readFileString(join(root.dir, folder, SKILL_FILE)).pipe(
+                Effect.map((text): Array<FoundSkill & { readonly body: string }> => {
+                  const file = parseSkillFile(text)
+                  const name = root.source === "humanity" ? folder : skillName(folder, file.name)
+                  if (name === undefined) return []
+                  return [
+                    {
+                      name,
+                      description: oneLine(file.description ?? "", MAX_DESCRIPTION),
+                      dir: join(root.dir, folder),
+                      root,
+                      body: file.body,
+                    },
+                  ]
+                }),
+                Effect.catch(() => Effect.succeed([])),
+              ),
           )
-          return skills.flat().sort((a, b) => a.name.localeCompare(b.name))
+          return skills.flat()
         })
 
-      const humanitySkills = readSkills(skillsDir, "humanity")
+      const claudePlugins = Effect.gen(function* () {
+        const dir = claudeDir(homes)
+        const [settings, installed] = yield* Effect.all([
+          readJson(join(dir, "settings.json")),
+          readJson(join(dir, "plugins", "installed_plugins.json")),
+        ])
+        return enabledClaudePlugins(settings, installed)
+      })
+
+      const roots = (projectPath: string | undefined) =>
+        Effect.map(claudePlugins, (plugins): ReadonlyArray<SkillRoot> => [
+          humanityRoot,
+          ...(projectPath === undefined ? [] : projectSkillRoots(projectPath)),
+          ...userSkillRoots(homes, plugins),
+        ])
+
+      const findSkills = (projectPath: string | undefined) =>
+        Effect.flatMap(roots(projectPath), (all) =>
+          Effect.map(Effect.forEach(all, readRoot, { concurrency: "unbounded" }), (found) =>
+            found.flat(),
+          ),
+        )
+
+      const skillView = (skill: FoundSkill & { readonly body: string }): Skill => {
+        const own = skill.root.source === "humanity"
+        return {
+          name: skill.name,
+          description: skill.description,
+          source: skill.root.source,
+          invocation: skillInvocation(skill.name, skill.root),
+          instructions: own ? skill.body : null,
+          location: skill.root.location,
+          nativeTo: nativeProviders(skill.root),
+        }
+      }
 
       const list = (projectPath: string | undefined) =>
         Effect.gen(function* () {
-          const [ownServers, ownSkills, repoServers, repoSkills] = yield* Effect.all(
+          const [ownServers, repoServers, skills] = yield* Effect.all(
             [
               humanityServers,
-              humanitySkills,
               projectPath === undefined ? Effect.succeed([]) : projectServers(projectPath),
-              projectPath === undefined
-                ? Effect.succeed([])
-                : readSkills(join(projectPath, ".claude", "skills"), "project"),
+              findSkills(projectPath),
             ],
             { concurrency: "unbounded" },
           )
           return {
             mcpServers: [...ownServers, ...repoServers],
-            skills: [...ownSkills, ...repoSkills],
+            skills: skills.map(skillView),
           } satisfies Extensions
         }).pipe(Effect.withSpan("ExtensionsService.list"))
+
+      const skillsForThread = (thread: {
+        readonly provider: AgentProvider
+        readonly onDefaultLogin: boolean
+        readonly cwd: string
+      }) =>
+        Effect.map(findSkills(thread.cwd), (found) =>
+          servedSkills(found, thread.provider, thread.onDefaultLogin),
+        ).pipe(Effect.withSpan("ExtensionsService.skillsForThread"))
 
       const findServer = (file: McpFile, name: string) =>
         file.servers.find(([server]) => server === name)?.[1]
@@ -332,6 +400,8 @@ export class ExtensionsService extends Context.Service<
                 source: "humanity",
                 invocation: `/${HUMANITY_PLUGIN_NAME}:${skill.name}`,
                 instructions: instructions === "" ? "" : `${instructions}\n`,
+                location: humanityRoot.location,
+                nativeTo: nativeProviders(humanityRoot),
               } satisfies Skill
             }),
           )
@@ -372,6 +442,7 @@ export class ExtensionsService extends Context.Service<
         saveSkill,
         removeSkill,
         forAgent,
+        skillsForThread,
       })
     }).pipe(Effect.orDie),
   )

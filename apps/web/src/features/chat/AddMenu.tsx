@@ -188,8 +188,8 @@ function Entries({
         <CommandGroup heading="Skills">
           {skills.map((skill) => (
             <CommandItem
-              key={`${skill.source}:${skill.name}`}
-              value={`skill ${skill.source} ${skill.invocation}`}
+              key={`${skill.source}:${skill.location}:${skill.name}`}
+              value={`skill ${skill.source} ${skill.location} ${skill.invocation}`}
               keywords={[skill.name, skill.invocation, skill.description]}
               onSelect={() => onPick({ kind: "skill", invocation: skill.invocation })}
               title={skill.description}
@@ -240,11 +240,11 @@ function Entries({
   )
 }
 
-function Origin({ source }: { readonly source: Skill["source"] }) {
+function Origin({ source }: { readonly source: Skill["source"] | McpServer["source"] }) {
   if (source === "humanity") return null
   return (
     <Badge variant="secondary" className={cn(TAG, "shrink-0 px-1 text-[0.65rem]")}>
-      repository
+      {source === "user" ? "yours" : "repository"}
     </Badge>
   )
 }

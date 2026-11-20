@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { AgentProvider } from "./Provider.ts"
 
 export const McpServerName = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/))
 export type McpServerName = typeof McpServerName.Type
@@ -64,12 +65,20 @@ export const McpTransportInput = Schema.Union([
 ])
 export type McpTransportInput = typeof McpTransportInput.Type
 
+/** Humanity's own skills, a repository's, or the human's own, found in their agents' folders. */
+export const SkillSource = Schema.Literals(["humanity", "project", "user"])
+export type SkillSource = typeof SkillSource.Type
+
 export const Skill = Schema.Struct({
   name: Schema.String,
   description: Schema.String,
-  source: ExtensionSource,
+  source: SkillSource,
   invocation: Schema.String,
   instructions: Schema.NullOr(Schema.String),
+  /** Where it was found: a folder (`~/.codex/skills`, `.agents/skills`) or a Claude Code plugin. */
+  location: Schema.String,
+  /** The providers that load it themselves; the others get it from Humanity's `load_skill`. */
+  nativeTo: Schema.Array(AgentProvider),
 })
 export type Skill = typeof Skill.Type
 

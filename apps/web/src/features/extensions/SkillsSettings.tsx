@@ -1,9 +1,9 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { Skill } from "@humanity/contracts"
+import { AgentProvider, PROVIDER_NAMES, type Skill } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { Pencil, Plus, Sparkles } from "lucide-react"
-import { type FormEvent, useId, useState } from "react"
+import { type FormEvent, type ReactNode, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,6 +39,7 @@ export function SkillsSettings({
   const [editing, setEditing] = useState<Editing>()
   const own = skills.filter((skill) => skill.source === "humanity")
   const repository = skills.filter((skill) => skill.source === "project")
+  const personal = skills.filter((skill) => skill.source === "user")
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,21 +77,91 @@ export function SkillsSettings({
         </ul>
       )}
 
-      {repository.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">
-            From {repositoryName ?? "the repository"}'s{" "}
-            <code className="font-mono text-xs">.claude/skills</code>
-          </h3>
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {repository.map((skill) => (
-              <SkillRow key={skill.name} skill={skill} onEdit={undefined} />
-            ))}
-          </ul>
+      {groupByLocation(repository).map(([location, skills]) => (
+        <SkillGroup
+          key={`project:${location}`}
+          heading={
+            <>
+              From {repositoryName ?? "the repository"}'s{" "}
+              <code className="font-mono text-xs">{location}</code>
+            </>
+          }
+          skills={skills}
+        />
+      ))}
+
+      {personal.length > 0 && (
+        <div className="flex flex-col gap-3 pt-2">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-medium">From your agents</h3>
+            <p className="text-sm text-muted-foreground">
+              Found in the folders of the CLIs on this computer, read where they are. Each agent
+              gets the ones it doesn't load itself, while Skills is on in Agent → Tools.
+            </p>
+          </div>
+          {groupByLocation(personal).map(([location, skills]) => (
+            <SkillGroup
+              key={`user:${location}`}
+              heading={
+                location.startsWith("~") || location.startsWith("/") ? (
+                  <code className="font-mono text-xs">{location}</code>
+                ) : (
+                  location
+                )
+              }
+              skills={skills}
+            />
+          ))}
         </div>
       )}
     </div>
   )
+}
+
+const groupByLocation = (
+  skills: ReadonlyArray<Skill>,
+): ReadonlyArray<readonly [string, ReadonlyArray<Skill>]> => {
+  const groups = new Map<string, Array<Skill>>()
+  for (const skill of skills) {
+    const group = groups.get(skill.location)
+    if (group === undefined) groups.set(skill.location, [skill])
+    else group.push(skill)
+  }
+  return [...groups]
+}
+
+function SkillGroup({
+  heading,
+  skills,
+}: {
+  readonly heading: ReactNode
+  readonly skills: ReadonlyArray<Skill>
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="text-sm font-medium">{heading}</h4>
+      <ul className="flex flex-col divide-y rounded-lg border">
+        {skills.map((skill) => (
+          <SkillRow key={skill.name} skill={skill} onEdit={undefined} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+const listNames = (providers: ReadonlyArray<AgentProvider>): string => {
+  const names = providers.map((provider) => PROVIDER_NAMES[provider])
+  return names.length <= 1
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+}
+
+/** Who reads the skill itself, and who gets it from Humanity's `load_skill`. */
+const sharing = (skill: Skill): string => {
+  const others = AgentProvider.literals.filter((provider) => !skill.nativeTo.includes(provider))
+  if (others.length === 0) return `Every agent reads it itself.`
+  if (skill.nativeTo.length === 0) return `Humanity gives it to ${listNames(others)}.`
+  return `${listNames(skill.nativeTo)} ${skill.nativeTo.length === 1 ? "reads" : "read"} it itself; Humanity gives it to ${listNames(others)}.`
 }
 
 function SkillRow({
@@ -110,13 +181,16 @@ function SkillRow({
         <ItemContent className="min-w-0 gap-0.5">
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{skill.name}</span>
-            <Badge asChild variant="secondary" className={cn(TAG, "font-mono")}>
-              <code>{skill.invocation}</code>
-            </Badge>
+            {skill.invocation.startsWith("/") && (
+              <Badge asChild variant="secondary" className={cn(TAG, "font-mono")}>
+                <code>{skill.invocation}</code>
+              </Badge>
+            )}
           </span>
           <span className="line-clamp-2 text-xs text-muted-foreground">
             {skill.description === "" ? "No description." : skill.description}
           </span>
+          <span className="text-xs text-muted-foreground/80">{sharing(skill)}</span>
         </ItemContent>
         {onEdit !== undefined && (
           <ItemActions className="gap-1">
