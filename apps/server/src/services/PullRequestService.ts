@@ -1,7 +1,13 @@
 import {
+  type BranchCommits,
+  type BranchComparison,
   type BranchPublication,
+  type CommitSummary,
   type Forge,
+  type GitRefNotFound,
   GITLAB_DEFAULT_HOST,
+  type MergeMethod,
+  type MergePullRequest,
   type NewPullRequest,
   type Project,
   type ProjectNotFound,
@@ -22,7 +28,8 @@ import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { ProjectService } from "./ProjectService.ts"
-import { SessionService, threadBranch } from "./SessionService.ts"
+import type { LoggedCommit } from "./gitParsers.ts"
+import { COMMIT_LIST_LIMIT, SessionService, threadBranch } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
@@ -53,6 +60,21 @@ interface Fetched {
 }
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+
+/** GitLab finds a picture per email: at most this many new emails are looked up per listing. */
+const AVATAR_LOOKUPS = 10
+
+const NOREPLY = /^(?:(\d+)\+)?([^@]+)@users\.noreply\.github\.com$/i
+
+/** GitHub's private commit emails name the account, so its picture needs no request. */
+export const noreplyAvatar = (email: string): string | null => {
+  const match = NOREPLY.exec(email)
+  if (match === null) return null
+  const [, id, login] = match
+  return id !== undefined
+    ? `https://avatars.githubusercontent.com/u/${id}?v=4`
+    : `https://github.com/${encodeURIComponent(login ?? "")}.png`
+}
 
 const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
 
@@ -94,12 +116,40 @@ export class PullRequestService extends Context.Service<
   PullRequestService,
   {
     readonly publication: (sessionId: string) => Effect.Effect<BranchPublication, Base>
+    /**
+     * The thread's branch's commits, each with whether its upstream has it, its page on the forge
+     * once pushed, and its author's picture when the forge knows them.
+     */
+    readonly commits: (sessionId: string) => Effect.Effect<BranchCommits, Base | GitRefNotFound>
+    /** What a pull request from the thread's branch into `base` would carry. */
+    readonly compare: (
+      sessionId: string,
+      base: string,
+    ) => Effect.Effect<BranchComparison, Base | GitRefNotFound | PullRequestUnavailable>
     readonly push: (
       sessionId: string,
     ) => Effect.Effect<BranchPublication, Base | PullRequestUnavailable>
     readonly create: (
       sessionId: string,
       pullRequest: NewPullRequest,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /**
+     * Merges the open pull request of the thread's branch at the head commit the human saw,
+     * posting their comment on it first.
+     */
+    readonly merge: (
+      sessionId: string,
+      merge: MergePullRequest,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /** Closes the pull request of the thread's branch, or reopens a closed one. */
+    readonly setOpen: (
+      sessionId: string,
+      open: boolean,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    /** Converts the open pull request of the thread's branch to a draft, or marks it ready. */
+    readonly setDraft: (
+      sessionId: string,
+      draft: boolean,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     readonly watch: (sessionId: string) => Stream.Stream<PullRequestFeed, Base>
     readonly refresh: (sessionId: string) => Effect.Effect<void, Base>
@@ -329,6 +379,137 @@ export class PullRequestService extends Context.Service<
         const target = targetOf(remote, branch)
         if (target !== null) yield* sync.opened(target, created)
         return created
+      })
+
+      const reachable = (remote: Remote | null) => {
+        if (remote === null) {
+          return Effect.fail(
+            new PullRequestUnavailable({
+              reason:
+                "This project's origin is not on GitHub or on a connected GitLab instance, so Humanity can't change its pull requests.",
+            }),
+          )
+        }
+        if (remote.forge === "gitlab" && remote.mismatch !== null) {
+          return Effect.fail(new PullRequestUnavailable({ reason: remote.mismatch }))
+        }
+        return Effect.succeed(remote)
+      }
+
+      /** The thread's branch's pull request as the forge has it now, not as the feed last saw it. */
+      const current = (sessionId: string) =>
+        Effect.gen(function* () {
+          const { session, remote: found, branch: own } = yield* load(sessionId)
+          const remote = yield* reachable(found)
+          const branch = yield* requireBranch(own)
+          const pullRequest = Option.getOrNull(yield* find(remote, branch))
+          if (pullRequest === null) {
+            return yield* new PullRequestUnavailable({
+              reason: `${branch} has no ${forgeName(remote.forge)}.`,
+            })
+          }
+          return { session, remote, pullRequest, target: targetOf(remote, branch) }
+        })
+
+      const notOpen = (pullRequest: PullRequest) => {
+        const noun = forgeName(pullRequest.forge)
+        return new PullRequestUnavailable({
+          reason:
+            pullRequest.state === "merged"
+              ? `This ${noun} is already merged.`
+              : `This ${noun} is closed. Reopen it first.`,
+        })
+      }
+
+      const MERGED_HOW: Record<MergeMethod, string> = {
+        squash: "squashed",
+        merge: "with a merge commit",
+        rebase: "rebased",
+      }
+
+      const merge = Effect.fn("PullRequestService.merge")(function* (
+        sessionId: string,
+        input: MergePullRequest,
+      ) {
+        const { session, remote, pullRequest, target } = yield* current(sessionId)
+        const noun = forgeName(remote.forge)
+        if (pullRequest.state === "draft") {
+          return yield* new PullRequestUnavailable({
+            reason: `This ${noun} is a draft. Mark it ready for review before merging it.`,
+          })
+        }
+        if (pullRequest.state !== "open") return yield* notOpen(pullRequest)
+        if (input.headSha === "" || pullRequest.headSha !== input.headSha) {
+          return yield* new PullRequestUnavailable({
+            reason: `This ${noun} has new commits since you looked at it, so nothing was merged. Look at them, then merge again.`,
+          })
+        }
+        if (remote.forge === "gitlab" && input.method === "rebase") {
+          return yield* new PullRequestUnavailable({
+            reason:
+              "GitLab merges by the project's own merge method. Pick Merge or Squash and merge.",
+          })
+        }
+        const comment = input.comment.trim()
+        if (comment !== "") {
+          yield* remote.forge === "github"
+            ? github.commentOnPullRequest(remote.fullName, pullRequest.number, comment)
+            : gitlab.commentOnMergeRequest(remote.fullPath, pullRequest.number, comment)
+        }
+        const merged =
+          remote.forge === "github"
+            ? yield* github.mergePullRequest(remote.fullName, pullRequest.number, {
+                method: input.method,
+                sha: pullRequest.headSha,
+              })
+            : yield* gitlab.mergeMergeRequest(remote.fullPath, pullRequest.number, {
+                squash: input.method === "squash",
+                sha: pullRequest.headSha,
+              })
+        if (target !== null) yield* sync.updated(target, merged)
+        const symbol = remote.forge === "github" ? "#" : "!"
+        yield* sessions.tell(session.id, {
+          notice: `Merged ${symbol}${merged.number} into ${merged.base}, ${MERGED_HOW[input.method]}.`,
+        })
+        return merged
+      })
+
+      const setOpen = Effect.fn("PullRequestService.setOpen")(function* (
+        sessionId: string,
+        open: boolean,
+      ) {
+        const { remote, pullRequest, target } = yield* current(sessionId)
+        const noun = forgeName(remote.forge)
+        if (pullRequest.state === "merged") return yield* notOpen(pullRequest)
+        if (open && pullRequest.state !== "closed") {
+          return yield* new PullRequestUnavailable({ reason: `This ${noun} is already open.` })
+        }
+        if (!open && pullRequest.state === "closed") {
+          return yield* new PullRequestUnavailable({ reason: `This ${noun} is already closed.` })
+        }
+        const updated =
+          remote.forge === "github"
+            ? yield* github.setPullRequestOpen(remote.fullName, pullRequest.number, open)
+            : yield* gitlab.setMergeRequestOpen(remote.fullPath, pullRequest.number, open)
+        if (target !== null) yield* sync.updated(target, updated)
+        return updated
+      })
+
+      const setDraft = Effect.fn("PullRequestService.setDraft")(function* (
+        sessionId: string,
+        draft: boolean,
+      ) {
+        const { remote, pullRequest, target } = yield* current(sessionId)
+        if (pullRequest.state !== "open" && pullRequest.state !== "draft") {
+          return yield* notOpen(pullRequest)
+        }
+        if ((pullRequest.state === "draft") === draft) return pullRequest
+        const updated =
+          remote.forge === "github"
+            ? yield* github.setPullRequestDraft(remote.fullName, pullRequest.number, draft)
+            : yield* gitlab.setMergeRequestDraft(remote.fullPath, pullRequest, draft)
+        if (target !== null) yield* sync.updated(target, updated)
+        return updated
       })
 
       const watch = (sessionId: string) =>
@@ -569,10 +750,162 @@ export class PullRequestService extends Context.Service<
         } satisfies SyncResult
       })
 
+      /** Pictures found by email, per forge, for this daemon's life: `null` when it has none. */
+      const pictures = new Map<string, string | null>()
+
+      const picturesOf = (
+        remote: Remote | null,
+        upstream: string | null,
+        listed: ReadonlyArray<LoggedCommit>,
+        unpushed: ReadonlySet<string>,
+      ) =>
+        Effect.gen(function* () {
+          const bySha = new Map<string, string>()
+          if (remote === null) return bySha
+          const scope = remote.forge === "github" ? "github" : `gitlab:${remote.host}`
+          const known = (email: string) => pictures.get(`${scope}\n${email.toLowerCase()}`)
+          const remember = (email: string, url: string | null) =>
+            pictures.set(`${scope}\n${email.toLowerCase()}`, url)
+
+          if (remote.forge === "github") {
+            const pushed = listed.filter((commit) => !unpushed.has(commit.hash)).length
+            const onOrigin = upstream?.startsWith("origin/") === true ? upstream.slice(7) : null
+            const token = yield* github.token
+            if (Option.isSome(token) && onOrigin !== null && pushed > 0) {
+              const authors = yield* github
+                .commitAuthors(remote.fullName, onOrigin, pushed)
+                .pipe(Effect.catch(() => Effect.succeed([])))
+              for (const author of authors) {
+                if (author.avatarUrl === null) continue
+                bySha.set(author.sha, author.avatarUrl)
+                if (author.email !== null) remember(author.email, author.avatarUrl)
+              }
+            }
+          } else if (remote.mismatch === null) {
+            const { token } = yield* gitlab.credentials
+            const unknown = [
+              ...new Set(listed.map((commit) => commit.authorEmail.toLowerCase())),
+            ].filter((email) => email !== "" && known(email) === undefined)
+            if (Option.isSome(token)) {
+              yield* Effect.forEach(
+                unknown.slice(0, AVATAR_LOOKUPS),
+                (email) =>
+                  gitlab.avatar(email).pipe(
+                    Effect.tap((url) => Effect.sync(() => remember(email, url))),
+                    Effect.catch(() => Effect.void),
+                  ),
+                { concurrency: 3, discard: true },
+              )
+            }
+          }
+          for (const commit of listed) {
+            if (bySha.has(commit.hash)) continue
+            const url =
+              known(commit.authorEmail) ??
+              (remote.forge === "github" ? noreplyAvatar(commit.authorEmail) : null)
+            if (url !== null && url !== undefined) bySha.set(commit.hash, url)
+          }
+          return bySha
+        })
+
+      const commitPage = (remote: Remote | null, hash: string) =>
+        remote === null
+          ? null
+          : remote.forge === "github"
+            ? `https://github.com/${remote.fullName}/commit/${hash}`
+            : `https://${remote.host}/${remote.fullPath}/-/commit/${hash}`
+
+      /** Git's commits with what the forge adds: pushed or not, their page, their author's picture. */
+      const detail = (
+        cwd: string,
+        ref: string,
+        remote: Remote | null,
+        upstream: string | null,
+        listed: ReadonlyArray<LoggedCommit>,
+      ) =>
+        Effect.gen(function* () {
+          const all = listed.map((commit) => commit.hash)
+          const unpushed = new Set(
+            upstream === null
+              ? all
+              : yield* git
+                  .commitsNotIn(cwd, ref, upstream, COMMIT_LIST_LIMIT + 1)
+                  .pipe(Effect.catch(() => Effect.succeed(all))),
+          )
+          const avatars = yield* picturesOf(remote, upstream, listed, unpushed)
+          return listed.map(({ authorEmail: _, ...commit }): CommitSummary => {
+            const pushed = !unpushed.has(commit.hash)
+            return {
+              ...commit,
+              pushed,
+              url: pushed ? commitPage(remote, commit.hash) : null,
+              avatarUrl: avatars.get(commit.hash) ?? null,
+            }
+          })
+        })
+
+      const commitsOf = Effect.fn("PullRequestService.commits")(function* (sessionId: string) {
+        const listed = yield* sessions.commits(sessionId)
+        const { session, remote, tracking } = yield* load(sessionId)
+        const ref = listed.branch === "HEAD" ? "HEAD" : `refs/heads/${listed.branch}`
+        return {
+          branch: listed.branch,
+          base: listed.base,
+          more: listed.more,
+          commits: yield* detail(
+            session.worktreePath,
+            ref,
+            remote,
+            tracking.upstream,
+            listed.commits,
+          ),
+        } satisfies BranchCommits
+      })
+
+      const compare = Effect.fn("PullRequestService.compare")(function* (
+        sessionId: string,
+        base: string,
+      ) {
+        const { session, remote, tracking, branch: own } = yield* load(sessionId)
+        const branch = yield* requireBranch(own)
+        const cwd = session.worktreePath
+        let against: string | undefined
+        for (const candidate of [`origin/${base}`, base]) {
+          if (yield* git.hasCommit(cwd, candidate)) {
+            against = candidate
+            break
+          }
+        }
+        if (against === undefined) {
+          return yield* new PullRequestUnavailable({
+            reason: `There is no branch named ${base}, here or on origin. Pick another base branch.`,
+          })
+        }
+        const ref = `refs/heads/${branch}`
+        const [listed, files] = yield* Effect.all(
+          [
+            git.log(cwd, ref, { exclude: against, limit: COMMIT_LIST_LIMIT }),
+            git.diffRange(cwd, against, ref),
+          ],
+          { concurrency: 2 },
+        )
+        return {
+          base: against,
+          commits: yield* detail(cwd, ref, remote, tracking.upstream, listed.commits),
+          more: listed.more,
+          files,
+        } satisfies BranchComparison
+      })
+
       return PullRequestService.of({
         publication,
+        commits: commitsOf,
+        compare,
         push,
         create,
+        merge,
+        setOpen,
+        setDraft,
         watch,
         refresh,
         syncStatus,

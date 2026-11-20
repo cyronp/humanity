@@ -7,6 +7,7 @@ import {
   type GitHubRepo,
   GitHubRequestFailed,
   type GitHubUser,
+  type MergeMethod,
   type PullRequest,
   type PullRequestCheck,
   type PullRequestComment,
@@ -58,6 +59,7 @@ const BranchJson = Schema.Struct({
 const ErrorJson = Schema.Struct({ message: Schema.optional(Schema.String) })
 
 const PullJson = Schema.Struct({
+  node_id: Schema.optional(Schema.String),
   number: Schema.Int,
   title: Schema.String,
   body: Schema.NullOr(Schema.String),
@@ -71,7 +73,26 @@ const PullJson = Schema.Struct({
   created_at: Schema.String,
 })
 
+const GraphQLJson = Schema.Struct({
+  errors: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
+})
+
 const AuthorJson = Schema.NullOr(Schema.Struct({ login: Schema.String, avatar_url: Schema.String }))
+
+const CommitJson = Schema.Struct({
+  sha: Schema.String,
+  commit: Schema.Struct({
+    author: Schema.NullOr(Schema.Struct({ email: Schema.optional(Schema.NullOr(Schema.String)) })),
+  }),
+  author: AuthorJson,
+})
+
+/** A commit's author as GitHub knows them: the email git recorded, and their picture. */
+export interface CommitAuthor {
+  readonly sha: string
+  readonly email: string | null
+  readonly avatarUrl: string | null
+}
 
 const CheckRunsJson = Schema.Struct({
   check_runs: Schema.Array(
@@ -195,6 +216,16 @@ export interface NewGitHubPull {
   readonly draft: boolean
 }
 
+export const GITHUB_GRAPHQL = `${GITHUB_API}/graphql`
+
+const CONVERT_TO_DRAFT = `mutation($id: ID!) {
+  convertPullRequestToDraft(input: { pullRequestId: $id }) { clientMutationId }
+}`
+
+const MARK_READY = `mutation($id: ID!) {
+  markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId }
+}`
+
 const toRepo = (repo: typeof RepoJson.Type): GitHubRepo => ({
   fullName: repo.full_name,
   name: repo.name,
@@ -240,6 +271,32 @@ export class GitHubService extends Context.Service<
       fullName: string,
       pull: NewGitHubPull,
     ) => Effect.Effect<PullRequest, GitHubError>
+    readonly getPullRequest: (
+      fullName: string,
+      number: number,
+    ) => Effect.Effect<PullRequest, GitHubError>
+    /** Merges at `sha` only: GitHub refuses when the head moved since. */
+    readonly mergePullRequest: (
+      fullName: string,
+      number: number,
+      merge: { readonly method: MergeMethod; readonly sha: string },
+    ) => Effect.Effect<PullRequest, GitHubError>
+    readonly commentOnPullRequest: (
+      fullName: string,
+      number: number,
+      body: string,
+    ) => Effect.Effect<void, GitHubError>
+    readonly setPullRequestOpen: (
+      fullName: string,
+      number: number,
+      open: boolean,
+    ) => Effect.Effect<PullRequest, GitHubError>
+    /** GitHub's REST API cannot change a pull request's draft state; its GraphQL API can. */
+    readonly setPullRequestDraft: (
+      fullName: string,
+      number: number,
+      draft: boolean,
+    ) => Effect.Effect<PullRequest, GitHubError>
     readonly checks: (
       fullName: string,
       sha: string,
@@ -248,6 +305,12 @@ export class GitHubService extends Context.Service<
       fullName: string,
       number: number,
     ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitHubError>
+    /** The authors of the newest `count` commits (at most 100) of a branch on GitHub. */
+    readonly commitAuthors: (
+      fullName: string,
+      branch: string,
+      count: number,
+    ) => Effect.Effect<ReadonlyArray<CommitAuthor>, GitHubError>
   }
 >()("humanity/GitHubService") {
   static readonly layer = Layer.effect(
@@ -384,13 +447,21 @@ ${absolute(url)}`
           return { status: response.status, headers: { link }, json: Effect.succeed(json) }
         })
 
-      const post = (path: string, body: unknown, token: Redacted.Redacted<string>) =>
+      const write = (
+        method: "POST" | "PUT" | "PATCH",
+        path: string,
+        body: unknown,
+        token: Redacted.Redacted<string>,
+      ) =>
         send(
-          HttpClientRequest.post(`${GITHUB_API}${path}`, {
+          HttpClientRequest.make(method)(absolute(path), {
             headers: authorization(Option.some(token)),
           }).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
           Option.some(token),
         )
+
+      const post = (path: string, body: unknown, token: Redacted.Redacted<string>) =>
+        write("POST", path, body, token)
 
       const decode =
         <S extends Schema.Constraint>(schema: S) =>
@@ -531,6 +602,73 @@ ${absolute(url)}`
           return toPullRequest(created)
         })
 
+      const getPullRequest = (fullName: string, number: number) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const found = yield* get(`/repos/${fullName}/pulls/${number}`, token).pipe(
+            Effect.flatMap(decode(PullJson)),
+          )
+          return toPullRequest(found)
+        })
+
+      const mergePullRequest = (
+        fullName: string,
+        number: number,
+        merge: { readonly method: MergeMethod; readonly sha: string },
+      ) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          yield* write(
+            "PUT",
+            `/repos/${fullName}/pulls/${number}/merge`,
+            { merge_method: merge.method, sha: merge.sha },
+            token,
+          )
+          return yield* getPullRequest(fullName, number)
+        })
+
+      const commentOnPullRequest = (fullName: string, number: number, body: string) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          yield* post(`/repos/${fullName}/issues/${number}/comments`, { body }, token)
+        })
+
+      const setPullRequestOpen = (fullName: string, number: number, open: boolean) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          const updated = yield* write(
+            "PATCH",
+            `/repos/${fullName}/pulls/${number}`,
+            { state: open ? "open" : "closed" },
+            token,
+          ).pipe(Effect.flatMap(decode(PullJson)))
+          return toPullRequest(updated)
+        })
+
+      const setPullRequestDraft = (fullName: string, number: number, draft: boolean) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          const current = yield* get(`/repos/${fullName}/pulls/${number}`, Option.some(token)).pipe(
+            Effect.flatMap(decode(PullJson)),
+          )
+          if (current.node_id === undefined) {
+            return yield* new GitHubRequestFailed({
+              status: 200,
+              detail: "GitHub did not say which pull request to change.",
+            })
+          }
+          const response = yield* post(
+            GITHUB_GRAPHQL,
+            { query: draft ? CONVERT_TO_DRAFT : MARK_READY, variables: { id: current.node_id } },
+            token,
+          ).pipe(Effect.flatMap(decode(GraphQLJson)))
+          const problem = response.errors?.[0]?.message
+          if (problem !== undefined) {
+            return yield* new GitHubRequestFailed({ status: 200, detail: problem })
+          }
+          return yield* getPullRequest(fullName, number)
+        })
+
       const checks = (fullName: string, sha: string) =>
         Effect.gen(function* () {
           const token = yield* tokens.get
@@ -562,6 +700,21 @@ ${absolute(url)}`
             finishedAt: status.state === "pending" ? null : status.updated_at,
           }))
           return [...fromRuns, ...fromStatuses]
+        })
+
+      const commitAuthors = (fullName: string, branch: string, count: number) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const perPage = Math.max(1, Math.min(100, count))
+          const commits = yield* read(
+            `/repos/${fullName}/commits?sha=${encodeURIComponent(branch)}&per_page=${perPage}`,
+            token,
+          ).pipe(Effect.flatMap(decode(Schema.Array(CommitJson))))
+          return commits.map((commit): CommitAuthor => ({
+            sha: commit.sha,
+            email: commit.commit.author?.email ?? null,
+            avatarUrl: commit.author?.avatar_url ?? null,
+          }))
         })
 
       const comments = (fullName: string, number: number) =>
@@ -629,8 +782,14 @@ ${absolute(url)}`
         token: tokens.get,
         findPullRequest,
         createPullRequest,
+        getPullRequest,
+        mergePullRequest,
+        commentOnPullRequest,
+        setPullRequestOpen,
+        setPullRequestDraft,
         checks,
         comments,
+        commitAuthors,
       })
     }),
   )

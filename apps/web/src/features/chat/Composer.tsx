@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
   memo,
   type Ref,
+  useEffect,
   useId,
   useImperativeHandle,
   useState,
@@ -33,7 +34,7 @@ import {
 import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
 import { AddMenu } from "./AddMenu.tsx"
-import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
+import { ChatBox, ChatBoxFooter, noteMessageSent, SendButton, StopButton } from "./ChatBox.tsx"
 import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
 import { MentionTextarea } from "./MentionTextarea.tsx"
 import { useFileMention } from "./useFileMention.ts"
@@ -53,6 +54,7 @@ export const Composer = memo(function Composer({
   effort,
   disabled,
   busy,
+  onTypingChange,
   ref,
 }: {
   readonly ref?: Ref<ComposerHandle>
@@ -64,6 +66,8 @@ export const Composer = memo(function Composer({
   readonly effort: ReasoningEffort | null
   readonly disabled: boolean
   readonly busy: boolean
+  /** Told when the box starts or stops holding something to send. */
+  readonly onTypingChange?: ((typing: boolean) => void) | undefined
 }) {
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
@@ -90,6 +94,8 @@ export const Composer = memo(function Composer({
     recentScope: projectId,
     disabled,
   })
+  const typing = !disabled && text.trim() !== ""
+  useEffect(() => onTypingChange?.(typing), [typing, onTypingChange])
   const idBase = useId()
   const mentionIds = fileMentionIds(idBase)
 
@@ -109,6 +115,7 @@ export const Composer = memo(function Composer({
     })
     setPending(false)
     if (Exit.isSuccess(exit)) {
+      noteMessageSent()
       setText("")
       mentions.sent()
       files.clear()

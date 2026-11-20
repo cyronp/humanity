@@ -20,11 +20,7 @@ import { SettingsFrame, SettingsPane, SettingsRow, SettingsRows } from "./Settin
 export function BrowserSettings() {
   const result = useAtomValue(browserPreferencesAtom)
   return (
-    <SettingsFrame
-      id="settings-browser"
-      title="Browser"
-      description="The Browser on a thread's shelf shows the app you or the agent are running."
-    >
+    <SettingsFrame id="settings-browser" title="Browser">
       <SettingsPane>
         <AsyncView result={result} errorTitle="Couldn't load the Browser settings">
           {(preferences) => <BrowserView preferences={preferences} />}

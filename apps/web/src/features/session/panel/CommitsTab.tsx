@@ -1,81 +1,143 @@
 import { useAtomValue } from "@effect/atom-react"
-import type { BranchCommits, CommitSummary, Session } from "@humanity/contracts"
-import { GitBranch } from "lucide-react"
+import type { BranchCommits, CommitSummary, Forge, Session } from "@humanity/contracts"
+import { GitCommitHorizontal } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { ChangeCount } from "@/features/diff/FileDiffView"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { sessionCommitsAtom } from "../atoms.ts"
+import { ForgeLink } from "./ForgeLink.tsx"
+import { forgeTerms } from "./publication.ts"
 
-export function CommitsTab({ session }: { readonly session: Session }) {
+export function CommitsTab({
+  session,
+  forge,
+}: {
+  readonly session: Session
+  readonly forge: Forge | null
+}) {
   const commits = useAtomValue(sessionCommitsAtom(session.id))
   return (
     <AsyncView result={commits} errorTitle="Could not read the branch's commits">
-      {(value) => <CommitList value={value} />}
+      {(value) => <CommitList value={value} forge={forge} />}
     </AsyncView>
   )
 }
 
-function CommitList({ value }: { readonly value: BranchCommits }) {
+function CommitList({
+  value,
+  forge,
+}: {
+  readonly value: BranchCommits
+  readonly forge: Forge | null
+}) {
   const now = useNow(60_000)
-  const count = `${value.commits.length}${value.more ? "+" : ""}`
+  if (value.commits.length === 0) {
+    return (
+      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+        {value.base === null ? (
+          "No commits yet."
+        ) : (
+          <>
+            No commits on <code>{value.branch}</code> that <code>{value.base}</code> lacks yet.
+          </>
+        )}
+      </p>
+    )
+  }
   return (
-    <div className="overflow-hidden rounded-md border bg-card">
-      <div className="flex items-center gap-2 border-b bg-muted/50 px-3 py-1.5 text-xs">
-        <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-        <code className="min-w-0 truncate font-mono font-medium" title={value.branch}>
-          {value.branch}
-        </code>
-        <span className="ml-auto shrink-0 text-muted-foreground">
-          {value.base === null ? "latest commits" : `${count} since ${value.base}`}
-        </span>
-      </div>
-      {value.commits.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-          {value.base === null ? (
-            "No commits yet."
-          ) : (
-            <>
-              No commits on <code>{value.branch}</code> that <code>{value.base}</code> lacks yet.
-            </>
-          )}
-        </p>
-      ) : (
-        <ul className="divide-y">
-          {value.commits.map((commit) => (
-            <CommitRow key={commit.hash} commit={commit} now={now} />
-          ))}
-        </ul>
-      )}
+    <>
+      <ul className="divide-y border-b">
+        {value.commits.map((commit) => (
+          <CommitRow key={commit.hash} commit={commit} forge={forge} now={now} />
+        ))}
+      </ul>
       {value.more && (
-        <p className="border-t px-3 py-1.5 text-xs text-muted-foreground">
+        <p className="px-4 py-2 text-xs text-muted-foreground">
           Only the latest {value.commits.length} are listed.
         </p>
       )}
-    </div>
+    </>
   )
 }
 
-function CommitRow({ commit, now }: { readonly commit: CommitSummary; readonly now: number }) {
+export function CommitRow({
+  commit,
+  forge,
+  now,
+}: {
+  readonly commit: CommitSummary
+  readonly forge: Forge | null
+  readonly now: number
+}) {
   const ago = formatTimeAgo(commit.committedAt, now)
+  const site = forge === null ? "the remote" : forgeTerms(forge).site
   return (
-    <li className="flex flex-col gap-0.5 px-3 py-2 text-xs">
-      <span className="truncate text-sm" title={commit.subject}>
-        {commit.subject}
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-        <code className="shrink-0 font-mono" title={commit.hash}>
-          {commit.shortHash}
-        </code>
-        <span aria-hidden>•</span>
-        <span className="truncate">{commit.author}</span>
-        {ago !== "" && (
-          <>
-            <span aria-hidden>•</span>
-            <time className="shrink-0" dateTime={commit.committedAt}>
-              {ago}
-            </time>
-          </>
-        )}
-      </span>
+    <li className="group/row flex items-start gap-2.5 px-4 py-2.5 hover:bg-muted/40">
+      <GitCommitHorizontal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="truncate text-sm" title={commit.subject}>
+          {commit.subject}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+          <code className="font-mono" title={commit.hash}>
+            {commit.shortHash}
+          </code>
+          <Dot />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Avatar className="size-4 after:hidden">
+              {commit.avatarUrl !== null && <AvatarImage src={commit.avatarUrl} alt="" />}
+              <AvatarFallback className="text-[0.5rem]">
+                {commit.author.trim().charAt(0).toUpperCase() || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{commit.author}</span>
+          </span>
+          {ago !== "" && (
+            <>
+              <Dot />
+              <time dateTime={commit.committedAt}>{ago}</time>
+            </>
+          )}
+          {commit.files > 0 && (
+            <>
+              <Dot />
+              <span>
+                {commit.files} file{commit.files === 1 ? "" : "s"} changed
+              </span>
+              <Dot />
+              <ChangeCount added={commit.insertions} removed={commit.deletions} />
+            </>
+          )}
+        </span>
+      </div>
+      {commit.url !== null ? (
+        <ForgeLink
+          url={commit.url}
+          forge={forge}
+          label={`Open ${commit.shortHash}`}
+          className="opacity-70 group-hover/row:opacity-100"
+        />
+      ) : (
+        !commit.pushed && (
+          <Badge
+            variant="outline"
+            className="shrink-0 font-normal text-muted-foreground"
+            title={`Not on ${site} until it's pushed`}
+          >
+            not pushed
+          </Badge>
+        )
+      )}
     </li>
+  )
+}
+
+function Dot() {
+  return (
+    <span aria-hidden className="text-muted-foreground/60">
+      ·
+    </span>
   )
 }

@@ -3,6 +3,7 @@ import type {
   BranchPublication,
   FileDiff,
   Forge,
+  MergeMethod,
   PullRequestCheck,
   PullRequestFeed,
 } from "@humanity/contracts"
@@ -119,3 +120,142 @@ export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | nu
   }
   return null
 }
+
+/**
+ * The one next step the Source control panel offers as its main button, or none. Uncommitted
+ * changes come first; then the pull request: pushing to it, marking it ready, merging it; then
+ * opening one, which pushes on its own; then a plain push.
+ */
+export type PrimaryAction =
+  | { readonly kind: "commit"; readonly files: number }
+  | { readonly kind: "push" }
+  | { readonly kind: "open-pull-request" }
+  | { readonly kind: "ready" }
+  | { readonly kind: "merge" }
+
+export const primaryAction = ({
+  publication,
+  changed,
+  feed,
+}: {
+  readonly publication: BranchPublication
+  readonly changed: number
+  /** `undefined` while the forge has not answered yet. */
+  readonly feed: PullRequestFeed | undefined
+}): PrimaryAction | null => {
+  if (checkoutMoved(publication)) return null
+  if (changed > 0) return { kind: "commit", files: changed }
+  if (publication.branch === null) return null
+  const pullRequest = feed?.pullRequest ?? null
+  const live =
+    pullRequest !== null && (pullRequest.state === "open" || pullRequest.state === "draft")
+  if (live) {
+    if (needsPush(publication)) return { kind: "push" }
+    return pullRequest.state === "draft" ? { kind: "ready" } : { kind: "merge" }
+  }
+  const canOpen =
+    publication.forge !== null &&
+    publication.branch !== publication.defaultBranch &&
+    feed !== undefined &&
+    feed.fetchedAt !== null &&
+    pullRequest?.state !== "merged"
+  if (canOpen) return { kind: "open-pull-request" }
+  return needsPush(publication) ? { kind: "push" } : null
+}
+
+/** The checks in a few words: "1 failing · 3 passed", or that there are none. */
+export const checksPhrase = (checks: ReadonlyArray<PullRequestCheck>): string => {
+  if (checks.length === 0) return "No checks reported yet"
+  const summary = summarizeChecks(checks)
+  return [
+    summary.failed > 0 && `${summary.failed} failing`,
+    summary.pending > 0 && `${summary.pending} in progress`,
+    summary.passed > 0 && `${summary.passed} passed`,
+    summary.other > 0 && `${summary.other} skipped`,
+  ]
+    .filter((part) => part !== false)
+    .join(" · ")
+}
+
+export interface FooterNote {
+  readonly text: string
+  readonly tone: "muted" | "destructive"
+}
+
+/**
+ * The sentence beside the panel's main button, along its bottom: why that is the next step, or,
+ * with nothing left to do, where the branch stands.
+ */
+export const footerNote = ({
+  action,
+  publication,
+  changed,
+  feed,
+}: {
+  readonly action: PrimaryAction | null
+  readonly publication: BranchPublication
+  readonly changed: number
+  readonly feed: PullRequestFeed | undefined
+}): FooterNote | null => {
+  if (checkoutMoved(publication)) return null
+  const muted = (text: string): FooterNote => ({ text, tone: "muted" })
+  const pullRequest = feed?.pullRequest ?? null
+  const checks = feed?.checks ?? []
+  switch (action?.kind) {
+    case "commit": {
+      const toPush =
+        publication.upstream !== null && publication.ahead > 0
+          ? ` · ${commits(publication.ahead)} to push`
+          : ""
+      return muted(`${changed} file${changed === 1 ? "" : "s"} changed${toPush}`)
+    }
+    case "push":
+      return muted(remoteStatus(publication))
+    case "open-pull-request":
+      return publication.forge === null
+        ? null
+        : muted(`No ${forgeTerms(publication.forge).noun} for this branch yet.`)
+    case "ready":
+      return muted(`A draft · ${checksPhrase(checks)}`)
+    case "merge": {
+      const failing = checks.filter((check) => check.status === "failure")
+      if (failing.length > 0) {
+        return {
+          text: `${failing.length} check${failing.length === 1 ? "" : "s"} failing: ${failing.map((check) => check.name).join(", ")}`,
+          tone: "destructive",
+        }
+      }
+      const summary = summarizeChecks(checks)
+      return muted(
+        summary.overall === "none"
+          ? "No checks reported"
+          : summary.overall === "pending"
+            ? "Checks in progress"
+            : "Every check passed",
+      )
+    }
+    case undefined:
+      return pullRequest?.state === "merged"
+        ? muted(`Merged into ${pullRequest.base}`)
+        : muted(remoteStatus(publication))
+  }
+}
+
+export interface MergeOption {
+  readonly method: MergeMethod
+  readonly label: string
+  readonly description: string
+}
+
+/** The ways a pull request can be merged, as each forge offers them. */
+export const mergeOptions = (forge: Forge): ReadonlyArray<MergeOption> =>
+  forge === "github"
+    ? [
+        { method: "squash", label: "Squash and merge", description: "Combine all commits" },
+        { method: "merge", label: "Merge commit", description: "Preserve commit history" },
+        { method: "rebase", label: "Rebase and merge", description: "Reapply all commits" },
+      ]
+    : [
+        { method: "merge", label: "Merge", description: "By the project's merge method" },
+        { method: "squash", label: "Squash and merge", description: "Combine all commits" },
+      ]

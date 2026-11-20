@@ -1,10 +1,4 @@
-import type {
-  Branch,
-  CommitSummary,
-  RepoStatus,
-  StatusEntry,
-  StatusEntryKind,
-} from "@humanity/contracts"
+import type { Branch, RepoStatus, StatusEntry, StatusEntryKind } from "@humanity/contracts"
 
 export const FIELD = "\u001f"
 
@@ -22,17 +16,65 @@ export const BRANCH_FORMAT = [
 
 export const RECORD = ""
 
-export const LOG_FORMAT = ["%H", "%h", "%s", "%an", "%cI"].join(FIELD) + RECORD
+/**
+ * One commit of `git log`, as the server reads it: what `CommitSummary` shows, plus the author's
+ * email, which only the server uses (to find the author's picture on the forge).
+ */
+export interface LoggedCommit {
+  readonly hash: string
+  readonly shortHash: string
+  readonly subject: string
+  readonly author: string
+  readonly authorEmail: string
+  readonly committedAt: string
+  readonly files: number
+  readonly insertions: number
+  readonly deletions: number
+}
 
-export const parseLog = (output: string): Array<CommitSummary> =>
+/**
+ * Each record starts with the separator, so the `--numstat` lines git prints after a commit's
+ * fields stay in that commit's record. Numstat, unlike `--shortstat`, is never translated.
+ */
+export const LOG_FORMAT = RECORD + ["%H", "%h", "%s", "%an", "%ae", "%cI"].join(FIELD)
+
+const NUMSTAT = /^(\d+|-)\t(\d+|-)\t/
+
+export const parseLog = (output: string): Array<LoggedCommit> =>
   output
     .split(RECORD)
-    .map((record) => record.trim())
-    .filter((record) => record !== "")
+    .filter((record) => record.trim() !== "")
     .map((record) => {
-      const [hash = "", shortHash = "", subject = "", author = "", committedAt = ""] =
-        record.split(FIELD)
-      return { hash, shortHash, subject, author, committedAt }
+      const [fields = "", ...stats] = record.split("\n")
+      const [
+        hash = "",
+        shortHash = "",
+        subject = "",
+        author = "",
+        authorEmail = "",
+        committedAt = "",
+      ] = fields.split(FIELD)
+      let files = 0
+      let insertions = 0
+      let deletions = 0
+      for (const line of stats) {
+        const match = NUMSTAT.exec(line)
+        if (match === null) continue
+        files++
+        insertions += match[1] === "-" ? 0 : Number(match[1])
+        deletions += match[2] === "-" ? 0 : Number(match[2])
+      }
+      return {
+        hash,
+        shortHash,
+        subject,
+        author,
+        authorEmail,
+        committedAt,
+        files,
+        insertions,
+        deletions,
+      }
     })
 
 const trackCount = (track: string, word: "ahead" | "behind") =>

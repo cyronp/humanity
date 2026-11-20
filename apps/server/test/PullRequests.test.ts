@@ -1,4 +1,5 @@
 import { assert, describe, expect, it } from "@effect/vitest"
+import type { PullRequest } from "@humanity/contracts"
 import { Effect, Layer, Option, Ref } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
 import {
@@ -8,7 +9,12 @@ import {
   GitHubService,
 } from "../src/services/GitHubService.ts"
 import { GitHubToken } from "../src/services/GitHubToken.ts"
-import { gitlabApi, gitlabJobStatus, GitLabService } from "../src/services/GitLabService.ts"
+import {
+  draftTitle,
+  gitlabApi,
+  gitlabJobStatus,
+  GitLabService,
+} from "../src/services/GitLabService.ts"
 import { GitLabToken } from "../src/services/GitLabToken.ts"
 
 interface Reply {
@@ -183,6 +189,98 @@ describe("GitHub pull requests", () => {
     }),
   )
 
+  it.effect("merges at the commit the human saw, by the method they picked", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`PUT ${REPO}/pulls/7/merge`]: { body: { merged: true, sha: "m1", message: "Merged" } },
+        [`GET ${REPO}/pulls/7`]: {
+          body: pull({ state: "closed", merged_at: "2026-11-19T10:00:00Z" }),
+        },
+      })
+      const merged = yield* GitHubService.use((service) =>
+        service.mergePullRequest("acme/app", 7, { method: "squash", sha: "abc123" }),
+      ).pipe(Effect.provide(github(client, "tok")))
+      assert.strictEqual(merged.state, "merged")
+      const [put] = yield* Ref.get(requests)
+      assert.deepStrictEqual(put?.body, { merge_method: "squash", sha: "abc123" })
+      assert.strictEqual(put?.auth, "Bearer tok")
+
+      const error = yield* GitHubService.use((service) =>
+        Effect.flip(service.mergePullRequest("acme/app", 7, { method: "merge", sha: "abc123" })),
+      ).pipe(Effect.provide(github(client, undefined)))
+      assert.strictEqual(error._tag, "GitHubNotAuthenticated")
+    }),
+  )
+
+  it.effect("reports why GitHub refused a merge", () =>
+    Effect.gen(function* () {
+      const { client } = yield* fakeApi({
+        [`PUT ${REPO}/pulls/7/merge`]: {
+          status: 405,
+          body: { message: "Merge commits are not allowed on this repository." },
+        },
+      })
+      const error = yield* GitHubService.use((service) =>
+        Effect.flip(service.mergePullRequest("acme/app", 7, { method: "merge", sha: "abc123" })),
+      ).pipe(Effect.provide(github(client, "tok")))
+      assert.strictEqual(error._tag, "GitHubRequestFailed")
+      assert.include(error.message, "Merge commits are not allowed")
+    }),
+  )
+
+  it.effect("comments on, closes and reopens a pull request", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`POST ${REPO}/issues/7/comments`]: { status: 201, body: { id: 1 } },
+        [`PATCH ${REPO}/pulls/7`]: { body: pull({ state: "closed" }) },
+      })
+      const closed = yield* GitHubService.use((service) =>
+        Effect.andThen(
+          service.commentOnPullRequest("acme/app", 7, "Shipping it"),
+          service.setPullRequestOpen("acme/app", 7, false),
+        ),
+      ).pipe(Effect.provide(github(client, "tok")))
+      assert.strictEqual(closed.state, "closed")
+      assert.deepStrictEqual(
+        (yield* Ref.get(requests)).map((request) => [request.method, request.body]),
+        [
+          ["POST", { body: "Shipping it" }],
+          ["PATCH", { state: "closed" }],
+        ],
+      )
+    }),
+  )
+
+  it.effect("turns a pull request into a draft through GraphQL, and reports its errors", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`GET ${REPO}/pulls/7`]: { body: pull({ node_id: "PR_node", draft: true }) },
+        [`POST ${GITHUB_API}/graphql`]: { body: { data: {} } },
+      })
+      const drafted = yield* GitHubService.use((service) =>
+        service.setPullRequestDraft("acme/app", 7, true),
+      ).pipe(Effect.provide(github(client, "tok")))
+      assert.strictEqual(drafted.state, "draft")
+      const graphql = (yield* Ref.get(requests)).find((request) => request.method === "POST")
+      const body = graphql?.body as { query: string; variables: unknown }
+      assert.include(body.query, "convertPullRequestToDraft")
+      assert.deepStrictEqual(body.variables, { id: "PR_node" })
+
+      const refused = yield* fakeApi({
+        [`GET ${REPO}/pulls/7`]: { body: pull({ node_id: "PR_node" }) },
+        [`POST ${GITHUB_API}/graphql`]: {
+          body: { data: null, errors: [{ message: "Resource not accessible by integration" }] },
+        },
+      })
+      const error = yield* GitHubService.use((service) =>
+        Effect.flip(service.setPullRequestDraft("acme/app", 7, false)),
+      ).pipe(Effect.provide(github(refused.client, "tok")))
+      assert.include(error.message, "Resource not accessible")
+      const ready = (yield* Ref.get(refused.requests)).find((request) => request.method === "POST")
+      assert.include((ready?.body as { query: string }).query, "markPullRequestReadyForReview")
+    }),
+  )
+
   it.effect("lists check runs and commit statuses of the head commit", () =>
     Effect.gen(function* () {
       const { client } = yield* fakeApi({
@@ -309,6 +407,20 @@ const mergeRequest = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 
+const OPENED: PullRequest = {
+  forge: "gitlab",
+  number: 5,
+  title: "Add login",
+  body: "Why",
+  url: "https://gitlab.com/acme/app/-/merge_requests/5",
+  state: "open",
+  base: "main",
+  head: "feat/login",
+  headSha: "def456",
+  author: "tanuki",
+  createdAt: "2026-11-10T10:00:00Z",
+}
+
 describe("GitLab merge requests", () => {
   it.effect("finds a branch's open merge request", () =>
     Effect.gen(function* () {
@@ -353,6 +465,66 @@ describe("GitLab merge requests", () => {
       })
     }),
   )
+
+  it.effect("merges at the commit the human saw, squashed or not", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`PUT ${GITLAB}/merge_requests/5/merge`]: { body: mergeRequest({ state: "merged" }) },
+        [`POST ${GITLAB}/merge_requests/5/notes`]: { status: 201, body: { id: 3 } },
+      })
+      const merged = yield* GitLabService.use((service) =>
+        Effect.andThen(
+          service.commentOnMergeRequest("acme/app", 5, "Shipping it"),
+          service.mergeMergeRequest("acme/app", 5, { squash: true, sha: "def456" }),
+        ),
+      ).pipe(Effect.provide(gitlab(client, "glpat")))
+      assert.strictEqual(merged.state, "merged")
+      assert.deepStrictEqual(
+        (yield* Ref.get(requests)).map((request) => [request.method, request.body]),
+        [
+          ["POST", { body: "Shipping it" }],
+          ["PUT", { squash: true, sha: "def456" }],
+        ],
+      )
+    }),
+  )
+
+  it.effect("closes, reopens, and drafts a merge request by its title", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`PUT ${GITLAB}/merge_requests/5`]: { body: mergeRequest({ state: "closed" }) },
+      })
+      yield* GitLabService.use((service) =>
+        Effect.all([
+          service.setMergeRequestOpen("acme/app", 5, false),
+          service.setMergeRequestOpen("acme/app", 5, true),
+          service.setMergeRequestDraft("acme/app", { ...OPENED, title: "Add login" }, true),
+          service.setMergeRequestDraft(
+            "acme/app",
+            { ...OPENED, title: "[Draft] WIP: Add login" },
+            false,
+          ),
+        ]),
+      ).pipe(Effect.provide(gitlab(client, "glpat")))
+      assert.deepStrictEqual(
+        (yield* Ref.get(requests)).map((request) => request.body),
+        [
+          { state_event: "close" },
+          { state_event: "reopen" },
+          { title: "Draft: Add login" },
+          { title: "Add login" },
+        ],
+      )
+    }),
+  )
+
+  it("reads every prefix GitLab takes for a draft", () => {
+    expect(draftTitle("Add login", true)).toBe("Draft: Add login")
+    expect(draftTitle("Draft: Add login", true)).toBe("Draft: Add login")
+    expect(draftTitle("(Draft) Add login", false)).toBe("Add login")
+    expect(draftTitle("draft - Add login", false)).toBe("Add login")
+    expect(draftTitle("Drafting rules", false)).toBe("Drafting rules")
+  })
 
   it.effect("lists the jobs of the latest pipeline, and nothing without one", () =>
     Effect.gen(function* () {

@@ -1,6 +1,12 @@
 import type { BranchPublication, WorkingTreeDiff } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { DEFAULT_SHELF, parseShelf, shelfBadges, toggleTool } from "@/features/session/panel/shelf"
+import {
+  DEFAULT_SHELF,
+  parseGitView,
+  parseShelf,
+  shelfBadges,
+  toggleTool,
+} from "@/features/session/panel/shelf"
 
 const publication = (patch: Partial<BranchPublication>): BranchPublication => ({
   forge: "github",
@@ -26,24 +32,42 @@ const diff = (count: number): WorkingTreeDiff => ({
 
 describe("shelf", () => {
   it("reads what it stored, and falls back on anything else", () => {
-    expect(parseShelf(JSON.stringify({ open: true, tool: "commits" }))).toEqual({
+    expect(parseShelf(JSON.stringify({ open: true, tool: "browser" }))).toEqual({
       open: true,
-      tool: "commits",
+      tool: "browser",
     })
     expect(parseShelf(JSON.stringify({ open: "yes", tool: "terminal" }))).toEqual(DEFAULT_SHELF)
     expect(parseShelf("{not json")).toEqual(DEFAULT_SHELF)
     expect(parseShelf(null)).toEqual(DEFAULT_SHELF)
   })
 
-  it("opens a tool, switches between tools, and closes on the open one", () => {
-    const opened = toggleTool(DEFAULT_SHELF, "commits")
-    expect(opened).toEqual({ open: true, tool: "commits" })
-    expect(toggleTool(opened, "pull-request")).toEqual({ open: true, tool: "pull-request" })
-    expect(toggleTool(opened, "commits")).toEqual({ open: false, tool: "commits" })
+  it("opens Source control for any git tool the rail used to have", () => {
+    for (const tool of ["changes", "commits", "commit", "pull-request"]) {
+      expect(parseShelf(JSON.stringify({ open: true, tool }))).toEqual({ open: true, tool: "git" })
+    }
   })
 
-  it("badges changed files and commits waiting for a push", () => {
-    expect(shelfBadges(diff(3), publication({ ahead: 2 }))).toEqual({ changes: 3, commit: 2 })
+  it("opens a tool, switches between tools, and closes on the open one", () => {
+    const opened = toggleTool(DEFAULT_SHELF, "git")
+    expect(opened).toEqual({ open: true, tool: "git" })
+    expect(toggleTool(opened, "browser")).toEqual({ open: true, tool: "browser" })
+    expect(toggleTool(opened, "git")).toEqual({ open: false, tool: "git" })
+  })
+
+  it("remembers the Source control tab, and starts on Overview", () => {
+    expect(parseGitView("commits")).toBe("commits")
+    expect(parseGitView("checks")).toBe("checks")
+    expect(parseGitView("pull-request")).toBe("overview")
+    expect(parseGitView(null)).toBe("overview")
+  })
+
+  it("badges changed files, else commits waiting for a push", () => {
+    expect(shelfBadges(diff(3), publication({ ahead: 2 }))).toEqual({
+      git: { count: 3, label: "3 changed" },
+    })
+    expect(shelfBadges(diff(0), publication({ ahead: 2 }))).toEqual({
+      git: { count: 2, label: "2 to push" },
+    })
     expect(shelfBadges(diff(0), publication({ ahead: 0 }))).toEqual({})
     expect(shelfBadges(undefined, publication({ upstream: null, ahead: 4 }))).toEqual({})
   })

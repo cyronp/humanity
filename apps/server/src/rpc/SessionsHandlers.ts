@@ -1,10 +1,12 @@
 import { SessionsRpcs } from "@humanity/contracts"
 import { Effect } from "effect"
+import { PullRequestService } from "../services/PullRequestService.ts"
 import { SessionService } from "../services/SessionService.ts"
 
 export const SessionsHandlers = SessionsRpcs.toLayer(
   Effect.gen(function* () {
     const sessions = yield* SessionService
+    const pullRequests = yield* PullRequestService
     return SessionsRpcs.of({
       "Sessions.list": ({ projectId }) => sessions.list(projectId),
       "Sessions.watchAll": () => sessions.watchAll,
@@ -26,7 +28,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
       "Sessions.diff": ({ sessionId }) => sessions.diff(sessionId),
       "Sessions.searchFiles": ({ sessionId, query, recent }) =>
         sessions.searchFiles(sessionId, query, recent),
-      "Sessions.commits": ({ sessionId }) => sessions.commits(sessionId),
+      "Sessions.commits": ({ sessionId }) => pullRequests.commits(sessionId),
       "Sessions.commit": ({ sessionId, message, paths }) =>
         sessions.commit(sessionId, message, paths),
       "Sessions.earlierMessages": ({ sessionId, before }) =>

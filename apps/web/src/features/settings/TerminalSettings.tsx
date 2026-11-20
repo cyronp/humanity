@@ -49,7 +49,7 @@ export function TerminalSettings() {
     <SettingsFrame
       id="settings-terminal"
       title="Terminal"
-      description="The terminals under a thread's chat. Changes apply to terminals opened from now on; the font size applies at once."
+      description="Changes apply to new terminals. The font size applies at once."
     >
       <SettingsPane>
         <SettingsGroup>

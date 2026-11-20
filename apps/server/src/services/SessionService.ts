@@ -9,7 +9,6 @@ import {
   AttachmentRejected,
   type AttachmentUpload,
   type Autonomy,
-  type BranchCommits,
   type FileEntry,
   BranchNotCheckedOut,
   ChangeId,
@@ -91,6 +90,7 @@ import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
+import type { LoggedCommit } from "./gitParsers.ts"
 import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
@@ -161,7 +161,15 @@ export const matchModel = (
   )?.value
 }
 
-const COMMIT_LIST_LIMIT = 50
+export const COMMIT_LIST_LIMIT = 50
+
+/** A thread's branch's commits as git lists them, before the forge adds what it knows. */
+export interface LoggedBranchCommits {
+  readonly branch: string
+  readonly base: string | null
+  readonly commits: ReadonlyArray<LoggedCommit>
+  readonly more: boolean
+}
 
 export const threadBranch = (session: Session): string | null =>
   session.branch === "HEAD" ? null : session.branch
@@ -243,7 +251,10 @@ export class SessionService extends Context.Service<
     readonly diff: (sessionId: string) => Effect.Effect<WorkingTreeDiff, SessionNotFound | GitError>
     readonly commits: (
       sessionId: string,
-    ) => Effect.Effect<BranchCommits, SessionNotFound | ProjectNotFound | GitError | GitRefNotFound>
+    ) => Effect.Effect<
+      LoggedBranchCommits,
+      SessionNotFound | ProjectNotFound | GitError | GitRefNotFound
+    >
     readonly commit: (
       sessionId: string,
       message: string,
@@ -1181,7 +1192,11 @@ export class SessionService extends Context.Service<
         }
         const ref = own === null ? "HEAD" : `refs/heads/${own}`
         const listed = yield* git.log(cwd, ref, { exclude: base, limit: COMMIT_LIST_LIMIT })
-        return { branch: own ?? "HEAD", base: base ?? null, ...listed } satisfies BranchCommits
+        return {
+          branch: own ?? "HEAD",
+          base: base ?? null,
+          ...listed,
+        } satisfies LoggedBranchCommits
       })
 
       const commit = Effect.fn("SessionService.commit")(function* (

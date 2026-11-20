@@ -29,7 +29,7 @@ export function DiffTab({
     <AsyncView result={diff} errorTitle="Could not read the worktree">
       {(value) =>
         value.files.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             No uncommitted changes on <code>{session.branch}</code>.
           </p>
         ) : (
@@ -39,6 +39,7 @@ export function DiffTab({
               <FileDiffView
                 key={key}
                 file={file}
+                flat
                 onReference={onReference}
                 editorRoot={session.worktreePath}
                 open={open.has(key)}

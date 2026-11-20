@@ -1,6 +1,53 @@
 import { describe, expect, it } from "vitest"
 import { parseGitHubFullName, parseGitLabRemote } from "../src/services/GitService.ts"
-import { FIELD, parseBranches, parseStatus, parseWorktrees } from "../src/services/gitParsers.ts"
+import {
+  FIELD,
+  parseBranches,
+  parseLog,
+  parseStatus,
+  parseWorktrees,
+  RECORD,
+} from "../src/services/gitParsers.ts"
+
+describe("parseLog", () => {
+  const fields = (subject: string) =>
+    [
+      "a".repeat(40),
+      "aaaaaaa",
+      subject,
+      "Ana Lima",
+      "ana@example.com",
+      "2026-11-20T10:00:00Z",
+    ].join(FIELD)
+
+  it("sums each commit's numstat lines, counting a binary file with no lines", () => {
+    const output = [
+      `${RECORD}${fields("feat: two files")}\n\n12\t3\tsrc/a.ts\n-\t-\timg.png\n`,
+      `${RECORD}${fields("chore: empty")}\n`,
+      `${RECORD}${fields("docs: rename")}\n\n0\t0\tdocs/{old => new}.md\n`,
+    ].join("")
+    expect(
+      parseLog(output).map(({ subject, files, insertions, deletions }) => ({
+        subject,
+        files,
+        insertions,
+        deletions,
+      })),
+    ).toEqual([
+      { subject: "feat: two files", files: 2, insertions: 12, deletions: 3 },
+      { subject: "chore: empty", files: 0, insertions: 0, deletions: 0 },
+      { subject: "docs: rename", files: 1, insertions: 0, deletions: 0 },
+    ])
+  })
+
+  it("keeps the author's email apart from their name", () => {
+    expect(parseLog(`${RECORD}${fields("x")}\n`)[0]).toMatchObject({
+      author: "Ana Lima",
+      authorEmail: "ana@example.com",
+      shortHash: "aaaaaaa",
+    })
+  })
+})
 
 describe("parseStatus", () => {
   it("reads branch headers including upstream and ahead/behind", () => {

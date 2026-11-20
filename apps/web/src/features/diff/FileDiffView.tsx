@@ -1,5 +1,6 @@
 import type { FileDiff } from "@humanity/contracts"
 import { countChanges, hunkHeader } from "@humanity/diff"
+import { cn } from "cn"
 import {
   ChevronRight,
   FileDiff as FileDiffIcon,
@@ -41,8 +42,11 @@ export function FileDiffView({
   open: openProp,
   onOpenChange,
   headerActions,
+  flat = false,
 }: {
   readonly file: FileDiff
+  /** Sits on its panel as a row with a line under it, instead of as a card of its own. */
+  readonly flat?: boolean
   readonly headerActions?: ReactNode
   readonly onReference?: ((reference: string) => void) | undefined
   readonly editorRoot?: string | undefined
@@ -64,14 +68,25 @@ export function FileDiffView({
   return (
     <Collapsible open={open} onOpenChange={setOpen} asChild>
       <section
-        className="group/file overflow-hidden rounded-md border bg-card"
+        className={cn(
+          "group/file overflow-hidden",
+          flat ? "border-b" : "rounded-md border bg-card",
+        )}
         aria-label={`Changes to ${file.filePath}`}
       >
-        <header className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 group-data-[state=open]/file:border-b">
+        <header
+          className={cn(
+            "flex items-center gap-2 group-data-[state=open]/file:border-b",
+            flat ? "px-4 py-2 hover:bg-muted/40" : "bg-muted/50 px-3 py-1.5",
+          )}
+        >
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="-my-1.5 -ml-3 flex min-w-0 flex-1 flex-wrap items-center gap-2 py-1.5 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                flat ? "-my-2 -ml-4 py-2 pl-4" : "-my-1.5 -ml-3 py-1.5 pl-3",
+              )}
               aria-label={`${open ? "Hide" : "Show"} the changes to ${file.filePath}`}
             >
               <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/file:rotate-90" />

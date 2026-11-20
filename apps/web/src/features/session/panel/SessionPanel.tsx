@@ -1,17 +1,16 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Session } from "@humanity/contracts"
+import type {
+  BranchPublication,
+  PullRequest,
+  PullRequestCheck,
+  PullRequestFeed,
+  Session,
+} from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import {
-  FileDiff,
-  GitCommitHorizontal,
-  GitPullRequest,
-  Globe,
-  History,
-  PanelRightClose,
-  RefreshCw,
-} from "lucide-react"
-import { type ReactNode, useEffect, useState } from "react"
+import { GitBranch, GitPullRequestArrow, Globe, PanelRightClose, RefreshCw, X } from "lucide-react"
+import { type ReactNode, useEffect, useId, useState } from "react"
+import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -19,27 +18,41 @@ import { BrowserView } from "@/features/browser/BrowserView"
 import type { CaptureTarget } from "@/features/browser/BrowserView"
 import type { BrowserState } from "@/features/browser/useBrowser"
 import {
+  feedKey,
   publicationAtom,
+  pullRequestFeedAtom,
   refreshPullRequestAtom,
   sessionCommitsAtom,
   sessionDiffAtom,
 } from "../atoms.ts"
 import { SyncButton } from "../SyncButton.tsx"
+import { CHECK_ICON, ChecksTab } from "./ChecksTab.tsx"
 import { CommitsTab } from "./CommitsTab.tsx"
-import { CommitTab } from "./CommitTab.tsx"
 import { DiffTab } from "./DiffTab.tsx"
-import { PullRequestTab } from "./PullRequestTab.tsx"
-import { SetupWorktreeButton } from "./SetupWorktreeButton.tsx"
-import { SHELF_LABELS, SHELF_TOOLS, type ShelfState, type ShelfTool, shelfBadges } from "./shelf.ts"
+import { MoreMenu } from "./MoreMenu.tsx"
+import { OpenPullRequestPage } from "./OpenPullRequestPage.tsx"
+import { OverviewTab } from "./OverviewTab.tsx"
+import { CommitBar, type PanelError, PrimaryAction } from "./PrimaryAction.tsx"
+import { footerNote, forgeTerms, primaryAction, summarizeChecks } from "./publication.ts"
+import { PULL_REQUEST_STATE } from "./PullRequestHeading.tsx"
+import {
+  GIT_VIEW_LABELS,
+  GIT_VIEWS,
+  type GitView,
+  readStoredGitView,
+  SHELF_LABELS,
+  SHELF_TOOLS,
+  type ShelfState,
+  type ShelfTool,
+  shelfBadges,
+  storeGitView,
+} from "./shelf.ts"
 
 /** The rail's width in pixels: the window's own buttons in the desktop app cover it first. */
 export const RAIL_WIDTH = 48
 
 const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
-  changes: <FileDiff />,
-  commits: <History />,
-  commit: <GitCommitHorizontal />,
-  "pull-request": <GitPullRequest />,
+  git: <GitPullRequestArrow />,
   browser: <Globe />,
 }
 
@@ -100,7 +113,7 @@ export function ToolRail({
                 {ICONS[tool]}
                 {badge !== undefined && (
                   <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">
-                    {badge > 99 ? "99+" : badge}
+                    {badge.count > 99 ? "99+" : badge.count}
                   </span>
                 )}
                 {dot && (
@@ -116,7 +129,7 @@ export function ToolRail({
                 ? `${SHELF_LABELS[tool]} (a new address)`
                 : badge === undefined
                   ? SHELF_LABELS[tool]
-                  : `${SHELF_LABELS[tool]} (${tool === "changes" ? `${badge} changed` : `${badge} to push`})`}
+                  : `${SHELF_LABELS[tool]} (${badge.label})`}
             </TooltipContent>
           </Tooltip>
         )
@@ -172,7 +185,6 @@ export function ToolPanel({
   activity,
   tool,
   browser,
-  onToolChange,
   onClose,
   onReference,
   onCapture,
@@ -181,7 +193,6 @@ export function ToolPanel({
   readonly activity: number
   readonly tool: ShelfTool
   readonly browser: BrowserState
-  readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
   readonly onCapture?: CaptureTarget | undefined
@@ -196,12 +207,10 @@ export function ToolPanel({
     })
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {tool !== "browser" && (
+      {tool === "git" && (
         <GitPanel
           session={session}
           activity={activity}
-          tool={tool}
-          onToolChange={onToolChange}
           onClose={onClose}
           onReference={onReference}
           openFiles={openFiles}
@@ -223,8 +232,6 @@ export function ToolPanel({
 function GitPanel({
   session,
   activity,
-  tool,
-  onToolChange,
   onClose,
   onReference,
   openFiles,
@@ -232,13 +239,12 @@ function GitPanel({
 }: {
   readonly session: Session
   readonly activity: number
-  readonly tool: ShelfTool
-  readonly onToolChange: (tool: ShelfTool) => void
   readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
   readonly onFileOpenChange: (key: string, open: boolean) => void
 }) {
+  const publication = useAtomValue(publicationAtom(session.id))
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
   const refreshCommits = useAtomRefresh(sessionCommitsAtom(session.id))
   const refreshPublication = useAtomRefresh(publicationAtom(session.id))
@@ -257,16 +263,43 @@ function GitPanel({
     refreshPullRequest({ payload: { sessionId: session.id } })
   }
 
+  const branch = AsyncResult.isSuccess(publication) ? publication.value : undefined
+  const [opening, setOpening] = useState(false)
+  const body = {
+    session,
+    onReference,
+    openFiles,
+    onFileOpenChange,
+    onOpenPullRequest: () => setOpening(true),
+  }
+
+  if (opening && branch?.forge != null && branch.branch !== null) {
+    return (
+      <OpenPullRequestPage
+        session={session}
+        publication={branch}
+        forge={branch.forge}
+        branch={branch.branch}
+        titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
+        onBack={() => setOpening(false)}
+        onClose={onClose}
+      />
+    )
+  }
+
   return (
     <>
       <div
         className="titlebar flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3"
         style={{ paddingRight: titlebarPaddingEnd(RAIL_WIDTH) }}
       >
-        <h2 className="truncate text-sm font-medium">{SHELF_LABELS[tool]}</h2>
-        <div className="flex items-center gap-1">
+        {branch === undefined ? (
+          <BranchName name={session.branch} />
+        ) : (
+          <PanelHeading session={session} publication={branch} />
+        )}
+        <div className="flex shrink-0 items-center gap-1">
           <SyncButton session={session} />
-          <SetupWorktreeButton session={session} />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -287,9 +320,133 @@ function GitPanel({
           </Button>
         </div>
       </div>
+      {branch === undefined ? (
+        <GitBody {...body} publication={undefined} feed={undefined} />
+      ) : (
+        <FollowedGitBody {...body} publication={branch} />
+      )}
+    </>
+  )
+}
+
+interface GitBodyProps {
+  readonly session: Session
+  readonly onReference?: ((reference: string) => void) | undefined
+  readonly openFiles: ReadonlySet<string>
+  readonly onFileOpenChange: (key: string, open: boolean) => void
+  readonly onOpenPullRequest: () => void
+}
+
+/** The panel once the branch is known, with what the forge says about its pull request. */
+function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPublication }) {
+  const feed = useAtomValue(
+    pullRequestFeedAtom(feedKey(props.session.id, props.publication.branch)),
+  )
+  return <GitBody {...props} feed={AsyncResult.isSuccess(feed) ? feed.value : undefined} />
+}
+
+/**
+ * Source control under its header: the tabs, the open tab's content sitting flat on the panel,
+ * and along the bottom the one next step with every other action behind `…`.
+ */
+function GitBody({
+  session,
+  onReference,
+  openFiles,
+  onFileOpenChange,
+  onOpenPullRequest,
+  publication,
+  feed,
+}: GitBodyProps & {
+  readonly publication: BranchPublication | undefined
+  readonly feed: PullRequestFeed | undefined
+}) {
+  const diff = useAtomValue(sessionDiffAtom(session.id))
+  const commits = useAtomValue(sessionCommitsAtom(session.id))
+  const [stored, setStored] = useState<GitView>(readStoredGitView)
+  const [error, setError] = useState<PanelError>()
+  const tabsId = useId()
+
+  const files = AsyncResult.isSuccess(diff) ? diff.value.files : []
+  const pullRequest = feed?.pullRequest ?? null
+  const views = GIT_VIEWS.filter((each) => each !== "checks" || pullRequest !== null)
+  const view = views.includes(stored) ? stored : "overview"
+  const setView = (next: GitView) => {
+    setStored(next)
+    storeGitView(next)
+  }
+
+  const counts: Partial<Record<GitView, ReactNode>> = {
+    changes: files.length > 0 ? <TabCount>{files.length}</TabCount> : null,
+    commits: AsyncResult.isSuccess(commits) ? (
+      <TabCount>{`${commits.value.commits.length}${commits.value.more ? "+" : ""}`}</TabCount>
+    ) : null,
+    checks: feed !== undefined && <ChecksMark checks={feed.checks} />,
+  }
+
+  const action =
+    publication === undefined ? null : primaryAction({ publication, changed: files.length, feed })
+  const note =
+    publication === undefined
+      ? null
+      : footerNote({ action, publication, changed: files.length, feed })
+  const more = <MoreMenu session={session} pullRequest={pullRequest} onError={setError} />
+
+  return (
+    <>
+      <div
+        role="tablist"
+        aria-label="Source control"
+        className="flex shrink-0 gap-4 overflow-x-auto border-b px-4 scrollbar-none"
+      >
+        {views.map((each) => {
+          const selected = each === view
+          return (
+            <button
+              key={each}
+              type="button"
+              role="tab"
+              id={`${tabsId}-${each}`}
+              aria-selected={selected}
+              aria-controls={`${tabsId}-panel`}
+              onClick={() => setView(each)}
+              className={cn(
+                "-mb-px flex items-center gap-1.5 border-b-2 py-2.5 text-sm whitespace-nowrap outline-none focus-visible:text-foreground focus-visible:underline",
+                selected
+                  ? "border-foreground font-medium text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {GIT_VIEW_LABELS[each]}
+              {counts[each]}
+            </button>
+          )
+        })}
+      </div>
+      {error !== undefined && (
+        <div className="relative shrink-0 border-b p-3">
+          <ErrorNote title={error.title} message={error.message} />
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="absolute top-4 right-4"
+            onClick={() => setError(undefined)}
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <X />
+          </Button>
+        </div>
+      )}
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-4 p-4">
-          {tool === "changes" && (
+        <div
+          role="tabpanel"
+          id={`${tabsId}-panel`}
+          aria-labelledby={`${tabsId}-${view}`}
+          className={cn("flex flex-col", (view === "overview" || view === "checks") && "p-4")}
+        >
+          {view === "overview" && <OverviewTab session={session} />}
+          {view === "changes" && (
             <DiffTab
               session={session}
               onReference={onReference}
@@ -297,15 +454,114 @@ function GitPanel({
               onOpenChange={onFileOpenChange}
             />
           )}
-          {tool === "commits" && <CommitsTab session={session} />}
-          {tool === "commit" && (
-            <CommitTab session={session} onOpenPullRequest={() => onToolChange("pull-request")} />
+          {view === "commits" && (
+            <CommitsTab session={session} forge={publication?.forge ?? null} />
           )}
-          {tool === "pull-request" && (
-            <PullRequestTab session={session} onOpenCommit={() => onToolChange("commit")} />
+          {view === "checks" && publication !== undefined && (
+            <ChecksTab session={session} publication={publication} />
           )}
         </div>
       </ScrollArea>
+      {publication !== undefined && (
+        <div className="flex shrink-0 flex-col gap-2 border-t p-3">
+          {action?.kind === "commit" ? (
+            <CommitBar
+              session={session}
+              publication={publication}
+              files={files}
+              note={note?.text ?? ""}
+              more={more}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-xs",
+                  note?.tone === "destructive" ? "text-destructive" : "text-muted-foreground",
+                )}
+                title={note?.text}
+              >
+                {note?.text}
+              </span>
+              {more}
+              {action !== null && (
+                <PrimaryAction
+                  action={action}
+                  session={session}
+                  publication={publication}
+                  feed={feed}
+                  onError={setError}
+                  onOpenPullRequest={onOpenPullRequest}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </>
+  )
+}
+
+function TabCount({ children }: { readonly children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-muted px-1.5 text-[0.6875rem] leading-4 font-medium text-foreground tabular-nums">
+      {children}
+    </span>
+  )
+}
+
+/** The checks tab's mark: how the checks stand, in their color. */
+function ChecksMark({ checks }: { readonly checks: ReadonlyArray<PullRequestCheck> }) {
+  const { overall } = summarizeChecks(checks)
+  if (overall === "none") return null
+  const status = overall === "failure" ? "failure" : overall === "pending" ? "running" : "success"
+  const { Icon, className, label } = CHECK_ICON[status]
+  return <Icon className={cn("size-3.5", className)} aria-label={label} />
+}
+
+function BranchName({ name }: { readonly name: string | null }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+      <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+      <span className="truncate" title={name ?? undefined}>
+        {name ?? "detached HEAD"}
+      </span>
+    </span>
+  )
+}
+
+/** The thread's branch, with its pull request's number and state once the forge has one. */
+function PanelHeading({
+  session,
+  publication,
+}: {
+  readonly session: Session
+  readonly publication: BranchPublication
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  const pullRequest = AsyncResult.isSuccess(feed) ? feed.value.pullRequest : null
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <BranchName name={publication.branch} />
+      {pullRequest !== null && <PullRequestChip pullRequest={pullRequest} />}
+    </div>
+  )
+}
+
+function PullRequestChip({ pullRequest }: { readonly pullRequest: PullRequest }) {
+  const { Icon, tone, label } = PULL_REQUEST_STATE[pullRequest.state]
+  const terms = forgeTerms(pullRequest.forge)
+  return (
+    <a
+      href={pullRequest.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium hover:bg-accent"
+      title={`${label}: ${pullRequest.title}`}
+    >
+      <Icon className={cn("size-3.5", tone)} />
+      {terms.symbol}
+      {pullRequest.number}
+    </a>
   )
 }

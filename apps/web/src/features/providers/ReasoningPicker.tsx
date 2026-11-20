@@ -20,15 +20,15 @@ const DEFAULT = "default"
 interface EffortOption {
   readonly value: ReasoningEffort | typeof DEFAULT
   readonly label: string
-  readonly description: string
+  readonly description?: string
 }
 
 export const EFFORT_OPTIONS: ReadonlyArray<EffortOption> = [
   { value: DEFAULT, label: "Default", description: "The effort the model picks on its own." },
-  { value: "low", label: "Low", description: "Fastest. For small, well-defined tasks." },
-  { value: "medium", label: "Medium", description: "Balanced speed and depth." },
-  { value: "high", label: "High", description: "Thinks longer on harder problems." },
-  { value: "xhigh", label: "Extra high", description: "Deeper still, slower and costlier." },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
   {
     value: "max",
     label: "Max",
@@ -80,7 +80,9 @@ export function ReasoningPicker({
               <DropdownMenuRadioItem key={option.value} value={option.value}>
                 <span className="flex flex-1 flex-col gap-0.5">
                   <span>{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                  {option.description !== undefined && (
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  )}
                 </span>
                 <PinDefaultButton
                   label={option.label}

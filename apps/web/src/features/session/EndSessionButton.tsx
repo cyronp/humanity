@@ -50,17 +50,17 @@ export function EndSessionButton({
           variant="muted"
           size="xs"
           className={className}
-          aria-label={`End session “${session.title}”`}
+          aria-label={`End thread “${session.title}”`}
         >
           <CircleStop />
-          End session
+          End thread
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>End “{session.title}”?</AlertDialogTitle>
           <AlertDialogDescription>
-            The agent stops and the session becomes read-only.{" "}
+            The agent stops and the thread becomes read-only.{" "}
             {session.inWorktree ? (
               <>
                 The branch <code>{session.branch}</code> is kept either way.
@@ -83,11 +83,11 @@ export function EndSessionButton({
             </Label>
           </div>
         )}
-        {error !== undefined && <ErrorNote title="Could not end the session" message={error} />}
+        {error !== undefined && <ErrorNote title="Could not end the thread" message={error} />}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={confirm}>
-            End session
+            End thread
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

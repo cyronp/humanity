@@ -17,7 +17,13 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
-import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import {
+  ChatBox,
+  ChatBoxFooter,
+  KeyHint,
+  noteMessageSent,
+  SendButton,
+} from "@/features/chat/ChatBox"
 import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
 import { MentionTextarea } from "@/features/chat/MentionTextarea"
 import { useFileMention } from "@/features/chat/useFileMention"
@@ -41,7 +47,13 @@ import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
-export function NewChat({ projectId }: { readonly projectId: ProjectId | undefined }) {
+export function NewChat({
+  projectId,
+  initialPrompt,
+}: {
+  readonly projectId: ProjectId | undefined
+  readonly initialPrompt?: string | undefined
+}) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
   const claude = useAtomValue(claudeStatusAtom)
@@ -101,7 +113,7 @@ export function NewChat({ projectId }: { readonly projectId: ProjectId | undefin
               project === undefined ? (
                 <NoProjects />
               ) : (
-                <NewChatForm project={project} defaults={defaults} />
+                <NewChatForm project={project} defaults={defaults} initialPrompt={initialPrompt} />
               ),
           })}
         </div>
@@ -128,9 +140,11 @@ function NoProjects() {
 function NewChatForm({
   project,
   defaults,
+  initialPrompt,
 }: {
   readonly project: Project
   readonly defaults: ThreadDefaults
+  readonly initialPrompt: string | undefined
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
@@ -141,7 +155,7 @@ function NewChatForm({
   const effort = chosenEffort === undefined ? defaults.effort : chosenEffort
   const autonomy = chosenAutonomy ?? defaults.autonomy
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialPrompt ?? "")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const files = useAttachmentDraft()
@@ -190,6 +204,7 @@ function NewChatForm({
       setError(describeCause(exit.cause))
       return
     }
+    noteMessageSent()
     setText("")
     mentions.sent()
     files.clear()
@@ -265,6 +280,7 @@ function NewChatForm({
           </div>
         </ChatBoxFooter>
       </ChatBox>
+      {!pending && <KeyHint typing={text.trim() !== ""} className="flex justify-center" />}
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
           {chosen === undefined || chosen === current

@@ -352,6 +352,23 @@ describe("GitService commits and pushes", () => {
           assert.match(own.commits[0]?.hash ?? "", /^[0-9a-f]{40}$/)
           assert.isTrue((own.commits[0]?.hash ?? "").startsWith(own.commits[0]?.shortHash ?? "-"))
           assert.isFalse(Number.isNaN(Date.parse(own.commits[0]?.committedAt ?? "")))
+          assert.deepInclude(own.commits[0], { files: 1, insertions: 1, deletions: 0 })
+
+          assert.deepStrictEqual(
+            yield* service.commitsNotIn(repo, "refs/heads/feat/log", "main", 10),
+            git(repo, "rev-list", "main..feat/log").trim().split("\n"),
+          )
+          assert.deepStrictEqual(yield* service.commitsNotIn(repo, "main", "feat/log", 10), [])
+          assert.deepStrictEqual(
+            (yield* service.diffRange(repo, "main", "refs/heads/feat/log")).map(
+              ({ filePath, kind, hunks }) => ({ filePath, kind, lines: hunks[0]?.lines }),
+            ),
+            ["a", "b", "c"].map((name) => ({
+              filePath: `${name}.txt`,
+              kind: "create" as const,
+              lines: [`+${name}`],
+            })),
+          )
 
           const latest = yield* service.log(repo, "main", { limit: 10 })
           assert.deepStrictEqual(
