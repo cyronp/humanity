@@ -48,6 +48,7 @@ import {
   type SessionStatus,
   type SessionUsage,
   NothingToCommit,
+  NO_USAGE,
   newThreadAutonomy,
   toolMode,
   trimCharacters,
@@ -1435,6 +1436,8 @@ export class SessionService extends Context.Service<
           updatedAt: timestamp,
         })
         yield* repo.setAccountId(sessionId, accountId)
+        yield* repo.setUsage(sessionId, NO_USAGE)
+        yield* events.publish(sessionId, { _tag: "UsageUpdated", usage: NO_USAGE })
         if (Option.isSome(parked) && whole !== undefined) {
           resumeFallback.set(sessionId, whole.text)
         } else {

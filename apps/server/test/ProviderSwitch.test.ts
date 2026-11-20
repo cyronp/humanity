@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest"
-import { HUMANITY_MCP_SERVER, THREAD_HISTORY_TOOL_NAME } from "@humanity/contracts"
+import { HUMANITY_MCP_SERVER, NO_USAGE, THREAD_HISTORY_TOOL_NAME } from "@humanity/contracts"
 import { Effect, Ref } from "effect"
 import { join } from "node:path"
 import { FakeAgentLog } from "../src/agent/AgentRunnerFake.ts"
@@ -134,8 +134,16 @@ describe("moving a thread to another provider", () => {
         const project = yield* addProject(repo)
         const created = yield* sessions.create({ projectId: project.id, prompt: "Start here" })
         yield* waitForStatus(created.id, "idle")
+        yield* eventually(
+          "Claude Code's plan usage",
+          Effect.map(contents(created.id), ({ usage }) => usage.plan ?? undefined),
+        )
 
         yield* sessions.switchProvider(created.id, "kiro", null)
+        assert.deepStrictEqual((yield* contents(created.id)).usage, NO_USAGE)
+        const unavailable = yield* Effect.flip(sessions.refreshUsage(created.id))
+        assert.strictEqual(unavailable._tag, "PlanUsageUnavailable")
+        assert.deepStrictEqual((yield* contents(created.id)).usage, NO_USAGE)
         yield* sessions.sendMessage(created.id, "Kiro, do the second part")
         yield* eventually(
           "the Kiro run",
