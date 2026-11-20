@@ -51,6 +51,16 @@ export const CommitSummary = Schema.Struct({
   subject: Schema.String,
   author: Schema.String,
   committedAt: Schema.String,
+  /** What the commit changed: files, and lines added and removed (0 for binary files). */
+  files: Schema.Int,
+  insertions: Schema.Int,
+  deletions: Schema.Int,
+  /** Whether the branch's upstream has it; only a pushed commit has a page on the forge. */
+  pushed: Schema.Boolean,
+  /** The commit's page on GitHub or GitLab, once it is pushed there. */
+  url: Schema.NullOr(Schema.String),
+  /** The author's picture on the forge, when the forge knows them. */
+  avatarUrl: Schema.NullOr(Schema.String),
 })
 export type CommitSummary = typeof CommitSummary.Type
 

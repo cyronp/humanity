@@ -79,6 +79,21 @@ const GraphQLJson = Schema.Struct({
 
 const AuthorJson = Schema.NullOr(Schema.Struct({ login: Schema.String, avatar_url: Schema.String }))
 
+const CommitJson = Schema.Struct({
+  sha: Schema.String,
+  commit: Schema.Struct({
+    author: Schema.NullOr(Schema.Struct({ email: Schema.optional(Schema.NullOr(Schema.String)) })),
+  }),
+  author: AuthorJson,
+})
+
+/** A commit's author as GitHub knows them: the email git recorded, and their picture. */
+export interface CommitAuthor {
+  readonly sha: string
+  readonly email: string | null
+  readonly avatarUrl: string | null
+}
+
 const CheckRunsJson = Schema.Struct({
   check_runs: Schema.Array(
     Schema.Struct({
@@ -290,6 +305,12 @@ export class GitHubService extends Context.Service<
       fullName: string,
       number: number,
     ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitHubError>
+    /** The authors of the newest `count` commits (at most 100) of a branch on GitHub. */
+    readonly commitAuthors: (
+      fullName: string,
+      branch: string,
+      count: number,
+    ) => Effect.Effect<ReadonlyArray<CommitAuthor>, GitHubError>
   }
 >()("humanity/GitHubService") {
   static readonly layer = Layer.effect(
@@ -681,6 +702,21 @@ ${absolute(url)}`
           return [...fromRuns, ...fromStatuses]
         })
 
+      const commitAuthors = (fullName: string, branch: string, count: number) =>
+        Effect.gen(function* () {
+          const token = yield* tokens.get
+          const perPage = Math.max(1, Math.min(100, count))
+          const commits = yield* read(
+            `/repos/${fullName}/commits?sha=${encodeURIComponent(branch)}&per_page=${perPage}`,
+            token,
+          ).pipe(Effect.flatMap(decode(Schema.Array(CommitJson))))
+          return commits.map((commit): CommitAuthor => ({
+            sha: commit.sha,
+            email: commit.commit.author?.email ?? null,
+            avatarUrl: commit.author?.avatar_url ?? null,
+          }))
+        })
+
       const comments = (fullName: string, number: number) =>
         Effect.gen(function* () {
           const token = yield* tokens.get
@@ -753,6 +789,7 @@ ${absolute(url)}`
         setPullRequestDraft,
         checks,
         comments,
+        commitAuthors,
       })
     }),
   )

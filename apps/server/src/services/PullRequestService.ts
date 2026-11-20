@@ -1,6 +1,9 @@
 import {
+  type BranchCommits,
   type BranchPublication,
+  type CommitSummary,
   type Forge,
+  type GitRefNotFound,
   GITLAB_DEFAULT_HOST,
   type MergeMethod,
   type MergePullRequest,
@@ -24,7 +27,8 @@ import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { ProjectService } from "./ProjectService.ts"
-import { SessionService, threadBranch } from "./SessionService.ts"
+import type { LoggedCommit } from "./gitParsers.ts"
+import { COMMIT_LIST_LIMIT, SessionService, threadBranch } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
@@ -55,6 +59,21 @@ interface Fetched {
 }
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+
+/** GitLab finds a picture per email: at most this many new emails are looked up per listing. */
+const AVATAR_LOOKUPS = 10
+
+const NOREPLY = /^(?:(\d+)\+)?([^@]+)@users\.noreply\.github\.com$/i
+
+/** GitHub's private commit emails name the account, so its picture needs no request. */
+export const noreplyAvatar = (email: string): string | null => {
+  const match = NOREPLY.exec(email)
+  if (match === null) return null
+  const [, id, login] = match
+  return id !== undefined
+    ? `https://avatars.githubusercontent.com/u/${id}?v=4`
+    : `https://github.com/${encodeURIComponent(login ?? "")}.png`
+}
 
 const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
 
@@ -96,6 +115,11 @@ export class PullRequestService extends Context.Service<
   PullRequestService,
   {
     readonly publication: (sessionId: string) => Effect.Effect<BranchPublication, Base>
+    /**
+     * The thread's branch's commits, each with whether its upstream has it, its page on the forge
+     * once pushed, and its author's picture when the forge knows them.
+     */
+    readonly commits: (sessionId: string) => Effect.Effect<BranchCommits, Base | GitRefNotFound>
     readonly push: (
       sessionId: string,
     ) => Effect.Effect<BranchPublication, Base | PullRequestUnavailable>
@@ -720,8 +744,103 @@ export class PullRequestService extends Context.Service<
         } satisfies SyncResult
       })
 
+      /** Pictures found by email, per forge, for this daemon's life: `null` when it has none. */
+      const pictures = new Map<string, string | null>()
+
+      const picturesOf = (
+        remote: Remote | null,
+        upstream: string | null,
+        listed: ReadonlyArray<LoggedCommit>,
+        unpushed: ReadonlySet<string>,
+      ) =>
+        Effect.gen(function* () {
+          const bySha = new Map<string, string>()
+          if (remote === null) return bySha
+          const scope = remote.forge === "github" ? "github" : `gitlab:${remote.host}`
+          const known = (email: string) => pictures.get(`${scope}\n${email.toLowerCase()}`)
+          const remember = (email: string, url: string | null) =>
+            pictures.set(`${scope}\n${email.toLowerCase()}`, url)
+
+          if (remote.forge === "github") {
+            const pushed = listed.filter((commit) => !unpushed.has(commit.hash)).length
+            const onOrigin = upstream?.startsWith("origin/") === true ? upstream.slice(7) : null
+            const token = yield* github.token
+            if (Option.isSome(token) && onOrigin !== null && pushed > 0) {
+              const authors = yield* github
+                .commitAuthors(remote.fullName, onOrigin, pushed)
+                .pipe(Effect.catch(() => Effect.succeed([])))
+              for (const author of authors) {
+                if (author.avatarUrl === null) continue
+                bySha.set(author.sha, author.avatarUrl)
+                if (author.email !== null) remember(author.email, author.avatarUrl)
+              }
+            }
+          } else if (remote.mismatch === null) {
+            const { token } = yield* gitlab.credentials
+            const unknown = [
+              ...new Set(listed.map((commit) => commit.authorEmail.toLowerCase())),
+            ].filter((email) => email !== "" && known(email) === undefined)
+            if (Option.isSome(token)) {
+              yield* Effect.forEach(
+                unknown.slice(0, AVATAR_LOOKUPS),
+                (email) =>
+                  gitlab.avatar(email).pipe(
+                    Effect.tap((url) => Effect.sync(() => remember(email, url))),
+                    Effect.catch(() => Effect.void),
+                  ),
+                { concurrency: 3, discard: true },
+              )
+            }
+          }
+          for (const commit of listed) {
+            if (bySha.has(commit.hash)) continue
+            const url =
+              known(commit.authorEmail) ??
+              (remote.forge === "github" ? noreplyAvatar(commit.authorEmail) : null)
+            if (url !== null && url !== undefined) bySha.set(commit.hash, url)
+          }
+          return bySha
+        })
+
+      const commitPage = (remote: Remote | null, hash: string) =>
+        remote === null
+          ? null
+          : remote.forge === "github"
+            ? `https://github.com/${remote.fullName}/commit/${hash}`
+            : `https://${remote.host}/${remote.fullPath}/-/commit/${hash}`
+
+      const commitsOf = Effect.fn("PullRequestService.commits")(function* (sessionId: string) {
+        const listed = yield* sessions.commits(sessionId)
+        const { session, remote, tracking } = yield* load(sessionId)
+        const all = listed.commits.map((commit) => commit.hash)
+        const ref = listed.branch === "HEAD" ? "HEAD" : `refs/heads/${listed.branch}`
+        const unpushed = new Set(
+          tracking.upstream === null
+            ? all
+            : yield* git
+                .commitsNotIn(session.worktreePath, ref, tracking.upstream, COMMIT_LIST_LIMIT + 1)
+                .pipe(Effect.catch(() => Effect.succeed(all))),
+        )
+        const avatars = yield* picturesOf(remote, tracking.upstream, listed.commits, unpushed)
+        return {
+          branch: listed.branch,
+          base: listed.base,
+          more: listed.more,
+          commits: listed.commits.map(({ authorEmail: _, ...commit }): CommitSummary => {
+            const pushed = !unpushed.has(commit.hash)
+            return {
+              ...commit,
+              pushed,
+              url: pushed ? commitPage(remote, commit.hash) : null,
+              avatarUrl: avatars.get(commit.hash) ?? null,
+            }
+          }),
+        } satisfies BranchCommits
+      })
+
       return PullRequestService.of({
         publication,
+        commits: commitsOf,
         push,
         create,
         merge,

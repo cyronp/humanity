@@ -56,6 +56,7 @@ describe("shelf", () => {
 
   it("remembers the Source control tab, and starts on Overview", () => {
     expect(parseGitView("commits")).toBe("commits")
+    expect(parseGitView("checks")).toBe("checks")
     expect(parseGitView("pull-request")).toBe("overview")
     expect(parseGitView(null)).toBe("overview")
   })

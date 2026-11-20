@@ -1,9 +1,11 @@
 import { assert, describe, it } from "@effect/vitest"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { Effect, Layer, Stream } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
 import { GitHubService } from "../src/services/GitHubService.ts"
 import { GitHubToken } from "../src/services/GitHubToken.ts"
-import { PullRequestService } from "../src/services/PullRequestService.ts"
+import { noreplyAvatar, PullRequestService } from "../src/services/PullRequestService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
 import { addProject, services, setup, waitForStatus } from "./sessionHelpers.ts"
@@ -199,4 +201,100 @@ describe("PullRequestService", () => {
       }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
     }),
   )
+})
+
+describe("PullRequestService.commits", () => {
+  it.live("marks what origin has as pushed, links it, and finds its author's picture", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      git(repo, "remote", "add", "origin", "https://github.com/acme/app.git")
+      git(repo, "checkout", "--quiet", "-b", "feat/login")
+      for (const name of ["a", "b"]) {
+        writeFileSync(join(repo, `${name}.txt`), `${name}\n`)
+        git(repo, "add", "--all")
+        git(repo, "commit", "--quiet", "--message", `add ${name}`)
+      }
+      const pushed = git(repo, "rev-parse", "HEAD~1").trim()
+      const unpushed = git(repo, "rev-parse", "HEAD").trim()
+      git(repo, "update-ref", "refs/remotes/origin/feat/login", pushed)
+      git(repo, "branch", "--quiet", "--set-upstream-to=origin/feat/login")
+      const email = git(repo, "config", "user.email").trim()
+
+      const requests: Array<string> = []
+      const client = HttpClient.make((request) =>
+        Effect.sync(() => {
+          requests.push(request.url)
+          const body = request.url.includes("/commits?sha=")
+            ? [
+                {
+                  sha: pushed,
+                  commit: { author: { email } },
+                  author: { login: "ana", avatar_url: "https://avatars.example/ana" },
+                },
+              ]
+            : []
+          return HttpClientResponse.fromWeb(
+            request,
+            new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }),
+          )
+        }),
+      )
+      const layer = GitHubService.layer.pipe(
+        Layer.provide(GitHubToken.layerTest("tok")),
+        Layer.provide(Layer.succeed(HttpClient.HttpClient, client)),
+      )
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const pullRequests = yield* PullRequestService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
+        yield* waitForStatus(session.id, "idle")
+
+        const listed = yield* pullRequests.commits(session.id)
+        assert.deepStrictEqual(
+          listed.commits.slice(0, 2).map(({ hash, pushed, url, avatarUrl, files, insertions }) => ({
+            hash,
+            pushed,
+            url,
+            avatarUrl,
+            files,
+            insertions,
+          })),
+          [
+            {
+              hash: unpushed,
+              pushed: false,
+              url: null,
+              avatarUrl: "https://avatars.example/ana",
+              files: 1,
+              insertions: 1,
+            },
+            {
+              hash: pushed,
+              pushed: true,
+              url: `https://github.com/acme/app/commit/${pushed}`,
+              avatarUrl: "https://avatars.example/ana",
+              files: 1,
+              insertions: 1,
+            },
+          ],
+        )
+        assert.isTrue(
+          requests.some((url) => url.includes("/repos/acme/app/commits?sha=feat%2Flogin")),
+        )
+      }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
+    }),
+  )
+})
+
+describe("noreplyAvatar", () => {
+  it("reads GitHub's private emails, and nothing else", () => {
+    assert.strictEqual(
+      noreplyAvatar("12345+ana@users.noreply.github.com"),
+      "https://avatars.githubusercontent.com/u/12345?v=4",
+    )
+    assert.strictEqual(noreplyAvatar("ana@users.noreply.github.com"), "https://github.com/ana.png")
+    assert.isNull(noreplyAvatar("ana@example.com"))
+  })
 })

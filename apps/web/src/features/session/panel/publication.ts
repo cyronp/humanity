@@ -163,6 +163,84 @@ export const primaryAction = ({
   return needsPush(publication) ? { kind: "push" } : null
 }
 
+/** The checks in a few words: "1 failing · 3 passed", or that there are none. */
+export const checksPhrase = (checks: ReadonlyArray<PullRequestCheck>): string => {
+  if (checks.length === 0) return "No checks reported yet"
+  const summary = summarizeChecks(checks)
+  return [
+    summary.failed > 0 && `${summary.failed} failing`,
+    summary.pending > 0 && `${summary.pending} in progress`,
+    summary.passed > 0 && `${summary.passed} passed`,
+    summary.other > 0 && `${summary.other} skipped`,
+  ]
+    .filter((part) => part !== false)
+    .join(" · ")
+}
+
+export interface FooterNote {
+  readonly text: string
+  readonly tone: "muted" | "destructive"
+}
+
+/**
+ * The sentence beside the panel's main button, along its bottom: why that is the next step, or,
+ * with nothing left to do, where the branch stands.
+ */
+export const footerNote = ({
+  action,
+  publication,
+  changed,
+  feed,
+}: {
+  readonly action: PrimaryAction | null
+  readonly publication: BranchPublication
+  readonly changed: number
+  readonly feed: PullRequestFeed | undefined
+}): FooterNote | null => {
+  if (checkoutMoved(publication)) return null
+  const muted = (text: string): FooterNote => ({ text, tone: "muted" })
+  const pullRequest = feed?.pullRequest ?? null
+  const checks = feed?.checks ?? []
+  switch (action?.kind) {
+    case "commit": {
+      const toPush =
+        publication.upstream !== null && publication.ahead > 0
+          ? ` · ${commits(publication.ahead)} to push`
+          : ""
+      return muted(`${changed} file${changed === 1 ? "" : "s"} changed${toPush}`)
+    }
+    case "push":
+      return muted(remoteStatus(publication))
+    case "open-pull-request":
+      return publication.forge === null
+        ? null
+        : muted(`No ${forgeTerms(publication.forge).noun} for this branch yet.`)
+    case "ready":
+      return muted(`A draft · ${checksPhrase(checks)}`)
+    case "merge": {
+      const failing = checks.filter((check) => check.status === "failure")
+      if (failing.length > 0) {
+        return {
+          text: `${failing.length} check${failing.length === 1 ? "" : "s"} failing: ${failing.map((check) => check.name).join(", ")}`,
+          tone: "destructive",
+        }
+      }
+      const summary = summarizeChecks(checks)
+      return muted(
+        summary.overall === "none"
+          ? "No checks reported"
+          : summary.overall === "pending"
+            ? "Checks in progress"
+            : "Every check passed",
+      )
+    }
+    case undefined:
+      return pullRequest?.state === "merged"
+        ? muted(`Merged into ${pullRequest.base}`)
+        : muted(remoteStatus(publication))
+  }
+}
+
 export interface MergeOption {
   readonly method: MergeMethod
   readonly label: string

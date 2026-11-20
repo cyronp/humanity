@@ -1,6 +1,5 @@
 import {
   type Branch,
-  type CommitSummary,
   type FileDiff,
   GitBranchExists,
   GitCommandFailed,
@@ -19,6 +18,7 @@ import { join, resolve } from "node:path"
 import {
   BRANCH_FORMAT,
   LOG_FORMAT,
+  type LoggedCommit,
   parseBranches,
   parseLog,
   parseStatus,
@@ -70,9 +70,16 @@ export class GitService extends Context.Service<
       ref: string,
       options: { readonly exclude?: string | undefined; readonly limit: number },
     ) => Effect.Effect<
-      { readonly commits: ReadonlyArray<CommitSummary>; readonly more: boolean },
+      { readonly commits: ReadonlyArray<LoggedCommit>; readonly more: boolean },
       GitError | GitRefNotFound
     >
+    /** The hashes of up to `limit` commits that `ref` has and `exclude` lacks, newest first. */
+    readonly commitsNotIn: (
+      cwd: string,
+      ref: string,
+      exclude: string,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<string>, GitError>
     readonly diff: (cwd: string, base?: string) => Effect.Effect<WorkingTreeDiff, GitError>
     readonly worktreeAdd: (
       cwd: string,
@@ -301,6 +308,7 @@ export class GitService extends Context.Service<
           "log",
           `--max-count=${options.limit + 1}`,
           `--format=${LOG_FORMAT}`,
+          "--numstat",
           "--end-of-options",
           ...revisions,
           "--",
@@ -481,6 +489,23 @@ export class GitService extends Context.Service<
           ),
         )
 
+      const commitsNotIn = (cwd: string, ref: string, exclude: string, limit: number) =>
+        exec(cwd, [
+          "rev-list",
+          `--max-count=${limit}`,
+          "--end-of-options",
+          ref,
+          `^${exclude}`,
+          "--",
+        ]).pipe(
+          Effect.map((out) =>
+            out
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line !== ""),
+          ),
+        )
+
       const aheadBehind = (cwd: string, ref: string, target: string) =>
         exec(cwd, [
           "rev-list",
@@ -563,6 +588,7 @@ export class GitService extends Context.Service<
         listFiles,
         hasCommit,
         log,
+        commitsNotIn,
         diff,
         worktreeAdd,
         worktreeRemove,

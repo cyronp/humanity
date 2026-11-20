@@ -32,6 +32,8 @@ export const gitlabApi = (host: string): string => `https://${host}/api/v4`
 
 export type GitLabError = GitLabNotAuthenticated | GitLabRateLimited | GitLabRequestFailed
 
+const AvatarJson = Schema.Struct({ avatar_url: Schema.optional(Schema.NullOr(Schema.String)) })
+
 export interface GitLabCredentials {
   readonly host: string
   readonly token: Option.Option<Redacted.Redacted<string>>
@@ -246,6 +248,8 @@ export class GitLabService extends Context.Service<
       fullPath: string,
       mergeRequest: PullRequest,
     ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitLabError>
+    /** The picture GitLab shows for an email, or `null` when it has none. */
+    readonly avatar: (email: string) => Effect.Effect<string | null, GitLabError>
   }
 >()("humanity/GitLabService") {
   static readonly layer = Layer.effect(
@@ -592,6 +596,16 @@ ${path}`
           }))
         })
 
+      const avatar = (email: string) =>
+        Effect.gen(function* () {
+          const using = yield* credentials
+          const found = yield* read(
+            `/avatar?email=${encodeURIComponent(email)}&size=48`,
+            using,
+          ).pipe(Effect.flatMap(decode(AvatarJson)))
+          return found.avatar_url ?? null
+        })
+
       const comments = (fullPath: string, mergeRequest: PullRequest) =>
         Effect.gen(function* () {
           const using = yield* credentials
@@ -637,6 +651,7 @@ ${path}`
         setMergeRequestDraft,
         checks,
         comments,
+        avatar,
       })
     }),
   )

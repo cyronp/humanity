@@ -10,13 +10,14 @@ export const SHELF_LABELS: Readonly<Record<ShelfTool, string>> = {
 }
 
 /** The tabs of the Source control tool. */
-export const GIT_VIEWS = ["overview", "changes", "commits"] as const
+export const GIT_VIEWS = ["overview", "changes", "commits", "checks"] as const
 export type GitView = (typeof GIT_VIEWS)[number]
 
 export const GIT_VIEW_LABELS: Readonly<Record<GitView, string>> = {
   overview: "Overview",
   changes: "Changes",
   commits: "Commits",
+  checks: "Checks",
 }
 
 export interface ShelfState {

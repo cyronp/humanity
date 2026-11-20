@@ -74,21 +74,20 @@ export function PrimaryAction({
   action,
   session,
   publication,
-  files,
   feed,
   onError,
 }: {
   readonly action: Action
   readonly session: Session
   readonly publication: BranchPublication
-  readonly files: ReadonlyArray<FileDiff>
   readonly feed: PullRequestFeed | undefined
   readonly onError: (error: PanelError | undefined) => void
 }) {
   const pullRequest = feed?.pullRequest ?? null
   switch (action.kind) {
     case "commit":
-      return <CommitAction session={session} publication={publication} files={files} />
+      // Committing takes the whole bar: see `CommitBar`.
+      return null
     case "push":
       return <PushAction session={session} onError={onError} />
     case "open-pull-request":
@@ -158,7 +157,7 @@ function ActionPopover({
           </Button>
         </PopoverTrigger>
       </Hinted>
-      <PopoverContent align="end" className="w-80 gap-3">
+      <PopoverContent side="top" align="end" className="w-80 gap-3">
         {children}
       </PopoverContent>
     </Popover>
@@ -207,14 +206,23 @@ function MethodList<M extends string>({
 
 type CommitMethod = "commit" | "commit-push"
 
-function CommitAction({
+/**
+ * The panel's bottom bar while files are changed: the message, then Commit. The arrow beside it
+ * picks which files go in, and offers Commit and push.
+ */
+export function CommitBar({
   session,
   publication,
   files,
+  note,
+  more,
 }: {
   readonly session: Session
   readonly publication: BranchPublication
   readonly files: ReadonlyArray<FileDiff>
+  /** Where the branch stands, shown while every file is picked. */
+  readonly note: string
+  readonly more: ReactNode
 }) {
   const commit = useAtomSet(commitAtom, { mode: "promiseExit" })
   const push = useAtomSet(pushAtom, { mode: "promiseExit" })
@@ -231,6 +239,7 @@ function CommitAction({
   const branch = publication.branch ?? session.branch
   const canPush =
     publication.branch !== null && (publication.forge !== null || publication.upstream !== null)
+  const ready = message.trim() !== "" && picked.length > 0 && !busy
 
   const toggle = (path: string) =>
     setLeft((current) => {
@@ -241,7 +250,7 @@ function CommitAction({
     })
 
   const run = async (method: CommitMethod) => {
-    if (message.trim() === "" || picked.length === 0 || pending !== null) return
+    if (!ready || pending !== null) return
     setPending(method)
     setError(undefined)
     const exit = await commit({
@@ -269,6 +278,7 @@ function CommitAction({
         payload: { sessionId: session.id },
         reactivityKeys: [
           keys.publication(session.id),
+          keys.sessionCommits(session.id),
           keys.git(session.projectId),
           keys.sync(session.id),
         ],
@@ -301,64 +311,107 @@ function CommitAction({
   ]
 
   return (
-    <ActionPopover
-      icon={<GitCommitHorizontal />}
-      label="Commit"
-      open={open}
-      onOpenChange={setOpen}
-      hint={busy ? WAIT_FOR_AGENT : null}
-    >
-      <div className="overflow-hidden rounded-md border">
-        <label className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1 text-xs font-medium">
-          <Checkbox
-            className={SMALL_CHECKBOX}
-            checked={everything ? true : picked.length > 0 ? "indeterminate" : false}
-            onCheckedChange={() =>
-              setLeft(everything ? new Set(files.map((file) => file.filePath)) : new Set())
-            }
-          />
-          {picked.length} of {files.length} file{files.length === 1 ? "" : "s"}
-          <span className="ml-auto">
-            <ChangeCount {...counts} />
-          </span>
-        </label>
-        <ul className="max-h-40 divide-y overflow-y-auto scrollbar-thin">
-          {files.map((file) => (
-            <li key={`${file.kind}:${file.filePath}`}>
-              <label className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/40">
-                <Checkbox
-                  className={SMALL_CHECKBOX}
-                  checked={!left.has(file.filePath)}
-                  onCheckedChange={() => toggle(file.filePath)}
-                />
-                <code
-                  className={cn("min-w-0 flex-1 truncate font-mono", fileNameClass(file.kind))}
-                  title={file.filePath}
-                >
-                  {file.filePath}
-                </code>
-                <FileStatusLetter kind={file.kind} />
-              </label>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <>
       <Textarea
         value={message}
         onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault()
+            void run("commit")
+          }
+        }}
         placeholder="Commit message"
-        rows={3}
         aria-label="Commit message"
-        autoFocus
+        rows={1}
+        className="max-h-32 min-h-8 resize-none py-1.5"
       />
-      <MethodList
-        options={options}
-        disabled={message.trim() === "" || picked.length === 0}
-        pending={pending}
-        onPick={(method) => void run(method)}
-      />
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {everything ? note : `${picked.length} of ${files.length} files`}
+        </span>
+        {more}
+        <Hinted hint={busy ? WAIT_FOR_AGENT : null}>
+          <div className="flex">
+            <Button
+              size="sm"
+              disabled={!ready || pending !== null}
+              onClick={() => void run("commit")}
+              className="rounded-r-none"
+              title="Commit (Ctrl+Enter)"
+            >
+              {pending === "commit" ? <Spinner className="size-3.5" /> : <GitCommitHorizontal />}
+              Commit
+            </Button>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  className="rounded-l-none border-l border-primary-foreground/20 px-1.5"
+                  aria-label="Pick files, or commit and push"
+                  title="Pick files, or commit and push"
+                >
+                  <ChevronDown />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-80 gap-3">
+                <div className="overflow-hidden rounded-md border">
+                  <label className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1 text-xs font-medium">
+                    <Checkbox
+                      className={SMALL_CHECKBOX}
+                      checked={everything ? true : picked.length > 0 ? "indeterminate" : false}
+                      onCheckedChange={() =>
+                        setLeft(
+                          everything ? new Set(files.map((file) => file.filePath)) : new Set(),
+                        )
+                      }
+                    />
+                    {picked.length} of {files.length} file{files.length === 1 ? "" : "s"}
+                    <span className="ml-auto">
+                      <ChangeCount {...counts} />
+                    </span>
+                  </label>
+                  <ul className="max-h-40 divide-y overflow-y-auto scrollbar-thin">
+                    {files.map((file) => (
+                      <li key={`${file.kind}:${file.filePath}`}>
+                        <label className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/40">
+                          <Checkbox
+                            className={SMALL_CHECKBOX}
+                            checked={!left.has(file.filePath)}
+                            onCheckedChange={() => toggle(file.filePath)}
+                          />
+                          <code
+                            className={cn(
+                              "min-w-0 flex-1 truncate font-mono",
+                              fileNameClass(file.kind),
+                            )}
+                            title={file.filePath}
+                          >
+                            {file.filePath}
+                          </code>
+                          <FileStatusLetter kind={file.kind} />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {message.trim() === "" && (
+                  <p className="text-xs text-muted-foreground">Write a commit message first.</p>
+                )}
+                <MethodList
+                  options={options}
+                  disabled={!ready}
+                  pending={pending}
+                  onPick={(method) => void run(method)}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </Hinted>
+      </div>
       {error !== undefined && <ErrorNote title={error.title} message={error.message} />}
-    </ActionPopover>
+    </>
   )
 }
 
@@ -380,6 +433,7 @@ function PushAction({
       payload: { sessionId: session.id },
       reactivityKeys: [
         keys.publication(session.id),
+        keys.sessionCommits(session.id),
         keys.git(session.projectId),
         keys.sync(session.id),
       ],

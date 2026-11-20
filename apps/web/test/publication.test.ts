@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest"
 import {
   baseBranches,
   commitPaths,
+  checksPhrase,
   feedNotice,
+  footerNote,
   forgeTerms,
   checkoutMoved,
   mergeOptions,
@@ -266,5 +268,72 @@ describe("mergeOptions", () => {
       "rebase",
     ])
     expect(mergeOptions("gitlab").map((option) => option.method)).toEqual(["merge", "squash"])
+  })
+})
+
+describe("checksPhrase", () => {
+  it("says how the checks stand, worst first", () => {
+    expect(checksPhrase([])).toBe("No checks reported yet")
+    expect(
+      checksPhrase([check("success"), check("failure"), check("running"), check("skipped")]),
+    ).toBe("1 failing · 1 in progress · 1 passed · 1 skipped")
+  })
+})
+
+describe("footerNote", () => {
+  const note = (...args: Parameters<typeof footerNote>) => footerNote(...args)
+
+  it("counts what a commit takes, and what waits to be pushed", () => {
+    const commit = { kind: "commit", files: 3 } as const
+    expect(
+      note({ action: commit, publication: publication({ ahead: 1 }), changed: 3, feed: feed() }),
+    ).toEqual({ text: "3 files changed · 1 commit to push", tone: "muted" })
+    expect(
+      note({
+        action: commit,
+        publication: publication({ upstream: null }),
+        changed: 1,
+        feed: feed(),
+      })?.text,
+    ).toBe("1 file changed")
+  })
+
+  it("names the failing checks before a merge, in red", () => {
+    const failing = { ...check("failure"), name: "test" }
+    expect(
+      note({
+        action: { kind: "merge" },
+        publication: publication(),
+        changed: 0,
+        feed: feed({ pullRequest: pull("open"), checks: [check("success"), failing] }),
+      }),
+    ).toEqual({ text: "1 check failing: test", tone: "destructive" })
+    expect(
+      note({
+        action: { kind: "merge" },
+        publication: publication(),
+        changed: 0,
+        feed: feed({ pullRequest: pull("open"), checks: [check("success")] }),
+      })?.text,
+    ).toBe("Every check passed")
+  })
+
+  it("says where the branch stands when nothing is left to do", () => {
+    expect(
+      note({
+        action: null,
+        publication: publication(),
+        changed: 0,
+        feed: feed({ pullRequest: pull("merged") }),
+      })?.text,
+    ).toBe("Merged into main")
+    expect(
+      note({
+        action: null,
+        publication: publication({ checkedOut: "main" }),
+        changed: 0,
+        feed: feed(),
+      }),
+    ).toBeNull()
   })
 })
