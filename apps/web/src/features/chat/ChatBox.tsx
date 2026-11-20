@@ -32,7 +32,7 @@ export function ChatBoxFooter({ className, ...props }: ComponentProps<typeof Inp
     <InputGroupAddon
       align="block-end"
       className={cn(
-        "@container/chat-footer gap-1 px-2 pb-2 opacity-70 transition-opacity",
+        "gap-1 px-2 pb-2 opacity-70 transition-opacity",
         "group-focus-within/input-group:opacity-100 group-has-[[data-state=open]]/input-group:opacity-100 group-has-[textarea:not(:placeholder-shown)]/input-group:opacity-100",
         className,
       )}
@@ -108,6 +108,9 @@ export const noteMessageSent = () => {
   }
 }
 
+/** Whether the key hint still shows: the human has not sent enough messages to know the keys. */
+export const useKeyHintShown = (): boolean => useState(() => readSends() < KEY_HINT_SENDS)[0]
+
 /**
  * How to send and how to break a line, shown once there is something to send, until the human has
  * sent a few messages.
@@ -119,8 +122,7 @@ export function KeyHint({
   readonly typing: boolean
   readonly className?: string
 }) {
-  const [retired] = useState(() => readSends() >= KEY_HINT_SENDS)
-  if (retired) return null
+  if (!useKeyHintShown()) return null
   return (
     <span
       aria-hidden

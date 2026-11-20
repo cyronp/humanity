@@ -10,6 +10,7 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useBrowser } from "@/features/browser/useBrowser"
+import { KeyHint, useKeyHintShown } from "@/features/chat/ChatBox"
 import { Composer, type ComposerHandle } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
@@ -25,7 +26,7 @@ import {
   pendingConfirmations,
   type SessionView,
 } from "./state.ts"
-import { UsageMeters } from "./UsageMeters.tsx"
+import { HINT_CLASS, UsageMeters } from "./UsageMeters.tsx"
 import { useTranscript } from "./useTranscript.ts"
 
 export interface WorkspaceSearch {
@@ -63,6 +64,8 @@ export function Workspace({
   const browser = useBrowser(session.id, view.toolCalls)
 
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
+  const [typing, setTyping] = useState(false)
+  const keyHint = useKeyHintShown()
   const [dockHeight, setDockHeight] = useState(0)
   useEffect(() => {
     if (dock === null) return
@@ -178,7 +181,15 @@ export function Workspace({
           {/* The @ menu opens upward from the chat box: while it is open nothing may clip it. */}
           <div className="max-h-[calc(100svh-3.5rem)] shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto has-[[data-slot=file-mention-menu]]:overflow-visible">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
-              <UsageMeters sessionId={session.id} usage={view.usage} />
+              <UsageMeters
+                sessionId={session.id}
+                usage={view.usage}
+                hint={
+                  keyHint && typing && (asked === undefined || questions === undefined) ? (
+                    <KeyHint typing={typing} className={HINT_CLASS} />
+                  ) : undefined
+                }
+              />
               {asked !== undefined && questions !== undefined ? (
                 <QuestionPanel key={asked.id} confirmation={asked} questions={questions} />
               ) : (
@@ -192,6 +203,7 @@ export function Workspace({
                   effort={session.effort}
                   disabled={!acceptsMessages(session)}
                   busy={isBusy(session.status)}
+                  onTypingChange={setTyping}
                 />
               )}
             </div>

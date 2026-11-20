@@ -3,7 +3,7 @@ import type { ContextUsage, SessionId, SessionUsage } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { Gauge, RefreshCw } from "lucide-react"
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, type ReactNode, useCallback, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -38,19 +38,35 @@ const FLOATING = "rounded-full bg-background/60 px-2 py-0.5 text-xs tabular-nums
 export const UsageMeters = memo(function UsageMeters({
   sessionId,
   usage,
+  hint,
 }: {
   readonly sessionId: SessionId
   readonly usage: SessionUsage
+  /** Shown to the right of the plan usage: the chat box's key hint. */
+  readonly hint?: ReactNode
 }) {
   const rows = planRows(usage.plan, new Date())
-  if (usage.context === null && usage.plan === null) return null
+  if (usage.context === null && usage.plan === null && hint === undefined) return null
   return (
-    <div className="-mb-1 flex items-center justify-between gap-3 px-1">
-      {usage.plan === null ? <span /> : <PlanUsageButton sessionId={sessionId} rows={rows} />}
-      {usage.context !== null && <ContextMeter context={usage.context} />}
+    <div className="-mb-1 flex items-center gap-3 px-1">
+      <div className="flex min-w-0 items-center gap-2">
+        {usage.plan !== null && <PlanUsageButton sessionId={sessionId} rows={rows} />}
+        {hint}
+      </div>
+      {usage.context !== null && (
+        <span className="ml-auto shrink-0">
+          <ContextMeter context={usage.context} />
+        </span>
+      )}
     </div>
   )
 })
+
+/** The chat box's key hint, floating like the meters beside it. */
+export const HINT_CLASS = cn(
+  FLOATING,
+  "hidden min-w-0 animate-in fade-in-0 duration-200 motion-reduce:animate-none sm:flex",
+)
 
 function ContextMeter({ context }: { readonly context: ContextUsage }) {
   const used = contextPercentUsed(context)
