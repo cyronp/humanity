@@ -392,7 +392,7 @@ function OtherAccountRow({ account }: { readonly account: OtherAccountRowData })
       <span className="grow truncate font-medium">{account.label}</span>
       {plan === null ? (
         <span className="shrink-0 text-muted-foreground" title={account.unavailable ?? undefined}>
-          {account.unavailable === null ? "Reports no plan limits" : "Could not read its limits"}
+          {account.unavailable === null ? "Limits not available" : "Could not read its limits"}
         </span>
       ) : windows.length === 0 ? (
         <span className="shrink-0 text-muted-foreground">No limits to show</span>
