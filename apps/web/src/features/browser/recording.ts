@@ -5,10 +5,6 @@ const MAX_BYTES = 50 * 1024 * 1024
 const MAX_MS = 10 * 60 * 1000
 const FRAME_RATE = 30
 
-/**
- * A live video of a Browser page: the desktop app answers the window's `getDisplayMedia` with the
- * page it was told about just before, with no picker.
- */
 export const pageStream = async (
   bridge: DesktopPreviewBridge,
   guest: number,
@@ -39,10 +35,6 @@ export type RecorderState =
 const describe = (cause: unknown) =>
   cause instanceof Error ? cause.message : "The page could not be recorded."
 
-/**
- * Records a Browser page to WebM (video only, 30 fps), stopping at 50 MB or 10 minutes, and saves
- * it under `~/.humanity/recordings/<thread>/` through the desktop app.
- */
 export const usePageRecorder = (bridge: DesktopPreviewBridge | undefined, threadId: string) => {
   const [state, setState] = useState<RecorderState>({ _tag: "Idle" })
   const [now, setNow] = useState(() => Date.now())

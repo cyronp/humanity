@@ -39,7 +39,6 @@ const OVERALL = {
   success: { word: "All checks passed", status: "success" },
 } as const
 
-/** The pull request's checks as a pipeline, in the order the forge reports them. */
 export function ChecksTab({
   session,
   publication,

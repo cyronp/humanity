@@ -192,11 +192,9 @@ export class TerminalService extends Context.Service<
     ) => Effect.Effect<void, TerminalNotFound>
     readonly ack: (terminalId: string, attachmentId: string, seq: number) => Effect.Effect<void>
     readonly shells: Effect.Effect<ReadonlyArray<ShellInfo>>
-    /** The colors the dock draws terminals in, reported to programs that ask for them. */
     readonly setColors: (colors: TerminalColors) => Effect.Effect<void>
     readonly closeOwner: (owner: TerminalOwner) => Effect.Effect<void>
     readonly moveSession: (sessionId: SessionId, folder: string) => Effect.Effect<void>
-    /** The process id of each running terminal's shell. */
     readonly processIds: Effect.Effect<ReadonlyMap<number, TerminalId>>
 
     readonly info: (terminalId: string) => Effect.Effect<TerminalInfo, TerminalNotFound>
@@ -1108,12 +1106,6 @@ export class TerminalService extends Context.Service<
     )
 }
 
-/**
- * The local URLs in the complete part of `carry + data`, up to its last whitespace, and what is
- * left to carry into the next chunk: a URL never holds whitespace, so one split across chunks is
- * whole by the time it is scanned. The carry is capped, so a program that never prints whitespace
- * costs nothing.
- */
 export const scanLocalUrls = (
   carry: string,
   data: string,

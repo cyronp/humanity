@@ -18,21 +18,13 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import { guestDestinationOf, isAppShortcut, isRecording, recordingPath } from "./previewRules.ts"
 
-/** Permissions a Browser page gets; everything else (camera, location, notifications…) is denied. */
 const ALLOWED_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"])
 
-/** How long after `prepareCapture` the window's `getDisplayMedia` may take the page. */
 const CAPTURE_WINDOW_MS = 5_000
 
-/**
- * The desktop app's Browser: hardens every `<webview>` the window attaches, keeps its pages away
- * from Humanity, turns their new windows into tabs and their downloads into links opened outside,
- * and answers the preload's bridge.
- */
 export const installPreview = (options: {
   readonly appOrigin: string
   readonly home: string
-  /** The app's own window contents: the only caller the bridge answers. */
   readonly isAppContents: (contents: WebContents) => boolean
 }) => {
   const { appOrigin, home } = options
@@ -52,7 +44,6 @@ export const installPreview = (options: {
     contents.hostWebContents?.send(PREVIEW_CHANNELS.download, download)
   })
 
-  /** Every `<webview>` of the app's window: its settings are the shell's, never the page's. */
   const hardenHost = (host: WebContents) => {
     host.on("will-attach-webview", (event, webPreferences, params) => {
       delete webPreferences.preload
@@ -68,10 +59,6 @@ export const installPreview = (options: {
     })
   }
 
-  /**
-   * A Browser page: it stays off Humanity and other schemes, opens new windows as tabs, and hands
-   * the app's own shortcuts to the window, which never sees a key pressed in a page.
-   */
   const confineGuest = (guest: WebContents) => {
     const refuse = (event: { preventDefault: () => void }, url: string) => {
       const destination = guestDestinationOf(url, appOrigin)
@@ -108,7 +95,6 @@ export const installPreview = (options: {
     })
   }
 
-  /** The page `id` names, when it is a Browser page of the window that asks. */
   const guestOf = (event: IpcMainInvokeEvent, id: unknown): WebContents => {
     if (!options.isAppContents(event.sender)) throw new Error("Not the app's window.")
     const guest = typeof id === "number" ? webContents.fromId(id) : undefined
@@ -146,7 +132,6 @@ export const installPreview = (options: {
     return new Uint8Array(image.toPNG())
   })
 
-  /** The page each window's next `getDisplayMedia` captures, named just before it asks. */
   const captures = new Map<number, { readonly guest: WebContents; readonly until: number }>()
 
   ipcMain.handle(PREVIEW_CHANNELS.prepareCapture, (event, id: unknown) => {

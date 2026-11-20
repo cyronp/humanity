@@ -128,7 +128,6 @@ export class ApprovalService extends Context.Service<
       },
     ) => Effect.Effect<PendingConfirmation, ApprovalNotFound | ApprovalAlreadyDecided>
     readonly allowsInSession: (sessionId: string, toolName: string) => boolean
-    /** Forgets every "Always allow in this thread" of a thread. */
     readonly forgetAllowed: (sessionId: string) => Effect.Effect<void>
     readonly listForSession: (sessionId: string) => Effect.Effect<ReadonlyArray<Approval>>
     readonly pendingCount: (sessionId: string) => Effect.Effect<number>

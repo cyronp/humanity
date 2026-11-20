@@ -1,5 +1,4 @@
 import { trimTrailing } from "@humanity/contracts"
-/** What the picker reports about the element the human clicked in a Browser page. */
 export interface PickedElement {
   readonly url: string
   readonly title: string
@@ -28,11 +27,6 @@ export interface SourceLocation {
   readonly column: number | null
 }
 
-/**
- * Runs in the page's own world (`executeJavaScript`), so it sees React's internals and no CSP of
- * the page stops it. It highlights the element under the pointer and resolves with what the human
- * clicks, or with null on Esc. Its overlay lives in a closed shadow root and is removed after.
- */
 export const PICKER_SCRIPT = String.raw`(() => new Promise((resolve) => {
   if (window.__humanityPick) window.__humanityPick.cancel()
   const host = document.createElement("div")
@@ -140,17 +134,11 @@ export const PICKER_SCRIPT = String.raw`(() => new Promise((resolve) => {
   window.__humanityPick = { cancel: () => finish(null) }
 }))()`
 
-/** Cancels a pick in progress, if the page has one. */
 export const CANCEL_PICK_SCRIPT = `window.__humanityPick && window.__humanityPick.cancel(); true`
 
 const INTERNAL =
   /node_modules|react-dom|react\.development|react-jsx|jsx-dev-runtime|\/chunk-|\/deps\/|react-stack-top-frame/
 
-/**
- * Where React 19 says an element was written: the first frame of its `_debugStack` that is the
- * app's own code, as a path without the dev server's query. The line is of the code the browser
- * ran, so it is close to the source's, not always equal.
- */
 export const sourceFromStack = (stack: string): SourceLocation | undefined => {
   for (const line of stack.split("\n").slice(1)) {
     const at = line.search(/(?:https?|file):\/\//)
@@ -164,9 +152,7 @@ export const sourceFromStack = (stack: string): SourceLocation | undefined => {
     try {
       const parsed = new URL(url)
       file = parsed.protocol === "file:" ? decodeURIComponent(parsed.pathname) : parsed.pathname
-    } catch {
-      // Keep the address as it is.
-    }
+    } catch {}
     return {
       file: file.replace(/^\/(?=[A-Za-z]:)/, "").replace(/^\//, ""),
       line: Number(row),
@@ -176,7 +162,6 @@ export const sourceFromStack = (stack: string): SourceLocation | undefined => {
   return undefined
 }
 
-/** A path from the project's source folder on: `src/` first, else Next.js's `app/` or `pages/`. */
 const shortFile = (file: string) => {
   for (const root of ["src", "app", "pages"]) {
     const found = new RegExp(`(?:^|[\\\\/])(${root}[\\\\/].*)$`).exec(file)
@@ -185,7 +170,6 @@ const shortFile = (file: string) => {
   return file
 }
 
-/** The element as a block of the message: what it is, where it was written, and its HTML. */
 export const formatPickedElement = (picked: PickedElement): string => {
   const source =
     picked.react?.source ??
@@ -214,10 +198,6 @@ export const formatPickedElement = (picked: PickedElement): string => {
 
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024
 
-/**
- * A screenshot as a file the composer takes: a PNG, or a JPEG when the PNG is larger than an
- * image attachment may be.
- */
 export const imageFile = async (png: Uint8Array, name: string): Promise<File> => {
   const pngFile = new File([png.slice()], `${name}.png`, { type: "image/png" })
   if (png.byteLength <= MAX_IMAGE_BYTES) return pngFile

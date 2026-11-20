@@ -88,7 +88,6 @@ export function StopButton({
 
 const KEY_HINT_KEY = "humanity.key-hint-sends"
 
-/** After this many messages the keys are known, and the hint stops showing. */
 const KEY_HINT_SENDS = 3
 
 const readSends = (): number => {
@@ -99,25 +98,16 @@ const readSends = (): number => {
   }
 }
 
-/** Counts a message sent from a chat box, so the key hint can retire. */
 export const noteMessageSent = () => {
   try {
     localStorage.setItem(KEY_HINT_KEY, String(readSends() + 1))
-  } catch {
-    // Storage can be unavailable; the hint then keeps showing, which is harmless.
-  }
+  } catch {}
 }
 
-/** Keys as tall as a line of the hint's text, so the hint is no taller than the meters beside it. */
 const KEY = "h-4 min-w-4 px-1 text-[0.625rem] leading-none"
 
-/** Whether the key hint still shows: the human has not sent enough messages to know the keys. */
 export const useKeyHintShown = (): boolean => useState(() => readSends() < KEY_HINT_SENDS)[0]
 
-/**
- * How to send and how to break a line, shown once there is something to send, until the human has
- * sent a few messages.
- */
 export function KeyHint({
   typing,
   className,

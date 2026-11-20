@@ -82,7 +82,6 @@ export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
 
 export const comparisonKey = (sessionId: SessionId, base: string): string => `${sessionId}\n${base}`
 
-/** What a pull request from the thread's branch into a base branch would carry. */
 export const comparisonAtom = Atom.family((key: string) => {
   const [id = "", base = ""] = key.split("\n")
   const sessionId = SessionId.make(id)
@@ -128,7 +127,6 @@ export const syncStatusAtom = Atom.family((sessionId: SessionId) =>
   ),
 )
 
-/** `PullRequests.syncStatus` with `fetch: true`: fetches origin unless it did a minute ago. */
 export const fetchOriginAtom = HumanityClient.mutation("PullRequests.syncStatus")
 
 export const syncAtom = HumanityClient.mutation("PullRequests.sync")

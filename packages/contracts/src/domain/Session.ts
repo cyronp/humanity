@@ -35,7 +35,6 @@ export const Session = Schema.Struct({
   inWorktree: Schema.Boolean,
   model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(ReasoningEffort),
-  /** The account the thread runs as; `null` for the provider's default login. */
   accountId: Schema.optional(Schema.NullOr(Schema.String)),
   autonomy: Autonomy,
   status: SessionStatus,
@@ -148,13 +147,6 @@ export const MessageContent = Schema.Union([
     level: Schema.Literals(["info", "warning", "error"]),
     text: Schema.String,
   }),
-  /**
-   * The thread moved to another provider (or account). `resumed` when the target picked up its own
-   * earlier conversation; otherwise it got the conversation as context, `included` of its entries
-   * in full and `omitted` left for `thread_history`. `tokens` estimates what the handoff costs.
-   * `fromModel` and `model` are the models before and after (`null`: the provider's default),
-   * `fromAccount` and `account` the names of the accounts.
-   */
   Schema.TaggedStruct("provider_switch", {
     from: AgentProvider,
     to: AgentProvider,

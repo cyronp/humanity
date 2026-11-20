@@ -33,10 +33,6 @@ export const BranchPublication = Schema.Struct({
 })
 export type BranchPublication = typeof BranchPublication.Type
 
-/**
- * Where a thread's branch stands against the remote branch Sync updates it from: its upstream,
- * else `origin/<default branch>`. Sync pushes only to an upstream of the same name on origin.
- */
 export const SyncStatus = Schema.Struct({
   branch: Schema.NullOr(Schema.String),
   hasRemote: Schema.Boolean,
@@ -114,18 +110,12 @@ export const NewPullRequest = Schema.Struct({
 })
 export type NewPullRequest = typeof NewPullRequest.Type
 
-/**
- * How a pull request is merged. GitLab merges by its project's own method, with or without a
- * squash, so it takes `merge` and `squash` only.
- */
 export const MergeMethod = Schema.Literals(["squash", "merge", "rebase"])
 export type MergeMethod = typeof MergeMethod.Type
 
 export const MergePullRequest = Schema.Struct({
   method: MergeMethod,
-  /** Posted on the pull request before it is merged; empty posts nothing. */
   comment: Schema.String,
-  /** The head commit the human saw: a pull request that moved since is not merged. */
   headSha: Schema.String,
 })
 export type MergePullRequest = typeof MergePullRequest.Type

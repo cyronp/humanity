@@ -16,7 +16,6 @@ function Output({ call }: ToolCallProps) {
   )
 }
 
-/** Claude Code's own `Skill`, or Humanity's `load_skill` (a skill's instructions, or one of its files). */
 const loadedSkill = (input: unknown) => ({
   skill: stringField(input, "skill") ?? stringField(input, "name") ?? "unknown",
   file: stringField(input, "file"),

@@ -67,7 +67,6 @@ export class ForgeSync extends Context.Service<
     readonly refresh: (target: ForgeTarget) => Effect.Effect<void>
     readonly changed: (target: ForgeTarget) => Effect.Effect<void>
     readonly opened: (target: ForgeTarget, pullRequest: PullRequest) => Effect.Effect<void>
-    /** Shows a pull request the human just changed at once, then asks the forge again soon. */
     readonly updated: (target: ForgeTarget, pullRequest: PullRequest) => Effect.Effect<void>
   }
 >()("humanity/ForgeSync") {

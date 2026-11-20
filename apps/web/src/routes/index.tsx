@@ -5,7 +5,6 @@ import { NewChat } from "@/features/home/NewChat"
 
 interface HomeSearch {
   readonly project?: ProjectId | undefined
-  /** What the composer starts with, such as a pull request a new thread is about. */
   readonly prompt?: string | undefined
 }
 
@@ -24,7 +23,6 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const { project, prompt } = Route.useSearch()
   const navigate = useNavigate({ from: "/" })
-  // The prompt fills the composer once; it leaves the address so a reload does not fill it again.
   const [initialPrompt] = useState(prompt)
   useEffect(() => {
     if (prompt !== undefined) {

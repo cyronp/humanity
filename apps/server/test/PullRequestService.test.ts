@@ -49,7 +49,6 @@ const fakeGitHub = () => {
   return { requests, layer }
 }
 
-/** A GitHub whose pull request for the branch is `current`, recording every write. */
 const fakeForge = (current: () => Record<string, unknown>) => {
   const writes: Array<{ method: string; url: string; body: unknown }> = []
   const client = HttpClient.make((request) =>

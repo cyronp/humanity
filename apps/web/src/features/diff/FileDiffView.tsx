@@ -45,7 +45,6 @@ export function FileDiffView({
   flat = false,
 }: {
   readonly file: FileDiff
-  /** Sits on its panel as a row with a line under it, instead of as a card of its own. */
   readonly flat?: boolean
   readonly headerActions?: ReactNode
   readonly onReference?: ((reference: string) => void) | undefined

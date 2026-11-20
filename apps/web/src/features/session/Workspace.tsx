@@ -185,7 +185,6 @@ export function Workspace({
               </div>
             </div>
           )}
-          {/* The @ menu opens upward from the chat box: while it is open nothing may clip it. */}
           <div className="max-h-[calc(100svh-3.5rem)] shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-y-auto has-[[data-slot=file-mention-menu]]:overflow-visible">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
               <UsageMeters

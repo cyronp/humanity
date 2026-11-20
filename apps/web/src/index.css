@@ -191,7 +191,6 @@
 .titlebar {
   app-region: drag;
 }
-/* While a resize handle is dragged, layout follows the pointer at once and nothing gets selected. */
 :root[data-resizing],
 :root[data-resizing] * {
   cursor: col-resize !important;
@@ -219,7 +218,6 @@
 .dark .shiki-token {
   color: var(--shiki-dark);
 }
-/* The Browser's loading bar, while a desktop page loads. */
 @keyframes browser-loading {
   0% {
     transform: translateX(-100%);

@@ -22,10 +22,6 @@ import { refusedPorts } from "./browser.ts"
 
 const EMPTY: ReadonlyArray<LocalServer> = []
 
-/**
- * The local servers on this machine, without Humanity's own: the daemon leaves out what it knows,
- * the page what only it knows (a dev server's port).
- */
 export const useLocalServers = (fast: boolean): ReadonlyArray<LocalServer> => {
   const result = useAtomValue(localServersAtom(fast))
   const servers = AsyncResult.isSuccess(result) ? result.value : EMPTY
@@ -35,10 +31,6 @@ export const useLocalServers = (fast: boolean): ReadonlyArray<LocalServer> => {
   }, [servers])
 }
 
-/**
- * The running servers, those of the thread's own terminals first, each with Stop. Stopping one no
- * terminal of Humanity's started asks first.
- */
 export function ServerList({
   servers,
   terminalNames,

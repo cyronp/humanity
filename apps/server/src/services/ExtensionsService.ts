@@ -76,10 +76,6 @@ export class ExtensionsService extends Context.Service<
     ) => Effect.Effect<Skill, ExtensionInvalid | ExtensionNotFound>
     readonly removeSkill: (name: string) => Effect.Effect<void, ExtensionNotFound>
     readonly forAgent: Effect.Effect<AgentExtensionsSnapshot>
-    /**
-     * The skills a thread's agent gets through `load_skill`: every skill found, Humanity's, the
-     * folder's and the human's own, but those its CLI reads itself. Read again at each start.
-     */
     readonly skillsForThread: (thread: {
       readonly provider: AgentProvider
       readonly onDefaultLogin: boolean

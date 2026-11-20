@@ -15,7 +15,6 @@ import { OutputText, Path } from "./common.tsx"
 const filePath = (props: ToolCallProps) =>
   shortPath(stringField(props.input, "file_path") ?? "", props.worktreePath)
 
-/** "Open in the Browser" for an HTML or PDF file the call read or wrote, once it ran. */
 function OpenFile(props: ToolCallProps) {
   const path = stringField(props.input, "file_path")
   const call = props.call

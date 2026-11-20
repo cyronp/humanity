@@ -121,11 +121,6 @@ export const feedNotice = (feed: PullRequestFeed, forge: Forge): FeedNotice | nu
   return null
 }
 
-/**
- * The one next step the Source control panel offers as its main button, or none. Uncommitted
- * changes come first; then the pull request: pushing to it, marking it ready, merging it; then
- * opening one, which pushes on its own; then a plain push.
- */
 export type PrimaryAction =
   | { readonly kind: "commit"; readonly files: number }
   | { readonly kind: "push" }
@@ -140,7 +135,6 @@ export const primaryAction = ({
 }: {
   readonly publication: BranchPublication
   readonly changed: number
-  /** `undefined` while the forge has not answered yet. */
   readonly feed: PullRequestFeed | undefined
 }): PrimaryAction | null => {
   if (checkoutMoved(publication)) return null
@@ -163,7 +157,6 @@ export const primaryAction = ({
   return needsPush(publication) ? { kind: "push" } : null
 }
 
-/** The checks in a few words: "1 failing · 3 passed", or that there are none. */
 export const checksPhrase = (checks: ReadonlyArray<PullRequestCheck>): string => {
   if (checks.length === 0) return "No checks reported yet"
   const summary = summarizeChecks(checks)
@@ -182,10 +175,6 @@ export interface FooterNote {
   readonly tone: "muted" | "destructive"
 }
 
-/**
- * The sentence beside the panel's main button, along its bottom: why that is the next step, or,
- * with nothing left to do, where the branch stands.
- */
 export const footerNote = ({
   action,
   publication,
@@ -247,7 +236,6 @@ export interface MergeOption {
   readonly description: string
 }
 
-/** The ways a pull request can be merged, as each forge offers them. */
 export const mergeOptions = (forge: Forge): ReadonlyArray<MergeOption> =>
   forge === "github"
     ? [

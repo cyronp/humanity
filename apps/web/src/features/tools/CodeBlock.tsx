@@ -63,7 +63,6 @@ export function TerminalOutput({
 }: {
   readonly text: string
   readonly className?: string
-  /** Local addresses become links that open in the thread's Browser. */
   readonly links?: boolean
 }) {
   const segments = useMemo(() => parseAnsi(text), [text])
@@ -110,7 +109,6 @@ const segmentClass = (segment: AnsiSegment) =>
     segment.underline && "underline",
   )
 
-/** A local address: a click opens it in the thread's Browser, Ctrl or Cmd-click in a new tab. */
 function LocalLink({ url, children }: { readonly url: string; readonly children: string }) {
   return (
     <a

@@ -16,7 +16,6 @@ export const SKILL_TOOL_NAME = "load_skill"
 
 export const SKILL_TOOL = humanityTool(SKILL_TOOL_NAME)
 
-/** Reads a thread's earlier conversation; offered once a thread has changed provider. */
 export const THREAD_HISTORY_TOOL_NAME = "thread_history"
 
 export const THREAD_HISTORY_TOOL = humanityTool(THREAD_HISTORY_TOOL_NAME)

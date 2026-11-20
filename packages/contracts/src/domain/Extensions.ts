@@ -65,7 +65,6 @@ export const McpTransportInput = Schema.Union([
 ])
 export type McpTransportInput = typeof McpTransportInput.Type
 
-/** Humanity's own skills, a repository's, or the human's own, found in their agents' folders. */
 export const SkillSource = Schema.Literals(["humanity", "project", "user"])
 export type SkillSource = typeof SkillSource.Type
 
@@ -75,9 +74,7 @@ export const Skill = Schema.Struct({
   source: SkillSource,
   invocation: Schema.String,
   instructions: Schema.NullOr(Schema.String),
-  /** Where it was found: a folder (`~/.codex/skills`, `.agents/skills`) or a Claude Code plugin. */
   location: Schema.String,
-  /** The providers that load it themselves; the others get it from Humanity's `load_skill`. */
   nativeTo: Schema.Array(AgentProvider),
 })
 export type Skill = typeof Skill.Type

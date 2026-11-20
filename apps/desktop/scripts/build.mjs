@@ -34,7 +34,6 @@ await build({
   loader: { ".svg": "text" },
 })
 
-// The window's preload: sandboxed, so it is one file that needs nothing but Electron.
 await build({
   ...shared,
   platform: "browser",

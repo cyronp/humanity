@@ -67,7 +67,6 @@ export const offlineGitLab = GitLabService.layer.pipe(
   Layer.provide(offlineHttp),
 )
 
-/** The human's home as the skill catalog sees it: a folder of the test's, never the real one. */
 export const cliHomes = (home: string) =>
   Layer.succeed(CliHomes, { userHome: join(home, "user-home"), env: {} })
 

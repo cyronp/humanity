@@ -95,7 +95,6 @@ export function ResizeHandle({
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
       className={cn(
-        // no-drag: where it crosses a title bar, the desktop app must not move the window instead.
         "absolute z-20 touch-none outline-none [app-region:no-drag]",
         "after:absolute after:transition-colors hover:after:bg-ring/60 focus-visible:after:bg-ring",
         vertical

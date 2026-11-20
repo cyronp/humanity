@@ -87,7 +87,6 @@ const CommitJson = Schema.Struct({
   author: AuthorJson,
 })
 
-/** A commit's author as GitHub knows them: the email git recorded, and their picture. */
 export interface CommitAuthor {
   readonly sha: string
   readonly email: string | null
@@ -275,7 +274,6 @@ export class GitHubService extends Context.Service<
       fullName: string,
       number: number,
     ) => Effect.Effect<PullRequest, GitHubError>
-    /** Merges at `sha` only: GitHub refuses when the head moved since. */
     readonly mergePullRequest: (
       fullName: string,
       number: number,
@@ -291,7 +289,6 @@ export class GitHubService extends Context.Service<
       number: number,
       open: boolean,
     ) => Effect.Effect<PullRequest, GitHubError>
-    /** GitHub's REST API cannot change a pull request's draft state; its GraphQL API can. */
     readonly setPullRequestDraft: (
       fullName: string,
       number: number,
@@ -305,7 +302,6 @@ export class GitHubService extends Context.Service<
       fullName: string,
       number: number,
     ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitHubError>
-    /** The authors of the newest `count` commits (at most 100) of a branch on GitHub. */
     readonly commitAuthors: (
       fullName: string,
       branch: string,

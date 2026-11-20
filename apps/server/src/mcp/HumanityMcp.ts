@@ -54,12 +54,10 @@ export interface HumanityTools {
     request: OpenThreadRequest,
   ) => Effect.Effect<OpenedThread, OpenThreadFailed>
   readonly terminal?: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
-  /** `load_skill`, offered only with at least one skill. */
   readonly skills?: {
     readonly catalog: ReadonlyArray<ServedSkill>
     readonly load: (args: unknown) => Effect.Effect<ToolText>
   }
-  /** `thread_history`, offered once the thread has changed provider. */
   readonly history?: (args: unknown) => Effect.Effect<ToolText>
 }
 

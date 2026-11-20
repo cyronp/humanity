@@ -184,7 +184,6 @@ export interface NewGitLabMergeRequest {
   readonly draft: boolean
 }
 
-/** The title prefixes GitLab reads as a draft, as many as lead the title. */
 const DRAFT_PREFIX = /^\s*(?:(?:\[draft\]|\(draft\)|draft:|draft\s+-|\[wip\]|wip:)\s*)+/i
 
 export const draftTitle = (title: string, draft: boolean): string => {
@@ -218,7 +217,6 @@ export class GitLabService extends Context.Service<
       fullPath: string,
       mergeRequest: NewGitLabMergeRequest,
     ) => Effect.Effect<PullRequest, GitLabError>
-    /** Merges at `sha` only, squashed or by the project's own merge method. */
     readonly mergeMergeRequest: (
       fullPath: string,
       iid: number,
@@ -234,7 +232,6 @@ export class GitLabService extends Context.Service<
       iid: number,
       open: boolean,
     ) => Effect.Effect<PullRequest, GitLabError>
-    /** GitLab keeps a merge request's draft state in its title. */
     readonly setMergeRequestDraft: (
       fullPath: string,
       mergeRequest: PullRequest,
@@ -248,7 +245,6 @@ export class GitLabService extends Context.Service<
       fullPath: string,
       mergeRequest: PullRequest,
     ) => Effect.Effect<ReadonlyArray<PullRequestComment>, GitLabError>
-    /** The picture GitLab shows for an email, or `null` when it has none. */
     readonly avatar: (email: string) => Effect.Effect<string | null, GitLabError>
   }
 >()("humanity/GitLabService") {

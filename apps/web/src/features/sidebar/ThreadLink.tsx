@@ -68,7 +68,6 @@ export function ThreadLink({
   )
 }
 
-/** The whole branch, wrapped rather than cut, with its prefix dimmed so the name stands out. */
 function ThreadBranch({ session }: { readonly session: Session }) {
   const cut = session.branch.lastIndexOf("/") + 1
   const Icon = session.inWorktree ? GitFork : GitBranch

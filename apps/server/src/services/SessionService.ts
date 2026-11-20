@@ -117,14 +117,9 @@ interface ActiveRun {
   readonly usageLock: Semaphore.Semaphore
   extensionsVersion: number
   readonly humanity: AgentMcpServer | undefined
-  /** The run was sent the thread's pending handoff, which stays saved until the agent answers. */
   handoffSent: boolean
 }
 
-/**
- * The skill a call loads: Claude Code's own `Skill`, or Humanity's `load_skill` for a skill's
- * instructions (not for one of its other files).
- */
 export const loadedSkill = (toolName: string, input: unknown): string | undefined => {
   const fields =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}
@@ -187,7 +182,6 @@ export const matchModel = (
   )?.value
 }
 
-/** The thread's last provider switch, while no message of the human has followed it. */
 export const unsentSwitch = (
   messages: ReadonlyArray<ChatMessage>,
 ):
@@ -202,7 +196,6 @@ export const unsentSwitch = (
 
 export const COMMIT_LIST_LIMIT = 50
 
-/** A thread's branch's commits as git lists them, before the forge adds what it knows. */
 export interface LoggedBranchCommits {
   readonly branch: string
   readonly base: string | null
@@ -263,11 +256,6 @@ export class SessionService extends Context.Service<
       sessionId: string,
       effort: ReasoningEffort | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
-    /**
-     * Moves the thread to another provider, between turns. The new agent picks up its own earlier
-     * conversation in this thread when it has one, else gets this one as context with the human's
-     * next message.
-     */
     readonly switchProvider: (
       sessionId: string,
       provider: AgentProvider,
@@ -317,10 +305,6 @@ export class SessionService extends Context.Service<
       string,
       SessionNotFound | SessionBusy | NothingToCommit | BranchNotCheckedOut | GitError
     >
-    /**
-     * Shows `notice` in the thread and, when the agent has a conversation to resume, puts `agent`
-     * in front of the human's next message so the agent hears about it before it acts.
-     */
     readonly tell: (
       sessionId: string,
       message: { readonly notice: string; readonly agent?: string | undefined },
@@ -376,7 +360,6 @@ export class SessionService extends Context.Service<
           accountsOf(session.provider).configDirFor(accountId),
         )
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
-      /** The whole conversation, for an agent that was to resume its own and could not. */
       const resumeFallback = new Map<string, string>()
       const agentNotes = new Map<string, Array<string>>()
       const startLock = yield* Semaphore.make(1)
@@ -1237,7 +1220,6 @@ export class SessionService extends Context.Service<
         const model = requested?.trim() || null
         if (session.model === model) return session
         yield* repo.update(sessionId, { model, updatedAt: session.updatedAt })
-        // The divider of a switch nothing was sent after yet names the model the thread goes on.
         const unsent = unsentSwitch(yield* repo.listMessages(sessionId))
         if (unsent !== undefined && unsent.content.model !== model) {
           const message: ChatMessage = { ...unsent, content: { ...unsent.content, model } }
@@ -1308,7 +1290,6 @@ export class SessionService extends Context.Service<
         return updated
       })
 
-      /** The account a switch runs as, with what it offers: the one asked for, else the active one. */
       const switchAccount = (provider: AgentProvider, requested: string | undefined) =>
         Effect.gen(function* () {
           const registry = accountsOf(provider)
@@ -1388,8 +1369,6 @@ export class SessionService extends Context.Service<
         const messages = yield* repo.listMessages(sessionId)
         const toolCalls = yield* repo.listToolCalls(sessionId)
 
-        // A switch that carried nothing yet (no message of the human since) is replaced, not
-        // stacked: the thread goes on from where it was before that switch.
         const replaced = unsentSwitch(messages)
         const origin =
           replaced === undefined
@@ -1407,8 +1386,6 @@ export class SessionService extends Context.Service<
           replaced === undefined ? messages : messages.filter((each) => each.id !== replaced.id)
         const entries = historyEntries(kept, toolCalls, session.provider)
 
-        // An agent that never got its handoff has not seen the thread since it was parked, so
-        // what it had seen stays as it was parked, if it was.
         const unheard = (yield* repo.getPendingHandoff(sessionId)) !== null
         if (session.sdkSessionId !== null && !unheard) {
           yield* repo.parkProvider({
@@ -1466,7 +1443,6 @@ export class SessionService extends Context.Service<
         relocated.delete(sessionId)
         yield* approvals.forgetAllowed(sessionId)
 
-        // Back on the agent and account it was on before an unsent switch: nothing happened.
         const sameAgentAsBefore =
           origin.provider === provider &&
           (origin.account === undefined || origin.account === account.name)

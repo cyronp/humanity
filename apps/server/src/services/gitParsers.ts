@@ -16,10 +16,6 @@ export const BRANCH_FORMAT = [
 
 export const RECORD = ""
 
-/**
- * One commit of `git log`, as the server reads it: what `CommitSummary` shows, plus the author's
- * email, which only the server uses (to find the author's picture on the forge).
- */
 export interface LoggedCommit {
   readonly hash: string
   readonly shortHash: string
@@ -32,10 +28,6 @@ export interface LoggedCommit {
   readonly deletions: number
 }
 
-/**
- * Each record starts with the separator, so the `--numstat` lines git prints after a commit's
- * fields stay in that commit's record. Numstat, unlike `--shortstat`, is never translated.
- */
 export const LOG_FORMAT = RECORD + ["%H", "%h", "%s", "%an", "%ae", "%cI"].join(FIELD)
 
 const NUMSTAT = /^(\d+|-)\t(\d+|-)\t/

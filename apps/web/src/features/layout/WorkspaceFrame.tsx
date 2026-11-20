@@ -33,7 +33,6 @@ import { type DockCommands, TerminalDock } from "@/features/terminal/TerminalDoc
 import { useStoredWidth } from "@/lib/resize"
 
 const PANEL_MIN_WIDTH = 320
-/** The chat keeps at least this much room beside an open panel. */
 const CHAT_MIN_WIDTH = 360
 
 export interface PanelProps {
@@ -123,8 +122,6 @@ export function WorkspaceFrame({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [terminalsOpen, setTerminalsOpen])
 
-  // The header runs over the chat only: the panel and the rail have their own space, full height.
-  // On a narrow window the open panel takes the chat's place, under the header.
   const [chat, setChat] = useState<HTMLDivElement | null>(null)
   const [chatWidth, setChatWidth] = useState<number | null>(null)
   const [rowWidth, setRowWidth] = useState(0)

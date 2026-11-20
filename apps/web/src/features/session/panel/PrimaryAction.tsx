@@ -49,7 +49,6 @@ export interface PanelError {
   readonly message: string
 }
 
-/** The Source control panel's main button: the one next step for this thread's branch. */
 export function PrimaryAction({
   action,
   session,
@@ -63,13 +62,11 @@ export function PrimaryAction({
   readonly publication: BranchPublication
   readonly feed: PullRequestFeed | undefined
   readonly onError: (error: PanelError | undefined) => void
-  /** Opens the panel's page for opening a pull request. */
   readonly onOpenPullRequest: () => void
 }) {
   const pullRequest = feed?.pullRequest ?? null
   switch (action.kind) {
     case "commit":
-      // Committing takes the whole bar: see `CommitBar`.
       return null
     case "push":
       return <PushAction session={session} onError={onError} />
@@ -93,7 +90,6 @@ export function PrimaryAction({
   }
 }
 
-/** A button that explains, on hover, why it is disabled. */
 export function Hinted({
   hint,
   children,
@@ -153,7 +149,6 @@ interface Method<M extends string> {
   readonly description: string
 }
 
-/** The ways to do the popover's action, each a button that does it at once. */
 function MethodList<M extends string>({
   options,
   disabled,
@@ -189,10 +184,6 @@ function MethodList<M extends string>({
 
 type CommitMethod = "commit" | "commit-push"
 
-/**
- * The panel's bottom bar while files are changed: the message, then Commit. The arrow beside it
- * picks which files go in, and offers Commit and push.
- */
 export function CommitBar({
   session,
   publication,
@@ -203,7 +194,6 @@ export function CommitBar({
   readonly session: Session
   readonly publication: BranchPublication
   readonly files: ReadonlyArray<FileDiff>
-  /** Where the branch stands, shown while every file is picked. */
   readonly note: string
   readonly more: ReactNode
 }) {

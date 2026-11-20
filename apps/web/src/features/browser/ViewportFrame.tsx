@@ -15,11 +15,6 @@ const READOUT = 28
 
 type Edge = "right" | "bottom" | "corner"
 
-/**
- * Shows a page at its tab's size: the whole area when it fills the panel, else a frame of the
- * device's or a free size, centred and scaled down to fit, with handles that drag it to a free
- * size. Zoom scales what the page draws, as a browser's zoom does.
- */
 export function ViewportFrame({
   viewport,
   zoom,
@@ -29,11 +24,6 @@ export function ViewportFrame({
   readonly viewport: PreviewViewport
   readonly zoom: number
   readonly onViewportChange: (viewport: PreviewViewport) => void
-  /**
-   * The page. A frame is drawn scaled with a CSS transform; a function child (a `<webview>`, which
-   * draws unscaled whatever its box's transform) gets the box at the shown size and the scale to
-   * zoom the page by instead.
-   */
   readonly children: ReactNode | ((scale: number) => ReactNode)
 }) {
   const area = useRef<HTMLDivElement>(null)

@@ -118,10 +118,6 @@ export const formatTokens = (tokens: number): string =>
 const LIMIT_WORDS =
   /usage limit|rate limit|rate_limit|quota|limit reached|limit exceeded|out of credits|too many requests|\b429\b/i
 
-/**
- * Whether the agent stopped on its plan's limit: its error says so, or a limit the provider
- * reported is full.
- */
 export const hitUsageLimit = (error: string, plan: PlanUsage | null, now: Date): boolean =>
   LIMIT_WORDS.test(error) ||
   planRows(plan, now).some((row) => row.blocking && row.utilization >= 100)

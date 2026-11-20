@@ -4,7 +4,6 @@ import { homedir } from "node:os"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import { claudeConfigDir } from "../claude/environment.ts"
 
-/** The human's own home and environment, where each CLI keeps its folders. */
 export interface CliHomesShape {
   readonly userHome: string
   readonly env: Readonly<Record<string, string | undefined>>
@@ -14,20 +13,14 @@ export const CliHomes = Context.Reference<CliHomesShape>("humanity/CliHomes", {
   defaultValue: () => ({ userHome: homedir(), env: process.env }),
 })
 
-/**
- * A provider that reads a folder of skills itself. `defaultLogin`: only while the thread runs
- * on the CLI's own login, since an added account points the CLI at a folder of its own.
- */
 export interface NativeReader {
   readonly provider: AgentProvider
   readonly defaultLogin: boolean
 }
 
 export interface SkillRoot {
-  /** A folder holding one folder per skill, each with its `SKILL.md`. */
   readonly dir: string
   readonly source: SkillSource
-  /** Shown to the human and the agent: the folder, short, or the plugin. */
   readonly location: string
   readonly readBy: ReadonlyArray<NativeReader>
 }
@@ -50,7 +43,6 @@ export const shortPath = (path: string, userHome: string): string => {
   return `~/${inside.split("\\").join("/")}`
 }
 
-/** The skills of Humanity's settings: a Claude Code plugin, so Claude Code reads them itself. */
 export const humanitySkillRoot = (pluginDir: string): SkillRoot => ({
   dir: join(pluginDir, "skills"),
   source: "humanity",
@@ -58,7 +50,6 @@ export const humanitySkillRoot = (pluginDir: string): SkillRoot => ({
   readBy: always("claude-code"),
 })
 
-/** A repository's folders of skills, in the folder a session works in. */
 export const projectSkillRoots = (projectPath: string): ReadonlyArray<SkillRoot> => [
   {
     dir: join(projectPath, ".claude", "skills"),
@@ -87,7 +78,6 @@ export const projectSkillRoots = (projectPath: string): ReadonlyArray<SkillRoot>
 ]
 
 export interface ClaudePlugin {
-  /** `name@marketplace`, as Claude Code's settings name it. */
   readonly id: string
   readonly installPath: string
 }
@@ -95,11 +85,6 @@ export interface ClaudePlugin {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
-/**
- * The plugins Claude Code loads for the human: enabled in their `settings.json` and installed
- * for the user (`plugins/installed_plugins.json`, an entry or, since its version 2, a list of
- * them by scope). A plugin installed for one project only is left to that project.
- */
 export const enabledClaudePlugins = (
   settings: unknown,
   installed: unknown,
@@ -126,10 +111,6 @@ export const enabledClaudePlugins = (
 export const claudeDir = (homes: CliHomesShape): string =>
   claudeConfigDir(homes.env, homes.userHome)
 
-/**
- * The human's own folders of skills, as each CLI finds them on its own login. Built-in skills
- * (`.system`, `builtin`, Claude's `synced` ones from claude.ai) are each CLI's own and left out.
- */
 export const userSkillRoots = (
   homes: CliHomesShape,
   claudePlugins: ReadonlyArray<ClaudePlugin>,
@@ -161,11 +142,6 @@ export const userSkillRoots = (
   ]
 }
 
-/**
- * What the composer puts in a message to ask for a skill. Humanity's and a repository's
- * `.claude/skills` are Claude Code's slash commands; any other skill is asked for in words,
- * since a slash command one agent does not know may be refused, and every agent reads a sentence.
- */
 export const skillInvocation = (name: string, root: SkillRoot): string =>
   root.source === "humanity"
     ? `/${HUMANITY_PLUGIN_NAME}:${name}`
@@ -173,7 +149,6 @@ export const skillInvocation = (name: string, root: SkillRoot): string =>
       ? `/${name}`
       : `Use the ${name} skill.`
 
-/** Whether a thread on `provider` (on its CLI's own login, or an added account) reads the folder itself. */
 export const readsItself = (
   root: SkillRoot,
   provider: AgentProvider,
@@ -183,7 +158,6 @@ export const readsItself = (
     (reader) => reader.provider === provider && (onDefaultLogin || !reader.defaultLogin),
   )
 
-/** The providers that read a folder themselves, on their CLI's own login. */
 export const nativeProviders = (root: SkillRoot): ReadonlyArray<AgentProvider> => [
   ...new Set(root.readBy.map((reader) => reader.provider)),
 ]
@@ -191,12 +165,10 @@ export const nativeProviders = (root: SkillRoot): ReadonlyArray<AgentProvider> =
 export interface FoundSkill {
   readonly name: string
   readonly description: string
-  /** The skill's own folder, where its `SKILL.md` is. */
   readonly dir: string
   readonly root: SkillRoot
 }
 
-/** What `load_skill` offers a thread. */
 export interface ServedSkill {
   readonly name: string
   readonly description: string
@@ -204,11 +176,6 @@ export interface ServedSkill {
   readonly location: string
 }
 
-/**
- * The skills a thread's agent gets from Humanity: those its CLI does not read itself, once per
- * name, the first found winning (Humanity's, then the repository's, then the human's own), and
- * never one named like a skill its CLI already has.
- */
 export const servedSkills = (
   found: ReadonlyArray<FoundSkill>,
   provider: AgentProvider,
@@ -234,7 +201,6 @@ export const servedSkills = (
 
 const SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
-/** A skill's name: its `SKILL.md`'s own when it is a plain one, else its folder's. */
 export const skillName = (folder: string, declared: string | undefined): string | undefined =>
   declared !== undefined && SKILL_NAME.test(declared)
     ? declared

@@ -138,7 +138,6 @@ export function MessageList({
   )
 }
 
-/** The provider switches whose context a later message of the human has carried. */
 const deliveredSwitches = (messages: ReadonlyArray<ChatMessage>): ReadonlySet<string> => {
   const delivered = new Set<string>()
   let waiting: Array<string> = []

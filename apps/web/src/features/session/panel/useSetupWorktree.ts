@@ -7,7 +7,6 @@ import { keys } from "@/lib/rpc"
 import { setupWorktreeAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 
-/** Moves a thread that works in the project's checkout into a worktree of its own. */
 export function useSetupWorktree(session: Session) {
   const setup = useAtomSet(setupWorktreeAtom, { mode: "promiseExit" })
   const [pending, setPending] = useState(false)
@@ -15,7 +14,6 @@ export function useSetupWorktree(session: Session) {
   const available = !session.inWorktree && session.status !== "ended"
   const busy = isBusy(session.status)
 
-  /** Resolves to the failure's message, or `undefined` once the worktree is set up. */
   const run = async (): Promise<string | undefined> => {
     setPending(true)
     const exit = await setup({

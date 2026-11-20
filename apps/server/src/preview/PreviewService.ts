@@ -36,20 +36,17 @@ export interface CommandResult {
   readonly exitCode: number
 }
 
-/** Runs a program with arguments (never through a shell) and collects what it printed. */
 export type RunCommand = (
   command: string,
   args: ReadonlyArray<string>,
 ) => Effect.Effect<CommandResult>
 
-/** Whether something answers HTTP at `url`. */
 export type HttpCheck = (url: string) => Effect.Effect<boolean>
 
 export interface PreviewServiceOptions {
   readonly platform?: NodeJS.Platform | undefined
   readonly run?: RunCommand | undefined
   readonly answersHttp?: HttpCheck | undefined
-  /** Ports never listed, besides the daemon's and the desktop app's. */
   readonly ownPorts?: () => ReadonlyArray<number>
 }
 
@@ -79,7 +76,6 @@ const urlHost = (host: string) => (host === "::1" ? "[::1]" : "localhost")
 export class PreviewService extends Context.Service<
   PreviewService,
   {
-    /** The servers on this machine that answer HTTP, scanned every 2 s (fast) or 10 s. */
     readonly servers: (fast: boolean) => Stream.Stream<ReadonlyArray<LocalServer>>
     readonly scan: Effect.Effect<ReadonlyArray<LocalServer>>
     readonly stopServer: (

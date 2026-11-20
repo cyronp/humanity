@@ -1,13 +1,8 @@
 import { DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT, isLoopbackHost } from "@humanity/contracts"
 import { isAbsolute, join, relative, resolve } from "node:path"
 
-/** What a Browser page may do with an address it navigates to or opens. */
 export type GuestDestination = "page" | "own" | "external" | "blocked"
 
-/**
- * Where an address leads a Browser page: a web page it may show, Humanity itself (refused, whatever
- * loopback name or port of Humanity's it uses), a mail link for the human's own apps, or nothing.
- */
 export const guestDestinationOf = (url: string, appOrigin: string): GuestDestination => {
   if (url === "" || url === "about:blank") return "page"
   let parsed: URL
@@ -28,7 +23,6 @@ export const guestDestinationOf = (url: string, appOrigin: string): GuestDestina
   return "page"
 }
 
-/** A key as Electron's `before-input-event` describes it. */
 export interface GuestKey {
   readonly type: string
   readonly key: string
@@ -39,12 +33,6 @@ export interface GuestKey {
   readonly meta: boolean
 }
 
-/**
- * Whether a key pressed in a Browser page is one of the app's own shortcuts, taken from the page
- * and handed to the window: Ctrl+` and Ctrl+Shift+` (the terminal dock, on every platform) and
- * find (Ctrl+F, ⌘F on macOS), as a browser's own find would. Other keys stay the page's, such as
- * Ctrl+B, which editors use for bold.
- */
 export const isAppShortcut = (key: GuestKey, mac: boolean): boolean => {
   if (key.type !== "keyDown") return false
   if (key.code === "Backquote") return key.control && !key.alt && !key.meta
@@ -54,7 +42,6 @@ export const isAppShortcut = (key: GuestKey, mac: boolean): boolean => {
 
 const MAX_RECORDING_BYTES = 50 * 1024 * 1024
 
-/** Where a thread's recording goes, under `~/.humanity/recordings/<thread>/`, or why it can't. */
 export const recordingPath = (
   home: string,
   threadId: string,
@@ -68,7 +55,6 @@ export const recordingPath = (
   return { path: join(home, "recordings", threadId, `${stamp}.webm`) }
 }
 
-/** Whether `path` is a file under `~/.humanity/recordings/`, the only folder Reveal shows. */
 export const isRecording = (home: string, path: string): boolean => {
   const inside = relative(join(home, "recordings"), resolve(path))
   return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside)

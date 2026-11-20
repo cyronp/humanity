@@ -48,7 +48,6 @@ export const TerminalInfo = Schema.Struct({
   busy: Schema.NullOr(Schema.Boolean),
   lastExitCode: Schema.NullOr(Schema.Number),
   integration: Schema.Boolean,
-  /** The local addresses this terminal's programs printed lately, oldest first. */
   urls: Schema.Array(Schema.Struct({ url: Schema.String, seenAt: Schema.String })),
   createdAt: Schema.String,
 })
@@ -75,11 +74,6 @@ export type TerminalAttachEvent = typeof TerminalAttachEvent.Type
 
 const HexColor = Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))
 
-/**
- * The colors the dock draws terminals in, which the daemon reports to a program that asks (OSC 4,
- * 10, 11 and 12), so a program that picks its colors from the background picks the right ones.
- * `ansi` is the 16-color palette, black to bright white.
- */
 export const TerminalColors = Schema.Struct({
   foreground: HexColor,
   background: HexColor,

@@ -30,7 +30,6 @@ const CATEGORIES = ["Phone", "Tablet", "Desktop"] as const
 const viewportKey = (viewport: PreviewViewport) =>
   viewport._tag === "device" ? `device:${viewport.id}` : viewport._tag
 
-/** Picks the page's size: the panel's, a free size, or a device's, with rotation. */
 export function DeviceMenu({
   viewport,
   onChange,
@@ -112,7 +111,6 @@ export function DeviceMenu({
   )
 }
 
-/** Zooms the page in fixed steps; the percentage resets it. */
 export function ZoomControl({
   zoom,
   onChange,
@@ -154,7 +152,6 @@ export function ZoomControl({
   )
 }
 
-/** The Browser's tabs: a click shows one, a middle click or its × closes it, + opens a new one. */
 export function TabStrip({
   tabs,
   active,
@@ -165,7 +162,6 @@ export function TabStrip({
 }: {
   readonly tabs: ReadonlyArray<BrowserTab>
   readonly active: string | null
-  /** A favicon per tab, where the page gave one. */
   readonly icons?: ReadonlyMap<string, string> | undefined
   readonly onSelect: (id: string) => void
   readonly onClose: (id: string) => void
@@ -226,7 +222,6 @@ export function TabStrip({
   )
 }
 
-/** A page's favicon, or a globe while it has none or it doesn't load. */
 function TabIcon({ src }: { readonly src: string | undefined }) {
   const [failed, setFailed] = useState(false)
   if (src === undefined || failed) return <Globe className="size-3.5 shrink-0" />

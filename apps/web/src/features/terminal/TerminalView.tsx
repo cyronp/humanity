@@ -220,8 +220,6 @@ export function TerminalView({
     if (active) void setColors({ payload: { colors: terminalColors(colors) } })
   }, [mounted, theme, active, setColors])
 
-  // Only the tab on show draws with WebGL: a browser keeps about 16 WebGL contexts and drops the
-  // oldest past that, so hidden tabs fall back to the DOM renderer and give theirs back.
   useEffect(() => {
     if (mounted === null || !active) return
     let webgl: WebglAddon | undefined
@@ -344,7 +342,6 @@ function Attachment({
       const event = result.value
       switch (event._tag) {
         case "Snapshot":
-          // A (re)attach, after a reload or a daemon restart: the daemon learns the colors again.
           if (terminal.options.theme !== undefined) {
             void setColors({ payload: { colors: terminalColors(terminal.options.theme) } })
           }

@@ -29,7 +29,6 @@ if (process.env.CRASH === "1") {
 }
 let requests = 0
 createServer((_request, response) => {
-  // Like a daemon listening before its handler is attached: the first request is never answered.
   if (process.env.HANG_FIRST === "1" && requests++ === 0) return
   response.statusCode = 401
   response.end()

@@ -60,7 +60,6 @@ export const UsageMeters = memo(function UsageMeters({
   readonly provider: AgentProvider
   readonly accountId: string
   readonly usage: SessionUsage
-  /** Shown to the right of the plan usage: the chat box's key hint. */
   readonly hint?: ReactNode
 }) {
   const rows = planRows(usage.plan, new Date())
@@ -87,10 +86,6 @@ export const UsageMeters = memo(function UsageMeters({
   )
 })
 
-/**
- * The chat box's key hint, floating like the meters beside it. It stays in place and only fades,
- * so its row never appears or grows under the chat.
- */
 export const HINT_CLASS = cn(FLOATING, "hidden min-w-0 sm:flex")
 
 function ContextMeter({ context }: { readonly context: ContextUsage }) {

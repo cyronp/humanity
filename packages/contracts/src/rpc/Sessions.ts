@@ -104,7 +104,6 @@ export const SessionsRpcs = RpcGroup.make(
       sessionId: SessionId,
       provider: AgentProvider,
       model: Schema.NullOr(Schema.String),
-      /** The account to run as; the provider's active account when left out. */
       accountId: Schema.optional(Schema.String),
     },
     success: Session,

@@ -6,10 +6,6 @@ import { GitHubIcon } from "@/features/github/GitHubIcon"
 import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { forgeTerms } from "./publication.ts"
 
-/**
- * A page on the forge, as a small button with the forge's own mark; a forge Humanity has no mark
- * for gets the plain external-link icon.
- */
 export function ForgeLink({
   url,
   forge,
