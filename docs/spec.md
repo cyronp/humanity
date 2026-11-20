@@ -168,6 +168,14 @@ An open thread can move to another provider and keep its conversation. This supe
 - **When the agent stops on an error,** the note under the chat offers "Continue on another model", which opens the same picker. When the error names a usage limit, or one of the plan's limits is full, the note says the agent hit a usage limit and the button is the main one.
 - **Not yet:** a preview of the handoff before it is sent, and carrying a provider's own plan tool (Codex's `update_plan`) when Humanity does not see it as a call.
 
+## Amendment: color themes (2026-11-20)
+
+The human picks the app's colors, as in an editor. This adds to the theming of section 10 and no library to the stack of section 3.
+
+- **A color theme apart from the mode.** Settings, under General → Appearance, keeps Theme (System, Light, Dark) and adds Color theme: Default, Graphite Indigo, Midnight, Evergreen, Ember, Plum and Obsidian Lime. Each color theme has a light and a dark set, so System still follows the machine.
+- **The same tokens, other values.** A color theme sets every token of `apps/web/src/index.css` (`COLOR_THEMES` in `apps/web/src/lib/colorThemes.ts`); no component names a theme. Default is the tokens of `index.css`, which a test keeps equal. The page's `theme-color` comes from the theme, so the desktop app's window buttons follow it.
+- **Kept in the browser** (`humanity.colorTheme`), like the mode, and applied before the first render. The terminal takes the new colors at once; code keeps its Shiki themes and the terminal its ANSI colors.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

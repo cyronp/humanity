@@ -1,5 +1,5 @@
 import { useId } from "react"
-import { useThemeChoice } from "@/lib/theme"
+import { useColorTheme, useThemeChoice } from "@/lib/theme"
 import {
   SettingsFrame,
   SettingsGroup,
@@ -7,7 +7,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
-import { ThemePicker } from "./ThemePicker.tsx"
+import { ColorThemePicker, ThemePicker } from "./ThemePicker.tsx"
 
 export function GeneralSettings() {
   return (
@@ -15,7 +15,7 @@ export function GeneralSettings() {
       <SettingsPane>
         <SettingsGroup title="Appearance">
           <SettingsRows>
-            <ThemeSetting />
+            <AppearanceSettings />
           </SettingsRows>
         </SettingsGroup>
       </SettingsPane>
@@ -23,13 +23,35 @@ export function GeneralSettings() {
   )
 }
 
-function ThemeSetting() {
+function AppearanceSettings() {
   const [choice, choose] = useThemeChoice()
-  const labelId = useId()
+  const [colorThemeId, chooseColorTheme] = useColorTheme()
+  const themeLabel = useId()
+  const colorThemeLabel = useId()
 
   return (
-    <SettingsRow label="Theme" labelId={labelId} stacked>
-      <ThemePicker labelledBy={labelId} value={choice} onChange={choose} />
-    </SettingsRow>
+    <>
+      <SettingsRow label="Theme" labelId={themeLabel} stacked>
+        <ThemePicker
+          labelledBy={themeLabel}
+          value={choice}
+          colorThemeId={colorThemeId}
+          onChange={choose}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Color theme"
+        labelId={colorThemeLabel}
+        detail="Each color theme has a light and a dark version, picked by Theme above."
+        stacked
+      >
+        <ColorThemePicker
+          labelledBy={colorThemeLabel}
+          value={colorThemeId}
+          choice={choice}
+          onChange={chooseColorTheme}
+        />
+      </SettingsRow>
+    </>
   )
 }

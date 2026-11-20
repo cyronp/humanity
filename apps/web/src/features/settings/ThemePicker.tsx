@@ -1,7 +1,8 @@
 import { cn } from "cn"
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui"
 import type { CSSProperties } from "react"
-import type { Theme, ThemeChoice } from "@/lib/theme"
+import { COLOR_THEMES, type ColorThemeId, type ColorThemeMode, colorTheme } from "@/lib/colorThemes"
+import type { ThemeChoice } from "@/lib/theme"
 
 const CHOICES = [
   { value: "system", label: "System" },
@@ -9,34 +10,20 @@ const CHOICES = [
   { value: "dark", label: "Dark" },
 ] as const satisfies ReadonlyArray<{ readonly value: ThemeChoice; readonly label: string }>
 
-const PALETTES: Readonly<Record<Theme, CSSProperties>> = {
-  light: {
-    "--pv-page": "oklch(1 0 0)",
-    "--pv-chat": "oklch(0.985 0 0)",
-    "--pv-card": "oklch(1 0 0)",
-    "--pv-border": "oklch(0.922 0 0)",
-    "--pv-muted": "oklch(0.95 0 0)",
-    "--pv-line": "oklch(0.9 0 0)",
-    "--pv-strong": "oklch(0.7 0 0)",
-    "--pv-brand": "#2563eb",
-    "--pv-modified": "#d97706",
-    "--pv-added": "#059669",
-    "--pv-removed": "#dc2626",
-  } as CSSProperties,
-  dark: {
-    "--pv-page": "oklch(0.1 0 0)",
-    "--pv-chat": "oklch(0.145 0 0)",
-    "--pv-card": "oklch(0.145 0 0)",
-    "--pv-border": "oklch(1 0 0 / 12%)",
-    "--pv-muted": "oklch(0.205 0 0)",
-    "--pv-line": "oklch(0.27 0 0)",
-    "--pv-strong": "oklch(0.55 0 0)",
-    "--pv-brand": "#60a5fa",
-    "--pv-modified": "#fbbf24",
-    "--pv-added": "#34d399",
-    "--pv-removed": "#f87171",
-  } as CSSProperties,
-}
+const previewStyle = (mode: ColorThemeMode): CSSProperties =>
+  ({
+    "--pv-page": mode.tokens.sidebar,
+    "--pv-chat": mode.tokens.chat,
+    "--pv-card": mode.tokens.card,
+    "--pv-border": mode.tokens.border,
+    "--pv-muted": mode.tokens.muted,
+    "--pv-line": `color-mix(in oklab, ${mode.tokens["muted-foreground"]} 35%, transparent)`,
+    "--pv-strong": mode.tokens["muted-foreground"],
+    "--pv-brand": mode.tokens.primary,
+    "--pv-modified": mode.tokens["git-modified"],
+    "--pv-added": mode.tokens["git-added"],
+    "--pv-removed": mode.tokens["git-deleted"],
+  }) as CSSProperties
 
 const DIFF_ROWS = [
   { kind: "context", width: "60%" },
@@ -48,13 +35,21 @@ const DIFF_ROWS = [
   { kind: "context", width: "52%" },
 ] as const
 
+const ITEM = cn(
+  "group flex min-w-0 flex-col gap-2 rounded-xl border bg-muted/40 p-1.5 pb-2 text-xs text-muted-foreground transition-colors outline-none sm:p-2 sm:text-sm",
+  "hover:border-foreground/20 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+  "data-[state=on]:border-brand data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-brand",
+)
+
 export function ThemePicker({
   labelledBy,
   value,
+  colorThemeId,
   onChange,
 }: {
   readonly labelledBy: string
   readonly value: ThemeChoice
+  readonly colorThemeId: ColorThemeId
   readonly onChange: (value: ThemeChoice) => void
 }) {
   return (
@@ -69,16 +64,8 @@ export function ThemePicker({
       className="grid grid-cols-3 gap-2 sm:gap-3"
     >
       {CHOICES.map(({ value: choice, label }) => (
-        <ToggleGroupPrimitive.Item
-          key={choice}
-          value={choice}
-          className={cn(
-            "group flex min-w-0 flex-col gap-2 rounded-xl border bg-muted/40 p-1.5 pb-2 text-xs text-muted-foreground transition-colors outline-none sm:p-2 sm:text-sm",
-            "hover:border-foreground/20 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-            "data-[state=on]:border-brand data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-brand",
-          )}
-        >
-          <ThemePreview choice={choice} />
+        <ToggleGroupPrimitive.Item key={choice} value={choice} className={ITEM}>
+          <ThemePreview choice={choice} colorThemeId={colorThemeId} />
           <span className="truncate">{label}</span>
         </ToggleGroupPrimitive.Item>
       ))}
@@ -86,7 +73,51 @@ export function ThemePicker({
   )
 }
 
-function ThemePreview({ choice }: { readonly choice: ThemeChoice }) {
+export function ColorThemePicker({
+  labelledBy,
+  value,
+  choice,
+  onChange,
+}: {
+  readonly labelledBy: string
+  readonly value: ColorThemeId
+  readonly choice: ThemeChoice
+  readonly onChange: (value: ColorThemeId) => void
+}) {
+  return (
+    <ToggleGroupPrimitive.Root
+      type="single"
+      aria-labelledby={labelledBy}
+      value={value}
+      onValueChange={(next) => {
+        const theme = COLOR_THEMES.find((candidate) => candidate.id === next)
+        if (theme !== undefined) onChange(theme.id)
+      }}
+      className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3"
+    >
+      {COLOR_THEMES.map((theme) => (
+        <ToggleGroupPrimitive.Item
+          key={theme.id}
+          value={theme.id}
+          title={theme.description}
+          className={ITEM}
+        >
+          <ThemePreview choice={choice} colorThemeId={theme.id} />
+          <span className="truncate">{theme.label}</span>
+        </ToggleGroupPrimitive.Item>
+      ))}
+    </ToggleGroupPrimitive.Root>
+  )
+}
+
+function ThemePreview({
+  choice,
+  colorThemeId,
+}: {
+  readonly choice: ThemeChoice
+  readonly colorThemeId: ColorThemeId
+}) {
+  const theme = colorTheme(colorThemeId)
   return (
     <span
       aria-hidden="true"
@@ -94,20 +125,26 @@ function ThemePreview({ choice }: { readonly choice: ThemeChoice }) {
     >
       {choice === "system" ? (
         <>
-          <MiniApp theme="light" />
-          <MiniApp theme="dark" className="[clip-path:inset(0_0_0_50%)]" />
+          <MiniApp mode={theme.light} />
+          <MiniApp mode={theme.dark} className="[clip-path:inset(0_0_0_50%)]" />
         </>
       ) : (
-        <MiniApp theme={choice} />
+        <MiniApp mode={theme[choice]} />
       )}
     </span>
   )
 }
 
-function MiniApp({ theme, className }: { readonly theme: Theme; readonly className?: string }) {
+function MiniApp({
+  mode,
+  className,
+}: {
+  readonly mode: ColorThemeMode
+  readonly className?: string
+}) {
   return (
     <span
-      style={PALETTES[theme]}
+      style={previewStyle(mode)}
       className={cn(
         "absolute inset-0 flex overflow-hidden rounded-md border border-(--pv-border) bg-(--pv-page)",
         className,
@@ -170,8 +207,8 @@ function DiffFile({ open = false }: { readonly open?: boolean }) {
             key={index}
             className={cn(
               "flex h-[3cqw] items-center gap-[1.5cqw] pr-[1.8cqw]",
-              kind === "add" && "bg-emerald-500/15",
-              kind === "remove" && "bg-red-500/15",
+              kind === "add" && "bg-(--pv-added)/15",
+              kind === "remove" && "bg-(--pv-removed)/15",
             )}
           >
             <span className="h-full w-[4cqw] shrink-0 border-r border-(--pv-border)" />

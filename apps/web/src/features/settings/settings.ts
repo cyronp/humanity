@@ -34,7 +34,16 @@ export const SECTION_INFO: Record<
 > = {
   general: {
     label: "General",
-    keywords: ["theme", "appearance", "dark mode", "light mode", "system"],
+    keywords: [
+      "theme",
+      "appearance",
+      "dark mode",
+      "light mode",
+      "system",
+      "color theme",
+      "colors",
+      "palette",
+    ],
   },
   terminal: {
     label: "Terminal",
