@@ -33,7 +33,14 @@ import {
 import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
 import { AddMenu } from "./AddMenu.tsx"
-import { ChatBox, ChatBoxFooter, SendButton, StopButton } from "./ChatBox.tsx"
+import {
+  ChatBox,
+  ChatBoxFooter,
+  KeyHint,
+  noteMessageSent,
+  SendButton,
+  StopButton,
+} from "./ChatBox.tsx"
 import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
 import { MentionTextarea } from "./MentionTextarea.tsx"
 import { useFileMention } from "./useFileMention.ts"
@@ -109,6 +116,7 @@ export const Composer = memo(function Composer({
     })
     setPending(false)
     if (Exit.isSuccess(exit)) {
+      noteMessageSent()
       setText("")
       mentions.sent()
       files.clear()
@@ -203,6 +211,10 @@ export const Composer = memo(function Composer({
             disabled={disabled}
           />
           <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
+          <KeyHint
+            typing={!disabled && text.trim() !== ""}
+            className="ml-1 hidden @min-[38rem]/chat-footer:flex"
+          />
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
             <ModelPicker

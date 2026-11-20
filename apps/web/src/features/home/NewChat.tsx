@@ -17,7 +17,13 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
-import { ChatBox, ChatBoxFooter, SendButton } from "@/features/chat/ChatBox"
+import {
+  ChatBox,
+  ChatBoxFooter,
+  KeyHint,
+  noteMessageSent,
+  SendButton,
+} from "@/features/chat/ChatBox"
 import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
 import { MentionTextarea } from "@/features/chat/MentionTextarea"
 import { useFileMention } from "@/features/chat/useFileMention"
@@ -198,6 +204,7 @@ function NewChatForm({
       setError(describeCause(exit.cause))
       return
     }
+    noteMessageSent()
     setText("")
     mentions.sent()
     files.clear()
@@ -273,6 +280,7 @@ function NewChatForm({
           </div>
         </ChatBoxFooter>
       </ChatBox>
+      {!pending && <KeyHint typing={text.trim() !== ""} className="flex justify-center" />}
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
           {chosen === undefined || chosen === current

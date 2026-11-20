@@ -1,7 +1,8 @@
 import { cn } from "cn"
 import { ArrowUp, Square } from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
+import { type ComponentProps, type ReactNode, useState } from "react"
 import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
+import { Kbd } from "@/components/ui/kbd"
 
 export function ChatBox({
   className,
@@ -31,7 +32,7 @@ export function ChatBoxFooter({ className, ...props }: ComponentProps<typeof Inp
     <InputGroupAddon
       align="block-end"
       className={cn(
-        "gap-1 px-2 pb-2 opacity-70 transition-opacity",
+        "@container/chat-footer gap-1 px-2 pb-2 opacity-70 transition-opacity",
         "group-focus-within/input-group:opacity-100 group-has-[[data-state=open]]/input-group:opacity-100 group-has-[textarea:not(:placeholder-shown)]/input-group:opacity-100",
         className,
       )}
@@ -82,5 +83,55 @@ export function StopButton({
     >
       <Square className="size-3 fill-current" />
     </InputGroupButton>
+  )
+}
+
+const KEY_HINT_KEY = "humanity.key-hint-sends"
+
+/** After this many messages the keys are known, and the hint stops showing. */
+const KEY_HINT_SENDS = 3
+
+const readSends = (): number => {
+  try {
+    return Number(localStorage.getItem(KEY_HINT_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+/** Counts a message sent from a chat box, so the key hint can retire. */
+export const noteMessageSent = () => {
+  try {
+    localStorage.setItem(KEY_HINT_KEY, String(readSends() + 1))
+  } catch {
+    // Storage can be unavailable; the hint then keeps showing, which is harmless.
+  }
+}
+
+/**
+ * How to send and how to break a line, shown once there is something to send, until the human has
+ * sent a few messages.
+ */
+export function KeyHint({
+  typing,
+  className,
+}: {
+  readonly typing: boolean
+  readonly className?: string
+}) {
+  const [retired] = useState(() => readSends() >= KEY_HINT_SENDS)
+  if (retired) return null
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "items-center gap-1 text-xs whitespace-nowrap text-muted-foreground transition-opacity duration-200 motion-reduce:transition-none",
+        typing ? "opacity-100" : "opacity-0",
+        className,
+      )}
+    >
+      <Kbd>Enter</Kbd> to send <span className="text-muted-foreground/60">·</span> <Kbd>Shift</Kbd>+
+      <Kbd>Enter</Kbd> new line
+    </span>
   )
 }
