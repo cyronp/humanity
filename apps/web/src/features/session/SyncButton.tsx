@@ -3,7 +3,7 @@ import type { Session, SyncStatus } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { ArrowDown, ArrowUp, RefreshCw } from "lucide-react"
+import { ArrowDown, ArrowDownUp, ArrowUp, Check, LoaderCircle } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
@@ -83,6 +83,8 @@ export function SyncButton({ session }: { readonly session: Session }) {
   const status = result.value
   const outgoing = status.pushes ? status.ahead : 0
   const unavailable = status.branch === null || status.target === null
+  // Like VS Code's status bar: arrows alone when in step, both counts once either is not.
+  const counted = !pending && !settled && (status.behind > 0 || outgoing > 0)
 
   const onSync = async () => {
     setPending(true)
@@ -116,24 +118,29 @@ export function SyncButton({ session }: { readonly session: Session }) {
             <span className="inline-flex">
               <Button
                 variant="ghost"
-                size="sm"
+                size={counted ? "sm" : "icon-sm"}
                 onClick={onSync}
                 disabled={busy || pending || unavailable}
-                aria-label="Sync with origin"
+                aria-label={pending ? "Syncing with origin" : "Sync with origin"}
+                className={cn(counted && "gap-1.5 px-2 tabular-nums")}
               >
-                <RefreshCw className={cn(pending && "animate-spin")} />
-                {pending ? "Syncing…" : settled ? "Up to date" : "Sync"}
-                {!pending && status.behind > 0 && (
-                  <span className="flex items-center text-xs tabular-nums">
-                    <ArrowDown className="size-3" />
-                    {status.behind}
-                  </span>
-                )}
-                {!pending && outgoing > 0 && (
-                  <span className="flex items-center text-xs tabular-nums">
-                    <ArrowUp className="size-3" />
-                    {outgoing}
-                  </span>
+                {pending ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : settled ? (
+                  <Check />
+                ) : counted ? (
+                  <>
+                    <span className="flex items-center">
+                      {status.behind}
+                      <ArrowDown className="size-3" />
+                    </span>
+                    <span className="flex items-center">
+                      {outgoing}
+                      <ArrowUp className="size-3" />
+                    </span>
+                  </>
+                ) : (
+                  <ArrowDownUp />
                 )}
               </Button>
             </span>
