@@ -62,11 +62,11 @@ export const UsageMeters = memo(function UsageMeters({
   )
 })
 
-/** The chat box's key hint, floating like the meters beside it. */
-export const HINT_CLASS = cn(
-  FLOATING,
-  "hidden min-w-0 animate-in fade-in-0 duration-200 motion-reduce:animate-none sm:flex",
-)
+/**
+ * The chat box's key hint, floating like the meters beside it. It stays in place and only fades,
+ * so its row never appears or grows under the chat.
+ */
+export const HINT_CLASS = cn(FLOATING, "hidden min-w-0 sm:flex")
 
 function ContextMeter({ context }: { readonly context: ContextUsage }) {
   const used = contextPercentUsed(context)

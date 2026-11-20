@@ -108,6 +108,9 @@ export const noteMessageSent = () => {
   }
 }
 
+/** Keys as tall as a line of the hint's text, so the hint is no taller than the meters beside it. */
+const KEY = "h-4 min-w-4 px-1 text-[0.625rem] leading-none"
+
 /** Whether the key hint still shows: the human has not sent enough messages to know the keys. */
 export const useKeyHintShown = (): boolean => useState(() => readSends() < KEY_HINT_SENDS)[0]
 
@@ -132,8 +135,8 @@ export function KeyHint({
         className,
       )}
     >
-      <Kbd>Enter</Kbd> to send <span className="text-muted-foreground/60">·</span> <Kbd>Shift</Kbd>+
-      <Kbd>Enter</Kbd> new line
+      <Kbd className={KEY}>Enter</Kbd> to send <span className="text-muted-foreground/60">·</span>{" "}
+      <Kbd className={KEY}>Shift</Kbd>+<Kbd className={KEY}>Enter</Kbd> new line
     </span>
   )
 }

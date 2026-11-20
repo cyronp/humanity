@@ -185,7 +185,7 @@ export function Workspace({
                 sessionId={session.id}
                 usage={view.usage}
                 hint={
-                  keyHint && typing && (asked === undefined || questions === undefined) ? (
+                  keyHint && (asked === undefined || questions === undefined) ? (
                     <KeyHint typing={typing} className={HINT_CLASS} />
                   ) : undefined
                 }
