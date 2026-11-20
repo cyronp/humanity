@@ -31,7 +31,7 @@ function AppearanceSettings() {
 
   return (
     <>
-      <SettingsRow label="Theme" labelId={themeLabel} stacked>
+      <SettingsRow label="Color scheme" labelId={themeLabel} stacked>
         <ThemePicker
           labelledBy={themeLabel}
           value={choice}
@@ -39,12 +39,7 @@ function AppearanceSettings() {
           onChange={choose}
         />
       </SettingsRow>
-      <SettingsRow
-        label="Color theme"
-        labelId={colorThemeLabel}
-        detail="Each color theme has a light and a dark version, picked by Theme above."
-        stacked
-      >
+      <SettingsRow label="Theme" labelId={colorThemeLabel} stacked>
         <ColorThemePicker
           labelledBy={colorThemeLabel}
           value={colorThemeId}

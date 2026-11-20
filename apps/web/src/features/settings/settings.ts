@@ -40,6 +40,7 @@ export const SECTION_INFO: Record<
       "dark mode",
       "light mode",
       "system",
+      "color scheme",
       "color theme",
       "colors",
       "palette",
