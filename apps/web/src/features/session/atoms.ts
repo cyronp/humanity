@@ -56,6 +56,7 @@ export const attachmentAtom = Atom.family((key: string) => {
 export const fetchAttachmentAtom = HumanityClient.mutation("Sessions.attachment")
 export const interruptAtom = HumanityClient.mutation("Sessions.interrupt")
 export const refreshUsageAtom = HumanityClient.mutation("Sessions.refreshUsage")
+export const otherAccountsUsageAtom = HumanityClient.mutation("Sessions.otherAccountsUsage")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")
 
 export const decideChangeAtom = HumanityClient.mutation("Approvals.decideChange")

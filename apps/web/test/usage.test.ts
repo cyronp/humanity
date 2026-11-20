@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
+  accountLabel,
   contextPercentUsed,
   formatTokens,
   hitUsageLimit,
+  otherAccountRows,
   planHeadline,
   planRows,
   usageLevel,
+  windowUsed,
 } from "@/features/session/usage"
 
 describe("usageLevel", () => {
@@ -118,5 +121,44 @@ describe("hitUsageLimit", () => {
     expect(hitUsageLimit("Request failed", full, now)).toBe(true)
     const room = { fiveHour: window(80), sevenDay: window(40), models: [] }
     expect(hitUsageLimit("Request failed", room, now)).toBe(false)
+  })
+})
+
+describe("windowUsed", () => {
+  const now = new Date("2026-01-01T12:00:00.000Z")
+  it("reads a window that is still open, and counts one that reset as empty", () => {
+    expect(windowUsed(null, now)).toBeNull()
+    expect(windowUsed({ utilization: 81, resetsAt: "2026-01-01T15:00:00.000Z" }, now)).toBe(81)
+    expect(windowUsed({ utilization: 81, resetsAt: null }, now)).toBe(81)
+    expect(windowUsed({ utilization: 81, resetsAt: "2026-01-01T11:00:00.000Z" }, now)).toBe(0)
+  })
+})
+
+describe("otherAccountRows", () => {
+  const account = (
+    provider: "claude-code" | "codex" | "kiro",
+    accountId: string,
+    name: string,
+  ) => ({
+    provider,
+    accountId,
+    name,
+    plan: null,
+    unavailable: null,
+  })
+
+  it("names an account only where its provider has several", () => {
+    const rows = otherAccountRows([
+      account("codex", "default", "Default login"),
+      account("codex", "work", "Work"),
+      account("kiro", "default", "Default login"),
+    ])
+    expect(rows.map((row) => row.label)).toEqual(["Codex · Default login", "Codex · Work", "Kiro"])
+  })
+
+  it("names the thread's own account the same way", () => {
+    expect(accountLabel("claude-code", "Personal", 2)).toBe("Claude Code · Personal")
+    expect(accountLabel("claude-code", "Personal", 1)).toBe("Claude Code")
+    expect(accountLabel("claude-code", undefined, 3)).toBe("Claude Code")
   })
 })

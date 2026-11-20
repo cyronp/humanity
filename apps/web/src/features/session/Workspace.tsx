@@ -1,5 +1,6 @@
 import {
   acceptsMessages,
+  DEFAULT_ACCOUNT,
   parseQuestions,
   type Project,
   QUESTION_TOOL,
@@ -189,6 +190,8 @@ export function Workspace({
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 p-4 *:pointer-events-auto">
               <UsageMeters
                 sessionId={session.id}
+                provider={session.provider}
+                accountId={session.accountId ?? DEFAULT_ACCOUNT}
                 usage={view.usage}
                 hint={
                   keyHint && (asked === undefined || questions === undefined) ? (

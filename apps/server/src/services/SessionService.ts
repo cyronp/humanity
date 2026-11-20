@@ -1,4 +1,5 @@
 import {
+  type AccountUsage,
   acceptsMessages,
   applyAutonomy,
   type AgentProvider,
@@ -89,6 +90,8 @@ import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
 import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
+import type { AccountRegistry } from "./accountRegistry.ts"
+import { makeAccountsUsage, type UsageAccount } from "./accountsUsage.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -285,6 +288,11 @@ export class SessionService extends Context.Service<
     readonly refreshUsage: (
       sessionId: string,
     ) => Effect.Effect<SessionUsage, SessionNotFound | PlanUsageUnavailable>
+    /** Every signed-in account's plan usage, apart from the thread's provider. */
+    readonly otherAccountsUsage: (
+      sessionId: string,
+      refresh: boolean,
+    ) => Effect.Effect<ReadonlyArray<AccountUsage>, SessionNotFound>
     readonly end: (
       sessionId: string,
       options: { readonly removeWorktree: boolean },
@@ -670,6 +678,40 @@ export class SessionService extends Context.Service<
           return yield* unavailable("this login has no plan limits to report.")
         }
         return yield* storeUsage(sessionId, undefined, plan)
+      })
+
+      const signedIn = <Status extends { readonly connection: { readonly _tag: string } }>(
+        registry: AccountRegistry<Status>,
+      ): Effect.Effect<ReadonlyArray<UsageAccount>> =>
+        Effect.map(registry.accounts({ refresh: false }), (listed) =>
+          listed.map((account) => ({
+            id: account.id,
+            name: account.name,
+            connected: account.status.connection._tag === "Connected",
+          })),
+        )
+      const readAccountsUsage = yield* makeAccountsUsage([
+        {
+          provider: "claude-code",
+          accounts: signedIn(accounts),
+          plan: (accountId) =>
+            Effect.flatMap(accounts.configDirFor(accountId), (dir) => claude.planUsage(dir)),
+        },
+        {
+          provider: "codex",
+          accounts: signedIn(codexAccounts),
+          plan: (accountId) =>
+            Effect.flatMap(codexAccounts.configDirFor(accountId), (dir) => codex.planUsage(dir)),
+        },
+        { provider: "kiro", accounts: signedIn(kiroAccounts) },
+        { provider: "antigravity", accounts: signedIn(antigravityAccounts) },
+      ])
+      const otherAccountsUsage = Effect.fn("SessionService.otherAccountsUsage")(function* (
+        sessionId: string,
+        refresh: boolean,
+      ) {
+        const session = yield* get(sessionId)
+        return yield* readAccountsUsage(session.provider, refresh)
       })
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
@@ -1629,6 +1671,7 @@ export class SessionService extends Context.Service<
         attachment,
         interrupt,
         refreshUsage: refreshUsageNow,
+        otherAccountsUsage,
         end,
         stopProject,
         diff,

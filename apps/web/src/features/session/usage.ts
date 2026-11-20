@@ -1,4 +1,11 @@
-import type { ContextUsage, PlanUsage, PlanWindow } from "@humanity/contracts"
+import {
+  type AccountUsage,
+  type AgentProvider,
+  type ContextUsage,
+  type PlanUsage,
+  type PlanWindow,
+  PROVIDER_NAMES,
+} from "@humanity/contracts"
 
 export type UsageLevel = "ok" | "notice" | "warning" | "critical"
 
@@ -36,6 +43,36 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
   ]
   return rows.filter((row) => stillOpen(row, now))
 }
+
+/** How full a window is now: `null` without one, 0 once it has reset. */
+export const windowUsed = (window: PlanWindow | null, now: Date): number | null =>
+  window === null ? null : stillOpen(window, now) ? window.utilization : 0
+
+/** An account by its provider's name, and by its own only where the provider has several. */
+export const accountLabel = (
+  provider: AgentProvider,
+  name: string | undefined,
+  accountsOfProvider: number,
+): string =>
+  name === undefined || accountsOfProvider < 2
+    ? PROVIDER_NAMES[provider]
+    : `${PROVIDER_NAMES[provider]} · ${name}`
+
+/** How many other accounts the plan usage lists before "Show more". */
+export const OTHER_ACCOUNTS_SHOWN = 3
+
+/** The other accounts, labelled, in the order the daemon lists them. */
+export const otherAccountRows = (
+  accounts: ReadonlyArray<AccountUsage>,
+): ReadonlyArray<AccountUsage & { readonly label: string }> =>
+  accounts.map((account) => ({
+    ...account,
+    label: accountLabel(
+      account.provider,
+      account.name,
+      accounts.filter((other) => other.provider === account.provider).length,
+    ),
+  }))
 
 export const planHeadline = (rows: ReadonlyArray<PlanRow>): PlanRow | undefined =>
   rows.reduce<PlanRow | undefined>(

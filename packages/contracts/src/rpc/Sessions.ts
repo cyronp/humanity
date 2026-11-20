@@ -4,7 +4,13 @@ import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
-import { ReasoningEffort, Session, SessionId, SessionUsage } from "../domain/Session.ts"
+import {
+  AccountUsage,
+  ReasoningEffort,
+  Session,
+  SessionId,
+  SessionUsage,
+} from "../domain/Session.ts"
 import { BranchCommits, FileEntry, WorkingTreeDiff } from "../domain/Git.ts"
 import { FileMentions } from "../domain/Mention.ts"
 import { SessionEvent, TranscriptPage } from "../domain/SessionEvent.ts"
@@ -179,6 +185,15 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId },
     success: SessionUsage,
     error: Schema.Union([SessionNotFound, PlanUsageUnavailable]),
+  }),
+  /**
+   * The plan usage of every signed-in account of the providers this thread does not run on.
+   * Read again when `refresh` is set, else as last read within a couple of minutes.
+   */
+  Rpc.make("Sessions.otherAccountsUsage", {
+    payload: { sessionId: SessionId, refresh: Schema.Boolean },
+    success: Schema.Array(AccountUsage),
+    error: SessionNotFound,
   }),
   Rpc.make("Sessions.earlierMessages", {
     payload: { sessionId: SessionId, before: Schema.String },
