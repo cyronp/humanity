@@ -36,7 +36,8 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
       : [{ label: "5-hour limit", blocking: true, ...plan.fiveHour }]),
     ...(plan.sevenDay === null ? [] : [{ label: "7-day limit", blocking: true, ...plan.sevenDay }]),
     ...plan.models.map(({ name, ...window }) => ({
-      label: `${name} 7-day limit`,
+      // Claude names a model ("Opus"), whose limit is weekly; Codex names the window itself.
+      label: /\blimit$/i.test(name) ? name : `${name} 7-day limit`,
       blocking: false,
       ...window,
     })),
@@ -47,6 +48,40 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
 /** How full a window is now: `null` without one, 0 once it has reset. */
 export const windowUsed = (window: PlanWindow | null, now: Date): number | null =>
   window === null ? null : stillOpen(window, now) ? window.utilization : 0
+
+export interface CompactWindow {
+  /** A few characters: `5h`, `7d`, `30d`. */
+  readonly short: string
+  readonly label: string
+  readonly used: number
+  readonly resetsAt: string | null
+}
+
+const shortName = (name: string): string => {
+  const length = /^(\d+)-(day|hour|minute) limit$/.exec(name)
+  return length === null ? name : `${length[1]}${length[2]?.charAt(0)}`
+}
+
+/**
+ * At most two of an account's windows, for one line: its 5-hour and 7-day limits, else the
+ * windows it reports under other names (a Codex plan's 30-day limit, say).
+ */
+export const compactWindows = (plan: PlanUsage, now: Date): ReadonlyArray<CompactWindow> => {
+  const main = [
+    { short: "5h", label: "5-hour limit", window: plan.fiveHour },
+    { short: "7d", label: "7-day limit", window: plan.sevenDay },
+  ]
+  const named = plan.models.map(({ name, ...window }) => ({
+    short: shortName(name),
+    label: name,
+    window,
+  }))
+  const reported = main.filter((entry) => entry.window !== null)
+  return (reported.length > 0 ? reported : named).slice(0, 2).flatMap(({ window, ...entry }) => {
+    const used = windowUsed(window, now)
+    return used === null || window === null ? [] : [{ ...entry, used, resetsAt: window.resetsAt }]
+  })
+}
 
 /** An account by its provider's name, and by its own only where the provider has several. */
 export const accountLabel = (

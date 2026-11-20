@@ -3,7 +3,6 @@ import {
   type AccountUsage,
   type AgentProvider,
   type ContextUsage,
-  type PlanWindow,
   PROVIDER_NAMES,
   type SessionId,
   type SessionUsage,
@@ -28,6 +27,8 @@ import { describeCause } from "@/lib/errors"
 import { otherAccountsUsageAtom, refreshUsageAtom } from "./atoms.ts"
 import {
   accountLabel,
+  type CompactWindow,
+  compactWindows,
   contextPercentUsed,
   formatTokens,
   OTHER_ACCOUNTS_SHOWN,
@@ -37,7 +38,6 @@ import {
   planRows,
   type UsageLevel,
   usageLevel,
-  windowUsed,
 } from "./usage.ts"
 
 const LEVEL_CLASS: Record<UsageLevel, string> = {
@@ -384,10 +384,8 @@ function OtherAccounts({ state }: { readonly state: Others }) {
 }
 
 function OtherAccountRow({ account }: { readonly account: OtherAccountRowData }) {
-  const now = new Date()
   const { plan } = account
-  const fiveHour = windowUsed(plan?.fiveHour ?? null, now)
-  const sevenDay = windowUsed(plan?.sevenDay ?? null, now)
+  const windows = plan === null ? [] : compactWindows(plan, new Date())
   return (
     <div className="flex min-w-0 items-center gap-2 border-b py-2 text-xs last:border-b-0">
       <ProviderIcon provider={account.provider} className="size-3.5" />
@@ -396,40 +394,21 @@ function OtherAccountRow({ account }: { readonly account: OtherAccountRowData })
         <span className="shrink-0 text-muted-foreground" title={account.unavailable ?? undefined}>
           {account.unavailable === null ? "Reports no plan limits" : "Could not read its limits"}
         </span>
-      ) : fiveHour === null && sevenDay === null ? (
+      ) : windows.length === 0 ? (
         <span className="shrink-0 text-muted-foreground">No limits to show</span>
       ) : (
-        <>
-          {fiveHour !== null && (
-            <MiniMeter short="5h" label="5-hour limit" used={fiveHour} window={plan.fiveHour} />
-          )}
-          {sevenDay !== null && (
-            <MiniMeter short="7d" label="7-day limit" used={sevenDay} window={plan.sevenDay} />
-          )}
-        </>
+        windows.map((window) => <MiniMeter key={window.label} window={window} />)
       )}
     </div>
   )
 }
 
-function MiniMeter({
-  short,
-  label,
-  used,
-  window,
-}: {
-  readonly short: string
-  readonly label: string
-  readonly used: number
-  readonly window: PlanWindow | null
-}) {
-  const level = usageLevel(used)
-  const percent = Math.round(used)
+function MiniMeter({ window }: { readonly window: CompactWindow }) {
+  const level = usageLevel(window.used)
+  const percent = Math.round(window.used)
   const resets =
-    window !== null && window.resetsAt !== null && used > 0
-      ? `, resets ${formatReset(window.resetsAt)}`
-      : ""
-  const description = `${label}: ${percent}% used${resets}`
+    window.resetsAt !== null && window.used > 0 ? `, resets ${formatReset(window.resetsAt)}` : ""
+  const description = `${window.label}: ${percent}% used${resets}`
   return (
     <span
       className={cn("flex shrink-0 items-center gap-1.5 tabular-nums", LEVEL_CLASS[level])}
@@ -437,13 +416,13 @@ function MiniMeter({
       aria-label={description}
       title={description}
     >
-      <span className="text-muted-foreground" aria-hidden>
-        {short}
+      <span className="max-w-12 truncate text-muted-foreground" aria-hidden>
+        {window.short}
       </span>
       <span className="flex h-1 w-8 overflow-hidden rounded-full bg-muted" aria-hidden>
         <span
           className={cn("rounded-full", BAR_CLASS[level])}
-          style={{ width: `${Math.min(100, Math.max(0, used))}%` }}
+          style={{ width: `${Math.min(100, Math.max(0, window.used))}%` }}
         />
       </span>
       <span className="w-8 text-right" aria-hidden>
