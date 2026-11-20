@@ -12,6 +12,10 @@ export const humanityTool = (name: string) => `mcp__${HUMANITY_MCP_SERVER}__${na
 
 export const OPEN_THREAD_TOOL = humanityTool(OPEN_THREAD_TOOL_NAME)
 
+export const SKILL_TOOL_NAME = "load_skill"
+
+export const SKILL_TOOL = humanityTool(SKILL_TOOL_NAME)
+
 export const TERMINAL_TOOL_NAMES = [
   "terminal_list",
   "terminal_read",
@@ -34,6 +38,7 @@ export const AUTO_TOOLS: ReadonlyArray<string> = [
   "TodoWrite",
   "Skill",
   OPEN_THREAD_TOOL,
+  SKILL_TOOL,
   ...TERMINAL_TOOLS,
 ]
 

@@ -23,6 +23,7 @@ import {
   type GitInvalidBranchName,
   type GitRefNotFound,
   HUMANITY_MCP_SERVER,
+  SKILL_TOOL,
   type MessageContent,
   type OpenedThread,
   type PendingConfirmation,
@@ -75,6 +76,7 @@ import {
   type PermissionDecision,
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
+import { makeSkillTool } from "../extensions/skillTool.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
@@ -110,6 +112,22 @@ interface ActiveRun {
   readonly usageLock: Semaphore.Semaphore
   extensionsVersion: number
   readonly humanity: AgentMcpServer | undefined
+}
+
+/**
+ * The skill a call loads: Claude Code's own `Skill`, or Humanity's `load_skill` for a skill's
+ * instructions (not for one of its other files).
+ */
+export const loadedSkill = (toolName: string, input: unknown): string | undefined => {
+  const fields =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}
+  if (toolName === "Skill") {
+    return typeof fields["skill"] === "string" ? fields["skill"] : "unknown"
+  }
+  if (toolName !== SKILL_TOOL) return undefined
+  const file = fields["file"]
+  if (file !== undefined && file !== null && file !== "") return undefined
+  return typeof fields["name"] === "string" ? fields["name"] : "unknown"
 }
 
 const withHumanity = (
@@ -518,12 +536,12 @@ export class SessionService extends Context.Service<
             }
             yield* repo.insertToolCall(toolCall)
             yield* events.publish(session.id, { _tag: "ToolCallStarted", toolCall })
-            if (block.toolName === "Skill") {
-              const skill = (block.input as { readonly skill?: unknown } | null)?.skill
+            const skill = loadedSkill(block.toolName, block.input)
+            if (skill !== undefined) {
               yield* events.publish(session.id, {
                 _tag: "SkillLoaded",
                 toolUseId: block.toolUseId,
-                skill: typeof skill === "string" ? skill : "unknown",
+                skill,
                 at: toolCall.startedAt,
               })
             }
@@ -696,11 +714,27 @@ export class SessionService extends Context.Service<
             const scope = yield* Scope.fork(serviceScope)
             const denied = new Set<string>()
             const offered = yield* preferences.tools
+            const configDir = yield* accountDir(session)
+            const skillCatalog = offered.skills
+              ? yield* extensions.skillsForThread({
+                  provider: session.provider,
+                  onDefaultLogin: configDir === undefined,
+                  cwd: session.worktreePath,
+                })
+              : []
             const humanity =
-              offered.openThread || offered.terminals
+              offered.openThread || offered.terminals || skillCatalog.length > 0
                 ? yield* mcp
                     .serve({
                       ...(offered.openThread ? { openThread: openThread(session) } : {}),
+                      ...(skillCatalog.length > 0
+                        ? {
+                            skills: {
+                              catalog: skillCatalog,
+                              load: makeSkillTool(fs, skillCatalog),
+                            },
+                          }
+                        : {}),
                       ...(offered.terminals
                         ? {
                             terminal: makeTerminalTools({
@@ -727,7 +761,7 @@ export class SessionService extends Context.Service<
               .start({
                 provider: session.provider,
                 cwd: session.worktreePath,
-                configDir: yield* accountDir(session),
+                configDir,
                 resume: session.sdkSessionId ?? undefined,
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,

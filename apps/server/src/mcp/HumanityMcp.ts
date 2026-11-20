@@ -7,11 +7,14 @@ import {
   type OpenedThread,
   PROVIDER_NAMES,
   ReasoningEffort,
+  SKILL_TOOL_NAME,
   type TerminalToolName,
 } from "@humanity/contracts"
 import { Context, Data, Effect, Layer, Option, Schema, type Scope } from "effect"
 import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
+import type { ServedSkill } from "../extensions/skillCatalog.ts"
+import { skillToolDefinition } from "../extensions/skillTool.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import {
   HUMANITY_INSTRUCTIONS,
@@ -49,6 +52,11 @@ export interface HumanityTools {
     request: OpenThreadRequest,
   ) => Effect.Effect<OpenedThread, OpenThreadFailed>
   readonly terminal?: (tool: TerminalToolName, args: unknown) => Effect.Effect<ToolText>
+  /** `load_skill`, offered only with at least one skill. */
+  readonly skills?: {
+    readonly catalog: ReadonlyArray<ServedSkill>
+    readonly load: (args: unknown) => Effect.Effect<ToolText>
+  }
 }
 
 const providers = AgentProvider.literals
@@ -100,6 +108,9 @@ export const OPEN_THREAD_TOOL_DEFINITION = {
 const listTools = (tools: HumanityTools): ReadonlyArray<unknown> => [
   ...(tools.openThread === undefined ? [] : [OPEN_THREAD_TOOL_DEFINITION]),
   ...(tools.terminal === undefined ? [] : TERMINAL_TOOL_DEFINITIONS),
+  ...(tools.skills === undefined || tools.skills.catalog.length === 0
+    ? []
+    : [skillToolDefinition(tools.skills.catalog)]),
 ]
 
 export interface McpReply {
@@ -130,7 +141,15 @@ const INVALID_PARAMS = -32602
 
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
-  const { terminal, openThread } = tools
+  const { terminal, openThread, skills } = tools
+  if (name === SKILL_TOOL_NAME) {
+    if (skills === undefined || skills.catalog.length === 0) return Option.none()
+    return Option.some(
+      Effect.map(skills.load(params["arguments"] ?? {}), (said) =>
+        toolText(said.text, said.isError),
+      ),
+    )
+  }
   if (typeof name === "string" && isTerminalToolName(name)) {
     if (terminal === undefined) return Option.none()
     return Option.some(

@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { DatabaseLive } from "../src/db/Database.ts"
+import { CliHomes } from "../src/extensions/skillCatalog.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
 import { GitHubService } from "../src/services/GitHubService.ts"
 import { GitHubToken } from "../src/services/GitHubToken.ts"
@@ -15,8 +16,7 @@ import { GitLabToken } from "../src/services/GitLabToken.ts"
 export const tempDir = (prefix = "humanity-test-") =>
   Effect.acquireRelease(
     Effect.sync(() => realpathSync.native(mkdtempSync(join(tmpdir(), prefix)))),
-    (dir) =>
-      Effect.sync(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
+    (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
   )
 
 export const git = (cwd: string, ...args: ReadonlyArray<string>): string =>
@@ -67,8 +67,12 @@ export const offlineGitLab = GitLabService.layer.pipe(
   Layer.provide(offlineHttp),
 )
 
+/** The human's home as the skill catalog sees it: a folder of the test's, never the real one. */
+export const cliHomes = (home: string) =>
+  Layer.succeed(CliHomes, { userHome: join(home, "user-home"), env: {} })
+
 export const baseLayer = (home: string, github: Layer.Layer<GitHubService> = offlineGitHub) =>
-  Layer.mergeAll(DatabaseLive, github, offlineGitLab).pipe(
+  Layer.mergeAll(DatabaseLive, github, offlineGitLab, cliHomes(home)).pipe(
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
     Layer.provideMerge(NodeServices.layer),
   )
