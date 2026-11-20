@@ -1,7 +1,11 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "stream",
+  "globalDependencies": ["eslint.config.js", "tsconfig.base.json"],
   "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
@@ -21,11 +25,14 @@
       "persistent": true,
       "passThroughEnv": ["HUMANITY_*"]
     },
-    "lint": {},
+    "lint": {
+      "dependsOn": ["transit"]
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
     "test": {
+      "dependsOn": ["transit"],
       "env": ["HUMANITY_HOME"],
       "passThroughEnv": ["PSModulePath", "PSModuleAnalysisCachePath"]
     }

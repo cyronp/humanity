@@ -13,38 +13,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Pushes to main run everything. A pull request runs only what its files can break.
   changes:
     name: Changes
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
       desktop: ${{ steps.filter.outputs.desktop }}
+      terminal: ${{ steps.filter.outputs.terminal }}
     steps:
       - name: Sort the changed files
         id: filter
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
-          if [ -z "$PR" ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "desktop=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ -n "$PR" ]; then
+            files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+              --jq '.[] | .filename, (.previous_filename // empty)')
+          else
+            files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$SHA" \
+              --jq '.files[] | .filename, (.previous_filename // empty)' || echo "unknown")
           fi
-          # A renamed file counts under its old path and its new one.
-          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
-            --jq '.[] | .filename, (.previous_filename // empty)')
           printf '%s\n' "$files"
-          # Code is anything but the docs and GitHub's own files of the repository.
           code=$(printf '%s\n' "$files" | grep -viE '^(docs/|[^/]+\.md$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|workflows/(codeql|nightly|release)\.yml$))' || true)
-          # The Linux job already builds the web app and bundles the daemon; what only
-          # the installer can break is the shell, the dependencies and this workflow.
           desktop=$(printf '%s\n' "$files" | grep -E '^(apps/desktop/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' || true)
+          terminal=$(printf '%s\n' "$files" | grep -E '^(unknown$|apps/server/(src/terminal/|test/(PtyHost|shellIntegration|shells|terminalColors|TerminalService|terminalTools)\.test\.ts$|package\.json$)|package-lock\.json$|turbo\.json$|\.github/workflows/ci\.yml$)' || true)
+          if [ -z "$PR" ]; then
+            code=true
+            desktop=true
+          fi
           echo "code=$([ -n "$code" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "desktop=$([ -n "$desktop" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "terminal=$([ -n "$terminal" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   check:
     name: Node ${{ matrix.node }}
@@ -53,20 +58,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
-    # A required check, so the job always runs and reports: a skipped matrix job
-    # never reports "Node 22" or "Node 24", and the pull request would wait forever.
-    # When no code changed, its steps are skipped instead.
+        node: ${{ github.event_name == 'push' && fromJSON('[22, 24]') || fromJSON('[24]') }}
     steps:
       - if: needs.changes.outputs.code != 'true'
         run: echo "No code changed."
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: needs.changes.outputs.code == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: needs.changes.outputs.code == 'true'
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - uses: actions/cache@v6
+        if: needs.changes.outputs.code == 'true'
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-node${{ matrix.node }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-node${{ matrix.node }}-
       - if: needs.changes.outputs.code == 'true'
         run: npm ci
       - if: needs.changes.outputs.code == 'true'
@@ -77,6 +85,26 @@ jobs:
         run: npm run test
       - if: needs.changes.outputs.code == 'true'
         run: npm run build
+      - name: Forget turbo results older than a week
+        if: needs.changes.outputs.code == 'true'
+        run: find .turbo/cache -type f -mtime +7 -delete
+
+  terminal:
+    name: Terminal tests (Windows)
+    needs: changes
+    if: needs.changes.outputs.terminal == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: >-
+          npm run test --workspace @humanity/server --
+          test/PtyHost.test.ts test/shellIntegration.test.ts test/shells.test.ts
+          test/terminalColors.test.ts test/TerminalService.test.ts test/terminalTools.test.ts
 
   desktop:
     name: Desktop installer (Windows)
@@ -84,15 +112,13 @@ jobs:
     if: needs.changes.outputs.desktop == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run package:desktop
-      # The daemon needs the Agent SDK's JavaScript beside it, and no agent
-      # ships: threads run on the CLIs the human installed.
       - name: Check the packaged daemon
         shell: bash
         run: |
@@ -109,14 +135,13 @@ jobs:
           test -f "$pty/prebuilds/win32-x64/conpty/conpty.dll"
           test -f "$pty/prebuilds/win32-x64/conpty/OpenConsole.exe"
           test -z "$(find "$pty" -name '*.pdb')"
-      # Without the window's preload, the Browser's desktop features vanish silently.
       - name: Check the app's archive
         shell: bash
         run: |
           files=$(npx asar list apps/desktop/release/win-unpacked/resources/app.asar)
           echo "$files" | grep -qx '[\\/]dist[\\/]main.cjs'
           echo "$files" | grep -qx '[\\/]dist[\\/]preload.cjs'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: humanity-desktop-windows
           path: apps/desktop/release/*.exe

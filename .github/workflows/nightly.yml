@@ -21,7 +21,7 @@ jobs:
     name: Publish nightly
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
       - name: Skip when main has not changed
@@ -38,17 +38,13 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
           echo "sha=$head" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.changed.outputs.build == 'true'
         with:
           node-version: 24
           cache: npm
       - if: steps.changed.outputs.build == 'true'
         run: npm ci
-      - if: steps.changed.outputs.build == 'true'
-        run: npm run lint
-      - if: steps.changed.outputs.build == 'true'
-        run: npm run typecheck
       - if: steps.changed.outputs.build == 'true'
         run: npm run test
       - name: Set the nightly version
