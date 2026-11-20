@@ -27,7 +27,7 @@ export function BrandMark({ className, ...props }: SVGProps<SVGSVGElement>) {
       fill="currentColor"
       shapeRendering="crispEdges"
       aria-hidden="true"
-      className={cn("text-blue-500", className)}
+      className={cn("text-brand-mark", className)}
       {...props}
     >
       {LAYERS.map(([opacity, d]) => (
