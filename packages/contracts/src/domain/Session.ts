@@ -73,14 +73,11 @@ export const PlanUsage = Schema.Struct({
 })
 export type PlanUsage = typeof PlanUsage.Type
 
-/** The plan's limits of a signed-in account, whichever thread runs on it. */
 export const AccountUsage = Schema.Struct({
   provider: AgentProvider,
   accountId: Schema.String,
   name: Schema.String,
-  /** `null` when the provider reports no limits, or they could not be read. */
   plan: Schema.NullOr(PlanUsage),
-  /** Why the limits could not be read; `null` when they were, or there are none to read. */
   unavailable: Schema.NullOr(Schema.String),
 })
 export type AccountUsage = typeof AccountUsage.Type

@@ -7,24 +7,17 @@ export interface UsageAccount {
   readonly connected: boolean
 }
 
-/** One provider's accounts, and how to read an account's plan limits. */
 export interface UsageSource {
   readonly provider: AgentProvider
   readonly accounts: Effect.Effect<ReadonlyArray<UsageAccount>>
-  /** Absent for a provider that reports no plan limits. */
   readonly plan?: (
     accountId: string,
   ) => Effect.Effect<PlanUsage | undefined, { readonly reason: string }>
 }
 
-/** Reading an account's limits starts its CLI, so a reading is kept this long. */
 export const USAGE_FRESH_FOR = Duration.minutes(2)
 const READ_CONCURRENCY = 3
 
-/**
- * The plan usage of every signed-in account, apart from one provider's. One reading at a time,
- * so a second ask waits for the first and takes what it read.
- */
 export const makeAccountsUsage = (sources: ReadonlyArray<UsageSource>) =>
   Effect.gen(function* () {
     const lock = yield* Semaphore.make(1)

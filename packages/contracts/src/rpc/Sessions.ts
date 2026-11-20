@@ -186,10 +186,6 @@ export const SessionsRpcs = RpcGroup.make(
     success: SessionUsage,
     error: Schema.Union([SessionNotFound, PlanUsageUnavailable]),
   }),
-  /**
-   * The plan usage of every signed-in account of the providers this thread does not run on.
-   * Read again when `refresh` is set, else as last read within a couple of minutes.
-   */
   Rpc.make("Sessions.otherAccountsUsage", {
     payload: { sessionId: SessionId, refresh: Schema.Boolean },
     success: Schema.Array(AccountUsage),

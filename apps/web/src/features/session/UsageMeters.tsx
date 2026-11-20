@@ -57,7 +57,6 @@ export const UsageMeters = memo(function UsageMeters({
   hint,
 }: {
   readonly sessionId: SessionId
-  /** The provider and account the thread runs on, whose plan the usage is. */
   readonly provider: AgentProvider
   readonly accountId: string
   readonly usage: SessionUsage
@@ -241,7 +240,6 @@ function PlanUsageButton({
   )
 }
 
-/** The popover's body: mounted while it is open, so each opening reads the usage again. */
 function PlanUsagePanel({
   sessionId,
   provider,

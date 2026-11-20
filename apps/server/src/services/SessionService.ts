@@ -288,7 +288,6 @@ export class SessionService extends Context.Service<
     readonly refreshUsage: (
       sessionId: string,
     ) => Effect.Effect<SessionUsage, SessionNotFound | PlanUsageUnavailable>
-    /** Every signed-in account's plan usage, apart from the thread's provider. */
     readonly otherAccountsUsage: (
       sessionId: string,
       refresh: boolean,

@@ -36,7 +36,6 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
       : [{ label: "5-hour limit", blocking: true, ...plan.fiveHour }]),
     ...(plan.sevenDay === null ? [] : [{ label: "7-day limit", blocking: true, ...plan.sevenDay }]),
     ...plan.models.map(({ name, ...window }) => ({
-      // Claude names a model ("Opus"), whose limit is weekly; Codex names the window itself.
       label: /\blimit$/i.test(name) ? name : `${name} 7-day limit`,
       blocking: false,
       ...window,
@@ -45,12 +44,10 @@ export const planRows = (plan: PlanUsage | null, now: Date): ReadonlyArray<PlanR
   return rows.filter((row) => stillOpen(row, now))
 }
 
-/** How full a window is now: `null` without one, 0 once it has reset. */
 export const windowUsed = (window: PlanWindow | null, now: Date): number | null =>
   window === null ? null : stillOpen(window, now) ? window.utilization : 0
 
 export interface CompactWindow {
-  /** A few characters: `5h`, `7d`, `30d`. */
   readonly short: string
   readonly label: string
   readonly used: number
@@ -62,10 +59,6 @@ const shortName = (name: string): string => {
   return length === null ? name : `${length[1]}${length[2]?.charAt(0)}`
 }
 
-/**
- * At most two of an account's windows, for one line: its 5-hour and 7-day limits, else the
- * windows it reports under other names (a Codex plan's 30-day limit, say).
- */
 export const compactWindows = (plan: PlanUsage, now: Date): ReadonlyArray<CompactWindow> => {
   const main = [
     { short: "5h", label: "5-hour limit", window: plan.fiveHour },
@@ -83,7 +76,6 @@ export const compactWindows = (plan: PlanUsage, now: Date): ReadonlyArray<Compac
   })
 }
 
-/** An account by its provider's name, and by its own only where the provider has several. */
 export const accountLabel = (
   provider: AgentProvider,
   name: string | undefined,
@@ -93,10 +85,8 @@ export const accountLabel = (
     ? PROVIDER_NAMES[provider]
     : `${PROVIDER_NAMES[provider]} · ${name}`
 
-/** How many other accounts the plan usage lists before "Show more". */
 export const OTHER_ACCOUNTS_SHOWN = 3
 
-/** The other accounts, labelled, in the order the daemon lists them. */
 export const otherAccountRows = (
   accounts: ReadonlyArray<AccountUsage>,
 ): ReadonlyArray<AccountUsage & { readonly label: string }> =>
