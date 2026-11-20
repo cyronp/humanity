@@ -1,4 +1,5 @@
 import { cn } from "cn"
+import { ArrowUp, type LucideIcon, Moon, Sun } from "lucide-react"
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui"
 import type { CSSProperties } from "react"
 import { COLOR_THEMES, type ColorThemeId, type ColorThemeMode, colorTheme } from "@/lib/colorThemes"
@@ -76,12 +77,10 @@ export function ThemePicker({
 export function ColorThemePicker({
   labelledBy,
   value,
-  choice,
   onChange,
 }: {
   readonly labelledBy: string
   readonly value: ColorThemeId
-  readonly choice: ThemeChoice
   readonly onChange: (value: ColorThemeId) => void
 }) {
   return (
@@ -93,20 +92,50 @@ export function ColorThemePicker({
         const theme = COLOR_THEMES.find((candidate) => candidate.id === next)
         if (theme !== undefined) onChange(theme.id)
       }}
-      className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3"
+      className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3"
     >
       {COLOR_THEMES.map((theme) => (
         <ToggleGroupPrimitive.Item
           key={theme.id}
           value={theme.id}
           title={theme.description}
-          className={ITEM}
+          className={cn(
+            "group flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-3 pt-5 text-left text-sm text-muted-foreground transition-colors outline-none",
+            "hover:border-foreground/20 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+            "data-[state=on]:border-foreground/20 data-[state=on]:text-foreground",
+          )}
         >
-          <ThemePreview choice={choice} colorThemeId={theme.id} />
-          <span className="truncate">{theme.label}</span>
+          <span aria-hidden="true" className="flex items-center justify-center gap-5">
+            <SendSwatch mode={theme.light} icon={Sun} />
+            <SendSwatch mode={theme.dark} icon={Moon} />
+          </span>
+          <span className="truncate font-medium">{theme.label}</span>
         </ToggleGroupPrimitive.Item>
       ))}
     </ToggleGroupPrimitive.Root>
+  )
+}
+
+function SendSwatch({
+  mode,
+  icon: Icon,
+}: {
+  readonly mode: ColorThemeMode
+  readonly icon: LucideIcon
+}) {
+  return (
+    <span
+      style={{ background: mode.tokens.primary, color: mode.tokens["primary-foreground"] }}
+      className={cn(
+        "relative grid size-11 place-items-center rounded-full shadow-sm ring-offset-3 ring-offset-card transition-shadow sm:size-12",
+        "group-hover:shadow-md group-data-[state=on]:ring-2 group-data-[state=on]:ring-brand",
+      )}
+    >
+      <ArrowUp className="size-5" />
+      <span className="absolute -right-1.5 -bottom-1.5 hidden size-5 place-items-center rounded-full border bg-card text-foreground group-data-[state=on]:grid">
+        <Icon className="size-3" />
+      </span>
+    </span>
   )
 }
 

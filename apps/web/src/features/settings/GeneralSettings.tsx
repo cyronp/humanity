@@ -48,7 +48,6 @@ function AppearanceSettings() {
         <ColorThemePicker
           labelledBy={colorThemeLabel}
           value={colorThemeId}
-          choice={choice}
           onChange={chooseColorTheme}
         />
       </SettingsRow>
