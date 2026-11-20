@@ -9,10 +9,12 @@ import {
   ReasoningEffort,
   SKILL_TOOL_NAME,
   type TerminalToolName,
+  THREAD_HISTORY_TOOL_NAME,
 } from "@humanity/contracts"
 import { Context, Data, Effect, Layer, Option, Schema, type Scope } from "effect"
 import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
+import { THREAD_HISTORY_TOOL_DEFINITION } from "../agent/handoff.ts"
 import type { ServedSkill } from "../extensions/skillCatalog.ts"
 import { skillToolDefinition } from "../extensions/skillTool.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -57,6 +59,8 @@ export interface HumanityTools {
     readonly catalog: ReadonlyArray<ServedSkill>
     readonly load: (args: unknown) => Effect.Effect<ToolText>
   }
+  /** `thread_history`, offered once the thread has changed provider. */
+  readonly history?: (args: unknown) => Effect.Effect<ToolText>
 }
 
 const providers = AgentProvider.literals
@@ -111,6 +115,7 @@ const listTools = (tools: HumanityTools): ReadonlyArray<unknown> => [
   ...(tools.skills === undefined || tools.skills.catalog.length === 0
     ? []
     : [skillToolDefinition(tools.skills.catalog)]),
+  ...(tools.history === undefined ? [] : [THREAD_HISTORY_TOOL_DEFINITION]),
 ]
 
 export interface McpReply {
@@ -141,7 +146,13 @@ const INVALID_PARAMS = -32602
 
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
-  const { terminal, openThread, skills } = tools
+  const { terminal, openThread, skills, history } = tools
+  if (name === THREAD_HISTORY_TOOL_NAME) {
+    if (history === undefined) return Option.none()
+    return Option.some(
+      Effect.map(history(params["arguments"] ?? {}), (said) => toolText(said.text, said.isError)),
+    )
+  }
   if (name === SKILL_TOOL_NAME) {
     if (skills === undefined || skills.catalog.length === 0) return Option.none()
     return Option.some(

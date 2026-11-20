@@ -29,10 +29,12 @@ import {
   TraceLine,
   TraceTitle,
 } from "@/components/ui/trace"
+import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
+import { providerSwitchSummary } from "./providerSwitch.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
@@ -168,6 +170,8 @@ const renderContent = (
       return <InitLine content={content} />
     case "notice":
       return <Notice content={content} />
+    case "provider_switch":
+      return <ProviderSwitchLine content={content} />
     case "tool_results":
     case "other":
       return null
@@ -325,6 +329,20 @@ function InitLine({ content }: { readonly content: Content<"system_init"> }) {
         <TraceTitle title={summary}>{summary}</TraceTitle>
       </TraceLine>
     </Trace>
+  )
+}
+
+function ProviderSwitchLine({ content }: { readonly content: Content<"provider_switch"> }) {
+  const summary = providerSwitchSummary(content)
+  return (
+    <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
+      <span className="h-px flex-1 bg-border" />
+      <span className="flex min-w-0 items-center gap-1.5" title={summary}>
+        <ProviderIcon provider={content.to} className="size-3.5 shrink-0" />
+        <span className="truncate">{summary}</span>
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
   )
 }
 

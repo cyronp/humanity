@@ -128,6 +128,8 @@ export class ApprovalService extends Context.Service<
       },
     ) => Effect.Effect<PendingConfirmation, ApprovalNotFound | ApprovalAlreadyDecided>
     readonly allowsInSession: (sessionId: string, toolName: string) => boolean
+    /** Forgets every "Always allow in this thread" of a thread. */
+    readonly forgetAllowed: (sessionId: string) => Effect.Effect<void>
     readonly listForSession: (sessionId: string) => Effect.Effect<ReadonlyArray<Approval>>
     readonly pendingCount: (sessionId: string) => Effect.Effect<number>
     readonly expireSession: (sessionId: string) => Effect.Effect<void>
@@ -148,6 +150,10 @@ export class ApprovalService extends Context.Service<
         tools.add(toolName)
         allowedInSession.set(sessionId, tools)
       }
+      const forgetAllowed = (sessionId: string) =>
+        Effect.sync(() => {
+          allowedInSession.delete(sessionId)
+        })
       const decisionLock = yield* Semaphore.make(1)
       const now = Effect.map(DateTime.now, DateTime.formatIso)
 
@@ -439,6 +445,7 @@ export class ApprovalService extends Context.Service<
         decideChange,
         decideConfirmation,
         allowsInSession,
+        forgetAllowed,
         listForSession,
         pendingCount,
         expireSession,

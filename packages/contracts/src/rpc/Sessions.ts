@@ -21,6 +21,7 @@ import {
   NothingToCommit,
   PlanUsageUnavailable,
   ProjectNotFound,
+  ProviderSwitchUnavailable,
   SessionBusy,
   SessionEnded,
   SessionNotFound,
@@ -91,6 +92,15 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId, model: Schema.NullOr(Schema.String) },
     success: Session,
     error: Schema.Union([SessionNotFound, SessionEnded]),
+  }),
+  Rpc.make("Sessions.switchProvider", {
+    payload: {
+      sessionId: SessionId,
+      provider: AgentProvider,
+      model: Schema.NullOr(Schema.String),
+    },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded, ProviderSwitchUnavailable]),
   }),
   Rpc.make("Sessions.setEffort", {
     payload: { sessionId: SessionId, effort: Schema.NullOr(ReasoningEffort) },

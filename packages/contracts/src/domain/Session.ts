@@ -137,6 +137,19 @@ export const MessageContent = Schema.Union([
     level: Schema.Literals(["info", "warning", "error"]),
     text: Schema.String,
   }),
+  /**
+   * The thread moved to another provider (or account). `resumed` when the target picked up its own
+   * earlier conversation; otherwise it got the conversation as context, `included` of its entries
+   * in full and `omitted` left for `thread_history`.
+   */
+  Schema.TaggedStruct("provider_switch", {
+    from: AgentProvider,
+    to: AgentProvider,
+    model: Schema.NullOr(Schema.String),
+    resumed: Schema.Boolean,
+    included: Schema.Number,
+    omitted: Schema.Number,
+  }),
   Schema.TaggedStruct("other", { type: Schema.String, subtype: Schema.NullOr(Schema.String) }),
 ])
 export type MessageContent = typeof MessageContent.Type

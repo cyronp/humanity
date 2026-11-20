@@ -22,6 +22,7 @@ import type { PromptInsertion } from "@/features/extensions/prompt"
 import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
+import type { ModelChoice } from "@/features/providers/models"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import {
   interruptAtom,
@@ -30,6 +31,7 @@ import {
   setAutonomyAtom,
   setEffortAtom,
   setModelAtom,
+  switchProviderAtom,
 } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
@@ -72,6 +74,7 @@ export const Composer = memo(function Composer({
   const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
   const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
   const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
+  const moveThread = useAtomSet(switchProviderAtom, { mode: "promiseExit" })
   const updateEffort = useAtomSet(setEffortAtom, { mode: "promiseExit" })
   const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
   const [stopping, setStopping] = useState(false)
@@ -137,9 +140,14 @@ export const Composer = memo(function Composer({
     if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
   }
 
-  const changeModel = async (next: string | null) => {
+  const changeModel = async (choice: ModelChoice) => {
     setModelError(undefined)
-    const exit = await updateModel({ payload: { sessionId, model: next } })
+    const exit =
+      choice.provider === provider
+        ? await updateModel({ payload: { sessionId, model: choice.model } })
+        : await moveThread({
+            payload: { sessionId, provider: choice.provider, model: choice.model },
+          })
     if (Exit.isFailure(exit)) setModelError(describeCause(exit.cause))
   }
 
@@ -215,8 +223,9 @@ export const Composer = memo(function Composer({
             <ModelPicker
               provider={provider}
               value={model}
-              onChange={(choice) => void changeModel(choice.model)}
-              locked
+              onChange={(choice) => void changeModel(choice)}
+              locked={busy}
+              movesThread
               disabled={disabled}
             />
             {canStop ? (

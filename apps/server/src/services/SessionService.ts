@@ -34,6 +34,7 @@ import {
   type ProjectNotFound,
   type ProposedChange,
   PROVIDER_NAMES,
+  ProviderSwitchUnavailable,
   QUESTION_TOOL,
   type ReasoningEffort,
   type Session,
@@ -77,6 +78,7 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { makeSkillTool } from "../extensions/skillTool.ts"
+import { buildHandoff, historyEntries, latestPlan, readThreadHistory } from "../agent/handoff.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
@@ -112,6 +114,8 @@ interface ActiveRun {
   readonly usageLock: Semaphore.Semaphore
   extensionsVersion: number
   readonly humanity: AgentMcpServer | undefined
+  /** The run was sent the thread's pending handoff, which stays saved until the agent answers. */
+  handoffSent: boolean
 }
 
 /**
@@ -243,6 +247,16 @@ export class SessionService extends Context.Service<
       sessionId: string,
       effort: ReasoningEffort | null,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded>
+    /**
+     * Moves the thread to another provider, between turns. The new agent picks up its own earlier
+     * conversation in this thread when it has one, else gets this one as context with the human's
+     * next message.
+     */
+    readonly switchProvider: (
+      sessionId: string,
+      provider: AgentProvider,
+      model: string | null,
+    ) => Effect.Effect<Session, SessionNotFound | SessionEnded | ProviderSwitchUnavailable>
     readonly sendMessage: (
       sessionId: string,
       text: string,
@@ -341,6 +355,8 @@ export class SessionService extends Context.Service<
           accountsOf(session.provider).configDirFor(accountId),
         )
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
+      /** The whole conversation, for an agent that was to resume its own and could not. */
+      const resumeFallback = new Map<string, string>()
       const agentNotes = new Map<string, Array<string>>()
       const startLock = yield* Semaphore.make(1)
 
@@ -392,6 +408,13 @@ export class SessionService extends Context.Service<
           yield* repo.insertMessage(message, raw)
           yield* events.publish(sessionId, { _tag: "AgentMessage", message })
           return message
+        })
+
+      const threadEntries = (sessionId: string, current: AgentProvider) =>
+        Effect.gen(function* () {
+          const messages = yield* repo.listMessages(sessionId)
+          const toolCalls = yield* repo.listToolCalls(sessionId)
+          return { entries: historyEntries(messages, toolCalls, current), toolCalls }
         })
 
       const whileWaiting = <A>(sessionId: string, waitForHuman: Effect.Effect<A>) =>
@@ -669,6 +692,15 @@ export class SessionService extends Context.Service<
           }
           if (content._tag === "other" && content.type === "user") return
 
+          const answered =
+            (content._tag === "assistant" && content.parentToolUseId === null) ||
+            (content._tag === "result" && !content.isError)
+          if (state.handoffSent && answered) {
+            state.handoffSent = false
+            resumeFallback.delete(session.id)
+            yield* repo.setPendingHandoff(session.id, null)
+          }
+
           yield* addMessage(session.id, content, raw)
           yield* startToolCalls(session, content)
           yield* finishToolCalls(session, state, content, normalized.structuredResult)
@@ -722,8 +754,17 @@ export class SessionService extends Context.Service<
                   cwd: session.worktreePath,
                 })
               : []
+            const history = (yield* repo.hasProviderSwitch(session.id))
+              ? (args: unknown) =>
+                  Effect.map(threadEntries(session.id, session.provider), ({ entries }) =>
+                    readThreadHistory(entries, args),
+                  )
+              : undefined
             const humanity =
-              offered.openThread || offered.terminals || skillCatalog.length > 0
+              offered.openThread ||
+              offered.terminals ||
+              skillCatalog.length > 0 ||
+              history !== undefined
                 ? yield* mcp
                     .serve({
                       ...(offered.openThread ? { openThread: openThread(session) } : {}),
@@ -735,6 +776,7 @@ export class SessionService extends Context.Service<
                             },
                           }
                         : {}),
+                      ...(history === undefined ? {} : { history }),
                       ...(offered.terminals
                         ? {
                             terminal: makeTerminalTools({
@@ -756,6 +798,7 @@ export class SessionService extends Context.Service<
               usageLock: yield* Semaphore.make(1),
               extensionsVersion: added.version,
               humanity,
+              handoffSent: false,
             }
             const run = yield* runner
               .start({
@@ -786,6 +829,17 @@ export class SessionService extends Context.Service<
                     })
                     yield* Effect.logWarning("agent run failed", { sessionId: session.id, reason })
                     yield* addMessage(session.id, { _tag: "notice", level: "error", text: reason })
+                    const fallback = resumeFallback.get(session.id)
+                    if (fallback !== undefined && !state.initSeen) {
+                      resumeFallback.delete(session.id)
+                      yield* repo.update(session.id, { sdkSessionId: null, updatedAt: yield* now })
+                      yield* repo.setPendingHandoff(session.id, fallback)
+                      yield* addMessage(session.id, {
+                        _tag: "notice",
+                        level: "warning",
+                        text: `${PROVIDER_NAMES[session.provider]} could not pick up its earlier conversation in this thread. It gets the whole conversation as context instead: send your message again.`,
+                      })
+                    }
                     yield* setStatus(session.id, "error", reason)
                   }),
               }),
@@ -868,7 +922,9 @@ export class SessionService extends Context.Service<
           relocated.delete(session.id)
           const notes = agentNotes.get(session.id) ?? []
           agentNotes.delete(session.id)
+          const handoff = yield* repo.getPendingHandoff(session.id)
           const forAgent = [
+            ...(handoff === null ? [] : [handoff]),
             ...(moved === undefined
               ? []
               : [
@@ -887,6 +943,7 @@ export class SessionService extends Context.Service<
           })
           const state = yield* ensureRun(session)
           state.interrupted = false
+          if (handoff !== null) state.handoffSent = true
           yield* syncExtensions(session.id, state)
           yield* setStatus(session.id, "running")
           yield* state.run.send({
@@ -1189,6 +1246,121 @@ export class SessionService extends Context.Service<
         return updated
       })
 
+      const switchTarget = (provider: AgentProvider, requested: string | null) =>
+        Effect.gen(function* () {
+          const product = PROVIDER_NAMES[provider]
+          const refused = (reason: string) => new ProviderSwitchUnavailable({ reason })
+          const { connection, models } = yield* accountsOf(provider).status({ refresh: false })
+          if (connection._tag === "SignedOut") {
+            return yield* refused(
+              `Nobody is signed in to ${product} in Humanity. Sign in under Settings, then switch again.`,
+            )
+          }
+          const wanted = requested?.trim()
+          if (!wanted || wanted.toLowerCase() === "default") return null
+          if (models.length === 0) return wanted
+          const known = matchModel(models, wanted)
+          if (known === undefined) {
+            return yield* refused(`${product} does not offer "${wanted}" to this account.`)
+          }
+          return known === "default" ? null : known
+        })
+
+      const switchProvider = Effect.fn("SessionService.switchProvider")(function* (
+        sessionId: string,
+        provider: AgentProvider,
+        requested: string | null,
+      ) {
+        const session = yield* get(sessionId)
+        if (!acceptsMessages(session)) return yield* new SessionEnded({ sessionId })
+        if (provider === session.provider) return yield* setModel(sessionId, requested)
+        if (session.status === "running" || session.status === "waiting_for_human") {
+          return yield* new ProviderSwitchUnavailable({
+            reason: `The agent is still working. Wait until it is idle, or stop it, before moving the thread to ${PROVIDER_NAMES[provider]}.`,
+          })
+        }
+        const model = yield* switchTarget(provider, requested)
+        const activeAccount = yield* accountsOf(provider).activeId
+        const accountId = activeAccount === DEFAULT_ACCOUNT ? null : activeAccount
+
+        yield* stopRun(sessionId)
+        const timestamp = yield* now
+        const { entries, toolCalls } = yield* threadEntries(sessionId, session.provider)
+        const fromAccount = yield* repo.getAccountId(sessionId)
+        // An agent that never got its handoff has not seen the thread so far: it is not kept to
+        // resume, and gets the whole conversation if the thread comes back to it.
+        const unheard = (yield* repo.getPendingHandoff(sessionId)) !== null
+        if (session.sdkSessionId !== null && !unheard) {
+          yield* repo.parkProvider({
+            sessionId,
+            provider: session.provider,
+            accountId: fromAccount,
+            sdkSessionId: session.sdkSessionId,
+            cwd: session.worktreePath,
+            seenEntries: entries.length,
+            parkedAt: timestamp,
+          })
+        }
+        const parked = Option.filter(
+          yield* repo.findParked(sessionId, provider, accountId),
+          (earlier) => earlier.cwd === session.worktreePath,
+        )
+        const plan = latestPlan(toolCalls)
+        const whole = buildHandoff({
+          entries,
+          since: 1,
+          from: session.provider,
+          to: provider,
+          resumed: false,
+          plan,
+        })
+        const handoff = Option.match(parked, {
+          onNone: () => whole,
+          onSome: (earlier) =>
+            buildHandoff({
+              entries,
+              since: earlier.seenEntries + 1,
+              from: session.provider,
+              to: provider,
+              resumed: true,
+            }),
+        })
+
+        yield* repo.setPendingHandoff(sessionId, handoff?.text ?? null)
+        yield* repo.update(sessionId, {
+          provider,
+          model,
+          sdkSessionId: Option.match(parked, {
+            onNone: () => null,
+            onSome: (earlier) => earlier.sdkSessionId,
+          }),
+          ...(session.origin === "claude-code" ? { detachImport: true as const } : {}),
+          updatedAt: timestamp,
+        })
+        yield* repo.setAccountId(sessionId, accountId)
+        if (Option.isSome(parked)) {
+          yield* repo.dropParked(sessionId, provider, accountId)
+          if (whole !== undefined) resumeFallback.set(sessionId, whole.text)
+        } else {
+          resumeFallback.delete(sessionId)
+        }
+        relocated.delete(sessionId)
+        yield* approvals.forgetAllowed(sessionId)
+        yield* addMessage(sessionId, {
+          _tag: "provider_switch",
+          from: session.provider,
+          to: provider,
+          model,
+          resumed: Option.isSome(parked),
+          included: handoff?.included ?? 0,
+          omitted: handoff?.omitted ?? 0,
+        })
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
+      })
+
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
         yield* get(sessionId)
         const state = active.get(sessionId)
@@ -1360,6 +1532,7 @@ export class SessionService extends Context.Service<
         setAutonomy,
         setModel,
         setEffort,
+        switchProvider,
         sendMessage,
         attachment,
         interrupt,

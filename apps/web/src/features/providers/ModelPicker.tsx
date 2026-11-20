@@ -67,12 +67,16 @@ export function ModelPicker({
   value,
   onChange,
   locked = false,
+  movesThread = false,
   disabled = false,
 }: {
   readonly provider: ProviderId
   readonly value: string | null
   readonly onChange: (choice: ModelChoice) => void
+  /** Offers only the current provider's models. */
   readonly locked?: boolean
+  /** Picking another provider's model moves an open thread there: say what that means. */
+  readonly movesThread?: boolean
   readonly disabled?: boolean
 }) {
   const claude = useAtomValue(claudeStatusAtom)
@@ -216,6 +220,12 @@ export function ModelPicker({
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
           <CommandList className="h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))] max-h-none">
             <CommandEmpty>No model matches.</CommandEmpty>
+            {movesThread && section !== "favorites" && section !== provider && !searching && (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Picking a {PROVIDERS[section].name} model moves this thread there. It gets this
+                conversation as context with your next message.
+              </p>
+            )}
             {legacyOpen && !searching && section !== "favorites" && (
               <CommandItem
                 value="back"
@@ -238,6 +248,11 @@ export function ModelPicker({
               />
             ))}
             {section !== "favorites" && !searching && <CliPickerNote provider={section} />}
+            {movesThread && locked && section === provider && !searching && (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Other providers show here once the agent is idle.
+              </p>
+            )}
             {section !== "favorites" && !searching && answered[section] && !connected[section] && (
               <p className="px-3 py-3 text-xs text-muted-foreground">
                 {PROVIDERS[section].name} is not signed in. Settings, under Providers, shows how.
