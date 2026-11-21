@@ -1,8 +1,10 @@
 import { cn } from "cn"
 import { ArrowUp, Square } from "lucide-react"
-import { type ComponentProps, type ReactNode, useState } from "react"
+import { type ComponentProps, type KeyboardEvent, type ReactNode, useState } from "react"
 import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
+import { isMac } from "@/features/terminal/keys"
+import { type SendKey, uiPreferences, useUiPreferences } from "@/lib/uiPreferences"
 
 export function ChatBox({
   className,
@@ -108,6 +110,32 @@ const KEY = "h-4 min-w-4 px-1 text-[0.625rem] leading-none"
 
 export const useKeyHintShown = (): boolean => useState(() => readSends() < KEY_HINT_SENDS)[0]
 
+export const isSendKey = (
+  event: {
+    readonly key: string
+    readonly shiftKey: boolean
+    readonly ctrlKey: boolean
+    readonly metaKey: boolean
+    readonly isComposing: boolean
+  },
+  sendKey: SendKey,
+): boolean => {
+  if (event.key !== "Enter" || event.isComposing) return false
+  return sendKey === "enter" ? !event.shiftKey : event.ctrlKey || event.metaKey
+}
+
+export const sendKeyPressed = (event: KeyboardEvent<HTMLTextAreaElement>): boolean =>
+  isSendKey(
+    {
+      key: event.key,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      isComposing: event.nativeEvent.isComposing,
+    },
+    uiPreferences().sendKey,
+  )
+
 export function KeyHint({
   typing,
   className,
@@ -115,7 +143,9 @@ export function KeyHint({
   readonly typing: boolean
   readonly className?: string
 }) {
-  if (!useKeyHintShown()) return null
+  const shown = useKeyHintShown()
+  const [{ sendKey }] = useUiPreferences()
+  if (!shown) return null
   return (
     <span
       aria-hidden
@@ -125,8 +155,19 @@ export function KeyHint({
         className,
       )}
     >
-      <Kbd className={KEY}>Enter</Kbd> to send <span className="text-muted-foreground/60">·</span>{" "}
-      <Kbd className={KEY}>Shift</Kbd>+<Kbd className={KEY}>Enter</Kbd> new line
+      {sendKey === "enter" ? (
+        <>
+          <Kbd className={KEY}>Enter</Kbd> to send{" "}
+          <span className="text-muted-foreground/60">·</span> <Kbd className={KEY}>Shift</Kbd>+
+          <Kbd className={KEY}>Enter</Kbd> new line
+        </>
+      ) : (
+        <>
+          <Kbd className={KEY}>{isMac() ? "⌘" : "Ctrl"}</Kbd>+<Kbd className={KEY}>Enter</Kbd> to
+          send <span className="text-muted-foreground/60">·</span> <Kbd className={KEY}>Enter</Kbd>{" "}
+          new line
+        </>
+      )}
     </span>
   )
 }

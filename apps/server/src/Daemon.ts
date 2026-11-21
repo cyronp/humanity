@@ -31,6 +31,7 @@ import { PreviewHandlers } from "./rpc/PreviewHandlers.ts"
 import { ProjectsHandlers } from "./rpc/ProjectsHandlers.ts"
 import { PullRequestsHandlers } from "./rpc/PullRequestsHandlers.ts"
 import { SessionsHandlers } from "./rpc/SessionsHandlers.ts"
+import { SystemHandlers } from "./rpc/SystemHandlers.ts"
 import { TerminalsHandlers } from "./rpc/TerminalsHandlers.ts"
 import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
@@ -54,6 +55,7 @@ import { ProjectService } from "./services/ProjectService.ts"
 import { PullRequestService } from "./services/PullRequestService.ts"
 import { SessionEvents } from "./services/SessionEvents.ts"
 import { SessionService } from "./services/SessionService.ts"
+import { SystemService } from "./services/SystemService.ts"
 import { UpdateService } from "./services/UpdateService.ts"
 import { PtyHost } from "./terminal/PtyHost.ts"
 import { TerminalService } from "./terminal/TerminalService.ts"
@@ -65,6 +67,7 @@ export const Services = Layer.mergeAll(
     UpdateService.layer,
     PreviewService.layer(),
     PreviewFiles.layer,
+    SystemService.layer,
   ).pipe(
     Layer.provideMerge(ForgeSync.layer),
     Layer.provideMerge(SessionService.layer),
@@ -103,6 +106,7 @@ export const RpcHandlers = Layer.mergeAll(
   AgentClisHandlers,
   TerminalsHandlers,
   PreviewHandlers,
+  SystemHandlers,
 )
 
 export const App = HttpApp.pipe(Layer.provide(RpcHandlers), Layer.provideMerge(Services))

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PROJECT_SETTINGS,
   type Project,
   ProjectId,
   type Session,
@@ -22,6 +23,7 @@ const project = (id: string, name: string): Project => ({
   gitlab: null,
   defaultBranch: "main",
   defaultAutonomy: null,
+  settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: "2026-11-01T00:00:00.000Z",
 })
 

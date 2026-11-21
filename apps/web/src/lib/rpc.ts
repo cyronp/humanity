@@ -44,4 +44,5 @@ export const keys = {
   publication: (sessionId: string) => `publication:${sessionId}`,
   sync: (sessionId: string) => `sync:${sessionId}`,
   history: (projectId: string) => `history:${projectId}`,
+  recordings: "recordings",
 } as const

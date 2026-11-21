@@ -32,5 +32,12 @@ export const usePinnedDefaults = () => {
     if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
-  return { pinned, ready, toggle, error }
+  const set = async (next: PinnedDefaults) => {
+    if (!ready) return
+    setError(undefined)
+    const exit = await save({ payload: { pinned: next }, reactivityKeys: [keys.preferences] })
+    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
+  }
+
+  return { pinned, ready, toggle, set, error }
 }

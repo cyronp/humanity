@@ -2,6 +2,7 @@ import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
 import type { CSSProperties } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppHeaderHost } from "@/features/layout/AppHeader"
+import { NotificationWatcher } from "@/features/notifications/NotificationWatcher"
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
@@ -63,6 +64,7 @@ function RootLayout() {
       </SidebarInset>
       <OnboardingDialog />
       <SettingsDialog />
+      <NotificationWatcher />
       <AddRepositoryDialog />
     </SidebarProvider>
   )

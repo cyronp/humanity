@@ -1,11 +1,13 @@
 import { Rpc, RpcGroup } from "effect/rpc"
 import {
   BrowserPreferences,
+  CliPathPreferences,
   HistoryPreferences,
   PinnedDefaults,
   ToolsPreferences,
 } from "../domain/Preferences.ts"
 import { TerminalPreferences } from "../domain/Terminal.ts"
+import { CliPathNotFound } from "../Errors.ts"
 
 export const PreferencesRpcs = RpcGroup.make(
   Rpc.make("Preferences.getPinnedDefaults", {
@@ -42,5 +44,13 @@ export const PreferencesRpcs = RpcGroup.make(
   Rpc.make("Preferences.setTools", {
     payload: { tools: ToolsPreferences },
     success: ToolsPreferences,
+  }),
+  Rpc.make("Preferences.getCliPaths", {
+    success: CliPathPreferences,
+  }),
+  Rpc.make("Preferences.setCliPaths", {
+    payload: { paths: CliPathPreferences },
+    success: CliPathPreferences,
+    error: CliPathNotFound,
   }),
 )

@@ -5,12 +5,14 @@ import { createRoot } from "react-dom/client"
 import { AuthGate } from "@/components/AuthGate"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { applyTheme } from "@/lib/theme"
+import { applyInterfaceScale } from "@/lib/uiPreferences"
 import { captureTokenFromUrl } from "@/lib/token"
 import "./index.css"
 import { routeTree } from "./routeTree.gen"
 
 captureTokenFromUrl()
 applyTheme()
+applyInterfaceScale()
 
 const router = createRouter({ routeTree, defaultPreload: false })
 

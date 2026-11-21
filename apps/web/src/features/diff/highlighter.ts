@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react"
 import type { BundledLanguage, HighlighterCore } from "shiki"
 import type { bundledLanguages } from "shiki/langs"
+import type { bundledThemes } from "shiki/themes"
+import { CODE_THEMES, type CodeThemeId, uiPreferences, useUiPreferences } from "@/lib/uiPreferences"
 
-export const SHIKI_THEMES = { light: "github-light", dark: "github-dark" } as const
+export const shikiThemes = (id: CodeThemeId = uiPreferences().codeTheme) => {
+  const { light, dark } = CODE_THEMES[id]
+  return { light, dark }
+}
 
 export interface CodeToken {
   readonly content: string
@@ -71,6 +76,7 @@ const PLAIN_LANGUAGES: ReadonlySet<string> = new Set(["text", "txt", "plain", "p
 interface Shiki {
   readonly highlighter: HighlighterCore
   readonly languages: typeof bundledLanguages
+  readonly themes: typeof bundledThemes
 }
 
 let shikiPromise: Promise<Shiki> | undefined
@@ -89,11 +95,12 @@ const getShiki = (): Promise<Shiki> =>
       { bundledThemes },
     ]) => ({
       highlighter: await createHighlighterCore({
-        themes: [bundledThemes[SHIKI_THEMES.light], bundledThemes[SHIKI_THEMES.dark]],
+        themes: [],
         langs: [],
         engine: createJavaScriptRegexEngine({ forgiving: true }),
       }),
       languages,
+      themes: bundledThemes,
     }),
   ))
 
@@ -102,7 +109,11 @@ export const highlight = async (
   language: BundledLanguage,
 ): Promise<Array<Array<CodeToken>>> => {
   if (code.length > MAX_HIGHLIGHT_LENGTH) throw new CodeTooLongToHighlight()
-  const { highlighter, languages } = await getShiki()
+  const { highlighter, languages, themes } = await getShiki()
+  const pair = shikiThemes()
+  for (const name of [pair.light, pair.dark]) {
+    if (!highlighter.getLoadedThemes().includes(name)) await highlighter.loadTheme(themes[name])
+  }
   if (!PLAIN_LANGUAGES.has(language) && !highlighter.getLoadedLanguages().includes(language)) {
     const grammar = languages[language]
     if (grammar === undefined) throw new Error(`Shiki has no grammar for ${language}`)
@@ -110,7 +121,7 @@ export const highlight = async (
   }
   const { tokens } = highlighter.codeToTokens(code, {
     lang: language,
-    themes: SHIKI_THEMES,
+    themes: pair,
     defaultColor: false,
   })
   return tokens.map((line) =>
@@ -123,11 +134,12 @@ export const useHighlightedLines = (
   language: BundledLanguage | undefined,
 ): ReadonlyArray<ReadonlyArray<CodeToken>> | undefined => {
   const code = lines.join("\n")
+  const [{ codeTheme }] = useUiPreferences()
   const [result, setResult] = useState<{
     readonly key: string
     readonly tokens: ReadonlyArray<ReadonlyArray<CodeToken>>
   }>()
-  const key = `${language ?? ""}\u0000${code}`
+  const key = `${codeTheme}\u0000${language ?? ""}\u0000${code}`
 
   useEffect(() => {
     if (language === undefined) return

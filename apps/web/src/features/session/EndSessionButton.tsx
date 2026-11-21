@@ -18,6 +18,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { describeCause } from "@/lib/errors"
+import { useProject } from "@/features/projects/atoms"
 import { keys } from "@/lib/rpc"
 import { endSessionAtom } from "./atoms.ts"
 
@@ -29,14 +30,16 @@ export function EndSessionButton({
   readonly className?: string
 }) {
   const end = useAtomSet(endSessionAtom, { mode: "promiseExit" })
+  const onEnd = useProject(session.projectId)?.settings.worktreeOnEnd ?? "ask"
   const [removeWorktree, setRemoveWorktree] = useState(false)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
+  const removes = onEnd === "ask" ? removeWorktree : onEnd === "remove"
 
   const confirm = async () => {
     setError(undefined)
     const exit = await end({
-      payload: { sessionId: session.id, removeWorktree: session.inWorktree && removeWorktree },
+      payload: { sessionId: session.id, removeWorktree: session.inWorktree && removes },
       reactivityKeys: [keys.sessions(session.projectId)],
     })
     if (Exit.isSuccess(exit)) setOpen(false)
@@ -61,16 +64,26 @@ export function EndSessionButton({
           <AlertDialogTitle>End “{session.title}”?</AlertDialogTitle>
           <AlertDialogDescription>
             The agent stops and the thread becomes read-only.{" "}
-            {session.inWorktree ? (
+            {!session.inWorktree ? (
+              "Your checkout is left as it is."
+            ) : onEnd === "ask" ? (
               <>
                 The branch <code>{session.branch}</code> is kept either way.
               </>
+            ) : onEnd === "remove" ? (
+              <>
+                Its worktree is deleted, with any uncommitted changes in it, as this project&apos;s
+                settings ask. The branch <code>{session.branch}</code> is kept.
+              </>
             ) : (
-              "Your checkout is left as it is."
+              <>
+                Its worktree and the branch <code>{session.branch}</code> are kept, as this
+                project&apos;s settings ask.
+              </>
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {session.inWorktree && (
+        {session.inWorktree && onEnd === "ask" && (
           <div className="flex items-center gap-2">
             <Checkbox
               className="size-3.5 [&_svg]:size-3"

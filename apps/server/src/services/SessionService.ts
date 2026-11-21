@@ -16,6 +16,7 @@ import {
   DEFAULT_AUTONOMY,
   mentionedPaths,
   DEFAULT_ACCOUNT,
+  DEFAULT_BRANCH_PREFIX,
   DEFAULT_PROVIDER,
   type ChatMessage,
   ConfirmationId,
@@ -153,8 +154,19 @@ export const slugify = (title: string): string => {
   return trimTrailing(trimCharacters(words, "-").slice(0, 40), "-") || "session"
 }
 
-export const sessionBranchName = (sessionId: string, title: string): string =>
-  `humanity/${sessionId.slice(0, 8)}-${slugify(title)}`
+export const sessionBranchName = (
+  sessionId: string,
+  title: string,
+  prefix: string = DEFAULT_BRANCH_PREFIX,
+): string => `${prefix}${sessionId.slice(0, 8)}-${slugify(title)}`
+
+export const setupCommand = (script: string | null): string | undefined => {
+  const lines = (script ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+  return lines.length === 0 ? undefined : lines.join(" && ")
+}
 
 const modelKey = (name: string): string => {
   const words = name
@@ -1098,6 +1110,15 @@ export class SessionService extends Context.Service<
         const accountId = yield* accountsOf(provider).activeId
         if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
+        if (project.settings.worktreeForNewThreads) {
+          yield* setupWorktree(id).pipe(
+            Effect.catchTags({
+              SessionNotFound: Effect.die,
+              SessionEnded: Effect.die,
+              SessionBusy: Effect.die,
+            }),
+          )
+        }
         if (prompt) yield* deliver(session, prompt, files, options.mentions ?? [])
         return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
       })
@@ -1170,7 +1191,7 @@ export class SessionService extends Context.Service<
           return yield* new SessionBusy({ sessionId })
         }
         const project = yield* projects.get(session.projectId)
-        const branch = sessionBranchName(session.id, session.title)
+        const branch = sessionBranchName(session.id, session.title, project.settings.branchPrefix)
         const path = join(config.worktreesDir, project.id, session.id)
         const checkout = yield* git.status(project.localPath)
         const own = threadBranch(session)
@@ -1195,8 +1216,28 @@ export class SessionService extends Context.Service<
         const updated = yield* get(sessionId)
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
         yield* events.publishListChanged
+        yield* runSetupScript(updated, project.settings.setupScript)
         return updated
       })
+
+      const runSetupScript = (session: Session, script: string | null) =>
+        Effect.gen(function* () {
+          const command = setupCommand(script)
+          if (command === undefined) return
+          const terminal = yield* terminals.open(
+            { _tag: "Session", sessionId: session.id },
+            { opener: "human", title: "Setup" },
+          )
+          yield* terminals.write(terminal.id, `${command}\r`)
+        }).pipe(
+          Effect.catch((error) =>
+            addMessage(session.id, {
+              _tag: "notice",
+              level: "warning",
+              text: `The worktree's setup script did not start: ${error.message}`,
+            }),
+          ),
+        )
 
       const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
         sessionId: string,

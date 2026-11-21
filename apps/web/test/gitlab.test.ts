@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PROJECT_SETTINGS,
   type GitLabConnection,
   type GitLabRepo,
   normalizeGitLabHost,
@@ -37,6 +38,7 @@ const project = (name: string, gitlab: Project["gitlab"]): Project => ({
   gitlab,
   defaultBranch: "main",
   defaultAutonomy: null,
+  settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: "2026-11-01T00:00:00Z",
 })
 

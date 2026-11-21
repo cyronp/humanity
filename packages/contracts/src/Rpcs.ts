@@ -13,6 +13,7 @@ import { PreviewRpcs } from "./rpc/Preview.ts"
 import { ProjectsRpcs } from "./rpc/Projects.ts"
 import { PullRequestsRpcs } from "./rpc/PullRequests.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
+import { SystemRpcs } from "./rpc/System.ts"
 import { TerminalsRpcs } from "./rpc/Terminals.ts"
 import { UpdatesRpcs } from "./rpc/Updates.ts"
 
@@ -33,6 +34,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   AgentClisRpcs,
   TerminalsRpcs,
   PreviewRpcs,
+  SystemRpcs,
 )
 
 export const RPC_PATH = "/rpc"

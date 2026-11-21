@@ -50,7 +50,7 @@ describe("threadDefaults", () => {
   })
 
   it("starts on the project's autonomy over the pinned one", () => {
-    const pinned = { autonomy: "ask" as const, effort: null }
+    const pinned = { autonomy: "ask" as const, effort: null, model: null }
     expect(threadDefaults([], models, pinned, { defaultAutonomy: null }).autonomy).toBe("ask")
     expect(threadDefaults([], models, pinned, { defaultAutonomy: "accept_edits" }).autonomy).toBe(
       "accept_edits",
@@ -81,7 +81,9 @@ describe("threadDefaults", () => {
 
   it("starts on the pinned effort and autonomy instead of the last thread's", () => {
     const sessions = [session("latest", { model: "opus", effort: "high", autonomy: "auto" })]
-    expect(threadDefaults(sessions, models, { autonomy: "ask", effort: "low" })).toEqual({
+    expect(
+      threadDefaults(sessions, models, { autonomy: "ask", effort: "low", model: null }),
+    ).toEqual({
       provider: "claude-code",
       model: "opus",
       effort: "low",
@@ -91,7 +93,9 @@ describe("threadDefaults", () => {
 
   it("treats a pinned model default as a pin, not as no pin", () => {
     const sessions = [session("latest", { effort: "high", autonomy: "auto" })]
-    expect(threadDefaults(sessions, models, { autonomy: null, effort: "default" })).toEqual({
+    expect(
+      threadDefaults(sessions, models, { autonomy: null, effort: "default", model: null }),
+    ).toEqual({
       provider: "claude-code",
       model: null,
       effort: null,
@@ -100,11 +104,41 @@ describe("threadDefaults", () => {
   })
 
   it("uses the pins when there is no thread yet", () => {
-    expect(threadDefaults([], models, { autonomy: "accept_edits", effort: "max" })).toEqual({
+    expect(
+      threadDefaults([], models, { autonomy: "accept_edits", effort: "max", model: null }),
+    ).toEqual({
       provider: "claude-code",
       model: null,
       effort: "max",
       autonomy: "accept_edits",
     })
+  })
+
+  it("starts on the pinned model, and on the project's own default model before it", () => {
+    const sessions = [session("latest", { model: "opus", provider: "claude-code" })]
+    const pinned = {
+      autonomy: null,
+      effort: null,
+      model: { provider: "codex" as const, model: "gpt-codex" },
+    }
+    expect(threadDefaults(sessions, models, pinned)).toMatchObject({
+      provider: "codex",
+      model: "gpt-codex",
+    })
+    expect(
+      threadDefaults(sessions, models, pinned, {
+        defaultAutonomy: null,
+        settings: { defaultModel: { provider: "claude-code", model: null } },
+      }),
+    ).toMatchObject({ provider: "claude-code", model: null })
+  })
+
+  it("drops a pinned model its provider no longer offers, keeping the provider", () => {
+    const pinned = {
+      autonomy: null,
+      effort: null,
+      model: { provider: "codex" as const, model: "retired" },
+    }
+    expect(threadDefaults([], models, pinned)).toMatchObject({ provider: "codex", model: null })
   })
 })

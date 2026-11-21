@@ -1,5 +1,11 @@
 import { assert, describe, it } from "@effect/vitest"
-import { DEFAULT_TOOLS_PREFERENCES, NO_PINS, type PinnedDefaults } from "@humanity/contracts"
+import {
+  DEFAULT_BROWSER_PREFERENCES,
+  DEFAULT_TERMINAL_PREFERENCES,
+  DEFAULT_TOOLS_PREFERENCES,
+  NO_PINS,
+  type PinnedDefaults,
+} from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { SqlClient } from "effect/sql"
 import { PreferencesService } from "../src/services/PreferencesService.ts"
@@ -22,7 +28,7 @@ describe("PreferencesService", () => {
   it.live("keeps the pins across daemon restarts", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()
-      const pins: PinnedDefaults = { autonomy: "ask", effort: "default" }
+      const pins: PinnedDefaults = { autonomy: "ask", effort: "default", model: null }
 
       yield* PreferencesService.use((preferences) => preferences.setPinnedDefaults(pins)).pipe(
         Effect.provide(services(home)),
@@ -40,12 +46,12 @@ describe("PreferencesService", () => {
       const home = yield* tempDir()
       const pinned = yield* Effect.gen(function* () {
         const preferences = yield* PreferencesService
-        yield* preferences.setPinnedDefaults({ autonomy: "auto", effort: "high" })
-        yield* preferences.setPinnedDefaults({ autonomy: null, effort: "high" })
+        yield* preferences.setPinnedDefaults({ autonomy: "auto", effort: "high", model: null })
+        yield* preferences.setPinnedDefaults({ autonomy: null, effort: "high", model: null })
         return yield* preferences.pinnedDefaults
       }).pipe(Effect.provide(services(home)))
 
-      assert.deepStrictEqual(pinned, { autonomy: null, effort: "high" })
+      assert.deepStrictEqual(pinned, { autonomy: null, effort: "high", model: null })
     }),
   )
 
@@ -98,6 +104,68 @@ describe("PreferencesService", () => {
       }).pipe(Effect.provide(services(home)))
 
       assert.deepStrictEqual(tools, { terminals: false, openThread: true, skills: true })
+    }),
+  )
+
+  it.live("keeps pins saved before a model could be pinned, with no model pinned", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const pinned = yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`
+          INSERT INTO preferences (key, value_json)
+          VALUES ('pinned_defaults', '{"autonomy":"ask","effort":"high"}')
+        `
+        return yield* PreferencesService.use((preferences) => preferences.pinnedDefaults)
+      }).pipe(Effect.provide(services(home)))
+
+      assert.deepStrictEqual(pinned, { autonomy: "ask", effort: "high", model: null })
+    }),
+  )
+
+  it.live("keeps terminal and Browser settings saved before the new ones, with defaults", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const [terminal, browser] = yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`
+          INSERT INTO preferences (key, value_json)
+          VALUES ('terminal', '{"shell":"bash","fontSize":15,"scrollback":2000}'),
+            ('browser', '{"linkTarget":"system"}')
+        `
+        const preferences = yield* PreferencesService
+        return [yield* preferences.terminal, yield* preferences.browser] as const
+      }).pipe(Effect.provide(services(home)))
+
+      assert.deepStrictEqual(terminal, {
+        ...DEFAULT_TERMINAL_PREFERENCES,
+        shell: "bash",
+        fontSize: 15,
+        scrollback: 2000,
+      })
+      assert.deepStrictEqual(browser, { ...DEFAULT_BROWSER_PREFERENCES, linkTarget: "system" })
+    }),
+  )
+
+  it.live("keeps the CLI paths across daemon restarts", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const paths = {
+        "claude-code": "/opt/claude/bin/claude",
+        codex: null,
+        kiro: null,
+        antigravity: null,
+      }
+      yield* PreferencesService.use((preferences) => preferences.setCliPaths(paths)).pipe(
+        Effect.provide(services(home)),
+      )
+      const restored = yield* PreferencesService.use((preferences) => preferences.cliPaths).pipe(
+        Effect.provide(services(home)),
+      )
+      yield* PreferencesService.use((preferences) =>
+        preferences.setCliPaths({ ...paths, "claude-code": null }),
+      ).pipe(Effect.provide(services(home)))
+      assert.deepStrictEqual(restored, paths)
     }),
   )
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { newThreadAutonomy, NO_PINS, togglePin } from "../src/index.ts"
+import { isBranchPrefix, newThreadAutonomy, NO_PINS, togglePin } from "../src/index.ts"
 
 describe("newThreadAutonomy", () => {
   it("is Auto mode when nothing says otherwise", () => {
@@ -18,7 +18,7 @@ describe("newThreadAutonomy", () => {
 describe("togglePin", () => {
   it("keeps one pin per setting: pinning another moves it, pinning it again removes it", () => {
     const first = togglePin(NO_PINS, "autonomy", "auto")
-    expect(first).toEqual({ autonomy: "auto", effort: null })
+    expect(first).toEqual({ autonomy: "auto", effort: null, model: null })
     const moved = togglePin(first, "autonomy", "accept_edits")
     expect(moved.autonomy).toBe("accept_edits")
     expect(togglePin(moved, "autonomy", "accept_edits")).toEqual(NO_PINS)
@@ -26,13 +26,28 @@ describe("togglePin", () => {
 
   it("pins the two settings independently", () => {
     const pinned = togglePin(togglePin(NO_PINS, "autonomy", "ask"), "effort", "high")
-    expect(pinned).toEqual({ autonomy: "ask", effort: "high" })
-    expect(togglePin(pinned, "effort", "high")).toEqual({ autonomy: "ask", effort: null })
+    expect(pinned).toEqual({ autonomy: "ask", effort: "high", model: null })
+    expect(togglePin(pinned, "effort", "high")).toEqual({
+      autonomy: "ask",
+      effort: null,
+      model: null,
+    })
   })
 
   it("pins and unpins the model's own default effort", () => {
     const pinned = togglePin(NO_PINS, "effort", "default")
     expect(pinned.effort).toBe("default")
     expect(togglePin(pinned, "effort", "default").effort).toBeNull()
+  })
+})
+
+describe("ProjectSettings", () => {
+  it("accepts branch prefixes git can name a branch with, and refuses the rest", () => {
+    for (const prefix of ["", "humanity/", "feat/", "me-", "team.a/x/"]) {
+      expect(isBranchPrefix(prefix), prefix).toBe(true)
+    }
+    for (const prefix of ["/x", "a..b/", "a//b", ".hidden/", "a/.b", "x.lock/", "a b/", "~x"]) {
+      expect(isBranchPrefix(prefix), prefix).toBe(false)
+    }
   })
 })

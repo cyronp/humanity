@@ -3,6 +3,7 @@ import { type ComponentProps, memo } from "react"
 import { defaultComponents, Streamdown } from "streamdown"
 import "streamdown/styles.css"
 import { ThreadMention } from "@/features/session/ThreadMention"
+import { useUiPreferences } from "@/lib/uiPreferences"
 import { shikiCodePlugin } from "./codePlugin.ts"
 
 const plugins = { code: shikiCodePlugin }
@@ -24,8 +25,10 @@ export const Markdown = memo(function Markdown({
   readonly text: string
   readonly streaming?: boolean
 }) {
+  const [{ codeTheme }] = useUiPreferences()
   return (
     <Streamdown
+      key={codeTheme}
       className="text-sm leading-relaxed [&_pre]:text-xs"
       mode={streaming ? "streaming" : "static"}
       isAnimating={streaming}

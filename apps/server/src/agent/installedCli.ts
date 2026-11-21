@@ -141,10 +141,27 @@ export const findLaunch = (command: string, options: LocateOptions): CliLaunch |
   return undefined
 }
 
+const overrides = new Map<string, string>()
+
+export const setCliOverrides = (paths: Readonly<Record<string, string | null>>): void => {
+  overrides.clear()
+  for (const [command, path] of Object.entries(paths)) {
+    const trimmed = path?.trim() ?? ""
+    if (trimmed !== "") overrides.set(command, trimmed)
+  }
+}
+
 export const locateCli = (
   command: string,
   options: LocateOptions = systemLocateOptions(),
-): CliLaunch | undefined => findLaunch(command, options)
+): CliLaunch | undefined => {
+  const override = overrides.get(command)
+  if (override !== undefined && options.exists(override)) {
+    const launch = launchFor(override, options)
+    if (launch !== undefined) return launch
+  }
+  return findLaunch(command, options)
+}
 
 export const parseCliVersion = (output: string): string | undefined =>
   /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/.exec(output)?.[0]

@@ -24,6 +24,12 @@ import { projectsAtom, removeProjectAtom } from "@/features/projects/atoms"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import {
+  ProjectModel,
+  ProjectName,
+  ProjectPullRequests,
+  ProjectWorktrees,
+} from "./ProjectOptions.tsx"
 import { closeSettings, selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, SettingsPane, SettingsSplit } from "./SettingsLayout.tsx"
 
@@ -92,6 +98,7 @@ function ProjectDetail({ project }: { readonly project: Project }) {
         <h3 className="truncate text-sm font-medium">{project.name}</h3>
       </div>
       <dl className="divide-y border-b text-sm">
+        <ProjectName project={project} />
         <Row label="Folder">
           <code className="font-mono text-xs break-all">{project.localPath}</code>
         </Row>
@@ -124,8 +131,14 @@ function ProjectDetail({ project }: { readonly project: Project }) {
         </Row>
       </dl>
 
-      <div className="border-b py-5">
+      <div className="flex flex-col gap-5 border-b py-5">
         <ProjectPermissions project={project} />
+        <ProjectModel project={project} />
+      </div>
+
+      <div className="flex flex-col border-b py-5">
+        <ProjectWorktrees project={project} />
+        <ProjectPullRequests project={project} />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 py-4">

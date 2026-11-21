@@ -25,6 +25,10 @@ export const ProjectsHandlers = ProjectsRpcs.toLayer(
       "Projects.icon": ({ projectId }) => projects.icon(projectId),
       "Projects.setDefaultAutonomy": ({ projectId, autonomy }) =>
         projects.setDefaultAutonomy(projectId, autonomy),
+      "Projects.rename": ({ projectId, name }) =>
+        Effect.tap(projects.rename(projectId, name), () => events.publishListChanged),
+      "Projects.setSettings": ({ projectId, settings }) =>
+        projects.setSettings(projectId, settings),
     })
   }),
 )

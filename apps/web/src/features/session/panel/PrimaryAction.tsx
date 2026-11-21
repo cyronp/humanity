@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChangeCount } from "@/features/diff/FileDiffView"
 import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
+import { useProject } from "@/features/projects/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { commitAtom, mergePullRequestAtom, pushAtom, setPullRequestDraftAtom } from "../atoms.ts"
@@ -36,6 +37,7 @@ import {
   commitPaths,
   forgeTerms,
   mergeOptions,
+  preferMergeMethod,
   type PrimaryAction as Action,
   summarizeChecks,
 } from "./publication.ts"
@@ -470,6 +472,7 @@ function MergeAction({
   readonly feed: PullRequestFeed
 }) {
   const merge = useAtomSet(mergePullRequestAtom, { mode: "promiseExit" })
+  const preferred = useProject(session.projectId)?.settings.mergeMethod ?? null
   const [open, setOpen] = useState(false)
   const [comment, setComment] = useState("")
   const [pending, setPending] = useState<MergeMethod | null>(null)
@@ -524,7 +527,7 @@ function MergeAction({
         </p>
       )}
       <MethodList
-        options={mergeOptions(pullRequest.forge)}
+        options={preferMergeMethod(mergeOptions(pullRequest.forge), preferred)}
         disabled={false}
         pending={pending}
         onPick={(method) => void run(method)}

@@ -496,6 +496,7 @@ export class TerminalService extends Context.Service<
               platform: process.platform,
               folder: config.shellIntegrationDir,
               env: process.env,
+              integration: (yield* preferences.terminal).shellIntegration,
             })
             const pty = yield* host
               .spawn({

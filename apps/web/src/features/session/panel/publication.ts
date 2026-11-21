@@ -236,6 +236,16 @@ export interface MergeOption {
   readonly description: string
 }
 
+export const preferMergeMethod = (
+  options: ReadonlyArray<MergeOption>,
+  preferred: MergeMethod | null,
+): ReadonlyArray<MergeOption> => {
+  const first = options.find((option) => option.method === preferred)
+  return first === undefined
+    ? options
+    : [first, ...options.filter((option) => option.method !== preferred)]
+}
+
 export const mergeOptions = (forge: Forge): ReadonlyArray<MergeOption> =>
   forge === "github"
     ? [

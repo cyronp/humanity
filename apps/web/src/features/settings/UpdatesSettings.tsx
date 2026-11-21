@@ -1,7 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { type UpdatePreferences, type UpdateStatus, type UpdateTrack } from "@humanity/contracts"
 import { Exit } from "effect"
-import { Download, RefreshCw } from "lucide-react"
+import { Download, ExternalLink, RefreshCw } from "lucide-react"
 import { useId, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -16,7 +16,7 @@ import {
 } from "@/features/updates/atoms"
 import { describeUpdate, isUpdating } from "@/features/updates/describe"
 import { describeCause } from "@/lib/errors"
-import { APP_VERSION } from "@/lib/version"
+import { APP_VERSION, RELEASES_URL } from "@/lib/version"
 import {
   SettingsChoice,
   SettingsFrame,
@@ -111,6 +111,14 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
             onCheck={() => void run(check, "Could not look for updates")}
             onInstall={() => void run(install, "Could not install the update")}
           />
+        </SettingsRow>
+        <SettingsRow label="Release notes" detail="What changed in each version.">
+          <Button variant="outline" size="sm" asChild>
+            <a href={RELEASES_URL} target="_blank" rel="noreferrer">
+              Open
+              <ExternalLink />
+            </a>
+          </Button>
         </SettingsRow>
       </SettingsRows>
       {error !== undefined && <ErrorNote title={error.title} message={error.message} />}

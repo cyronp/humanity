@@ -26,6 +26,7 @@ import terminals from "./migrations/0021_terminals.ts"
 import terminalOwners from "./migrations/0022_terminal_owners.ts"
 import antigravityAccounts from "./migrations/0023_antigravity_accounts.ts"
 import sessionProviders from "./migrations/0024_session_providers.ts"
+import projectSettings from "./migrations/0025_project_settings.ts"
 
 const migrations = {
   "0001_initial": initial,
@@ -52,6 +53,7 @@ const migrations = {
   "0022_terminal_owners": terminalOwners,
   "0023_antigravity_accounts": antigravityAccounts,
   "0024_session_providers": sessionProviders,
+  "0025_project_settings": projectSettings,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })

@@ -2,6 +2,7 @@ import {
   Autonomy,
   type CloneEvent,
   CloneTargetExists,
+  DEFAULT_PROJECT_SETTINGS,
   type FolderEntry,
   GITLAB_DEFAULT_HOST,
   PathNotFound,
@@ -10,6 +11,8 @@ import {
   type ProjectIcon,
   ProjectId,
   ProjectNotFound,
+  ProjectSettings,
+  StoredProjectSettings,
 } from "@humanity/contracts"
 import { Context, DateTime, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
@@ -33,8 +36,18 @@ const ProjectRow = Schema.Struct({
   gitlab_full_path: Schema.NullOr(Schema.String),
   default_branch: Schema.String,
   default_autonomy: Schema.NullOr(Autonomy),
+  settings_json: Schema.NullOr(Schema.String),
   created_at: Schema.String,
 })
+
+const SettingsJson = Schema.fromJsonString(StoredProjectSettings)
+const decodeSettings = Schema.decodeUnknownOption(SettingsJson)
+const encodeSettings = Schema.encodeSync(Schema.fromJsonString(ProjectSettings))
+
+const readSettings = (json: string | null): ProjectSettings =>
+  json === null
+    ? DEFAULT_PROJECT_SETTINGS
+    : decodeSettings(json).pipe(Option.getOrElse(() => DEFAULT_PROJECT_SETTINGS))
 
 const toProject = (row: typeof ProjectRow.Type): Project => ({
   id: row.id,
@@ -47,6 +60,7 @@ const toProject = (row: typeof ProjectRow.Type): Project => ({
       : { host: row.gitlab_host, fullPath: row.gitlab_full_path },
   defaultBranch: row.default_branch,
   defaultAutonomy: row.default_autonomy,
+  settings: readSettings(row.settings_json),
   createdAt: row.created_at,
 })
 
@@ -71,6 +85,11 @@ export class ProjectService extends Context.Service<
     readonly setDefaultAutonomy: (
       projectId: string,
       autonomy: Autonomy | null,
+    ) => Effect.Effect<Project, ProjectNotFound>
+    readonly rename: (projectId: string, name: string) => Effect.Effect<Project, ProjectNotFound>
+    readonly setSettings: (
+      projectId: string,
+      settings: ProjectSettings,
     ) => Effect.Effect<Project, ProjectNotFound>
     readonly remove: (projectId: string) => Effect.Effect<void, ProjectNotFound>
     readonly icon: (projectId: string) => Effect.Effect<ProjectIcon | null, ProjectNotFound>
@@ -176,6 +195,7 @@ export class ProjectService extends Context.Service<
           gitlab: parseGitLabRemote(origin, gitlabHosts) ?? null,
           defaultBranch: yield* git.defaultBranch(localPath),
           defaultAutonomy: null,
+          settings: DEFAULT_PROJECT_SETTINGS,
           createdAt: DateTime.formatIso(yield* DateTime.now),
         }
         yield* sql`
@@ -210,6 +230,30 @@ export class ProjectService extends Context.Service<
           Effect.orDie,
         )
         return { ...project, defaultAutonomy: autonomy }
+      })
+
+      const rename = Effect.fn("ProjectService.rename")(function* (
+        projectId: string,
+        name: string,
+      ) {
+        const project = yield* get(projectId)
+        const trimmed = name.trim()
+        if (trimmed === "" || trimmed === project.name) return project
+        yield* sql`UPDATE projects SET name = ${trimmed} WHERE id = ${projectId}`.pipe(Effect.orDie)
+        return { ...project, name: trimmed }
+      })
+
+      const setSettings = Effect.fn("ProjectService.setSettings")(function* (
+        projectId: string,
+        settings: ProjectSettings,
+      ) {
+        const project = yield* get(projectId)
+        const setupScript = settings.setupScript?.trim() ? settings.setupScript : null
+        const next: ProjectSettings = { ...settings, setupScript }
+        yield* sql`UPDATE projects SET settings_json = ${encodeSettings(next)} WHERE id = ${projectId}`.pipe(
+          Effect.orDie,
+        )
+        return { ...project, settings: next }
       })
 
       const remove = Effect.fn("ProjectService.remove")(function* (projectId: string) {
@@ -346,6 +390,8 @@ export class ProjectService extends Context.Service<
         addLocal,
         listFolders,
         setDefaultAutonomy,
+        rename,
+        setSettings,
         remove,
         icon,
         cloneFromGitHub,

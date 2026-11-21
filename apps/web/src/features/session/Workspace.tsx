@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react"
 import {
   acceptsMessages,
   DEFAULT_ACCOUNT,
@@ -6,7 +7,9 @@ import {
   QUESTION_TOOL,
   type TerminalOwner,
 } from "@humanity/contracts"
+import { AsyncResult } from "effect/reactivity"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { browserPreferencesAtom } from "@/features/browser/atoms"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useBrowser } from "@/features/browser/useBrowser"
@@ -63,6 +66,10 @@ export function Workspace({
   )
 
   const browser = useBrowser(session.id, view.toolCalls)
+  const browserPreferences = useAtomValue(browserPreferencesAtom)
+  const offerLocalAddresses = AsyncResult.isSuccess(browserPreferences)
+    ? browserPreferences.value.offerLocalAddresses
+    : true
 
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [typing, setTyping] = useState(false)
@@ -97,7 +104,7 @@ export function Workspace({
         <ToolRail
           session={session}
           shelf={shelf}
-          browserUnseen={browser.unseen}
+          browserUnseen={browser.unseen && offerLocalAddresses}
           onSelect={onSelect}
         />
       )}
