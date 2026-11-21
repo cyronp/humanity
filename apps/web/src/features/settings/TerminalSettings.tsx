@@ -10,6 +10,7 @@ import {
 import { AsyncResult } from "effect/reactivity"
 import { useId } from "react"
 import { Input } from "@/components/ui/input"
+import { NumberInput } from "@/components/ui/number-input"
 import {
   Select,
   SelectContent,
@@ -35,12 +36,6 @@ import {
 } from "./SettingsLayout.tsx"
 
 const SYSTEM_DEFAULT = "system"
-
-const clamp = (
-  value: number,
-  bounds: { readonly min: number; readonly max: number },
-  precision = 1,
-) => Math.round(Math.min(Math.max(value, bounds.min), bounds.max) * precision) / precision
 
 const CURSOR_STYLES: ReadonlyArray<{
   readonly value: TerminalCursorStyle
@@ -163,7 +158,6 @@ export function TerminalSettings() {
               value={preferences.lineHeight}
               bounds={TERMINAL_LINE_HEIGHTS}
               step={0.1}
-              precision={10}
               onChange={(lineHeight) => change({ lineHeight })}
             />
             <SettingsRow label="Cursor" labelId={cursorId}>
@@ -277,7 +271,6 @@ function NumberSetting({
   value,
   bounds,
   step = 1,
-  precision = 1,
   onChange,
 }: {
   readonly label: string
@@ -285,34 +278,19 @@ function NumberSetting({
   readonly value: number
   readonly bounds: { readonly min: number; readonly max: number }
   readonly step?: number
-  readonly precision?: number
   readonly onChange: (value: number) => void
 }) {
   const labelId = useId()
   return (
     <SettingsRow label={label} labelId={labelId} detail={detail}>
-      <Input
-        key={value}
-        type="number"
+      <NumberInput
         aria-labelledby={labelId}
-        className="w-28"
+        className="w-36"
+        value={value}
         min={bounds.min}
         max={bounds.max}
         step={step}
-        defaultValue={value}
-        onBlur={(event) => {
-          const next = Number(event.currentTarget.value)
-          if (Number.isFinite(next) && event.currentTarget.value !== "") {
-            const clamped = clamp(next, bounds, precision)
-            if (clamped !== value) onChange(clamped)
-            else event.currentTarget.value = String(value)
-          } else {
-            event.currentTarget.value = String(value)
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur()
-        }}
+        onChange={onChange}
       />
     </SettingsRow>
   )

@@ -31,6 +31,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { CodeThemePreview } from "./CodeThemePreview.tsx"
 import { ColorThemePicker, ThemePicker } from "./ThemePicker.tsx"
 
 export function GeneralSettings() {
@@ -113,6 +114,9 @@ function AppearanceSettings() {
             ))}
           </SelectContent>
         </Select>
+        <div className="basis-full">
+          <CodeThemePreview />
+        </div>
       </SettingsRow>
     </>
   )

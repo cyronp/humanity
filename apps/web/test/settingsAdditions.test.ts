@@ -1,5 +1,6 @@
 import { FILL_VIEWPORT } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
+import { formatNumber, parseNumber, stepNumber } from "@/components/ui/number-input"
 import { browserDefaultsOf } from "@/features/browser/browser"
 import { isSendKey } from "@/features/chat/ChatBox"
 import { notificationFor } from "@/features/notifications/notify"
@@ -165,5 +166,27 @@ describe("diagnostics", () => {
     expect(formatBytes(512)).toBe("512 B")
     expect(formatBytes(1536)).toBe("1.5 KB")
     expect(formatBytes(50 * 1024 * 1024)).toBe("50 MB")
+  })
+})
+
+describe("the number input", () => {
+  const fontSize = { min: 8, max: 32, step: 1 }
+  const lineHeight = { min: 1, max: 2, step: 0.1 }
+
+  it("steps within its bounds, without float drift", () => {
+    expect(stepNumber(13, 1, fontSize)).toBe(14)
+    expect(stepNumber(32, 1, fontSize)).toBe(32)
+    expect(stepNumber(8, -1, fontSize)).toBe(8)
+    expect(stepNumber(1.2, 1, lineHeight)).toBe(1.3)
+    expect(formatNumber(stepNumber(1.2, 1, lineHeight), 0.1)).toBe("1.3")
+  })
+
+  it("reads what the human typed, fitted to the bounds", () => {
+    expect(parseNumber(" 20 ", fontSize)).toBe(20)
+    expect(parseNumber("99", fontSize)).toBe(32)
+    expect(parseNumber("14.6", fontSize)).toBe(15)
+    expect(parseNumber("1,25", lineHeight)).toBe(1.3)
+    expect(parseNumber("", fontSize)).toBeUndefined()
+    expect(parseNumber("big", fontSize)).toBeUndefined()
   })
 })
