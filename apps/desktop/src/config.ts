@@ -1,6 +1,8 @@
 import { DEFAULT_DESKTOP_PORT } from "@humanity/contracts"
 import { join, resolve } from "node:path"
 
+export const APP_USER_MODEL_ID = "dev.humanity.desktop"
+
 export interface DesktopConfig {
   readonly dev: boolean
   readonly home: string
