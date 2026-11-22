@@ -104,6 +104,7 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { AntigravityAccountService } from "./AntigravityAccountService.ts"
+import { humanEditsNote } from "../files/humanEdits.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
@@ -322,6 +323,7 @@ export class SessionService extends Context.Service<
       sessionId: string,
       message: { readonly notice: string; readonly agent?: string | undefined },
     ) => Effect.Effect<void, SessionNotFound>
+    readonly noteHumanEdit: (sessionId: string, path: string) => Effect.Effect<void>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     readonly earlierMessages: (
       sessionId: string,
@@ -375,6 +377,7 @@ export class SessionService extends Context.Service<
       const relocated = new Map<string, { readonly from: string; readonly to: string }>()
       const resumeFallback = new Map<string, string>()
       const agentNotes = new Map<string, Array<string>>()
+      const humanEdits = new Map<string, Set<string>>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -973,6 +976,8 @@ export class SessionService extends Context.Service<
           relocated.delete(session.id)
           const notes = agentNotes.get(session.id) ?? []
           agentNotes.delete(session.id)
+          const edited = humanEditsNote([...(humanEdits.get(session.id) ?? [])])
+          humanEdits.delete(session.id)
           const handoff = yield* repo.getPendingHandoff(session.id)
           const forAgent = [
             ...(handoff === null ? [] : [handoff]),
@@ -982,6 +987,7 @@ export class SessionService extends Context.Service<
                   `[Humanity] This session now works in its own git worktree at ${moved.to} on branch ${session.branch}, no longer in ${moved.from}. Use paths under ${moved.to} from now on; files under ${moved.from} can no longer be changed.`,
                 ]),
             ...notes,
+            ...(edited === undefined || session.sdkSessionId === null ? [] : [edited]),
             text,
           ].join("\n\n")
           const stored = yield* storeAttachments(session.id, files)
@@ -1610,6 +1616,13 @@ export class SessionService extends Context.Service<
         agentNotes.set(sessionId, notes)
       })
 
+      const noteHumanEdit = (sessionId: string, path: string) =>
+        Effect.sync(() => {
+          const paths = humanEdits.get(sessionId) ?? new Set<string>()
+          paths.add(path)
+          humanEdits.set(sessionId, paths)
+        })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
@@ -1698,6 +1711,7 @@ export class SessionService extends Context.Service<
         commits,
         commit,
         tell,
+        noteHumanEdit,
         subscribe,
         earlierMessages,
         watchAll,

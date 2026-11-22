@@ -1,9 +1,10 @@
 import type { BranchPublication, WorkingTreeDiff } from "@humanity/contracts"
 
-export const SHELF_TOOLS = ["git", "browser"] as const
+export const SHELF_TOOLS = ["files", "git", "browser"] as const
 export type ShelfTool = (typeof SHELF_TOOLS)[number]
 
 export const SHELF_LABELS: Readonly<Record<ShelfTool, string>> = {
+  files: "Files",
   git: "Source control",
   browser: "Browser",
 }

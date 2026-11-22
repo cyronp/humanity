@@ -23,6 +23,7 @@ import { CodexHandlers } from "./rpc/CodexHandlers.ts"
 import { KiroHandlers } from "./rpc/KiroHandlers.ts"
 import { AntigravityHandlers } from "./rpc/AntigravityHandlers.ts"
 import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
+import { FilesHandlers } from "./rpc/FilesHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
 import { GitHubHandlers } from "./rpc/GitHubHandlers.ts"
 import { GitLabHandlers } from "./rpc/GitLabHandlers.ts"
@@ -48,6 +49,7 @@ import { GitHubToken } from "./services/GitHubToken.ts"
 import { GitLabService } from "./services/GitLabService.ts"
 import { GitLabToken } from "./services/GitLabToken.ts"
 import { FileSearchService } from "./services/FileSearchService.ts"
+import { FilesService } from "./services/FilesService.ts"
 import { GitService } from "./services/GitService.ts"
 import { HistoryImport } from "./services/HistoryImport.ts"
 import { PreferencesService } from "./services/PreferencesService.ts"
@@ -63,6 +65,7 @@ import { TerminalService } from "./terminal/TerminalService.ts"
 export const Services = Layer.mergeAll(
   Layer.mergeAll(
     HistoryImport.layer,
+    FilesService.layer,
     PullRequestService.layer,
     UpdateService.layer,
     PreviewService.layer(),
@@ -94,6 +97,7 @@ export const RpcHandlers = Layer.mergeAll(
   GitHubHandlers,
   GitLabHandlers,
   SessionsHandlers,
+  FilesHandlers,
   ApprovalsHandlers,
   ClaudeHandlers,
   CodexHandlers,

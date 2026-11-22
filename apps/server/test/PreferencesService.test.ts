@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
 import {
   DEFAULT_BROWSER_PREFERENCES,
+  DEFAULT_EDITOR_PREFERENCES,
   DEFAULT_TERMINAL_PREFERENCES,
   DEFAULT_TOOLS_PREFERENCES,
   NO_PINS,
@@ -144,6 +145,34 @@ describe("PreferencesService", () => {
         scrollback: 2000,
       })
       assert.deepStrictEqual(browser, { ...DEFAULT_BROWSER_PREFERENCES, linkTarget: "system" })
+    }),
+  )
+
+  it.live("keeps the editor settings, and fills in the ones saved before them", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const editor = yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`
+          INSERT INTO preferences (key, value_json)
+          VALUES ('editor', '{"autoSave":"afterDelay","tabSize":4}')
+        `
+        return yield* PreferencesService.use((preferences) => preferences.editor)
+      }).pipe(Effect.provide(services(home)))
+      assert.deepStrictEqual(editor, {
+        ...DEFAULT_EDITOR_PREFERENCES,
+        autoSave: "afterDelay",
+        tabSize: 4,
+      })
+
+      const saved = { ...DEFAULT_EDITOR_PREFERENCES, wordWrap: true, fontSize: 15 }
+      yield* PreferencesService.use((preferences) => preferences.setEditor(saved)).pipe(
+        Effect.provide(services(home)),
+      )
+      const reread = yield* PreferencesService.use((preferences) => preferences.editor).pipe(
+        Effect.provide(services(home)),
+      )
+      assert.deepStrictEqual(reread, saved)
     }),
   )
 

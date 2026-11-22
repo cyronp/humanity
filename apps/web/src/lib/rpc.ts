@@ -41,6 +41,7 @@ export const keys = {
   sessions: (projectId: string) => `sessions:${projectId}`,
   sessionDiff: (sessionId: string) => `session-diff:${sessionId}`,
   sessionCommits: (sessionId: string) => `session-commits:${sessionId}`,
+  files: (sessionId: string) => `files:${sessionId}`,
   publication: (sessionId: string) => `publication:${sessionId}`,
   sync: (sessionId: string) => `sync:${sessionId}`,
   history: (projectId: string) => `history:${projectId}`,
