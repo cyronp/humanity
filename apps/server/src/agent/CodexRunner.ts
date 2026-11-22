@@ -395,11 +395,18 @@ export const startCodexRun =
         const opened = decodeThread(
           options.resume === undefined
             ? yield* connected.request("thread/start", settings)
-            : yield* connected.request("thread/resume", {
-                threadId: options.resume,
-                excludeTurns: true,
-                ...settings,
-              }),
+            : options.forkAt === undefined
+              ? yield* connected.request("thread/resume", {
+                  threadId: options.resume,
+                  excludeTurns: true,
+                  ...settings,
+                })
+              : yield* connected.request("thread/fork", {
+                  threadId: options.resume,
+                  lastTurnId: options.forkAt,
+                  excludeTurns: true,
+                  ...settings,
+                }),
         )
         if (Option.isNone(opened)) {
           return yield* new CodexFailed({ reason: "Codex did not say which thread it opened." })

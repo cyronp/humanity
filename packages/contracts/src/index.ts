@@ -1,6 +1,7 @@
 export * from "./domain/AgentCli.ts"
 export * from "./domain/Approval.ts"
 export * from "./domain/Attachment.ts"
+export * from "./domain/Checkpoint.ts"
 export * from "./domain/Claude.ts"
 export * from "./domain/Codex.ts"
 export * from "./domain/Desktop.ts"

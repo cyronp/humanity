@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Attachment } from "./Attachment.ts"
+import { RewindUndo } from "./Checkpoint.ts"
 import { FileMentions } from "./Mention.ts"
 import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
@@ -164,6 +165,12 @@ export const MessageContent = Schema.Union([
     included: Schema.Number,
     omitted: Schema.Number,
     tokens: Schema.optional(Schema.Number),
+  }),
+  Schema.TaggedStruct("rewind", {
+    conversation: Schema.Boolean,
+    restored: Schema.Number,
+    undo: RewindUndo,
+    message: Schema.String,
   }),
   Schema.TaggedStruct("other", { type: Schema.String, subtype: Schema.NullOr(Schema.String) }),
 ])

@@ -211,6 +211,16 @@ A thread remembers the thread it came from, and the sidebar shows them together.
 - **The call shows its thread.** An `open_thread` card in the chat shows the opened thread's status as it changes.
 - **Ending a thread leaves the threads it opened running.** The agent is still not told when a thread it opened finishes.
 
+## Amendment: checkpoints and rewind (2026-11-22)
+
+Before each of the human's messages reaches the agent, Humanity keeps a checkpoint of the thread's folder, and the human can rewind to it. This adds no library to the stack of section 3.
+
+- **A repository of Humanity's own.** Checkpoints live in a bare git repository per thread under `~/.humanity/checkpoints/<sessionId>/`, used with the thread's folder as its work tree. It never touches the project's `.git`, refs, index or stash, and does not borrow its objects. What git ignores (`.gitignore`, and the project's `info/exclude`, copied in) is neither kept nor restored; `.git` never is. Line endings, filters and encodings are off, so a file comes back byte for byte. A checkpoint that cannot be taken is logged and never stops the message. The repository is deleted when the thread ends or its project is removed; checkpoints are kept until then.
+- **Rewind, from any of the human's messages, between turns.** A dialog lists the files that go back (restored, brought back or deleted), warns when the thread works in the project's checkout, which other threads share, and when a terminal of the thread is running a command. "Rewind" restores the files and removes that message and everything after it from the thread; the message goes back into the composer. "Restore files only" keeps the conversation, and the agent is told in front of the human's next message. A message sent before checkpoints existed rewinds the conversation only.
+- **The agent forgets what was rewound.** Claude Code resumes its session forked at the last entry before the message (`forkSession` with `resumeSessionAt`); Codex forks its thread through the last turn before it (`thread/fork` with `lastTurnId`, with Humanity's approval settings, never `never`), so the thread gets a new Codex thread id. An ACP agent, or any agent whose session began after that message (it moved provider since), starts a new session with a `<humanity-handoff>` of the conversation before it. The fork point is stored (`sessions.pending_fork`) until the agent starts, so a restart does not lose it; a fork that fails falls back to the handoff. Each provider's parked session is forgotten. The thread keeps its provider, model and mode.
+- **Undo.** Restoring takes one more checkpoint first, so the rewind's divider in the chat offers Undo, which puts the files back as they were just before it, until the human sends another message. The conversation is not brought back.
+- **Not yet:** a checkpoint per file change inside a turn, rewinding the conversation without removing it from the thread, and limiting the size of what a checkpoint keeps.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

@@ -113,7 +113,11 @@ export const AgentRunnerFake = (script: FakeScript) =>
         Effect.gen(function* () {
           yield* Ref.update(log.runs, (runs) => [...runs, options])
           const runNumber = ++runCounter
-          const sdkSessionId = options.resume ?? `fake-sdk-session-${runNumber}`
+          const sdkSessionId =
+            options.forkAt === undefined
+              ? (options.resume ?? `fake-sdk-session-${runNumber}`)
+              : `fake-fork-${runNumber}`
+          let messageCounter = 0
           const outbox = yield* Queue.unbounded<unknown>()
           const prompts = yield* Queue.unbounded<string>()
           const current = yield* Ref.make(Option.none<Fiber.Fiber<void>>())
@@ -125,7 +129,13 @@ export const AgentRunnerFake = (script: FakeScript) =>
 
           const base = { session_id: sdkSessionId, uuid: "00000000-0000-0000-0000-000000000000" }
           const assistant = (content: ReadonlyArray<unknown>) =>
-            emit({ type: "assistant", message: { content }, parent_tool_use_id: null, ...base })
+            emit({
+              type: "assistant",
+              message: { content },
+              parent_tool_use_id: null,
+              ...base,
+              uuid: `fake-uuid-${runNumber}-${++messageCounter}`,
+            })
 
           const decide = (step: Extract<FakeStep, { tool: string }>, toolUseId: string) =>
             Effect.gen(function* () {

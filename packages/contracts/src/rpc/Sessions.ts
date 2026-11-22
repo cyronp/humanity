@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
+import { RewindPreview } from "../domain/Checkpoint.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
@@ -28,6 +29,7 @@ import {
   PlanUsageUnavailable,
   ProjectNotFound,
   ProviderSwitchUnavailable,
+  RewindUnavailable,
   SessionBusy,
   SessionEnded,
   SessionNotFound,
@@ -194,6 +196,25 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId, before: Schema.String },
     success: TranscriptPage,
     error: SessionNotFound,
+  }),
+  Rpc.make("Sessions.rewindPreview", {
+    payload: { sessionId: SessionId, messageId: Schema.String },
+    success: RewindPreview,
+    error: Schema.Union([SessionNotFound, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.rewind", {
+    payload: {
+      sessionId: SessionId,
+      messageId: Schema.String,
+      files: Schema.Boolean,
+      conversation: Schema.Boolean,
+    },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.undoRewind", {
+    payload: { sessionId: SessionId, messageId: Schema.String },
+    error: Schema.Union([SessionNotFound, SessionEnded, RewindUnavailable]),
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },

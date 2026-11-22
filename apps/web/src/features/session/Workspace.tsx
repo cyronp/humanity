@@ -1,12 +1,14 @@
-import { useAtomValue } from "@effect/atom-react"
+import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import {
   acceptsMessages,
+  type ChatMessage,
   DEFAULT_ACCOUNT,
   parseQuestions,
   type Project,
   QUESTION_TOOL,
   type TerminalOwner,
 } from "@humanity/contracts"
+import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
@@ -31,6 +33,10 @@ import {
   type SessionView,
 } from "./state.ts"
 import { HINT_CLASS, UsageMeters } from "./UsageMeters.tsx"
+import { RewindDialog } from "./RewindDialog.tsx"
+import { undoRewindAtom } from "./atoms.ts"
+import type { TranscriptActions } from "@/features/chat/transcriptActions"
+import { describeCause } from "@/lib/errors"
 import { useTranscript } from "./useTranscript.ts"
 
 export interface WorkspaceSearch {
@@ -71,6 +77,21 @@ export function Workspace({
     ? browserPreferences.value.offerLocalAddresses
     : true
 
+  const [rewinding, setRewinding] = useState<ChatMessage>()
+  const undoRewind = useAtomSet(undoRewindAtom, { mode: "promiseExit" })
+  const transcriptActions = useMemo(
+    (): TranscriptActions | undefined =>
+      acceptsMessages(session) && session.status !== "ended"
+        ? {
+            onRewind: setRewinding,
+            onUndoRewind: async (messageId) => {
+              const exit = await undoRewind({ payload: { sessionId: session.id, messageId } })
+              return Exit.isSuccess(exit) ? undefined : describeCause(exit.cause)
+            },
+          }
+        : undefined,
+    [session, undoRewind],
+  )
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [typing, setTyping] = useState(false)
   const keyHint = useKeyHintShown()
@@ -134,7 +155,14 @@ export function Workspace({
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
+          <RewindDialog
+            session={session}
+            message={rewinding}
+            onClose={() => setRewinding(undefined)}
+            onRewound={(text) => composer.current?.replace(text)}
+          />
           <MessageList
+            actions={transcriptActions}
             bottomInset={dockHeight}
             messages={transcript.messages}
             toolCalls={transcript.toolCalls}

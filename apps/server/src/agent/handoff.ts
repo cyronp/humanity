@@ -193,6 +193,11 @@ export const historyEntries = (
         )
         speaker = content.to
         break
+      case "rewind":
+        if (content.restored > 0 && !content.conversation) {
+          push("event", "Humanity: the human restored the files to an earlier checkpoint.")
+        }
+        break
       case "tool_results":
       case "result":
       case "system_init":
@@ -282,6 +287,8 @@ export interface Handoff {
   readonly tokens: number
 }
 
+export type HandoffReason = "switch" | "rewind" | "fork"
+
 export const buildHandoff = (options: {
   readonly entries: ReadonlyArray<HistoryEntry>
   readonly since: number
@@ -290,6 +297,7 @@ export const buildHandoff = (options: {
   readonly resumed: boolean
   readonly plan?: string | undefined
   readonly budget?: number | undefined
+  readonly reason?: HandoffReason | undefined
 }): Handoff | undefined => {
   const candidates = options.entries.filter((entry) => entry.index >= options.since)
   if (!candidates.some((entry) => entry.kind !== "event")) return undefined
@@ -297,9 +305,15 @@ export const buildHandoff = (options: {
   const omitted = candidates.length - chosen.length
   const from = PROVIDER_NAMES[options.from]
   const to = PROVIDER_NAMES[options.to]
-  const intro = options.resumed
-    ? `[Humanity] You are back in this thread on ${to}. While you were away it continued with another agent; below is what the human and that agent said and did since your last turn, as Humanity recorded it.`
-    : `[Humanity] This thread ran on ${from} until now and continues with you on ${to}. You did not take part in the conversation below: it is what the human and the previous agent said and did, as Humanity recorded it, for you to pick up from. Their thinking and the full output of their tools are not included.`
+  const reason = options.reason ?? "switch"
+  const intro =
+    reason === "rewind"
+      ? `[Humanity] The human rewound this thread to an earlier point, and it continues with you on ${to} in a new session. You did not see the conversation below in this session: it is what the human and the agent said and did before that point, as Humanity recorded it, for you to pick up from. Their thinking and the full output of their tools are not included.`
+      : reason === "fork"
+        ? `[Humanity] This thread was forked from another thread, and continues with you on ${to}. You did not take part in the conversation below: it is what the human and the agent said and did in that thread up to the fork, as Humanity recorded it, for you to pick up from. Their thinking and the full output of their tools are not included.`
+        : options.resumed
+          ? `[Humanity] You are back in this thread on ${to}. While you were away it continued with another agent; below is what the human and that agent said and did since your last turn, as Humanity recorded it.`
+          : `[Humanity] This thread ran on ${from} until now and continues with you on ${to}. You did not take part in the conversation below: it is what the human and the previous agent said and did, as Humanity recorded it, for you to pick up from. Their thinking and the full output of their tools are not included.`
   const left =
     omitted === 0
       ? ""

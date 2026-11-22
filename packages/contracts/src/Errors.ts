@@ -452,3 +452,12 @@ export class FileAccessFailed extends Schema.TaggedError<FileAccessFailed>()("Fi
     return `Could not access ${this.path}: ${this.detail}`
   }
 }
+
+export class RewindUnavailable extends Schema.TaggedError<RewindUnavailable>()(
+  "RewindUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}

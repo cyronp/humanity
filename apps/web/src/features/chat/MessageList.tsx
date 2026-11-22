@@ -7,9 +7,12 @@ import {
   type SessionId,
   type ToolCall,
 } from "@humanity/contracts"
-import { ArrowRight, Brain, CircleCheck, Info, TriangleAlert } from "lucide-react"
+import { ArrowRight, Brain, CircleCheck, History, Info, TriangleAlert, Undo2 } from "lucide-react"
 import { cn } from "cn"
-import { memo, type ReactNode, useMemo } from "react"
+import { memo, type ReactNode, useMemo, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent as MessageBody, MessageHeader } from "@/components/ui/message"
@@ -40,6 +43,13 @@ import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
 import {
+  type TranscriptActions,
+  TranscriptActionsContext,
+  rewindSummary,
+  undoableRewinds,
+  useTranscriptActions,
+} from "./transcriptActions.ts"
+import {
   formatTokens,
   type HandoffWeight,
   handoffTokens,
@@ -65,6 +75,7 @@ export function MessageList({
   earlier,
   footer,
   bottomInset = 0,
+  actions,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
@@ -76,66 +87,72 @@ export function MessageList({
   readonly earlier?: ReactNode
   readonly footer?: ReactNode
   readonly bottomInset?: number
+  readonly actions?: TranscriptActions | undefined
 }) {
   const items = useMemo(() => messages.filter(isShown), [messages])
   const delivered = useMemo(() => deliveredSwitches(messages), [messages])
+  const undoable = useMemo(() => undoableRewinds(messages), [messages])
+  const provided = useMemo(() => actions ?? {}, [actions])
   return (
-    <MessageScrollerProvider autoScroll defaultScrollPosition="end">
-      <MessageScroller>
-        <MessageScrollerViewport>
-          <MessageScrollerContent
-            aria-label="Conversation"
-            aria-busy={draft !== "" || working}
-            className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16"
-            style={{ paddingBottom: bottomInset + 16 }}
-          >
-            {items.length === 0 && draft === "" && empty !== undefined && (
-              <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
-            )}
-            {earlier !== undefined && (
-              <MessageScrollerItem messageId="earlier">{earlier}</MessageScrollerItem>
-            )}
-            {items.map((message) => (
-              <MessageScrollerItem
-                key={message.id}
-                messageId={message.id}
-                scrollAnchor={message.content._tag === "user"}
-              >
-                <TranscriptEntry
-                  message={message}
-                  delivered={delivered.has(message.id)}
-                  toolCalls={toolCalls}
-                  approvals={approvals}
-                  worktreePath={worktreePath}
-                />
-              </MessageScrollerItem>
-            ))}
-            {draft !== "" && (
-              <MessageScrollerItem messageId="draft">
-                <Message>
-                  <MessageBody>
-                    <Markdown text={draft} streaming />
-                  </MessageBody>
-                </Message>
-              </MessageScrollerItem>
-            )}
-            {draft === "" && working && (
-              <MessageScrollerItem messageId="working">
-                <Trace>
-                  <TraceLine status="running" className="text-xs">
-                    <TraceTitle>Working…</TraceTitle>
-                  </TraceLine>
-                </Trace>
-              </MessageScrollerItem>
-            )}
-            {footer !== undefined && (
-              <MessageScrollerItem messageId="footer">{footer}</MessageScrollerItem>
-            )}
-          </MessageScrollerContent>
-        </MessageScrollerViewport>
-        <MessageScrollerButton style={{ bottom: bottomInset + 16 }} />
-      </MessageScroller>
-    </MessageScrollerProvider>
+    <TranscriptActionsContext value={provided}>
+      <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+        <MessageScroller>
+          <MessageScrollerViewport>
+            <MessageScrollerContent
+              aria-label="Conversation"
+              aria-busy={draft !== "" || working}
+              className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16"
+              style={{ paddingBottom: bottomInset + 16 }}
+            >
+              {items.length === 0 && draft === "" && empty !== undefined && (
+                <MessageScrollerItem messageId="empty">{empty}</MessageScrollerItem>
+              )}
+              {earlier !== undefined && (
+                <MessageScrollerItem messageId="earlier">{earlier}</MessageScrollerItem>
+              )}
+              {items.map((message) => (
+                <MessageScrollerItem
+                  key={message.id}
+                  messageId={message.id}
+                  scrollAnchor={message.content._tag === "user"}
+                >
+                  <TranscriptEntry
+                    message={message}
+                    delivered={delivered.has(message.id)}
+                    undoable={undoable.has(message.id)}
+                    toolCalls={toolCalls}
+                    approvals={approvals}
+                    worktreePath={worktreePath}
+                  />
+                </MessageScrollerItem>
+              ))}
+              {draft !== "" && (
+                <MessageScrollerItem messageId="draft">
+                  <Message>
+                    <MessageBody>
+                      <Markdown text={draft} streaming />
+                    </MessageBody>
+                  </Message>
+                </MessageScrollerItem>
+              )}
+              {draft === "" && working && (
+                <MessageScrollerItem messageId="working">
+                  <Trace>
+                    <TraceLine status="running" className="text-xs">
+                      <TraceTitle>Working…</TraceTitle>
+                    </TraceLine>
+                  </Trace>
+                </MessageScrollerItem>
+              )}
+              {footer !== undefined && (
+                <MessageScrollerItem messageId="footer">{footer}</MessageScrollerItem>
+              )}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton style={{ bottom: bottomInset + 16 }} />
+        </MessageScroller>
+      </MessageScrollerProvider>
+    </TranscriptActionsContext>
   )
 }
 
@@ -155,39 +172,44 @@ const deliveredSwitches = (messages: ReadonlyArray<ChatMessage>): ReadonlySet<st
 const TranscriptEntry = memo(function TranscriptEntry({
   message,
   delivered,
+  undoable,
   toolCalls,
   approvals,
   worktreePath,
 }: {
   readonly message: ChatMessage
   readonly delivered: boolean
+  readonly undoable: boolean
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
 }) {
   return renderContent(
-    message.sessionId,
+    message,
     message.content,
     toolCalls,
     approvals,
     worktreePath,
     delivered,
+    undoable,
   )
 })
 
 const renderContent = (
-  sessionId: SessionId,
+  message: ChatMessage,
   content: MessageContent,
   toolCalls: Readonly<Record<string, ToolCall>>,
   approvals: ReadonlyMap<string, Approval>,
   worktreePath: string,
   delivered: boolean,
+  undoable: boolean,
 ) => {
   switch (content._tag) {
     case "user":
       return (
         <UserMessage
-          sessionId={sessionId}
+          message={message}
+          sessionId={message.sessionId}
           text={content.text}
           attachments={content.attachments ?? []}
           mentions={content.mentions ?? NO_MENTIONS}
@@ -210,6 +232,8 @@ const renderContent = (
       return <Notice content={content} />
     case "provider_switch":
       return <ProviderSwitchLine content={content} delivered={delivered} />
+    case "rewind":
+      return <RewindLine messageId={message.id} content={content} undoable={undoable} />
     case "tool_results":
     case "other":
       return null
@@ -219,27 +243,48 @@ const renderContent = (
 const NO_MENTIONS: ReadonlyArray<string> = []
 
 function UserMessage({
+  message,
   sessionId,
   text,
   attachments,
   mentions,
 }: {
+  readonly message: ChatMessage
   readonly sessionId: SessionId
   readonly text: string
   readonly attachments: ReadonlyArray<Attachment>
   readonly mentions: ReadonlyArray<string>
 }) {
+  const { onRewind } = useTranscriptActions()
   return (
-    <Message align="end">
+    <Message align="end" className="group/user">
       <MessageBody>
         {attachments.length > 0 && (
           <MessageAttachments sessionId={sessionId} attachments={attachments} />
         )}
-        <Bubble align="end" className="max-w-[85%]">
-          <BubbleContent className="whitespace-pre-wrap">
-            <FileReferenceText text={text} mentions={mentions} />
-          </BubbleContent>
-        </Bubble>
+        <div className="flex items-start justify-end gap-1">
+          {onRewind !== undefined && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="muted"
+                  size="icon-xs"
+                  className="mt-1.5 opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
+                  aria-label="Rewind to before this message"
+                  onClick={() => onRewind(message)}
+                >
+                  <History />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Rewind to before this message</TooltipContent>
+            </Tooltip>
+          )}
+          <Bubble align="end" className="max-w-[85%]">
+            <BubbleContent className="whitespace-pre-wrap">
+              <FileReferenceText text={text} mentions={mentions} />
+            </BubbleContent>
+          </Bubble>
+        </div>
       </MessageBody>
     </Message>
   )
@@ -439,5 +484,46 @@ function Notice({ content }: { readonly content: Content<"notice"> }) {
       <TriangleAlert />
       <AlertDescription>{content.text}</AlertDescription>
     </Alert>
+  )
+}
+
+function RewindLine({
+  messageId,
+  content,
+  undoable,
+}: {
+  readonly messageId: string
+  readonly content: Content<"rewind">
+  readonly undoable: boolean
+}) {
+  const { onUndoRewind } = useTranscriptActions()
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string>()
+  const summary = rewindSummary(content)
+  const undo = async () => {
+    if (onUndoRewind === undefined) return
+    setPending(true)
+    setError(undefined)
+    setError(await onUndoRewind(messageId))
+    setPending(false)
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <div role="separator" className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
+        <span className="h-px min-w-4 flex-1 bg-border" />
+        <History className="size-3.5 shrink-0" aria-hidden />
+        <span className="min-w-0 truncate whitespace-nowrap" title={summary}>
+          {summary}
+        </span>
+        {undoable && onUndoRewind !== undefined && (
+          <Button variant="muted" size="xs" disabled={pending} onClick={() => void undo()}>
+            {pending ? <Spinner /> : <Undo2 />}
+            Undo
+          </Button>
+        )}
+        <span className="h-px min-w-4 flex-1 bg-border" />
+      </div>
+      {error !== undefined && <p className="text-center text-xs text-destructive">{error}</p>}
+    </div>
   )
 }

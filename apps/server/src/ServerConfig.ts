@@ -22,6 +22,7 @@ export interface ServerConfigShape {
   readonly mcpConfigPath: string
   readonly pluginDir: string
   readonly terminalsDir: string
+  readonly checkpointsDir: string
   readonly shellIntegrationDir: string
   readonly webDist: string | undefined
   readonly webOrigin: string
@@ -53,6 +54,7 @@ const make = (options: {
     mcpConfigPath: join(home, "mcp.json"),
     pluginDir: join(home, "plugin"),
     terminalsDir: join(home, "terminals"),
+    checkpointsDir: join(home, "checkpoints"),
     shellIntegrationDir: join(home, "shell-integration"),
     webDist: options.webDist,
     webOrigin: options.webOrigin ?? `http://127.0.0.1:${options.port}`,

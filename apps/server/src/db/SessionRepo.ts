@@ -199,6 +199,27 @@ const ParkedRow = Schema.Struct({
 
 const accountKey = (accountId: string | null) => accountId ?? ""
 
+export interface RawMessage {
+  readonly id: string
+  readonly role: string
+  readonly raw: unknown
+}
+
+const RawRow = Schema.Struct({
+  id: Schema.String,
+  role: Schema.String,
+  raw_json: Schema.NullOr(Schema.String),
+})
+
+const parseRaw = (json: string | null): unknown => {
+  if (json === null) return null
+  try {
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 export class SessionRepo extends Context.Service<
   SessionRepo,
   {
@@ -272,6 +293,18 @@ export class SessionRepo extends Context.Service<
       sessionId: string,
       attachmentId: string,
     ) => Effect.Effect<Option.Option<Attachment>>
+    readonly rawBefore: (
+      sessionId: string,
+      messageId: string,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<RawMessage>>
+    readonly truncateFrom: (
+      sessionId: string,
+      messageId: string,
+    ) => Effect.Effect<ReadonlyArray<ChatMessage>>
+    readonly forgetParked: (sessionId: string) => Effect.Effect<void>
+    readonly getPendingFork: (sessionId: string) => Effect.Effect<string | null>
+    readonly setPendingFork: (sessionId: string, at: string | null) => Effect.Effect<void>
   }
 >()("humanity/SessionRepo") {
   static readonly layer = Layer.effect(
@@ -776,7 +809,82 @@ export class SessionRepo extends Context.Service<
           return true
         }).pipe(sql.withTransaction, Effect.orDie)
 
+      const findRawBefore = SqlSchema.findAll({
+        Request: Schema.Struct({
+          sessionId: Schema.String,
+          messageId: Schema.String,
+          limit: Schema.Number,
+        }),
+        Result: RawRow,
+        execute: ({ sessionId, messageId, limit }) =>
+          sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} AND rowid < (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid DESC LIMIT ${limit}`,
+      })
+
+      const rawBefore = (sessionId: string, messageId: string, limit: number) =>
+        findRawBefore({ sessionId, messageId, limit }).pipe(
+          Effect.map((rows) =>
+            rows.map((row): RawMessage => ({
+              id: row.id,
+              role: row.role,
+              raw: parseRaw(row.raw_json),
+            })),
+          ),
+          Effect.orDie,
+        )
+
+      const findFrom = SqlSchema.findAll({
+        Request: Schema.Struct({ sessionId: Schema.String, messageId: Schema.String }),
+        Result: MessageRow,
+        execute: ({ sessionId, messageId }) =>
+          sql`SELECT id, session_id, normalized_json, created_at FROM messages WHERE session_id = ${sessionId} AND rowid >= (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid`,
+      })
+
+      const truncateFrom = (sessionId: string, messageId: string) =>
+        Effect.gen(function* () {
+          const removed = (yield* findFrom({ sessionId, messageId })).map(toMessage)
+          const toolUseIds = toolUseIdsOf(removed)
+          for (const chunk of chunksOf(toolUseIds, 500)) {
+            yield* sql`DELETE FROM tool_calls WHERE session_id = ${sessionId} AND ${sql.in("tool_use_id", chunk)}`
+          }
+          for (const chunk of chunksOf(
+            removed.map((message) => message.id),
+            500,
+          )) {
+            yield* sql`DELETE FROM messages WHERE session_id = ${sessionId} AND ${sql.in("id", chunk)}`
+          }
+          return removed
+        }).pipe(sql.withTransaction, Effect.orDie)
+
+      const forgetParked = (sessionId: string) =>
+        sql`DELETE FROM session_providers WHERE session_id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const findPendingFork = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ pending_fork: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT pending_fork FROM sessions WHERE id = ${id}`,
+      })
+
+      const getPendingFork = (sessionId: string) =>
+        findPendingFork(sessionId).pipe(
+          Effect.map((row) => (Option.isSome(row) ? row.value.pending_fork : null)),
+          Effect.orDie,
+        )
+
+      const setPendingFork = (sessionId: string, at: string | null) =>
+        sql`UPDATE sessions SET pending_fork = ${at} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
       return SessionRepo.of({
+        getPendingFork,
+        setPendingFork,
+        rawBefore,
+        truncateFrom,
+        forgetParked,
         insert,
         get,
         listByProject,
