@@ -1,0 +1,25 @@
+.files-editor {
+  --syntax-keyword: #cf222e;
+  --syntax-string: #0a3069;
+  --syntax-constant: #0550ae;
+  --syntax-comment: #6e7781;
+  --syntax-function: #8250df;
+  --syntax-type: #953800;
+  --syntax-property: #0550ae;
+  --syntax-tag: #116329;
+  --syntax-variable: #24292f;
+  --syntax-invalid: #82071e;
+}
+
+.dark .files-editor {
+  --syntax-keyword: #ff7b72;
+  --syntax-string: #a5d6ff;
+  --syntax-constant: #79c0ff;
+  --syntax-comment: #8b949e;
+  --syntax-function: #d2a8ff;
+  --syntax-type: #ffa657;
+  --syntax-property: #79c0ff;
+  --syntax-tag: #7ee787;
+  --syntax-variable: #e6edf3;
+  --syntax-invalid: #ffa198;
+}

@@ -3,6 +3,7 @@ import { ApprovalsRpcs } from "./rpc/Approvals.ts"
 import { ClaudeRpcs } from "./rpc/Claude.ts"
 import { CodexRpcs } from "./rpc/Codex.ts"
 import { ExtensionsRpcs } from "./rpc/Extensions.ts"
+import { FilesRpcs } from "./rpc/Files.ts"
 import { GitRpcs } from "./rpc/Git.ts"
 import { GitHubRpcs } from "./rpc/GitHub.ts"
 import { GitLabRpcs } from "./rpc/GitLab.ts"
@@ -22,6 +23,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   GitHubRpcs,
   GitLabRpcs,
   SessionsRpcs,
+  FilesRpcs,
   ApprovalsRpcs,
   ClaudeRpcs,
   CodexRpcs,

@@ -415,3 +415,40 @@ export class CliPathNotFound extends Schema.TaggedError<CliPathNotFound>()("CliP
     return `${this.path} is not a file. Pick the CLI's executable or script.`
   }
 }
+
+export class FileRefused extends Schema.TaggedError<FileRefused>()("FileRefused", {
+  path: Schema.String,
+  reason: Schema.String,
+}) {
+  override get message() {
+    return `${this.path}: ${this.reason}`
+  }
+}
+
+export class FileNotFound extends Schema.TaggedError<FileNotFound>()("FileNotFound", {
+  path: Schema.String,
+}) {
+  override get message() {
+    return `${this.path} no longer exists in this thread's folder.`
+  }
+}
+
+export class FileChangedOnDisk extends Schema.TaggedError<FileChangedOnDisk>()(
+  "FileChangedOnDisk",
+  { path: Schema.String, version: Schema.NullOr(Schema.String) },
+) {
+  override get message() {
+    return this.version === null
+      ? `${this.path} was deleted since you opened it.`
+      : `${this.path} changed on disk since you opened it.`
+  }
+}
+
+export class FileAccessFailed extends Schema.TaggedError<FileAccessFailed>()("FileAccessFailed", {
+  path: Schema.String,
+  detail: Schema.String,
+}) {
+  override get message() {
+    return `Could not access ${this.path}: ${this.detail}`
+  }
+}

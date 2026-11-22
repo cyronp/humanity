@@ -8,8 +8,16 @@ import type {
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { GitBranch, GitPullRequestArrow, Globe, PanelRightClose, RefreshCw, X } from "lucide-react"
-import { type ReactNode, useEffect, useId, useState } from "react"
+import {
+  FolderTree,
+  GitBranch,
+  GitPullRequestArrow,
+  Globe,
+  PanelRightClose,
+  RefreshCw,
+  X,
+} from "lucide-react"
+import { lazy, type ReactNode, Suspense, useEffect, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -50,7 +58,10 @@ import {
 
 export const RAIL_WIDTH = 48
 
+const FilesPanel = lazy(() => import("@/features/files/FilesPanel"))
+
 const ICONS: Readonly<Record<ShelfTool, ReactNode>> = {
+  files: <FolderTree />,
   git: <GitPullRequestArrow />,
   browser: <Globe />,
 }
@@ -194,6 +205,16 @@ export function ToolPanel({
     })
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {tool === "files" && (
+        <Suspense fallback={null}>
+          <FilesPanel
+            session={session}
+            activity={activity}
+            onClose={onClose}
+            onReference={onReference}
+          />
+        </Suspense>
+      )}
       {tool === "git" && (
         <GitPanel
           session={session}
