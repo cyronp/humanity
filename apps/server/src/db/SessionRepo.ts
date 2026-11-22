@@ -5,6 +5,7 @@ import {
   Autonomy,
   type ChatMessage,
   MessageContent,
+  type MessageHit,
   NO_USAGE,
   ProjectId,
   ReasoningEffort,
@@ -22,6 +23,13 @@ import {
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+import {
+  indexMessage,
+  pruneOrphans,
+  searchMessages,
+  unindexMessages,
+  unindexSession,
+} from "./searchIndex.ts"
 
 const SessionRow = Schema.Struct({
   id: SessionId,
@@ -307,6 +315,12 @@ export class SessionRepo extends Context.Service<
       messageId: string,
     ) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly forgetParked: (sessionId: string) => Effect.Effect<void>
+    readonly search: (options: {
+      readonly query: string
+      readonly projectIds?: ReadonlyArray<string> | undefined
+      readonly limit?: number | undefined
+    }) => Effect.Effect<ReadonlyArray<MessageHit>>
+    readonly pruneSearch: Effect.Effect<void>
     readonly getPendingFork: (sessionId: string) => Effect.Effect<string | null>
     readonly setPendingFork: (sessionId: string, at: string | null) => Effect.Effect<void>
   }
@@ -617,6 +631,7 @@ export class SessionRepo extends Context.Service<
               created_at: message.createdAt,
             })}
           `
+          yield* indexMessage(sql, message)
         }).pipe(Effect.orDie)
 
       const updateMessage = (message: ChatMessage) =>
@@ -629,10 +644,13 @@ export class SessionRepo extends Context.Service<
             })}
             WHERE session_id = ${message.sessionId} AND id = ${message.id}
           `
+          yield* unindexMessages(sql, message.sessionId, [message.id])
+          yield* indexMessage(sql, message)
         }).pipe(Effect.orDie)
 
       const deleteMessage = (sessionId: string, messageId: string) =>
         sql`DELETE FROM messages WHERE session_id = ${sessionId} AND id = ${messageId}`.pipe(
+          Effect.andThen(unindexMessages(sql, sessionId, [messageId])),
           Effect.asVoid,
           Effect.orDie,
         )
@@ -790,6 +808,7 @@ export class SessionRepo extends Context.Service<
               updated_at = excluded.updated_at
           `
           yield* sql`DELETE FROM messages WHERE session_id = ${session.id}`
+          yield* unindexSession(sql, session.id)
           yield* sql`DELETE FROM tool_calls WHERE session_id = ${session.id}`
           for (const { message, raw } of messages) yield* insertMessage(message, raw)
           for (const toolCall of toolCalls) {
@@ -858,6 +877,11 @@ export class SessionRepo extends Context.Service<
           )) {
             yield* sql`DELETE FROM messages WHERE session_id = ${sessionId} AND ${sql.in("id", chunk)}`
           }
+          yield* unindexMessages(
+            sql,
+            sessionId,
+            removed.map((message) => message.id),
+          )
           return removed
         }).pipe(sql.withTransaction, Effect.orDie)
 
@@ -918,7 +942,17 @@ export class SessionRepo extends Context.Service<
           Effect.orDie,
         )
 
+      const search = (options: {
+        readonly query: string
+        readonly projectIds?: ReadonlyArray<string> | undefined
+        readonly limit?: number | undefined
+      }) => searchMessages(sql, options)
+
+      const pruneSearch = pruneOrphans(sql).pipe(Effect.orDie)
+
       return SessionRepo.of({
+        search,
+        pruneSearch,
         getPendingFork,
         setPendingFork,
         rawBefore,

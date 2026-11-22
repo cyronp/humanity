@@ -28,6 +28,7 @@ import {
   HUMANITY_MCP_SERVER,
   SKILL_TOOL,
   type MessageContent,
+  type MessageHit,
   type OpenedThread,
   type PendingConfirmation,
   type PlanUsage,
@@ -367,6 +368,11 @@ export class SessionService extends Context.Service<
       | GitInvalidBranchName
       | GitRefNotFound
     >
+    readonly search: (options: {
+      readonly query: string
+      readonly projectIds?: ReadonlyArray<string> | undefined
+      readonly limit?: number | undefined
+    }) => Effect.Effect<ReadonlyArray<MessageHit>>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     readonly earlierMessages: (
       sessionId: string,
@@ -2219,6 +2225,7 @@ export class SessionService extends Context.Service<
         }),
       )
 
+      yield* repo.pruneSearch
       const orphaned = yield* repo.listByStatus(["running", "waiting_for_human"])
       yield* Effect.forEach(
         orphaned,
@@ -2268,6 +2275,7 @@ export class SessionService extends Context.Service<
         rewind,
         undoRewind,
         fork,
+        search: repo.search,
         subscribe,
         earlierMessages,
         watchAll,
