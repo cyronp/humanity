@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PROJECT_SETTINGS,
   type GitHubConnection,
   type GitHubRepo,
   type Project,
@@ -36,6 +37,7 @@ const project = (name: string, githubFullName: string | null): Project => ({
   gitlab: null,
   defaultBranch: "main",
   defaultAutonomy: null,
+  settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: "2026-11-01T00:00:00Z",
 })
 

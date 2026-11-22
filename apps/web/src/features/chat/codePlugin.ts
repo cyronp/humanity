@@ -1,6 +1,7 @@
 import type { BundledLanguage } from "shiki"
 import type { CodeHighlighterPlugin, HighlightResult } from "streamdown"
-import { highlight, SHIKI_THEMES } from "@/features/diff/highlighter"
+import { highlight, shikiThemes } from "@/features/diff/highlighter"
+import { uiPreferences } from "@/lib/uiPreferences"
 
 const MAX_CACHED = 200
 const cache = new Map<string, HighlightResult>()
@@ -17,10 +18,13 @@ export const shikiCodePlugin: CodeHighlighterPlugin = {
   name: "shiki",
   type: "code-highlighter",
   getSupportedLanguages: () => [],
-  getThemes: () => [SHIKI_THEMES.light, SHIKI_THEMES.dark],
+  getThemes: () => {
+    const { light, dark } = shikiThemes()
+    return [light, dark]
+  },
   supportsLanguage: () => true,
   highlight: ({ code, language, isIncomplete }, callback) => {
-    const key = `${language}\u0000${code}`
+    const key = `${uiPreferences().codeTheme}\u0000${language}\u0000${code}`
     const cached = cache.get(key)
     if (cached !== undefined) return cached
 

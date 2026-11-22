@@ -1,5 +1,6 @@
 import { PREVIEW_PARTITION, type PreviewColorScheme } from "@humanity/contracts"
 import { useEffect, useLayoutEffect, useRef } from "react"
+import { browserDefaults } from "./browser.ts"
 import {
   type CrashRecovery,
   desktopPreview,
@@ -84,7 +85,11 @@ export function WebviewTab({
   const view = useRef<WebviewElement | null>(null)
   const ready = useRef(false)
   const shownUrl = useRef(url)
-  const settings = useRef({ zoom, muted: false, colorScheme: "system" as PreviewColorScheme })
+  const settings = useRef({
+    zoom,
+    muted: false,
+    colorScheme: browserDefaults().colorScheme as PreviewColorScheme,
+  })
   const callbacks = useRef({ onLive, onNavigated, onTitle })
   useLayoutEffect(() => {
     callbacks.current = { onLive, onNavigated, onTitle }
@@ -106,6 +111,8 @@ export function WebviewTab({
     let crashTimer: ReturnType<typeof setTimeout> | undefined
 
     const live = (patch: Partial<TabLive>) => callbacks.current.onLive(tabId, patch)
+    if (settings.current.colorScheme !== "system")
+      live({ colorScheme: settings.current.colorScheme })
     const history = () =>
       ready.current ? { canGoBack: webview.canGoBack(), canGoForward: webview.canGoForward() } : {}
     const applyColorScheme = () => {

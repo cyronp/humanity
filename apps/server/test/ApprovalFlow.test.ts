@@ -587,7 +587,7 @@ describe("autonomy", () => {
 
           assert.strictEqual(yield* create(), "auto")
 
-          yield* preferences.setPinnedDefaults({ autonomy: "ask", effort: null })
+          yield* preferences.setPinnedDefaults({ autonomy: "ask", effort: null, model: null })
           assert.strictEqual(yield* create(), "ask")
 
           const updated = yield* projects.setDefaultAutonomy(project.id, "accept_edits")

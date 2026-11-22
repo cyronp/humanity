@@ -33,7 +33,7 @@ export function AddProviderAccount({
         <SelectTrigger id={pickerId} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent position="popper" align="start">
+        <SelectContent>
           {PROVIDER_IDS.map((id) => {
             const { name, Icon } = PROVIDERS[id]
             return (

@@ -35,6 +35,7 @@ import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { useProviderModels } from "@/features/providers/useProviderModels"
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
+import { useUiPreferences } from "@/lib/uiPreferences"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
@@ -285,9 +286,10 @@ function AssistantMessage({
 }
 
 function Thinking({ text }: { readonly text: string }) {
+  const [{ expandThinking }] = useUiPreferences()
   return (
     <Trace>
-      <TraceCollapsible>
+      <TraceCollapsible defaultOpen={expandThinking}>
         <TraceCollapsibleTrigger className="text-xs">
           <TraceLine className="text-xs">
             <TraceIcon>

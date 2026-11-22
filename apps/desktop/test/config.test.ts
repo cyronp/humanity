@@ -1,7 +1,8 @@
 import { DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT } from "@humanity/contracts"
+import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { resolveDesktopConfig } from "../src/config.ts"
+import { APP_USER_MODEL_ID, resolveDesktopConfig } from "../src/config.ts"
 
 const input = {
   env: {},
@@ -70,5 +71,12 @@ describe("resolveDesktopConfig", () => {
     expect(config.daemon).toBeUndefined()
     expect(config.origin).toBe("http://127.0.0.1:5173")
     expect(config.userDataDir).toBe(join(home, "desktop-dev"))
+  })
+})
+
+describe("the Windows app id", () => {
+  it("is the installer's, so notifications carry Humanity's name and icon", () => {
+    const builder = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8")
+    expect(builder.split(/\r?\n/)).toContain(`appId: ${APP_USER_MODEL_ID}`)
   })
 })

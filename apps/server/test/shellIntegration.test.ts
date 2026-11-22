@@ -69,6 +69,21 @@ describe("shellLaunch", () => {
     env: { HOME: "/home/me" },
   })
 
+  it("starts each shell plainly, as a login shell, when integration is off", () => {
+    const off = (platform: NodeJS.Platform) => ({ ...options(platform), integration: false })
+    assert.deepStrictEqual(shellLaunch(shell("pwsh"), off("win32")), {
+      args: ["-NoLogo"],
+      env: {},
+      integrated: false,
+    })
+    assert.deepStrictEqual(shellLaunch(shell("bash"), off("linux")).args, ["--login", "-i"])
+    assert.deepStrictEqual(shellLaunch(shell("bash", "git-bash"), off("win32")).env, {
+      CHERE_INVOKING: "1",
+    })
+    assert.deepStrictEqual(shellLaunch(shell("zsh"), off("darwin")).args, ["-l"])
+    assert.deepStrictEqual(shellLaunch(shell("fish"), off("linux")).env, {})
+  })
+
   it("passes PowerShell its script inline, so no execution policy stops it", () => {
     const launch = shellLaunch(shell("pwsh"), options("win32"))
     assert.isTrue(launch.integrated)

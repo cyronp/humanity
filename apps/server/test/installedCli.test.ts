@@ -8,6 +8,7 @@ import {
   locateCli,
   parseCliVersion,
   searchFolders,
+  setCliOverrides,
   shimTarget,
 } from "../src/agent/installedCli.ts"
 
@@ -128,6 +129,23 @@ describe("finding an installed CLI", () => {
   it("reads the last quoted %dp0% path of a shim", () => {
     expect(shimTarget(NPM_SHIM)).toBe("node_modules\\@openai\\codex\\bin\\codex.js")
     expect(shimTarget('"%~dp0\\cli.js" %*')).toBe("cli.js")
+  })
+})
+
+describe("a CLI path the human picked", () => {
+  it("is used before the PATH, and the PATH again once it is gone or cleared", () => {
+    const picked = "/opt/claude/claude"
+    const onPath = "/usr/bin/claude"
+    setCliOverrides({ claude: picked })
+    try {
+      expect(locateCli("claude", unix([picked, onPath]))?.path).toBe(picked)
+      expect(locateCli("claude", unix([onPath]))?.path).toBe(onPath)
+      expect(locateCli("codex", unix(["/usr/bin/codex"]))?.path).toBe("/usr/bin/codex")
+      setCliOverrides({ claude: null })
+      expect(locateCli("claude", unix([picked, onPath]))?.path).toBe(onPath)
+    } finally {
+      setCliOverrides({})
+    }
   })
 })
 

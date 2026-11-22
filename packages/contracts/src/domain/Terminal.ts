@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { trimTrailing } from "../text.ts"
 import { ProjectId } from "./Project.ts"
 import { SessionId } from "./Session.ts"
@@ -84,6 +84,10 @@ export type TerminalColors = typeof TerminalColors.Type
 
 export const TERMINAL_FONT_SIZES = { min: 8, max: 32 } as const
 export const TERMINAL_SCROLLBACK = { min: 1_000, max: 50_000 } as const
+export const TERMINAL_LINE_HEIGHTS = { min: 1, max: 2 } as const
+
+export const TerminalCursorStyle = Schema.Literals(["block", "bar", "underline"])
+export type TerminalCursorStyle = typeof TerminalCursorStyle.Type
 
 export const TerminalPreferences = Schema.Struct({
   shell: Schema.NullOr(Schema.String),
@@ -93,6 +97,21 @@ export const TerminalPreferences = Schema.Struct({
   scrollback: Schema.Int.check(
     Schema.isBetween({ minimum: TERMINAL_SCROLLBACK.min, maximum: TERMINAL_SCROLLBACK.max }),
   ),
+  fontFamily: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
+  lineHeight: Schema.Number.check(
+    Schema.isBetween({ minimum: TERMINAL_LINE_HEIGHTS.min, maximum: TERMINAL_LINE_HEIGHTS.max }),
+  ).pipe(Schema.withDecodingDefaultKey(Effect.succeed(1))),
+  cursorStyle: TerminalCursorStyle.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed<TerminalCursorStyle>("block")),
+  ),
+  cursorBlink: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  copyOnSelect: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  rightClickPaste: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  gpuAcceleration: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  shellIntegration: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  confirmClose: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
 })
 export type TerminalPreferences = typeof TerminalPreferences.Type
 
@@ -100,6 +119,15 @@ export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
   shell: null,
   fontSize: 13,
   scrollback: 5_000,
+  fontFamily: null,
+  lineHeight: 1,
+  cursorStyle: "block",
+  cursorBlink: true,
+  copyOnSelect: false,
+  rightClickPaste: false,
+  gpuAcceleration: true,
+  shellIntegration: true,
+  confirmClose: true,
 }
 
 export const terminalLabel = (

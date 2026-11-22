@@ -1,5 +1,9 @@
 import { useAtomValue } from "@effect/atom-react"
-import { type TerminalOwner, terminalOwnerKey } from "@humanity/contracts"
+import {
+  DEFAULT_BROWSER_PREFERENCES,
+  type TerminalOwner,
+  terminalOwnerKey,
+} from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { PanelBottom, PanelRight } from "lucide-react"
@@ -8,7 +12,12 @@ import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
-import { onPreviewOpen, setLinkTarget } from "@/features/browser/browser"
+import {
+  browserDefaultsOf,
+  onPreviewOpen,
+  setBrowserDefaults,
+  setLinkTarget,
+} from "@/features/browser/browser"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
@@ -81,10 +90,14 @@ export function WorkspaceFrame({
   )
 
   const browserPreferences = useAtomValue(browserPreferencesAtom)
-  const linkTarget = AsyncResult.isSuccess(browserPreferences)
-    ? browserPreferences.value.linkTarget
-    : "browser"
+  const { linkTarget, device, zoom, appearance } = AsyncResult.isSuccess(browserPreferences)
+    ? browserPreferences.value
+    : DEFAULT_BROWSER_PREFERENCES
   useEffect(() => setLinkTarget(linkTarget), [linkTarget])
+  useEffect(
+    () => setBrowserDefaults(browserDefaultsOf({ device, zoom, appearance })),
+    [device, zoom, appearance],
+  )
 
   const hasPanel = panel !== undefined
   useEffect(() => {

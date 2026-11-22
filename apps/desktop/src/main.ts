@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import brandMark from "../../web/public/favicon.svg"
-import { resolveDesktopConfig } from "./config.ts"
+import { APP_USER_MODEL_ID, resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { makeElectronUpdater } from "./electronUpdater.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
@@ -32,6 +32,8 @@ const config = resolveDesktopConfig({
   resourcesPath: process.resourcesPath,
   appPath: app.getAppPath(),
 })
+
+if (process.platform === "win32" && app.isPackaged) app.setAppUserModelId(APP_USER_MODEL_ID)
 
 mkdirSync(config.userDataDir, { recursive: true })
 app.setPath("userData", config.userDataDir)

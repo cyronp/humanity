@@ -1,6 +1,10 @@
 import {
+  type AgentProvider,
   BrowserPreferences,
+  CLI_COMMANDS,
+  CliPathPreferences,
   DEFAULT_BROWSER_PREFERENCES,
+  DEFAULT_CLI_PATH_PREFERENCES,
   DEFAULT_HISTORY_PREFERENCES,
   DEFAULT_TERMINAL_PREFERENCES,
   DEFAULT_TOOLS_PREFERENCES,
@@ -14,22 +18,24 @@ import {
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+import { setCliOverrides } from "../agent/installedCli.ts"
 
-const PINNED_DEFAULTS_KEY = "pinned_defaults"
-const UPDATES_KEY = "updates"
-const HISTORY_KEY = "history"
-const TERMINAL_KEY = "terminal"
-const TOOLS_KEY = "tools"
-const BROWSER_KEY = "browser"
+const applyCliPaths = (paths: CliPathPreferences) =>
+  setCliOverrides(
+    Object.fromEntries(
+      (Object.keys(paths) as Array<AgentProvider>).map((provider) => [
+        CLI_COMMANDS[provider],
+        paths[provider],
+      ]),
+    ),
+  )
 
 const PreferenceRow = Schema.Struct({ value_json: Schema.String })
 
-const PinnedDefaultsJson = Schema.fromJsonString(PinnedDefaults)
-const UpdatePreferencesJson = Schema.fromJsonString(UpdatePreferences)
-const HistoryPreferencesJson = Schema.fromJsonString(HistoryPreferences)
-const TerminalPreferencesJson = Schema.fromJsonString(TerminalPreferences)
-const ToolsPreferencesJson = Schema.fromJsonString(ToolsPreferences)
-const BrowserPreferencesJson = Schema.fromJsonString(BrowserPreferences)
+interface Stored<A> {
+  readonly get: Effect.Effect<A>
+  readonly set: (value: A) => Effect.Effect<A>
+}
 
 export class PreferencesService extends Context.Service<
   PreferencesService,
@@ -46,14 +52,14 @@ export class PreferencesService extends Context.Service<
     readonly setTools: (preferences: ToolsPreferences) => Effect.Effect<ToolsPreferences>
     readonly browser: Effect.Effect<BrowserPreferences>
     readonly setBrowser: (preferences: BrowserPreferences) => Effect.Effect<BrowserPreferences>
+    readonly cliPaths: Effect.Effect<CliPathPreferences>
+    readonly setCliPaths: (preferences: CliPathPreferences) => Effect.Effect<CliPathPreferences>
   }
 >()("humanity/PreferencesService") {
   static readonly layer = Layer.effect(
     PreferencesService,
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      const decode = Schema.decodeEffect(PinnedDefaultsJson)
-      const encode = Schema.encodeEffect(PinnedDefaultsJson)
 
       const selectByKey = SqlSchema.findOneOption({
         Request: Schema.String,
@@ -61,173 +67,90 @@ export class PreferencesService extends Context.Service<
         execute: (key) => sql`SELECT value_json FROM preferences WHERE key = ${key}`,
       })
 
-      const pinnedDefaults = Effect.gen(function* () {
-        const row = yield* selectByKey(PINNED_DEFAULTS_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return NO_PINS
-        return yield* decode(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable pinned defaults", error.message),
-              NO_PINS,
+      const stored = <A, I>(
+        key: string,
+        schema: Schema.Codec<A, I>,
+        fallback: A,
+        label: string,
+      ): Stored<A> => {
+        const json = Schema.fromJsonString(schema)
+        const get = Effect.gen(function* () {
+          const row = yield* selectByKey(key).pipe(Effect.orDie)
+          if (Option.isNone(row)) return fallback
+          return yield* Schema.decodeEffect(json)(row.value.value_json).pipe(
+            Effect.catch((error) =>
+              Effect.as(Effect.logWarning(`Ignoring unreadable ${label}`, error.message), fallback),
             ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.pinnedDefaults"))
+          )
+        }).pipe(Effect.withSpan(`PreferencesService.${key}`))
+        const set = (value: A) =>
+          Effect.gen(function* () {
+            const encoded = yield* Schema.encodeEffect(json)(value).pipe(Effect.orDie)
+            yield* sql`
+              INSERT INTO preferences (key, value_json) VALUES (${key}, ${encoded})
+              ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
+            `.pipe(Effect.orDie)
+            return value
+          }).pipe(Effect.withSpan(`PreferencesService.set.${key}`))
+        return { get, set }
+      }
 
-      const setPinnedDefaults = Effect.fn("PreferencesService.setPinnedDefaults")(function* (
-        pinned: PinnedDefaults,
-      ) {
-        const json = yield* encode(pinned).pipe(Effect.orDie)
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${PINNED_DEFAULTS_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return pinned
-      })
+      const pinned = stored("pinned_defaults", PinnedDefaults, NO_PINS, "pinned defaults")
+      const updates = stored(
+        "updates",
+        UpdatePreferences,
+        DEFAULT_UPDATE_PREFERENCES,
+        "update preferences",
+      )
+      const history = stored(
+        "history",
+        HistoryPreferences,
+        DEFAULT_HISTORY_PREFERENCES,
+        "history preferences",
+      )
+      const terminal = stored(
+        "terminal",
+        TerminalPreferences,
+        DEFAULT_TERMINAL_PREFERENCES,
+        "terminal preferences",
+      )
+      const tools = stored(
+        "tools",
+        ToolsPreferences,
+        DEFAULT_TOOLS_PREFERENCES,
+        "tools preferences",
+      )
+      const browser = stored(
+        "browser",
+        BrowserPreferences,
+        DEFAULT_BROWSER_PREFERENCES,
+        "browser preferences",
+      )
+      const cliPaths = stored(
+        "cli_paths",
+        CliPathPreferences,
+        DEFAULT_CLI_PATH_PREFERENCES,
+        "CLI paths",
+      )
 
-      const updates = Effect.gen(function* () {
-        const row = yield* selectByKey(UPDATES_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return DEFAULT_UPDATE_PREFERENCES
-        return yield* Schema.decodeEffect(UpdatePreferencesJson)(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable update preferences", error.message),
-              DEFAULT_UPDATE_PREFERENCES,
-            ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.updates"))
-
-      const setUpdates = Effect.fn("PreferencesService.setUpdates")(function* (
-        preferences: UpdatePreferences,
-      ) {
-        const json = yield* Schema.encodeEffect(UpdatePreferencesJson)(preferences).pipe(
-          Effect.orDie,
-        )
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${UPDATES_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return preferences
-      })
-
-      const history = Effect.gen(function* () {
-        const row = yield* selectByKey(HISTORY_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return DEFAULT_HISTORY_PREFERENCES
-        return yield* Schema.decodeEffect(HistoryPreferencesJson)(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable history preferences", error.message),
-              DEFAULT_HISTORY_PREFERENCES,
-            ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.history"))
-
-      const setHistory = Effect.fn("PreferencesService.setHistory")(function* (
-        preferences: HistoryPreferences,
-      ) {
-        const json = yield* Schema.encodeEffect(HistoryPreferencesJson)(preferences).pipe(
-          Effect.orDie,
-        )
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${HISTORY_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return preferences
-      })
-
-      const terminal = Effect.gen(function* () {
-        const row = yield* selectByKey(TERMINAL_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return DEFAULT_TERMINAL_PREFERENCES
-        return yield* Schema.decodeEffect(TerminalPreferencesJson)(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable terminal preferences", error.message),
-              DEFAULT_TERMINAL_PREFERENCES,
-            ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.terminal"))
-
-      const setTerminal = Effect.fn("PreferencesService.setTerminal")(function* (
-        preferences: TerminalPreferences,
-      ) {
-        const json = yield* Schema.encodeEffect(TerminalPreferencesJson)(preferences).pipe(
-          Effect.orDie,
-        )
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${TERMINAL_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return preferences
-      })
-
-      const tools = Effect.gen(function* () {
-        const row = yield* selectByKey(TOOLS_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return DEFAULT_TOOLS_PREFERENCES
-        return yield* Schema.decodeEffect(ToolsPreferencesJson)(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable tools preferences", error.message),
-              DEFAULT_TOOLS_PREFERENCES,
-            ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.tools"))
-
-      const setTools = Effect.fn("PreferencesService.setTools")(function* (
-        preferences: ToolsPreferences,
-      ) {
-        const json = yield* Schema.encodeEffect(ToolsPreferencesJson)(preferences).pipe(
-          Effect.orDie,
-        )
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${TOOLS_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return preferences
-      })
-
-      const browser = Effect.gen(function* () {
-        const row = yield* selectByKey(BROWSER_KEY).pipe(Effect.orDie)
-        if (Option.isNone(row)) return DEFAULT_BROWSER_PREFERENCES
-        return yield* Schema.decodeEffect(BrowserPreferencesJson)(row.value.value_json).pipe(
-          Effect.catch((error) =>
-            Effect.as(
-              Effect.logWarning("Ignoring unreadable browser preferences", error.message),
-              DEFAULT_BROWSER_PREFERENCES,
-            ),
-          ),
-        )
-      }).pipe(Effect.withSpan("PreferencesService.browser"))
-
-      const setBrowser = Effect.fn("PreferencesService.setBrowser")(function* (
-        preferences: BrowserPreferences,
-      ) {
-        const json = yield* Schema.encodeEffect(BrowserPreferencesJson)(preferences).pipe(
-          Effect.orDie,
-        )
-        yield* sql`
-          INSERT INTO preferences (key, value_json) VALUES (${BROWSER_KEY}, ${json})
-          ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json
-        `.pipe(Effect.orDie)
-        return preferences
-      })
+      applyCliPaths(yield* cliPaths.get)
 
       return PreferencesService.of({
-        pinnedDefaults,
-        setPinnedDefaults,
-        updates,
-        setUpdates,
-        history,
-        setHistory,
-        terminal,
-        setTerminal,
-        tools,
-        setTools,
-        browser,
-        setBrowser,
+        pinnedDefaults: pinned.get,
+        setPinnedDefaults: pinned.set,
+        updates: updates.get,
+        setUpdates: updates.set,
+        history: history.get,
+        setHistory: history.set,
+        terminal: terminal.get,
+        setTerminal: terminal.set,
+        tools: tools.get,
+        setTools: tools.set,
+        browser: browser.get,
+        setBrowser: browser.set,
+        cliPaths: cliPaths.get,
+        setCliPaths: (paths) =>
+          Effect.tap(cliPaths.set(paths), (saved) => Effect.sync(() => applyCliPaths(saved))),
       })
     }),
   )

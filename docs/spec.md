@@ -176,6 +176,19 @@ The human picks the app's colors, as in an editor. This adds to the theming of s
 - **The same tokens, other values.** A color theme sets every token of `apps/web/src/index.css` (`COLOR_THEMES` in `apps/web/src/lib/colorThemes.ts`); no component names a theme. Default is the tokens of `index.css`, which a test keeps equal. The brand mark takes the theme's accent (`--brand-mark`; Default keeps its blue). The page's `theme-color` comes from the theme, so the desktop app's window buttons follow it.
 - **Kept in the browser** (`humanity.colorTheme`), like the mode, and applied before the first render. The terminal takes the new colors at once; code keeps its Shiki themes and the terminal its ANSI colors.
 
+## Amendment: more settings (2026-11-21)
+
+Settings grows a page and fills the ones it had. This adds no library to the stack of section 3, and every rule of "Autonomy first" holds.
+
+- **Kept in the browser** (`humanity.preferences`, like the theme): notifications, the send key, whether thinking and tool calls start expanded, the interface size, the code theme and how often an open thread fetches. **Kept by the daemon**, like the terminal's: the model pinned for new threads (`PinnedDefaults.model`), the terminal's and the Browser's new settings, a path for each provider's CLI, and each project's settings (`Project.settings`, one JSON column).
+- **General:** the interface size scales the app's root font. The code theme picks Shiki's light and dark pair for code everywhere. Notifications are off until the human turns one on: when a thread waits, finishes or stops on an error, and only when the human is not looking at that thread; an optional chime plays with them.
+- **Chat** (new): the model, reasoning effort and permissions a new thread starts with (a project's own default comes first), whether Enter or Ctrl/Cmd+Enter sends, and whether thinking and tool calls start expanded.
+- **Terminal:** font, line height, cursor, copy on select, right-click to paste, GPU rendering, asking before closing a terminal that runs a command, and shell integration, which can be turned off; a shell then starts plainly, as a login shell.
+- **Browser:** the device size, zoom and appearance of a new tab, whether the Browser points out local addresses, clearing its cookies and cache, and the recordings under `~/.humanity/recordings/`, opened in the system's file manager or deleted.
+- **Providers:** a path to the CLI, used before the PATH while the file exists ("Found, not shipped" otherwise holds); importing Claude Code's history, which onboarding asked once.
+- **Projects:** rename; the model for new threads; starting each new thread in a worktree; the branch prefix of a worktree's branch (`humanity/` by default); a setup script, run in a terminal of the thread, opened as the human's, each time a worktree is set up, one command per line; whether ending a thread asks, keeps or deletes its worktree; the merge method offered first and whether a pull request opens as a draft. The setup script is the human's own command, like their keystrokes in a terminal, and reaches no permission check.
+- **Repositories:** how often an open thread fetches in the background (never, or every 1, 5, 15 or 30 minutes); this supersedes "at most once a minute" of the shelf amendment as a fixed rate. **About:** the data folder, the daemon's address, links to the documentation and to a new issue, and diagnostics to copy (versions and OS, no paths).
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

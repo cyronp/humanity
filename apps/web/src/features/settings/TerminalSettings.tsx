@@ -2,12 +2,15 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import {
   DEFAULT_TERMINAL_PREFERENCES,
   TERMINAL_FONT_SIZES,
+  TERMINAL_LINE_HEIGHTS,
   TERMINAL_SCROLLBACK,
+  type TerminalCursorStyle,
   type TerminalPreferences,
 } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { useId } from "react"
 import { Input } from "@/components/ui/input"
+import { NumberInput } from "@/components/ui/number-input"
 import {
   Select,
   SelectContent,
@@ -15,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import {
   setTerminalPreferencesAtom,
   shellsAtom,
@@ -23,6 +27,7 @@ import {
 import { ShellIcon } from "@/features/terminal/ShellIcon"
 import { keys } from "@/lib/rpc"
 import {
+  SettingsChoice,
   SettingsFrame,
   SettingsGroup,
   SettingsPane,
@@ -32,8 +37,64 @@ import {
 
 const SYSTEM_DEFAULT = "system"
 
-const clamp = (value: number, bounds: { readonly min: number; readonly max: number }) =>
-  Math.round(Math.min(Math.max(value, bounds.min), bounds.max))
+const CURSOR_STYLES: ReadonlyArray<{
+  readonly value: TerminalCursorStyle
+  readonly label: string
+}> = [
+  { value: "block", label: "Block" },
+  { value: "bar", label: "Bar" },
+  { value: "underline", label: "Underline" },
+]
+
+type Toggle = keyof Pick<
+  TerminalPreferences,
+  | "cursorBlink"
+  | "copyOnSelect"
+  | "rightClickPaste"
+  | "gpuAcceleration"
+  | "shellIntegration"
+  | "confirmClose"
+>
+
+const BEHAVIOR: ReadonlyArray<{
+  readonly key: Toggle
+  readonly label: string
+  readonly detail: string
+}> = [
+  {
+    key: "copyOnSelect",
+    label: "Copy on select",
+    detail: "Copies text to the clipboard as soon as you select it.",
+  },
+  {
+    key: "rightClickPaste",
+    label: "Right-click to paste",
+    detail: "Right-click pastes, or copies a selection. Shift+right-click opens the menu.",
+  },
+  {
+    key: "confirmClose",
+    label: "Ask before closing a running terminal",
+    detail: "When a command is still running in it.",
+  },
+]
+
+const ADVANCED: ReadonlyArray<{
+  readonly key: Toggle
+  readonly label: string
+  readonly detail: string
+}> = [
+  {
+    key: "gpuAcceleration",
+    label: "GPU rendering",
+    detail: "Draws terminals with WebGL. Turn it off if text looks garbled on your graphics card.",
+  },
+  {
+    key: "shellIntegration",
+    label: "Shell integration",
+    detail:
+      "Marks each command's start and end, so tabs show what runs and the agent can wait for a command. Turn it off if it clashes with your shell's own startup files. Applies to new terminals.",
+  },
+]
 
 export function TerminalSettings() {
   const result = useAtomValue(terminalPreferencesAtom)
@@ -44,24 +105,30 @@ export function TerminalSettings() {
       payload: { terminal: { ...preferences, ...patch } },
       reactivityKeys: [keys.preferences],
     })
+  const cursorId = useId()
+  const blinkId = useId()
+  const toggleIds = useId()
+
+  const toggleRow = ({ key, label, detail }: (typeof BEHAVIOR)[number]) => (
+    <SettingsRow key={key} label={label} labelId={`${toggleIds}-${key}`} detail={detail}>
+      <Switch
+        aria-labelledby={`${toggleIds}-${key}`}
+        checked={preferences[key]}
+        onCheckedChange={(on) => change({ [key]: on })}
+      />
+    </SettingsRow>
+  )
 
   return (
     <SettingsFrame
       id="settings-terminal"
       title="Terminal"
-      description="Changes apply to new terminals. The font size applies at once."
+      description="The shell and scrollback apply to new terminals. How text looks applies at once."
     >
       <SettingsPane>
         <SettingsGroup>
           <SettingsRows>
             <ShellSetting value={preferences.shell} onChange={(shell) => change({ shell })} />
-            <NumberSetting
-              label="Font size"
-              detail={`In pixels, ${TERMINAL_FONT_SIZES.min} to ${TERMINAL_FONT_SIZES.max}.`}
-              value={preferences.fontSize}
-              bounds={TERMINAL_FONT_SIZES}
-              onChange={(fontSize) => change({ fontSize })}
-            />
             <NumberSetting
               label="Scrollback"
               detail={`Lines a terminal keeps above its screen, ${TERMINAL_SCROLLBACK.min.toLocaleString()} to ${TERMINAL_SCROLLBACK.max.toLocaleString()}.`}
@@ -71,6 +138,50 @@ export function TerminalSettings() {
               onChange={(scrollback) => change({ scrollback })}
             />
           </SettingsRows>
+        </SettingsGroup>
+        <SettingsGroup title="Text">
+          <SettingsRows>
+            <FontFamilySetting
+              value={preferences.fontFamily}
+              onChange={(fontFamily) => change({ fontFamily })}
+            />
+            <NumberSetting
+              label="Font size"
+              detail={`In pixels, ${TERMINAL_FONT_SIZES.min} to ${TERMINAL_FONT_SIZES.max}.`}
+              value={preferences.fontSize}
+              bounds={TERMINAL_FONT_SIZES}
+              onChange={(fontSize) => change({ fontSize })}
+            />
+            <NumberSetting
+              label="Line height"
+              detail={`A multiple of the font size, ${TERMINAL_LINE_HEIGHTS.min} to ${TERMINAL_LINE_HEIGHTS.max}.`}
+              value={preferences.lineHeight}
+              bounds={TERMINAL_LINE_HEIGHTS}
+              step={0.1}
+              onChange={(lineHeight) => change({ lineHeight })}
+            />
+            <SettingsRow label="Cursor" labelId={cursorId}>
+              <SettingsChoice
+                labelledBy={cursorId}
+                options={CURSOR_STYLES}
+                value={preferences.cursorStyle}
+                onChange={(cursorStyle) => change({ cursorStyle })}
+              />
+            </SettingsRow>
+            <SettingsRow label="Blinking cursor" labelId={blinkId}>
+              <Switch
+                aria-labelledby={blinkId}
+                checked={preferences.cursorBlink}
+                onCheckedChange={(cursorBlink) => change({ cursorBlink })}
+              />
+            </SettingsRow>
+          </SettingsRows>
+        </SettingsGroup>
+        <SettingsGroup title="Behavior">
+          <SettingsRows>{BEHAVIOR.map(toggleRow)}</SettingsRows>
+        </SettingsGroup>
+        <SettingsGroup title="Advanced">
+          <SettingsRows>{ADVANCED.map(toggleRow)}</SettingsRows>
         </SettingsGroup>
       </SettingsPane>
     </SettingsFrame>
@@ -122,6 +233,38 @@ function ShellSetting({
   )
 }
 
+function FontFamilySetting({
+  value,
+  onChange,
+}: {
+  readonly value: string | null
+  readonly onChange: (fontFamily: string | null) => void
+}) {
+  const labelId = useId()
+  return (
+    <SettingsRow
+      label="Font"
+      labelId={labelId}
+      detail="A font installed on this machine. Empty uses a Nerd Font when you have one, else your system's monospace font."
+    >
+      <Input
+        key={value ?? ""}
+        aria-labelledby={labelId}
+        className="w-56"
+        placeholder="JetBrains Mono"
+        defaultValue={value ?? ""}
+        onBlur={(event) => {
+          const next = event.currentTarget.value.trim()
+          if (next !== (value ?? "")) onChange(next === "" ? null : next)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur()
+        }}
+      />
+    </SettingsRow>
+  )
+}
+
 function NumberSetting({
   label,
   detail,
@@ -140,28 +283,14 @@ function NumberSetting({
   const labelId = useId()
   return (
     <SettingsRow label={label} labelId={labelId} detail={detail}>
-      <Input
-        key={value}
-        type="number"
+      <NumberInput
         aria-labelledby={labelId}
-        className="w-28"
+        className="w-36"
+        value={value}
         min={bounds.min}
         max={bounds.max}
         step={step}
-        defaultValue={value}
-        onBlur={(event) => {
-          const next = Number(event.currentTarget.value)
-          if (Number.isFinite(next) && event.currentTarget.value !== "") {
-            const clamped = clamp(next, bounds)
-            if (clamped !== value) onChange(clamped)
-            else event.currentTarget.value = String(value)
-          } else {
-            event.currentTarget.value = String(value)
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur()
-        }}
+        onChange={onChange}
       />
     </SettingsRow>
   )

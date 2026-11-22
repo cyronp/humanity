@@ -9,6 +9,7 @@ import { describeCause } from "@/lib/errors"
 import { AddAccount } from "./AddAccount.tsx"
 import { CliNotice, CliVersion, useCliUpdate } from "./CliStatus.tsx"
 import { PROVIDERS, type ProviderId } from "./ProviderIcon.tsx"
+import { ProviderOptions } from "./ProviderOptions.tsx"
 
 export function ProviderAccountList<Account extends { readonly id: string }>({
   provider,
@@ -18,6 +19,7 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
   onRefresh,
   onAdd,
   renderAccount,
+  options,
 }: {
   readonly provider: ProviderId
   readonly result: AsyncResult.AsyncResult<ReadonlyArray<Account>, unknown>
@@ -26,6 +28,7 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
   readonly onRefresh: () => void
   readonly onAdd: Parameters<typeof AddAccount>[0]["onAdd"]
   readonly renderAccount: (account: Account) => ReactNode
+  readonly options?: ReactNode
 }) {
   const { name, beta } = PROVIDERS[provider]
   const loaded = AsyncResult.isSuccess(result)
@@ -79,6 +82,7 @@ export function ProviderAccountList<Account extends { readonly id: string }>({
       {refreshError !== undefined && (
         <ErrorNote title="Could not check again" message={refreshError} />
       )}
+      <ProviderOptions provider={provider}>{options}</ProviderOptions>
     </section>
   )
 }

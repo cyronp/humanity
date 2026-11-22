@@ -23,6 +23,7 @@ import {
   KeyHint,
   noteMessageSent,
   SendButton,
+  sendKeyPressed,
 } from "@/features/chat/ChatBox"
 import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
 import { MentionTextarea } from "@/features/chat/MentionTextarea"
@@ -216,7 +217,7 @@ function NewChatForm({
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentions.onKeyDown(event)) return
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (sendKeyPressed(event)) {
       event.preventDefault()
       void submit()
     }

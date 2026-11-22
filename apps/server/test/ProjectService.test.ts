@@ -1,5 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
+import { DEFAULT_PROJECT_SETTINGS } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
+import { SqlClient } from "effect/sql"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join, sep } from "node:path"
 import { GitService } from "../src/services/GitService.ts"
@@ -142,6 +144,68 @@ describe("ProjectService", () => {
         const again = yield* Effect.flip(projects.remove(project.id))
         assert.strictEqual(again._tag, "ProjectNotFound")
       }).pipe(Effect.provide(services(home)))
+    }),
+  )
+
+  it.live("renames a project and keeps its settings across daemon restarts", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo()
+      const settings = {
+        ...DEFAULT_PROJECT_SETTINGS,
+        defaultModel: { provider: "codex" as const, model: "gpt-5" },
+        worktreeForNewThreads: true,
+        setupScript: "npm install",
+        branchPrefix: "me/",
+        mergeMethod: "rebase" as const,
+        draftPullRequests: true,
+        worktreeOnEnd: "remove" as const,
+      }
+
+      const added = yield* Effect.gen(function* () {
+        const projects = yield* ProjectService
+        const project = yield* projects.addLocal(repo)
+        assert.deepStrictEqual(project.settings, DEFAULT_PROJECT_SETTINGS)
+        yield* projects.rename(project.id, "  Widgets  ")
+        return yield* projects.setSettings(project.id, settings)
+      }).pipe(Effect.provide(services(home)))
+      const [listed] = yield* ProjectService.use((projects) => projects.list).pipe(
+        Effect.provide(services(home)),
+      )
+
+      assert.strictEqual(listed?.name, "Widgets")
+      assert.deepStrictEqual(listed?.settings, settings)
+      assert.deepStrictEqual(listed, added)
+    }),
+  )
+
+  it.live("reads settings it no longer understands as the defaults, field by field", () =>
+    Effect.gen(function* () {
+      const home = yield* tempDir()
+      const repo = yield* tempRepo()
+
+      const project = yield* Effect.gen(function* () {
+        const projects = yield* ProjectService
+        const sql = yield* SqlClient.SqlClient
+        const added = yield* projects.addLocal(repo)
+        yield* sql`UPDATE projects SET settings_json = ${'{"draftPullRequests":true}'}`
+        const partial = yield* projects.get(added.id)
+        yield* sql`UPDATE projects SET settings_json = ${"not json"}`
+        return { partial, broken: yield* projects.get(added.id) }
+      }).pipe(
+        Effect.provide(
+          ProjectService.layer.pipe(
+            Layer.provideMerge(GitService.layer),
+            Layer.provideMerge(baseLayer(home)),
+          ),
+        ),
+      )
+
+      assert.deepStrictEqual(project.partial.settings, {
+        ...DEFAULT_PROJECT_SETTINGS,
+        draftPullRequests: true,
+      })
+      assert.deepStrictEqual(project.broken.settings, DEFAULT_PROJECT_SETTINGS)
     }),
   )
 })

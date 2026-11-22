@@ -4,6 +4,7 @@ import {
   type TerminalAttachEvent,
   type TerminalId,
   type TerminalInfo,
+  type TerminalPreferences,
 } from "@humanity/contracts"
 import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
@@ -74,6 +75,21 @@ const setOptions = (terminal: Terminal, options: Partial<Terminal["options"]>) =
   Object.assign(terminal.options, options)
 }
 
+export const terminalFontFamily = (custom: string | null): string => {
+  const family = custom?.trim() ?? ""
+  if (family === "") return TERMINAL_FONT_FAMILY
+  const quoted = /^["'].*["']$/.test(family) || !family.includes(" ") ? family : `"${family}"`
+  return `${quoted}, ${TERMINAL_FONT_FAMILY}`
+}
+
+const lookOf = (preferences: TerminalPreferences) => ({
+  fontFamily: terminalFontFamily(preferences.fontFamily),
+  fontSize: preferences.fontSize,
+  lineHeight: preferences.lineHeight,
+  cursorStyle: preferences.cursorStyle,
+  cursorBlink: preferences.cursorBlink,
+})
+
 interface Mounted {
   readonly terminal: Terminal
   readonly fit: FitAddon
@@ -83,16 +99,14 @@ interface Mounted {
 export function TerminalView({
   info,
   active,
-  fontSize,
-  scrollback,
+  preferences,
   onCommand,
   onContextMenu,
   ref,
 }: {
   readonly info: TerminalInfo
   readonly active: boolean
-  readonly fontSize: number
-  readonly scrollback: number
+  readonly preferences: TerminalPreferences
   readonly onCommand: (command: TerminalCommand) => void
   readonly onContextMenu: (at: { readonly x: number; readonly y: number }) => void
   readonly ref?: Ref<TerminalViewHandle>
@@ -137,10 +151,8 @@ export function TerminalView({
     if (element === null) return
     const terminal = new Terminal({
       allowProposedApi: true,
-      fontFamily: TERMINAL_FONT_FAMILY,
-      fontSize,
-      scrollback,
-      cursorBlink: true,
+      ...lookOf(preferences),
+      scrollback: preferences.scrollback,
       macOptionIsMeta: false,
       theme: terminalTheme(element, theme),
     })
@@ -227,8 +239,19 @@ export function TerminalView({
     if (active) void setColors({ payload: { colors: terminalColors(colors) } })
   }, [mounted, theme, colorTheme, active, setColors])
 
+  const { gpuAcceleration, copyOnSelect, rightClickPaste } = preferences
+
   useEffect(() => {
-    if (mounted === null || !active) return
+    if (mounted === null || !copyOnSelect) return
+    const selection = mounted.terminal.onSelectionChange(() => {
+      const text = mounted.terminal.getSelection()
+      if (text !== "") void navigator.clipboard.writeText(text).catch(() => undefined)
+    })
+    return () => selection.dispose()
+  }, [mounted, copyOnSelect])
+
+  useEffect(() => {
+    if (mounted === null || !active || !gpuAcceleration) return
     let webgl: WebglAddon | undefined
     try {
       const addon = new WebglAddon()
@@ -240,13 +263,14 @@ export function TerminalView({
       webgl = addon
     } catch {}
     return () => webgl?.dispose()
-  }, [mounted, active])
+  }, [mounted, active, gpuAcceleration])
 
+  const { fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink } = lookOf(preferences)
   useEffect(() => {
     if (mounted === null) return
-    setOptions(mounted.terminal, { fontSize })
+    setOptions(mounted.terminal, { fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink })
     if (container.current !== null && container.current.offsetWidth > 0) mounted.fit.fit()
-  }, [mounted, fontSize])
+  }, [mounted, fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink])
 
   useEffect(() => {
     const element = container.current
@@ -290,6 +314,19 @@ export function TerminalView({
       aria-hidden={!active}
       onContextMenu={(event) => {
         event.preventDefault()
+        if (rightClickPaste && !event.shiftKey && mounted !== null) {
+          const terminal = mounted.terminal
+          if (terminal.hasSelection()) {
+            void navigator.clipboard.writeText(terminal.getSelection()).catch(() => undefined)
+            terminal.clearSelection()
+          } else {
+            void navigator.clipboard
+              .readText()
+              .then((text) => terminal.paste(text))
+              .catch(() => undefined)
+          }
+          return
+        }
         onContextMenu({ x: event.clientX, y: event.clientY })
       }}
     >

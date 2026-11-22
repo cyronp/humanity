@@ -3,7 +3,14 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { CloneEvent, GitHubFullName } from "../domain/GitHub.ts"
 import { GitLabFullPath } from "../domain/GitLab.ts"
 import { Autonomy } from "../domain/Policy.ts"
-import { FolderEntry, Project, ProjectIcon, ProjectId } from "../domain/Project.ts"
+import {
+  FolderEntry,
+  MAX_PROJECT_NAME_LENGTH,
+  Project,
+  ProjectIcon,
+  ProjectId,
+  ProjectSettings,
+} from "../domain/Project.ts"
 import {
   CloneTargetExists,
   GitCommandFailed,
@@ -82,6 +89,19 @@ export const ProjectsRpcs = RpcGroup.make(
   }),
   Rpc.make("Projects.setDefaultAutonomy", {
     payload: { projectId: ProjectId, autonomy: Schema.NullOr(Autonomy) },
+    success: Project,
+    error: ProjectNotFound,
+  }),
+  Rpc.make("Projects.rename", {
+    payload: {
+      projectId: ProjectId,
+      name: Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_PROJECT_NAME_LENGTH)),
+    },
+    success: Project,
+    error: ProjectNotFound,
+  }),
+  Rpc.make("Projects.setSettings", {
+    payload: { projectId: ProjectId, settings: ProjectSettings },
     success: Project,
     error: ProjectNotFound,
   }),

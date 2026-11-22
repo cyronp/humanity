@@ -2,6 +2,7 @@ import {
   type AgentProvider,
   type Autonomy,
   DEFAULT_PROVIDER,
+  type ModelDefault,
   newThreadAutonomy,
   NO_PINS,
   type PinnedDefaults,
@@ -24,19 +25,24 @@ export const threadDefaults = (
   sessions: ReadonlyArray<Session>,
   models: OfferedModels = {},
   pinned: PinnedDefaults = NO_PINS,
-  project?: { readonly defaultAutonomy: Autonomy | null },
+  project?: {
+    readonly defaultAutonomy: Autonomy | null
+    readonly settings?: { readonly defaultModel: ModelDefault | null }
+  },
 ): ThreadDefaults => {
   const last = sessions[0]
-  const provider = last?.provider ?? DEFAULT_PROVIDER
+  const chosen = project?.settings?.defaultModel ?? pinned.model
+  const provider = chosen?.provider ?? last?.provider ?? DEFAULT_PROVIDER
+  const wanted = chosen === null ? last?.model : chosen.model
   const known = models[provider]
   const offered =
-    last === undefined ||
-    last.model === null ||
+    wanted === undefined ||
+    wanted === null ||
     known === undefined ||
-    known.some((model) => model.value === last.model)
+    known.some((model) => model.value === wanted)
   return {
     provider,
-    model: offered ? (last?.model ?? null) : null,
+    model: offered ? (wanted ?? null) : null,
     effort:
       pinned.effort === null
         ? (last?.effort ?? null)

@@ -23,6 +23,7 @@ import {
   matchModel,
   SessionService,
   sessionBranchName,
+  setupCommand,
   slugify,
 } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
@@ -46,6 +47,23 @@ describe("session naming", () => {
       sessionBranchName("1234abcd-ffff-4000-8000-000000000000", "Add tests"),
       "humanity/1234abcd-add-tests",
     )
+    assert.strictEqual(
+      sessionBranchName("1234abcd-ffff-4000-8000-000000000000", "Add tests", "me/"),
+      "me/1234abcd-add-tests",
+    )
+    assert.strictEqual(
+      sessionBranchName("1234abcd-ffff-4000-8000-000000000000", "Add tests", ""),
+      "1234abcd-add-tests",
+    )
+  })
+
+  it("joins a setup script's lines into one command and skips an empty one", () => {
+    assert.strictEqual(
+      setupCommand("npm install\r\n\n  cp .env.example .env  "),
+      "npm install && cp .env.example .env",
+    )
+    assert.isUndefined(setupCommand("  \n "))
+    assert.isUndefined(setupCommand(null))
   })
 })
 
@@ -124,6 +142,29 @@ describe("SessionService", () => {
           sessions.create({ projectId: project.id, baseBranch: "nope" }),
         )
         assert.strictEqual(missing._tag, "GitCommandFailed")
+        assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
+      }).pipe(Effect.provide(services(home, () => [])))
+    }),
+  )
+
+  it.live("starts a new thread in a worktree on the project's branch prefix when it asks", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const projects = yield* ProjectService
+        const project = yield* addProject(repo)
+        yield* projects.setSettings(project.id, {
+          ...project.settings,
+          worktreeForNewThreads: true,
+          branchPrefix: "me/",
+        })
+        const session = yield* sessions.create({ projectId: project.id, title: "Fix login" })
+
+        assert.isTrue(session.inWorktree)
+        assert.match(session.branch, /^me\/[0-9a-f]{8}-fix-login$/)
+        assert.strictEqual(session.worktreePath, join(home, "worktrees", project.id, session.id))
         assert.strictEqual(git(repo, "branch", "--show-current").trim(), "main")
       }).pipe(Effect.provide(services(home, () => [])))
     }),

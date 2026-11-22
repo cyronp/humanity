@@ -37,7 +37,14 @@ import {
 import { describeCause } from "@/lib/errors"
 import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
 import { AddMenu } from "./AddMenu.tsx"
-import { ChatBox, ChatBoxFooter, noteMessageSent, SendButton, StopButton } from "./ChatBox.tsx"
+import {
+  ChatBox,
+  ChatBoxFooter,
+  noteMessageSent,
+  SendButton,
+  sendKeyPressed,
+  StopButton,
+} from "./ChatBox.tsx"
 import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
 import { MentionTextarea } from "./MentionTextarea.tsx"
 import { useFileMention } from "./useFileMention.ts"
@@ -173,7 +180,7 @@ export const Composer = memo(function Composer({
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentions.onKeyDown(event)) return
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (sendKeyPressed(event)) {
       event.preventDefault()
       void submit()
     }

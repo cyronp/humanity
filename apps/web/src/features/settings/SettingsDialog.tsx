@@ -5,6 +5,7 @@ import {
   FolderGit2,
   Globe,
   Info,
+  MessageSquare,
   Plug,
   RefreshCw,
   Search,
@@ -19,6 +20,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { McpIcon } from "@/features/extensions/McpIcon"
 import { AboutSettings } from "./AboutSettings.tsx"
+import { ChatSettings } from "./ChatSettings.tsx"
 import { McpSettings, SkillSettings } from "./ExtensionsSettings.tsx"
 import { GeneralSettings } from "./GeneralSettings.tsx"
 import { ProjectsSettings } from "./ProjectsSettings.tsx"
@@ -46,6 +48,7 @@ const SECTION_VIEWS: Record<
   }
 > = {
   general: { icon: SlidersHorizontal, View: GeneralSettings },
+  chat: { icon: MessageSquare, View: ChatSettings },
   terminal: { icon: SquareTerminal, View: TerminalSettings },
   browser: { icon: Globe, View: BrowserSettings },
   providers: { icon: Plug, View: ProvidersSettings },

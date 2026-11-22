@@ -398,3 +398,20 @@ export class PreviewFileRefused extends Schema.TaggedError<PreviewFileRefused>()
     return `${this.path} can't be previewed: ${this.reason}`
   }
 }
+
+export class FolderOpenFailed extends Schema.TaggedError<FolderOpenFailed>()("FolderOpenFailed", {
+  path: Schema.String,
+  reason: Schema.String,
+}) {
+  override get message() {
+    return `Could not open ${this.path}: ${this.reason}`
+  }
+}
+
+export class CliPathNotFound extends Schema.TaggedError<CliPathNotFound>()("CliPathNotFound", {
+  path: Schema.String,
+}) {
+  override get message() {
+    return `${this.path} is not a file. Pick the CLI's executable or script.`
+  }
+}

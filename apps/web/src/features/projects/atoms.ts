@@ -1,6 +1,7 @@
-import type { FolderEntry, ProjectId } from "@humanity/contracts"
+import { useAtomValue } from "@effect/atom-react"
+import type { FolderEntry, Project, ProjectId } from "@humanity/contracts"
 import { Effect } from "effect"
-import { Atom } from "effect/reactivity"
+import { Atom, AsyncResult } from "effect/reactivity"
 import type { FolderQuery } from "@/features/github/repoInput"
 import { HumanityClient, keys } from "@/lib/rpc"
 
@@ -35,3 +36,14 @@ export const foldersAtom = HumanityClient.runtime.atom((get) => {
     Effect.map((entries): FolderMatches | undefined => ({ query, entries })),
   )
 })
+
+export const renameProjectAtom = HumanityClient.mutation("Projects.rename")
+
+export const setProjectSettingsAtom = HumanityClient.mutation("Projects.setSettings")
+
+export const useProject = (projectId: string): Project | undefined => {
+  const result = useAtomValue(projectsAtom)
+  return AsyncResult.isSuccess(result)
+    ? result.value.find((project) => project.id === projectId)
+    : undefined
+}

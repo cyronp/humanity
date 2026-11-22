@@ -1,9 +1,12 @@
 import {
+  type BrowserAppearance,
   type BrowserLinkTarget,
+  type BrowserPreferences,
   DEFAULT_DAEMON_PORT,
   DEFAULT_DESKTOP_PORT,
   localUrlRanges,
   localUrls,
+  FILL_DEVICE,
   FILL_VIEWPORT,
   type OfferedUrl,
   parseViewport,
@@ -61,12 +64,37 @@ export const EMPTY_MEMORY: BrowserMemory = { tabs: [], active: null, seen: [] }
 
 export const browserKey = (sessionId: string) => `humanity.browser.${sessionId}`
 
+export interface BrowserDefaults {
+  readonly viewport: PreviewViewport
+  readonly zoom: number
+  readonly colorScheme: BrowserAppearance
+}
+
+export const browserDefaultsOf = (
+  preferences: Pick<BrowserPreferences, "device" | "zoom" | "appearance">,
+): BrowserDefaults => ({
+  viewport:
+    preferences.device === FILL_DEVICE
+      ? FILL_VIEWPORT
+      : parseViewport({ _tag: "device", id: preferences.device, landscape: false }),
+  zoom: parseZoom(preferences.zoom),
+  colorScheme: preferences.appearance,
+})
+
+let defaults: BrowserDefaults = { viewport: FILL_VIEWPORT, zoom: 1, colorScheme: "system" }
+
+export const setBrowserDefaults = (next: BrowserDefaults) => {
+  defaults = next
+}
+
+export const browserDefaults = (): BrowserDefaults => defaults
+
 export const makeTab = (url: string | null = null): BrowserTab => ({
   id: crypto.randomUUID(),
   url,
   title: null,
-  viewport: FILL_VIEWPORT,
-  zoom: 1,
+  viewport: defaults.viewport,
+  zoom: defaults.zoom,
 })
 
 const parseTab = (value: unknown): BrowserTab | undefined => {

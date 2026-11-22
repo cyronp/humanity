@@ -11,10 +11,9 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { useUiPreferences } from "@/lib/uiPreferences"
 import { fetchOriginAtom, syncAtom, syncStatusAtom } from "./atoms.ts"
 import { isBusy } from "./state.ts"
-
-const FETCH_EVERY_MS = 5 * 60_000
 
 const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
 
@@ -49,6 +48,7 @@ export function SyncButton({ session }: { readonly session: Session }) {
   const [error, setError] = useState<string>()
   const [settled, setSettled] = useState(false)
   const busy = isBusy(session.status)
+  const [{ fetchMinutes }] = useUiPreferences()
 
   const fetchNow = useCallback(() => {
     void fetchOrigin({
@@ -58,10 +58,11 @@ export function SyncButton({ session }: { readonly session: Session }) {
   }, [fetchOrigin, session.id])
 
   useEffect(() => {
+    if (fetchMinutes === 0) return
     fetchNow()
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") fetchNow()
-    }, FETCH_EVERY_MS)
+    }, fetchMinutes * 60_000)
     const onVisible = () => {
       if (document.visibilityState === "visible") fetchNow()
     }
@@ -70,7 +71,7 @@ export function SyncButton({ session }: { readonly session: Session }) {
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)
     }
-  }, [fetchNow])
+  }, [fetchNow, fetchMinutes])
 
   useEffect(() => {
     if (!settled) return

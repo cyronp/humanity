@@ -1,5 +1,14 @@
 import { useAtomValue } from "@effect/atom-react"
 import { AsyncResult } from "effect/reactivity"
+import { ArrowDownUp } from "lucide-react"
+import { useId } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { githubConnectionAtom } from "@/features/github/atoms"
 import { summarizeGitHub } from "@/features/github/connection"
 import { GitHubConnect } from "@/features/github/GitHubConnect"
@@ -9,10 +18,11 @@ import { summarizeGitLab } from "@/features/gitlab/connection"
 import { GitLabConnect } from "@/features/gitlab/GitLabConnect"
 import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { ToneDot } from "@/features/claude/ToneDot"
+import { FETCH_INTERVALS, type FetchInterval, useUiPreferences } from "@/lib/uiPreferences"
 import { selectSettingsItem, useSettings } from "./settings.ts"
-import { SettingsFrame, SettingsSplit } from "./SettingsLayout.tsx"
+import { SettingsFrame, SettingsRow, SettingsRows, SettingsSplit } from "./SettingsLayout.tsx"
 
-const SERVICES = ["github", "gitlab"] as const
+const SERVICES = ["github", "gitlab", "sync"] as const
 type Service = (typeof SERVICES)[number]
 
 export function RepositoriesSettings() {
@@ -46,11 +56,22 @@ export function RepositoriesSettings() {
               <Status {...summarizeGitLab(gitlab.value)} />
             ) : undefined,
           },
+          {
+            id: "sync",
+            label: "Sync",
+            icon: <ArrowDownUp className="size-6" aria-hidden="true" />,
+          },
         ]}
         selected={selected}
         onSelect={(id) => selectSettingsItem("repositories", id)}
       >
-        {selected === "github" ? <GitHubConnect /> : <GitLabConnect />}
+        {selected === "github" ? (
+          <GitHubConnect />
+        ) : selected === "gitlab" ? (
+          <GitLabConnect />
+        ) : (
+          <SyncSettings />
+        )}
       </SettingsSplit>
     </SettingsFrame>
   )
@@ -68,5 +89,38 @@ function Status({
       <ToneDot tone={tone} />
       <span className="sr-only">{title}</span>
     </span>
+  )
+}
+
+const intervalLabel = (minutes: FetchInterval) =>
+  minutes === 0 ? "Never" : minutes === 1 ? "Every minute" : `Every ${minutes} minutes`
+
+function SyncSettings() {
+  const [preferences, change] = useUiPreferences()
+  const labelId = useId()
+  return (
+    <SettingsRows>
+      <SettingsRow
+        label="Check origin in the background"
+        labelId={labelId}
+        detail="How often an open thread fetches its repository, to show commits to pull. A background fetch never asks for credentials. Sync always fetches first."
+      >
+        <Select
+          value={String(preferences.fetchMinutes)}
+          onValueChange={(value) => change({ fetchMinutes: Number(value) as FetchInterval })}
+        >
+          <SelectTrigger className="w-44" aria-labelledby={labelId}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FETCH_INTERVALS.map((minutes) => (
+              <SelectItem key={minutes} value={String(minutes)}>
+                {intervalLabel(minutes)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+    </SettingsRows>
   )
 }

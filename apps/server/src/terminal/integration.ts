@@ -192,15 +192,38 @@ export interface ShellLaunch {
 export const encodePowerShell = (script: string) =>
   Buffer.from(script, "utf16le").toString("base64")
 
+export const plainLaunch = (shell: Shell, platform: NodeJS.Platform): ShellLaunch => {
+  switch (shell.kind) {
+    case "pwsh":
+    case "powershell":
+      return { args: ["-NoLogo"], env: {}, integrated: false }
+    case "bash":
+      return {
+        args: ["--login", "-i"],
+        env: platform === "win32" ? { CHERE_INVOKING: "1" } : {},
+        integrated: false,
+      }
+    case "zsh":
+    case "fish":
+    case "sh":
+      return { args: ["-l"], env: {}, integrated: false }
+    case "cmd":
+    case "wsl":
+      return { args: [], env: {}, integrated: false }
+  }
+}
+
 export const shellLaunch = (
   shell: Shell,
   options: {
     readonly platform: NodeJS.Platform
     readonly folder: string
     readonly env: Readonly<Record<string, string | undefined>>
+    readonly integration?: boolean | undefined
   },
 ): ShellLaunch => {
   const { platform, folder, env } = options
+  if (options.integration === false) return plainLaunch(shell, platform)
   const path = platform === "win32" ? win32 : posix
   const file = (name: string) => path.join(folder, name).replaceAll("\\", "/")
   switch (shell.kind) {

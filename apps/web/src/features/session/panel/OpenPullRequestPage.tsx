@@ -22,6 +22,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ChangeCount, FileDiffView } from "@/features/diff/FileDiffView"
 import { branchesAtom } from "@/features/git/atoms"
+import { useProject } from "@/features/projects/atoms"
 import { describeCause } from "@/lib/errors"
 import { useNow } from "@/lib/elapsed"
 import { keys } from "@/lib/rpc"
@@ -56,7 +57,8 @@ export function OpenPullRequestPage({
   const comparison = useAtomValue(comparisonAtom(comparisonKey(session.id, base)))
   const [title, setTitle] = useState<string | null>(null)
   const [body, setBody] = useState("")
-  const [draft, setDraft] = useState(false)
+  const draftByDefault = useProject(session.projectId)?.settings.draftPullRequests ?? false
+  const [draft, setDraft] = useState(draftByDefault)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const busy = isBusy(session.status)

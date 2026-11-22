@@ -11,6 +11,7 @@ import {
   TraceTitle,
 } from "@/components/ui/trace"
 import { Spinner } from "@/components/ui/spinner"
+import { useUiPreferences } from "@/lib/uiPreferences"
 import { findRenderer, type ToolCallProps } from "./registry.ts"
 import { toolRenderers } from "./renderers/index.ts"
 
@@ -41,6 +42,7 @@ export function ToolCallCard({
   readonly approval?: Approval | undefined
   readonly worktreePath?: string | undefined
 }) {
+  const [{ expandToolCalls }] = useUiPreferences()
   const status = call?.status ?? "running"
   const props: ToolCallProps = { toolName, input, call, approval, worktreePath }
   const { Summary, Detail } = findRenderer(toolRenderers, toolName, input)
@@ -50,7 +52,7 @@ export function ToolCallCard({
 
   return (
     <Trace>
-      <TraceCollapsible>
+      <TraceCollapsible defaultOpen={expandToolCalls}>
         <TraceCollapsibleTrigger className="w-full text-xs">
           <TraceLine
             {...(line === undefined ? {} : { status: line })}

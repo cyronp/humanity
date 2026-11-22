@@ -11,6 +11,15 @@ import { Cause, Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Bot, ChevronDown, Eraser, Minus, Plus, RotateCcw, Search, X } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -141,6 +150,20 @@ export function TerminalDock({
     }
   }, [commandsRef, show, terminals, active])
 
+  const [confirming, setConfirming] = useState<ReadonlyArray<TerminalInfo>>()
+  const askFirst = (targets: ReadonlyArray<TerminalInfo>) =>
+    preferences.confirmClose && targets.some((terminal) => terminal.busy === true)
+
+  const requestClose = (terminal: TerminalInfo) => {
+    if (askFirst([terminal])) setConfirming([terminal])
+    else void closeTerminal(terminal)
+  }
+
+  const requestCloseAll = () => {
+    if (askFirst(terminals ?? [])) setConfirming(terminals ?? [])
+    else void closeAll()
+  }
+
   const closeTerminal = async (terminal: TerminalInfo) => {
     setError(undefined)
     const exit = await close({ payload: { terminalId: terminal.id } })
@@ -192,7 +215,7 @@ export function TerminalDock({
               selected={terminal.id === active}
               renaming={renaming === terminal.id}
               onSelect={() => show(terminal.id)}
-              onClose={() => void closeTerminal(terminal)}
+              onClose={() => requestClose(terminal)}
               onRenameStart={() => setRenaming(terminal.id)}
               onRename={(title) => {
                 setRenaming(undefined)
@@ -226,7 +249,7 @@ export function TerminalDock({
         </DockAction>
         <DockAction
           label="Close terminal"
-          onClick={() => void closeAll()}
+          onClick={requestCloseAll}
           disabled={terminals === undefined || terminals.length === 0}
         >
           <X />
@@ -250,8 +273,7 @@ export function TerminalDock({
             }}
             info={terminal}
             active={terminal.id === active}
-            fontSize={preferences.fontSize}
-            scrollback={preferences.scrollback}
+            preferences={preferences}
             onCommand={onCommand}
             onContextMenu={(at) =>
               setMenu({ ...at, terminal, view: views.current.get(terminal.id) })
@@ -287,6 +309,17 @@ export function TerminalDock({
             }}
           />
         )}
+        <CloseRunningDialog
+          terminals={confirming}
+          onCancel={() => setConfirming(undefined)}
+          onConfirm={() => {
+            const targets = confirming ?? []
+            setConfirming(undefined)
+            const [only] = targets
+            if (targets.length === 1 && only !== undefined) void closeTerminal(only)
+            else void closeAll()
+          }}
+        />
         {menu !== undefined && (
           <TerminalMenu
             at={menu}
@@ -295,7 +328,7 @@ export function TerminalDock({
             onFind={() => setFinding(menu.view)}
             onRename={() => setRenaming(menu.terminal.id)}
             onRestart={() => void restartTerminal(menu.terminal)}
-            onCloseTerminal={() => void closeTerminal(menu.terminal)}
+            onCloseTerminal={() => requestClose(menu.terminal)}
           />
         )}
       </div>
@@ -548,5 +581,48 @@ function TerminalMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function CloseRunningDialog({
+  terminals,
+  onCancel,
+  onConfirm,
+}: {
+  readonly terminals: ReadonlyArray<TerminalInfo> | undefined
+  readonly onCancel: () => void
+  readonly onConfirm: () => void
+}) {
+  const running = (terminals ?? []).filter((terminal) => terminal.busy === true)
+  const many = (terminals?.length ?? 0) > 1
+  const [first] = running
+  return (
+    <AlertDialog
+      open={terminals !== undefined}
+      onOpenChange={(open) => {
+        if (!open) onCancel()
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {many
+              ? "Close every terminal?"
+              : `Close ${first === undefined ? "this terminal" : terminalLabel(first)}?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {running.length === 1
+              ? "A command is still running in it. Closing stops it."
+              : `Commands are still running in ${running.length} terminals. Closing stops them.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <Button variant="destructive" onClick={onConfirm}>
+            {many ? "Close all" : "Close"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

@@ -19,6 +19,8 @@ const toolsPreferencesAtom = HumanityClient.query("Preferences.getTools", undefi
 
 const setToolsPreferencesAtom = HumanityClient.mutation("Preferences.setTools")
 
+const TOOL_KEYS = Object.keys(HUMANITY_TOOL_TOKENS) as ReadonlyArray<keyof ToolsPreferences>
+
 function TokenCost({ tool }: { readonly tool: keyof ToolsPreferences }) {
   return (
     <span className="mt-2 block font-medium text-warning">
@@ -52,6 +54,11 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
   const terminalsId = useId()
   const openThreadId = useId()
   const skillsId = useId()
+
+  const total = TOOL_KEYS.filter((tool) => preferences[tool]).reduce(
+    (sum, tool) => sum + HUMANITY_TOOL_TOKENS[tool],
+    0,
+  )
 
   const change = async (patch: Partial<ToolsPreferences>) => {
     setError(undefined)
@@ -118,6 +125,11 @@ function ToolsView({ preferences }: { readonly preferences: ToolsPreferences }) 
           />
         </SettingsRow>
       </SettingsRows>
+      <p className="text-sm text-muted-foreground">
+        {total === 0
+          ? "With every tool off, threads get no Humanity tools at all."
+          : `Together, about ${total.toLocaleString()} tokens per thread${preferences.skills ? `, plus ${HUMANITY_TOKENS_PER_SKILL} per skill` : ""}.`}
+      </p>
       {error !== undefined && <ErrorNote title="Couldn't save the tool settings" message={error} />}
     </div>
   )
