@@ -231,6 +231,15 @@ The human can fork a thread, from its end or from before any of their messages, 
 - **Where.** Each of the human's messages offers "Fork from before this message"; the thread's header offers "Fork thread".
 - **Not yet:** forking on another provider or model in one step (the fork can switch afterwards), and putting the message forked from into the new thread's composer.
 
+## Amendment: the command palette (2026-11-22)
+
+One keyboard entry to everything the app can do. It adds no library to the stack of section 3: it is `cmdk`, through shadcn/ui's Command.
+
+- **Ctrl+K, or Ctrl+Shift+P** (Cmd on a Mac) opens it anywhere, except in a terminal, which keeps its own keys (Ctrl+K clears a line in many shells). Ctrl+P still finds a file.
+- **What it lists.** Actions, grouped: what the open thread can do (fork, change the model, set up a worktree, stop the agent), the terminals and the shelf's tools, a new thread, adding a repository, the color scheme and each Settings page; then the threads, newest first, to go to. The last five actions run come first, kept in the browser (`humanity.palette.recent`).
+- **Prefixes.** `>` lists actions only, `#` threads only, `?` searches the messages of every thread.
+- **A registry, not a list.** A feature registers its own actions while it is on screen, with what they need; the palette knows none of them.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

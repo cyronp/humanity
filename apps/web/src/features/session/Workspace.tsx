@@ -35,7 +35,9 @@ import {
 import { HINT_CLASS, UsageMeters } from "./UsageMeters.tsx"
 import { ForkDialog, type ForkTarget } from "./ForkDialog.tsx"
 import { RewindDialog } from "./RewindDialog.tsx"
-import { undoRewindAtom } from "./atoms.ts"
+import { interruptAtom, undoRewindAtom } from "./atoms.ts"
+import { useSetupWorktree } from "./panel/useSetupWorktree.ts"
+import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import type { TranscriptActions } from "@/features/chat/transcriptActions"
 import { describeCause } from "@/lib/errors"
 import { useTranscript } from "./useTranscript.ts"
@@ -95,6 +97,60 @@ export function Workspace({
         : undefined,
     [session, undoRewind],
   )
+  const setupWorktree = useSetupWorktree(session)
+  const runSetupWorktree = useRef(setupWorktree.run)
+  useEffect(() => {
+    runSetupWorktree.current = setupWorktree.run
+  })
+  const canSetupWorktree = setupWorktree.available
+  const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
+  const paletteCommands = useMemo((): ReadonlyArray<PaletteCommand> => {
+    if (session.status === "ended") return []
+    const working = session.status === "running" || session.status === "waiting_for_human"
+    return [
+      {
+        id: "thread.fork",
+        title: "Fork this thread",
+        group: "This thread",
+        keywords: ["branch", "copy", "duplicate"],
+        run: () => setForking({}),
+      },
+      ...(acceptsMessages(session)
+        ? [
+            {
+              id: "thread.model",
+              title: "Change the model",
+              group: "This thread",
+              keywords: ["provider", "switch", "agent"],
+              run: () => composer.current?.openModelPicker(),
+            },
+          ]
+        : []),
+      ...(canSetupWorktree && !working
+        ? [
+            {
+              id: "thread.worktree",
+              title: "Set up a worktree",
+              group: "This thread",
+              keywords: ["isolate", "branch"],
+              run: () => void runSetupWorktree.current(),
+            },
+          ]
+        : []),
+      ...(working
+        ? [
+            {
+              id: "thread.stop",
+              title: "Stop the agent",
+              group: "This thread",
+              keywords: ["interrupt", "cancel"],
+              run: () => void interrupt({ payload: { sessionId: session.id } }),
+            },
+          ]
+        : []),
+    ]
+  }, [canSetupWorktree, interrupt, session])
+  usePaletteCommands("thread", paletteCommands)
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [typing, setTyping] = useState(false)
   const keyHint = useKeyHintShown()

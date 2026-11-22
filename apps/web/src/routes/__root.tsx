@@ -3,6 +3,7 @@ import type { CSSProperties } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppHeaderHost } from "@/features/layout/AppHeader"
 import { NotificationWatcher } from "@/features/notifications/NotificationWatcher"
+import { CommandPalette } from "@/features/palette/CommandPalette"
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
@@ -66,6 +67,7 @@ function RootLayout() {
       <SettingsDialog />
       <NotificationWatcher />
       <AddRepositoryDialog />
+      <CommandPalette />
     </SidebarProvider>
   )
 }

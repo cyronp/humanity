@@ -7,7 +7,8 @@ import {
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { PanelBottom, PanelRight } from "lucide-react"
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react"
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -22,6 +23,8 @@ import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
   readStoredShelf,
+  SHELF_LABELS,
+  SHELF_TOOLS,
   type ShelfState,
   type ShelfTool,
   storeShelf,
@@ -100,6 +103,58 @@ export function WorkspaceFrame({
   )
 
   const hasPanel = panel !== undefined
+  const hasRail = rail !== undefined
+  const hasTerminals = terminals !== undefined
+  const paletteCommands = useMemo(
+    (): ReadonlyArray<PaletteCommand> => [
+      ...(hasTerminals
+        ? [
+            {
+              id: "terminal.toggle",
+              title: terminalsOpen ? "Hide the terminals" : "Show the terminals",
+              group: "Terminal",
+              keywords: ["dock", "shell", "console"],
+              run: () => setTerminalsOpen(!terminalsOpen),
+            },
+            {
+              id: "terminal.new",
+              title: "New terminal",
+              group: "Terminal",
+              keywords: ["shell", "tab"],
+              run: () => {
+                if (terminalsOpen) setNewTerminalRequest((request) => request + 1)
+                else setTerminalsOpen(true)
+              },
+            },
+          ]
+        : []),
+      {
+        id: "shelf.toggle",
+        title: railShown ? "Hide the tool shelf" : "Show the tool shelf",
+        group: "View",
+        keywords: ["rail", "panel", "sidebar"],
+        run: () => setRailShown(!railShown),
+      },
+      ...(hasRail && hasPanel
+        ? SHELF_TOOLS.map((tool): PaletteCommand => ({
+            id: `shelf.${tool}`,
+            title: `Open ${SHELF_LABELS[tool]}`,
+            group: "View",
+            keywords: ["tool", "shelf", tool],
+            run: () => {
+              setRailShown(true)
+              setShelfState(() => {
+                const next = { open: true, tool }
+                storeShelf(next)
+                return next
+              })
+            },
+          }))
+        : []),
+    ],
+    [hasPanel, hasRail, hasTerminals, railShown, setRailShown, setTerminalsOpen, terminalsOpen],
+  )
+  usePaletteCommands("workspace-frame", paletteCommands)
   useEffect(() => {
     if (!hasPanel) return
     return onPreviewOpen(() => {
