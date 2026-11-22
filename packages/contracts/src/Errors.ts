@@ -461,3 +461,11 @@ export class RewindUnavailable extends Schema.TaggedError<RewindUnavailable>()(
     return this.reason
   }
 }
+
+export class ForkUnavailable extends Schema.TaggedError<ForkUnavailable>()("ForkUnavailable", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}

@@ -290,3 +290,80 @@ describe("rewind", () => {
     }),
   )
 })
+
+describe("fork", () => {
+  it.live(
+    "forks the whole thread into a worktree of its own, with its files and conversation",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup({ "a.txt": "start\n", "gone.txt": "bye\n" })
+        const file = join(repo, "a.txt")
+
+        yield* Effect.gen(function* () {
+          const sessions = yield* SessionService
+          const log = yield* FakeAgentLog
+          const project = yield* addProject(repo)
+          const source = yield* sessions.create({ projectId: project.id, prompt: "first write" })
+          yield* waitForStatus(source.id, "idle")
+          rmSync(join(repo, "gone.txt"))
+          writeFileSync(join(repo, "new.txt"), "untracked\n")
+
+          const forked = yield* sessions.fork(source.id, undefined)
+          assert.strictEqual(forked.parentId, source.id)
+          assert.strictEqual(forked.relation, "forked")
+          assert.isTrue(forked.inWorktree)
+          assert.notStrictEqual(forked.worktreePath, repo)
+          assert.strictEqual(read(join(forked.worktreePath, "a.txt")), "first write\n")
+          assert.strictEqual(read(join(forked.worktreePath, "new.txt")), "untracked\n")
+          assert.isFalse(existsSync(join(forked.worktreePath, "gone.txt")))
+          assert.strictEqual(read(file), "first write\n")
+
+          const copied = yield* contents(forked.id)
+          assert.strictEqual(tags(copied.messages)[0], "user")
+          assert.include(tags(copied.messages), "assistant")
+          assert.strictEqual(copied.messages.at(-1)?.content._tag, "notice")
+          assert.isTrue(copied.toolCalls.some((call) => call.toolName === "Write"))
+
+          yield* sessions.sendMessage(forked.id, "carry on")
+          yield* waitForStatus(forked.id, "idle")
+          const sent = (yield* Ref.get(log.sent)).at(-1)?.text ?? ""
+          assert.include(sent, "<humanity-handoff>")
+          assert.include(sent, "was forked from another thread")
+          assert.include(sent, "Human: first write")
+          assert.isUndefined((yield* Ref.get(log.runs)).at(-1)?.resume)
+        }).pipe(Effect.provide(services(home, writes(file))))
+      }),
+  )
+
+  it.live("forks from before a message with the files as they were then", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup({ "a.txt": "start\n" })
+      const file = join(repo, "a.txt")
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const source = yield* sessions.create({ projectId: project.id, prompt: "first write" })
+        yield* waitForStatus(source.id, "idle")
+        yield* sessions.sendMessage(source.id, "second write")
+        yield* waitForStatus(source.id, "idle")
+        const second = (yield* contents(source.id)).messages.find(
+          (message) => message.content._tag === "user" && message.content.text === "second write",
+        )!
+
+        const forked = yield* sessions.fork(source.id, second.id)
+        assert.strictEqual(forked.forkedAtMessageId, second.id)
+        assert.strictEqual(read(join(forked.worktreePath, "a.txt")), "first write\n")
+        assert.strictEqual(read(file), "second write\n")
+        const texts = (yield* contents(forked.id)).messages.flatMap((message) =>
+          message.content._tag === "user" ? [message.content.text] : [],
+        )
+        assert.deepStrictEqual(texts, ["first write"])
+
+        yield* sessions.end(source.id, { removeWorktree: false })
+        const refused = yield* Effect.flip(sessions.fork(source.id, undefined))
+        assert.strictEqual(refused._tag, "ForkUnavailable")
+      }).pipe(Effect.provide(services(home, writes(file))))
+    }),
+  )
+})

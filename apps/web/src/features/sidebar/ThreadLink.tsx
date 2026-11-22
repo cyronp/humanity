@@ -122,9 +122,9 @@ export function ThreadStatus({ status }: { readonly status: SessionStatus }) {
 }
 
 const CHILD_ATTENTION: Partial<Record<SessionStatus, string>> = {
-  waiting_for_human: "A thread it opened needs input",
-  error: "A thread it opened stopped with an error",
-  running: "A thread it opened is working",
+  waiting_for_human: "A thread started from it needs input",
+  error: "A thread started from it stopped with an error",
+  running: "A thread started from it is working",
 }
 
 function ChildAttention({ status }: { readonly status: SessionStatus }) {

@@ -11,6 +11,7 @@ export interface Checkpoint {
   readonly kind: CheckpointKind
   readonly commit: string
   readonly folder: string
+  readonly head: string | null
   readonly createdAt: string
 }
 
@@ -21,6 +22,7 @@ const CheckpointRow = Schema.Struct({
   kind: CheckpointKind,
   commit_sha: Schema.String,
   folder: Schema.String,
+  head: Schema.optional(Schema.NullOr(Schema.String)),
   created_at: Schema.String,
 })
 
@@ -31,6 +33,7 @@ const toCheckpoint = (row: typeof CheckpointRow.Type): Checkpoint => ({
   kind: row.kind,
   commit: row.commit_sha,
   folder: row.folder,
+  head: row.head ?? null,
   createdAt: row.created_at,
 })
 
@@ -81,6 +84,7 @@ export class CheckpointRepo extends Context.Service<
             kind: checkpoint.kind,
             commit_sha: checkpoint.commit,
             folder: checkpoint.folder,
+            head: checkpoint.head,
             created_at: checkpoint.createdAt,
           })}
         `.pipe(Effect.asVoid, Effect.orDie)

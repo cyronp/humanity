@@ -19,6 +19,7 @@ import {
   AttachmentNotFound,
   AttachmentRejected,
   BranchNotCheckedOut,
+  ForkUnavailable,
   GitBranchExists,
   GitCommandFailed,
   GitInvalidBranchName,
@@ -215,6 +216,21 @@ export const SessionsRpcs = RpcGroup.make(
   Rpc.make("Sessions.undoRewind", {
     payload: { sessionId: SessionId, messageId: Schema.String },
     error: Schema.Union([SessionNotFound, SessionEnded, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.fork", {
+    payload: { sessionId: SessionId, messageId: Schema.optional(Schema.String) },
+    success: Session,
+    error: Schema.Union([
+      SessionNotFound,
+      ForkUnavailable,
+      ProjectNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+      GitBranchExists,
+      GitInvalidBranchName,
+      GitRefNotFound,
+    ]),
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },

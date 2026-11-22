@@ -295,9 +295,13 @@ export class SessionRepo extends Context.Service<
     ) => Effect.Effect<Option.Option<Attachment>>
     readonly rawBefore: (
       sessionId: string,
-      messageId: string,
+      messageId: string | undefined,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<RawMessage>>
+    readonly insertCopies: (
+      messages: ReadonlyArray<ChatMessage>,
+      toolCalls: ReadonlyArray<ToolCall>,
+    ) => Effect.Effect<void>
     readonly truncateFrom: (
       sessionId: string,
       messageId: string,
@@ -812,16 +816,18 @@ export class SessionRepo extends Context.Service<
       const findRawBefore = SqlSchema.findAll({
         Request: Schema.Struct({
           sessionId: Schema.String,
-          messageId: Schema.String,
+          messageId: Schema.NullOr(Schema.String),
           limit: Schema.Number,
         }),
         Result: RawRow,
         execute: ({ sessionId, messageId, limit }) =>
-          sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} AND rowid < (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid DESC LIMIT ${limit}`,
+          messageId === null
+            ? sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} ORDER BY rowid DESC LIMIT ${limit}`
+            : sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} AND rowid < (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid DESC LIMIT ${limit}`,
       })
 
-      const rawBefore = (sessionId: string, messageId: string, limit: number) =>
-        findRawBefore({ sessionId, messageId, limit }).pipe(
+      const rawBefore = (sessionId: string, messageId: string | undefined, limit: number) =>
+        findRawBefore({ sessionId, messageId: messageId ?? null, limit }).pipe(
           Effect.map((rows) =>
             rows.map((row): RawMessage => ({
               id: row.id,
@@ -855,6 +861,39 @@ export class SessionRepo extends Context.Service<
           return removed
         }).pipe(sql.withTransaction, Effect.orDie)
 
+      const insertCopies = (
+        messages: ReadonlyArray<ChatMessage>,
+        toolCalls: ReadonlyArray<ToolCall>,
+      ) =>
+        Effect.gen(function* () {
+          for (const message of messages) yield* insertMessage(message, undefined)
+          for (const toolCall of toolCalls) {
+            const output =
+              toolCall.output === null
+                ? null
+                : yield* encodeOutput({
+                    result: toolCall.output,
+                    ...(toolCall.structuredOutput === undefined
+                      ? {}
+                      : { structured: toolCall.structuredOutput }),
+                  }).pipe(Effect.catch(() => encodeOutput({ result: toolCall.output! })))
+            yield* sql`
+              INSERT INTO tool_calls ${sql.insert({
+                id: toolCall.id,
+                session_id: toolCall.sessionId,
+                tool_use_id: toolCall.toolUseId,
+                tool_name: toolCall.toolName,
+                input_json: safeJson(toolCall.input),
+                output_json: output,
+                status: toolCall.status,
+                started_at: toolCall.startedAt,
+                finished_at: toolCall.finishedAt,
+              })}
+              ON CONFLICT (session_id, tool_use_id) DO NOTHING
+            `
+          }
+        }).pipe(sql.withTransaction, Effect.orDie)
+
       const forgetParked = (sessionId: string) =>
         sql`DELETE FROM session_providers WHERE session_id = ${sessionId}`.pipe(
           Effect.asVoid,
@@ -883,6 +922,7 @@ export class SessionRepo extends Context.Service<
         getPendingFork,
         setPendingFork,
         rawBefore,
+        insertCopies,
         truncateFrom,
         forgetParked,
         insert,

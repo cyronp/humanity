@@ -7,7 +7,16 @@ import {
   type SessionId,
   type ToolCall,
 } from "@humanity/contracts"
-import { ArrowRight, Brain, CircleCheck, History, Info, TriangleAlert, Undo2 } from "lucide-react"
+import {
+  ArrowRight,
+  Brain,
+  CircleCheck,
+  GitFork,
+  History,
+  Info,
+  TriangleAlert,
+  Undo2,
+} from "lucide-react"
 import { cn } from "cn"
 import { memo, type ReactNode, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -255,7 +264,7 @@ function UserMessage({
   readonly attachments: ReadonlyArray<Attachment>
   readonly mentions: ReadonlyArray<string>
 }) {
-  const { onRewind } = useTranscriptActions()
+  const { onRewind, onFork } = useTranscriptActions()
   return (
     <Message align="end" className="group/user">
       <MessageBody>
@@ -263,6 +272,22 @@ function UserMessage({
           <MessageAttachments sessionId={sessionId} attachments={attachments} />
         )}
         <div className="flex items-start justify-end gap-1">
+          {onFork !== undefined && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="muted"
+                  size="icon-xs"
+                  className="mt-1.5 opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
+                  aria-label="Fork from before this message"
+                  onClick={() => onFork(message)}
+                >
+                  <GitFork />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Fork from before this message</TooltipContent>
+            </Tooltip>
+          )}
           {onRewind !== undefined && (
             <Tooltip>
               <TooltipTrigger asChild>

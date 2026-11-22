@@ -1,5 +1,6 @@
 import type { CheckpointChange } from "@humanity/contracts"
 import { Context, Data, Effect, FileSystem, Layer } from "effect"
+import { randomUUID } from "node:crypto"
 import { join, resolve } from "node:path"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -41,6 +42,9 @@ const chunks = <A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A
     items.slice(index * size, (index + 1) * size),
   )
 
+export const parseNulList = (output: string): ReadonlyArray<string> =>
+  output.split("\0").filter((entry) => entry !== "")
+
 export const parseNameStatus = (output: string): ReadonlyArray<CheckpointChange> => {
   const fields = output.split("\0")
   const changes: Array<CheckpointChange> = []
@@ -80,6 +84,11 @@ export class CheckpointStore extends Context.Service<
       checkpoint: string,
       current: string,
     ) => Effect.Effect<ReadonlyArray<CheckpointChange>, CheckpointFailed>
+    readonly materialize: (
+      sessionId: string,
+      checkpoint: string,
+      target: string,
+    ) => Effect.Effect<ReadonlyArray<string>, CheckpointFailed>
     readonly remove: (sessionId: string) => Effect.Effect<void>
   }
 >()("humanity/CheckpointStore") {
@@ -249,10 +258,42 @@ export class CheckpointStore extends Context.Service<
           return changes
         })
 
+      const materialize = (sessionId: string, checkpoint: string, target: string) =>
+        Effect.gen(function* () {
+          const index = join(shadowDir(sessionId), `materialize-${randomUUID()}.index`)
+          const inTarget = (args: ReadonlyArray<string>) =>
+            Effect.gen(function* () {
+              const result = yield* git
+                .execResult(
+                  target,
+                  [
+                    `--git-dir=${shadowDir(sessionId)}`,
+                    `--work-tree=${target}`,
+                    ...SHADOW_CONFIG,
+                    ...args,
+                  ],
+                  { GIT_INDEX_FILE: index },
+                )
+                .pipe(Effect.mapError((error) => new CheckpointFailed({ reason: error.message })))
+              if (result.exitCode !== 0) {
+                return yield* new CheckpointFailed({
+                  reason: result.stderr.trim() || `git ${args[0] ?? ""} failed`,
+                })
+              }
+              return result.stdout
+            })
+          return yield* Effect.gen(function* () {
+            yield* inTarget(["read-tree", checkpoint])
+            yield* inTarget(["checkout-index", "--all", "--force"])
+            const listed = yield* inTarget(["ls-tree", "-r", "-z", "--name-only", checkpoint])
+            return parseNulList(listed)
+          }).pipe(Effect.ensuring(fs.remove(index, { force: true }).pipe(Effect.ignore)))
+        })
+
       const remove = (sessionId: string) =>
         fs.remove(shadowDir(sessionId), { recursive: true, force: true }).pipe(Effect.ignore)
 
-      return CheckpointStore.of({ snapshot, changesSince, restore, remove })
+      return CheckpointStore.of({ snapshot, changesSince, restore, materialize, remove })
     }),
   )
 }

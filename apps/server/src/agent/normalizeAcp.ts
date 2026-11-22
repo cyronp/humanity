@@ -6,7 +6,6 @@ import { decode, type ToolCallFields } from "../acp/protocol.ts"
 import type { Normalized } from "./normalize.ts"
 import type { PatchFile } from "./normalizeCodex.ts"
 
-
 export const ACP_READY = "humanity/ready"
 export const ACP_TEXT_DELTA = "message/delta"
 export const ACP_TEXT = "message"

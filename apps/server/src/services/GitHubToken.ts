@@ -79,10 +79,9 @@ export class GitHubToken extends Context.Service<
       const [resolve, invalidate] = yield* Effect.cachedInvalidateWithTTL(lookUp, "1 minute")
 
       const save = (token: Redacted.Redacted<string>) =>
-        fs.writeFileString(config.githubTokenPath, Redacted.value(token), { mode: 0o600 }).pipe(
-          Effect.orDie,
-          Effect.andThen(invalidate),
-        )
+        fs
+          .writeFileString(config.githubTokenPath, Redacted.value(token), { mode: 0o600 })
+          .pipe(Effect.orDie, Effect.andThen(invalidate))
 
       const clear = fs
         .remove(config.githubTokenPath, { force: true })

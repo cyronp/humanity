@@ -221,6 +221,16 @@ Before each of the human's messages reaches the agent, Humanity keeps a checkpoi
 - **Undo.** Restoring takes one more checkpoint first, so the rewind's divider in the chat offers Undo, which puts the files back as they were just before it, until the human sends another message. The conversation is not brought back.
 - **Not yet:** a checkpoint per file change inside a turn, rewinding the conversation without removing it from the thread, and limiting the size of what a checkpoint keeps.
 
+## Amendment: forking a thread (2026-11-22)
+
+The human can fork a thread, from its end or from before any of their messages, to try another way without losing the first. This adds no library to the stack of section 3.
+
+- **Always a worktree of its own.** The fork is a new thread of the same project, provider, account, model and effort, in a new worktree whose branch starts at the commit its source was on then (kept with each checkpoint). Its files are the source's checkpoint from before that message, or, from the end, a checkpoint taken at once, so changes not yet committed come along; files git ignores do not. The source is left as it is. A fork needs an idle thread that has not ended; from before a message, it needs that message's checkpoint.
+- **The conversation comes along.** Humanity copies the source's messages, tool calls and attachments up to that point into the fork, and links it to its source (`relation` `forked`, `forked_at_message_id`), so the sidebar shows it under its source. Its agent gets the conversation with the human's first message, as a `<humanity-handoff>` that says it was forked. On Codex the fork's thread is Codex's own fork of the source's (`thread/fork` through the last turn before that point, in the fork's folder), with the handoff as the fallback; Claude Code and the ACP agents take the handoff, since a Claude Code session is kept by the folder it ran in.
+- **Never inherited: the mode.** A fork starts in its project's default mode, like any new thread.
+- **Where.** Each of the human's messages offers "Fork from before this message"; the thread's header offers "Fork thread".
+- **Not yet:** forking on another provider or model in one step (the fork can switch afterwards), and putting the message forked from into the new thread's composer.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

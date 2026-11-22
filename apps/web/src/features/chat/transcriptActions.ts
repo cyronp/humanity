@@ -3,6 +3,7 @@ import { createContext, useContext } from "react"
 
 export interface TranscriptActions {
   readonly onRewind?: ((message: ChatMessage) => void) | undefined
+  readonly onFork?: ((message: ChatMessage) => void) | undefined
   readonly onUndoRewind?: ((messageId: string) => Promise<string | undefined>) | undefined
 }
 

@@ -1,0 +1,111 @@
+import { useAtomSet } from "@effect/atom-react"
+import type { ChatMessage, Session } from "@humanity/contracts"
+import { useNavigate } from "@tanstack/react-router"
+import { Exit } from "effect"
+import { GitFork } from "lucide-react"
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Spinner } from "@/components/ui/spinner"
+import { describeCause } from "@/lib/errors"
+import { keys } from "@/lib/rpc"
+import { forkAtom } from "./atoms.ts"
+
+export interface ForkTarget {
+  readonly message?: ChatMessage | undefined
+}
+
+export function ForkDialog({
+  session,
+  target,
+  onClose,
+}: {
+  readonly session: Session
+  readonly target: ForkTarget | undefined
+  readonly onClose: () => void
+}) {
+  const fork = useAtomSet(forkAtom, { mode: "promiseExit" })
+  const navigate = useNavigate()
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string>()
+  const message = target?.message
+  const text = message?.content._tag === "user" ? message.content.text : undefined
+  const busy = session.status === "running" || session.status === "waiting_for_human"
+
+  const close = () => {
+    setError(undefined)
+    onClose()
+  }
+
+  const run = async () => {
+    setPending(true)
+    setError(undefined)
+    const exit = await fork({
+      payload: {
+        sessionId: session.id,
+        ...(message === undefined ? {} : { messageId: message.id }),
+      },
+      reactivityKeys: [keys.sessions(session.projectId)],
+    })
+    setPending(false)
+    if (Exit.isFailure(exit)) {
+      setError(describeCause(exit.cause))
+      return
+    }
+    close()
+    void navigate({
+      to: "/projects/$projectId/sessions/$sessionId",
+      params: { projectId: exit.value.projectId, sessionId: exit.value.id },
+    })
+  }
+
+  return (
+    <Dialog open={target !== undefined} onOpenChange={(open) => !open && close()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <GitFork className="size-4" />
+            {text === undefined ? "Fork this thread?" : "Fork from before this message?"}
+          </DialogTitle>
+          {text !== undefined && (
+            <DialogDescription className="line-clamp-2 wrap-anywhere">“{text}”</DialogDescription>
+          )}
+        </DialogHeader>
+        <div className="flex flex-col gap-2 text-sm">
+          <p>
+            {text === undefined
+              ? "A new thread starts in a worktree of its own, with this thread’s files as they are now and its whole conversation."
+              : "A new thread starts in a worktree of its own, with the files as they were before this message and the conversation before it."}{" "}
+            This thread stays as it is.
+          </p>
+          <p className="text-muted-foreground">
+            The new thread’s agent gets that conversation as context with your first message there,
+            and runs in the project’s default permissions.
+          </p>
+        </div>
+        {busy && (
+          <p className="text-sm text-warning">
+            The agent is working. Stop it, or wait until it is done, before forking.
+          </p>
+        )}
+        {error !== undefined && <p className="text-sm text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={close}>
+            Cancel
+          </Button>
+          <Button disabled={busy || pending} onClick={() => void run()}>
+            {pending && <Spinner />}
+            Fork
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

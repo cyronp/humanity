@@ -33,6 +33,7 @@ import {
   type SessionView,
 } from "./state.ts"
 import { HINT_CLASS, UsageMeters } from "./UsageMeters.tsx"
+import { ForkDialog, type ForkTarget } from "./ForkDialog.tsx"
 import { RewindDialog } from "./RewindDialog.tsx"
 import { undoRewindAtom } from "./atoms.ts"
 import type { TranscriptActions } from "@/features/chat/transcriptActions"
@@ -78,12 +79,14 @@ export function Workspace({
     : true
 
   const [rewinding, setRewinding] = useState<ChatMessage>()
+  const [forking, setForking] = useState<ForkTarget>()
   const undoRewind = useAtomSet(undoRewindAtom, { mode: "promiseExit" })
   const transcriptActions = useMemo(
     (): TranscriptActions | undefined =>
       acceptsMessages(session) && session.status !== "ended"
         ? {
             onRewind: setRewinding,
+            onFork: (message) => setForking({ message }),
             onUndoRewind: async (messageId) => {
               const exit = await undoRewind({ payload: { sessionId: session.id, messageId } })
               return Exit.isSuccess(exit) ? undefined : describeCause(exit.cause)
@@ -120,7 +123,14 @@ export function Workspace({
         owner: terminalOwner,
         unavailable: session.status === "ended" ? "This thread has ended." : undefined,
       }}
-      header={(actions) => <SessionHeader project={project} session={session} actions={actions} />}
+      header={(actions) => (
+        <SessionHeader
+          project={project}
+          session={session}
+          actions={actions}
+          onFork={session.status === "ended" ? undefined : () => setForking({})}
+        />
+      )}
       rail={(shelf, onSelect) => (
         <ToolRail
           session={session}
@@ -155,6 +165,7 @@ export function Workspace({
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
+          <ForkDialog session={session} target={forking} onClose={() => setForking(undefined)} />
           <RewindDialog
             session={session}
             message={rewinding}
