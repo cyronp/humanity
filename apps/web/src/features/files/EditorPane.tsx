@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FileDiffView } from "@/features/diff/FileDiffView"
+import { FileIcon } from "./FileIcon.tsx"
 import { nameOf } from "./tree.ts"
 import type { DocSnapshot, FileWorkspace, WorkspaceSnapshot } from "./workspace.ts"
 import "./editor.css"
@@ -35,8 +36,10 @@ export function EditorPane({
   workspace,
   snapshot,
   readOnly,
+  icons,
   onReference,
 }: {
+  readonly icons: boolean
   readonly workspace: FileWorkspace
   readonly snapshot: WorkspaceSnapshot
   readonly readOnly: boolean
@@ -91,6 +94,7 @@ export function EditorPane({
               path={path}
               doc={snapshot.docs.get(path)}
               active={path === active}
+              icons={icons}
               onSelect={() => workspace.activate(path)}
               onClose={() => requestClose(path)}
             />
@@ -203,9 +207,11 @@ function EditorTab({
   path,
   doc,
   active,
+  icons,
   onSelect,
   onClose,
 }: {
+  readonly icons: boolean
   readonly path: string
   readonly doc: DocSnapshot | undefined
   readonly active: boolean
@@ -216,7 +222,7 @@ function EditorTab({
   return (
     <div
       className={cn(
-        "group/tab flex shrink-0 items-center gap-1 border-r pr-1 pl-3 text-[0.8125rem]",
+        "group/tab flex shrink-0 items-center gap-1.5 border-r pr-1 pl-3 text-[0.8125rem]",
         active
           ? "bg-background text-foreground"
           : "bg-muted/40 text-muted-foreground hover:text-foreground",
@@ -225,6 +231,7 @@ function EditorTab({
         if (event.button === 1) onClose()
       }}
     >
+      {icons && <FileIcon path={path} />}
       <button
         type="button"
         role="tab"

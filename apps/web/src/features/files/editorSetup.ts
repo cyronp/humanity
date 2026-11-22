@@ -1,10 +1,39 @@
-import { indentWithTab } from "@codemirror/commands"
-import { HighlightStyle, LanguageDescription, syntaxHighlighting } from "@codemirror/language"
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from "@codemirror/autocomplete"
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands"
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  foldGutter,
+  foldKeymap,
+  HighlightStyle,
+  indentOnInput,
+  indentUnit,
+  LanguageDescription,
+  syntaxHighlighting,
+} from "@codemirror/language"
 import { languages } from "@codemirror/language-data"
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search"
 import { Compartment, EditorState, type Extension } from "@codemirror/state"
-import { EditorView, keymap } from "@codemirror/view"
+import {
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
+  EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  keymap,
+  lineNumbers,
+  rectangularSelection,
+} from "@codemirror/view"
 import { tags } from "@lezer/highlight"
-import { basicSetup } from "codemirror"
+import type { EditorPreferences } from "@humanity/contracts"
+import type { DetectedIndent } from "./indent.ts"
 import { lineBreakOf } from "./tabs.ts"
 import { nameOf } from "./tree.ts"
 
@@ -44,12 +73,11 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   "&": {
     height: "100%",
-    fontSize: "0.8125rem",
     backgroundColor: "var(--background)",
     color: "var(--foreground)",
   },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.55" },
+  ".cm-scroller": { lineHeight: "1.55" },
   ".cm-content": { caretColor: "var(--foreground)" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   ".cm-gutters": {
@@ -109,15 +137,71 @@ const theme = EditorView.theme({
 export interface EditorHooks {
   readonly onSave: () => void
   readonly onChange: (state: EditorState) => void
+  readonly onBlur: () => void
 }
 
 export const languageSlot = new Compartment()
 export const readOnlySlot = new Compartment()
+export const settingsSlot = new Compartment()
+
+const setup: Extension = [
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter(),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...completionKeymap,
+  ]),
+]
+
+const fontStack = (family: string | null) =>
+  family === null ? "var(--font-mono)" : `${JSON.stringify(family)}, var(--font-mono)`
+
+export const settingsExtension = (
+  preferences: EditorPreferences,
+  detected: DetectedIndent | undefined,
+): Extension => {
+  const indent: DetectedIndent =
+    preferences.detectIndentation && detected !== undefined
+      ? detected
+      : preferences.insertSpaces
+        ? { kind: "spaces", size: preferences.tabSize }
+        : { kind: "tabs" }
+  return [
+    preferences.lineNumbers ? lineNumbers() : [],
+    preferences.wordWrap ? EditorView.lineWrapping : [],
+    EditorState.tabSize.of(indent.kind === "spaces" ? indent.size : preferences.tabSize),
+    indentUnit.of(indent.kind === "spaces" ? " ".repeat(indent.size) : "\t"),
+    EditorView.theme({
+      ".cm-scroller": {
+        fontFamily: fontStack(preferences.fontFamily),
+        fontSize: `${preferences.fontSize}px`,
+      },
+    }),
+  ]
+}
 
 export const createEditorState = (
   content: string,
   hooks: EditorHooks,
-  readOnly: boolean,
+  options: { readonly readOnly: boolean; readonly settings: Extension },
 ): EditorState =>
   EditorState.create({
     doc: content,
@@ -134,13 +218,20 @@ export const createEditorState = (
         },
         indentWithTab,
       ]),
-      basicSetup,
+      setup,
       theme,
       syntaxHighlighting(highlight),
       languageSlot.of([]),
-      readOnlySlot.of(readOnlyExtension(readOnly)),
+      readOnlySlot.of(readOnlyExtension(options.readOnly)),
+      settingsSlot.of(options.settings),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) hooks.onChange(update.state)
+      }),
+      EditorView.domEventHandlers({
+        blur: () => {
+          hooks.onBlur()
+          return false
+        },
       }),
     ],
   })

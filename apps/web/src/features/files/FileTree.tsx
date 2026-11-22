@@ -8,6 +8,7 @@ import { useTree } from "@headless-tree/react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { cn } from "cn"
 import { ChevronRight, File, Folder, FolderOpen } from "lucide-react"
+import { FileIcon } from "./FileIcon.tsx"
 import { useEffect, useMemo, useRef } from "react"
 import { FILE_STATUS, fileNameClass } from "@/features/diff/FileStatus"
 import { buildFileTree, type FileNode, nameOf, ROOT_ID, type TreeChanges } from "./tree.ts"
@@ -22,7 +23,9 @@ export function FileTree({
   expanded,
   onExpandedChange,
   onOpen,
+  icons,
 }: {
+  readonly icons: boolean
   readonly files: ReadonlyArray<string>
   readonly changes: TreeChanges
   readonly active: string | null
@@ -101,6 +104,7 @@ export function FileTree({
               top={row.start}
               active={item.getId() === active}
               changes={changes}
+              icons={icons}
             />
           )
         })}
@@ -114,7 +118,9 @@ function TreeRow({
   top,
   active,
   changes,
+  icons,
 }: {
+  readonly icons: boolean
   readonly item: ItemInstance<FileNode>
   readonly top: number
   readonly active: boolean
@@ -146,7 +152,11 @@ function TreeRow({
           expanded && "rotate-90",
         )}
       />
-      <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+      {icons ? (
+        <FileIcon path={node.id} folder={node.folder} expanded={expanded} />
+      ) : (
+        <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
       <span
         className={cn(
           "min-w-0 flex-1 truncate",

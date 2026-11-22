@@ -265,7 +265,7 @@ function FontFamilySetting({
   )
 }
 
-function NumberSetting({
+export function NumberSetting({
   label,
   detail,
   value,

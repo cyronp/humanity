@@ -12,6 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { searchSessionFilesAtom } from "@/features/session/atoms"
+import { FileIcon } from "./FileIcon.tsx"
 import { nameOf } from "./tree.ts"
 
 export function QuickOpen({
@@ -20,7 +21,9 @@ export function QuickOpen({
   recent,
   onOpenChange,
   onPick,
+  icons,
 }: {
+  readonly icons: boolean
   readonly sessionId: SessionId
   readonly open: boolean
   readonly recent: ReadonlyArray<string>
@@ -71,7 +74,7 @@ export function QuickOpen({
                 onOpenChange(false)
               }}
             >
-              <File className="text-muted-foreground" />
+              {icons ? <FileIcon path={entry.path} /> : <File className="text-muted-foreground" />}
               <span className="truncate">{nameOf(entry.path)}</span>
               <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
                 {entry.path}

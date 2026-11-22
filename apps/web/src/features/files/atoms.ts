@@ -9,3 +9,8 @@ export const fileListAtom = Atom.family((sessionId: SessionId) =>
 export const readFileAtom = HumanityClient.mutation("Files.read")
 export const fileVersionsAtom = HumanityClient.mutation("Files.versions")
 export const writeFileAtom = HumanityClient.mutation("Files.write")
+
+export const editorPreferencesAtom = HumanityClient.query("Preferences.getEditor", undefined, {
+  reactivityKeys: [keys.preferences],
+})
+export const setEditorPreferencesAtom = HumanityClient.mutation("Preferences.setEditor")

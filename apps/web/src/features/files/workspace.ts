@@ -1,4 +1,10 @@
-import type { FileVersion, OpenedFile, SavedFile } from "@humanity/contracts"
+import {
+  DEFAULT_EDITOR_PREFERENCES,
+  type EditorPreferences,
+  type FileVersion,
+  type OpenedFile,
+  type SavedFile,
+} from "@humanity/contracts"
 import type { EditorState, Extension, Text, TransactionSpec } from "@codemirror/state"
 import type { EditorView } from "@codemirror/view"
 import { Cause, Exit, Predicate } from "effect"
@@ -9,7 +15,10 @@ import {
   loadLanguage,
   readOnlyExtension,
   readOnlySlot,
+  settingsExtension,
+  settingsSlot,
 } from "./editorSetup.ts"
+import { type DetectedIndent, detectIndent } from "./indent.ts"
 import { closeTab, NO_TABS, onDiskChange, openTab, type Tabs } from "./tabs.ts"
 
 export interface FileCalls {
@@ -59,6 +68,7 @@ interface TextDoc {
   bom: boolean
   saving: boolean
   acknowledged: string | null | undefined
+  indent: DetectedIndent | undefined
 }
 
 interface Doc {
@@ -92,6 +102,8 @@ export class FileWorkspace {
   private readOnly = false
   private polling = false
   private focusPending: string | null = null
+  private preferences: EditorPreferences = DEFAULT_EDITOR_PREFERENCES
+  private readonly autoSaves = new Map<string, number>()
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
@@ -102,12 +114,23 @@ export class FileWorkspace {
 
   getSnapshot = () => this.snapshot
 
-  connect(calls: FileCalls, readOnly: boolean) {
+  connect(calls: FileCalls, readOnly: boolean, preferences: EditorPreferences) {
     this.calls = calls
-    if (this.readOnly === readOnly) return
-    this.readOnly = readOnly
-    for (const [path] of this.docs) {
-      this.transact(path, { effects: readOnlySlot.reconfigure(readOnlyExtension(readOnly)) })
+    if (this.readOnly !== readOnly) {
+      this.readOnly = readOnly
+      for (const [path] of this.docs) {
+        this.transact(path, { effects: readOnlySlot.reconfigure(readOnlyExtension(readOnly)) })
+      }
+    }
+    if (JSON.stringify(this.preferences) !== JSON.stringify(preferences)) {
+      this.preferences = preferences
+      if (preferences.autoSave !== "afterDelay") this.cancelAutoSaves()
+      for (const [path, doc] of this.docs) {
+        if (doc.text === undefined) continue
+        this.transact(path, {
+          effects: settingsSlot.reconfigure(settingsExtension(preferences, doc.text.indent)),
+        })
+      }
     }
   }
 
@@ -153,6 +176,7 @@ export class FileWorkspace {
   }
 
   close(path: string) {
+    this.cancelAutoSave(path)
     this.tabs = closeTab(this.tabs, path)
     this.docs.delete(path)
     if (this.shown === path) this.shown = null
@@ -344,13 +368,20 @@ export class FileWorkspace {
     else if (file._tag === "TooLarge") {
       doc.snapshot = this.fresh(path, { kind: "tooLarge", size: file.size })
     } else {
+      const indent = detectIndent(file.content)
       const state = createEditorState(
         file.content,
         {
           onSave: () => void this.save(path),
-          onChange: (next) => this.markDirty(path, next),
+          onChange: (next) => {
+            this.markDirty(path, next)
+            this.scheduleAutoSave(path)
+          },
+          onBlur: () => {
+            if (this.preferences.autoSave === "onFocusChange") void this.autoSave(path)
+          },
         },
-        this.readOnly,
+        { readOnly: this.readOnly, settings: settingsExtension(this.preferences, indent) },
       )
       doc.text = {
         state,
@@ -359,6 +390,7 @@ export class FileWorkspace {
         bom: file.bom,
         saving: false,
         acknowledged: undefined,
+        indent,
       }
       doc.snapshot = this.fresh(path, { kind: "text", dirty: false, saving: false })
       void loadLanguage(path).then((language) => {
@@ -366,6 +398,39 @@ export class FileWorkspace {
       })
     }
     this.emit()
+  }
+
+  private scheduleAutoSave(path: string) {
+    if (this.preferences.autoSave !== "afterDelay") return
+    this.cancelAutoSave(path)
+    this.autoSaves.set(
+      path,
+      window.setTimeout(() => {
+        this.autoSaves.delete(path)
+        void this.autoSave(path)
+      }, this.preferences.autoSaveDelay),
+    )
+  }
+
+  private cancelAutoSave(path: string) {
+    const timer = this.autoSaves.get(path)
+    if (timer === undefined) return
+    window.clearTimeout(timer)
+    this.autoSaves.delete(path)
+  }
+
+  private cancelAutoSaves() {
+    for (const path of [...this.autoSaves.keys()]) this.cancelAutoSave(path)
+  }
+
+  private async autoSave(path: string) {
+    const doc = this.docs.get(path)
+    if (doc === undefined || doc.snapshot.conflict !== undefined || !this.isDirty(path)) return
+    if (doc.text?.saving === true) {
+      this.scheduleAutoSave(path)
+      return
+    }
+    await this.save(path)
   }
 
   private setLanguage(path: string, language: Extension) {

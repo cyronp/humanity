@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
@@ -6,6 +8,11 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url))
+
+const materialIcons = join(
+  dirname(createRequire(import.meta.url).resolve("material-icon-theme/package.json")),
+  "icons",
+)
 
 const daemonPort = process.env["HUMANITY_PORT"] ?? "7420"
 
@@ -24,6 +31,7 @@ export default defineConfig({
       "@": fromHere("./src"),
       "@humanity/contracts": fromHere("../../packages/contracts/src/index.ts"),
       "@humanity/diff": fromHere("../../packages/diff/src/index.ts"),
+      "@material-icons": materialIcons,
     },
   },
   server: {

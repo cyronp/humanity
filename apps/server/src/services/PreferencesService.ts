@@ -2,6 +2,8 @@ import {
   type AgentProvider,
   BrowserPreferences,
   CLI_COMMANDS,
+  DEFAULT_EDITOR_PREFERENCES,
+  EditorPreferences,
   CliPathPreferences,
   DEFAULT_BROWSER_PREFERENCES,
   DEFAULT_CLI_PATH_PREFERENCES,
@@ -50,6 +52,8 @@ export class PreferencesService extends Context.Service<
     readonly setTerminal: (preferences: TerminalPreferences) => Effect.Effect<TerminalPreferences>
     readonly tools: Effect.Effect<ToolsPreferences>
     readonly setTools: (preferences: ToolsPreferences) => Effect.Effect<ToolsPreferences>
+    readonly editor: Effect.Effect<EditorPreferences>
+    readonly setEditor: (preferences: EditorPreferences) => Effect.Effect<EditorPreferences>
     readonly browser: Effect.Effect<BrowserPreferences>
     readonly setBrowser: (preferences: BrowserPreferences) => Effect.Effect<BrowserPreferences>
     readonly cliPaths: Effect.Effect<CliPathPreferences>
@@ -120,6 +124,12 @@ export class PreferencesService extends Context.Service<
         DEFAULT_TOOLS_PREFERENCES,
         "tools preferences",
       )
+      const editor = stored(
+        "editor",
+        EditorPreferences,
+        DEFAULT_EDITOR_PREFERENCES,
+        "editor preferences",
+      )
       const browser = stored(
         "browser",
         BrowserPreferences,
@@ -146,6 +156,8 @@ export class PreferencesService extends Context.Service<
         setTerminal: terminal.set,
         tools: tools.get,
         setTools: tools.set,
+        editor: editor.get,
+        setEditor: editor.set,
         browser: browser.get,
         setBrowser: browser.set,
         cliPaths: cliPaths.get,

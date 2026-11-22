@@ -1,6 +1,7 @@
 import { cn } from "cn"
 import {
   Blocks,
+  FileCode,
   FolderCog,
   FolderGit2,
   Globe,
@@ -26,6 +27,7 @@ import { GeneralSettings } from "./GeneralSettings.tsx"
 import { ProjectsSettings } from "./ProjectsSettings.tsx"
 import { ProvidersSettings } from "./ProvidersSettings.tsx"
 import { RepositoriesSettings } from "./RepositoriesSettings.tsx"
+import { EditorSettings } from "./EditorSettings.tsx"
 import { TerminalSettings } from "./TerminalSettings.tsx"
 import { BrowserSettings } from "./BrowserSettings.tsx"
 import { ToolsSettings } from "./ToolsSettings.tsx"
@@ -49,6 +51,7 @@ const SECTION_VIEWS: Record<
 > = {
   general: { icon: SlidersHorizontal, View: GeneralSettings },
   chat: { icon: MessageSquare, View: ChatSettings },
+  editor: { icon: FileCode, View: EditorSettings },
   terminal: { icon: SquareTerminal, View: TerminalSettings },
   browser: { icon: Globe, View: BrowserSettings },
   providers: { icon: Plug, View: ProvidersSettings },

@@ -6,6 +6,7 @@ import {
   PinnedDefaults,
   ToolsPreferences,
 } from "../domain/Preferences.ts"
+import { EditorPreferences } from "../domain/Files.ts"
 import { TerminalPreferences } from "../domain/Terminal.ts"
 import { CliPathNotFound } from "../Errors.ts"
 
@@ -30,6 +31,13 @@ export const PreferencesRpcs = RpcGroup.make(
   Rpc.make("Preferences.setTerminal", {
     payload: { terminal: TerminalPreferences },
     success: TerminalPreferences,
+  }),
+  Rpc.make("Preferences.getEditor", {
+    success: EditorPreferences,
+  }),
+  Rpc.make("Preferences.setEditor", {
+    payload: { editor: EditorPreferences },
+    success: EditorPreferences,
   }),
   Rpc.make("Preferences.getBrowser", {
     success: BrowserPreferences,

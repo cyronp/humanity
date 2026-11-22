@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Session } from "@humanity/contracts"
+import { DEFAULT_EDITOR_PREFERENCES, type Session } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { FolderTree, PanelLeft, PanelRightClose, RefreshCw, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
@@ -10,7 +10,13 @@ import { sessionDiffAtom } from "@/features/session/atoms"
 import { RAIL_WIDTH, titlebarPaddingEnd } from "@/features/session/panel/SessionPanel"
 import { useStoredFlag } from "@/features/terminal/dock"
 import { useStoredWidth } from "@/lib/resize"
-import { fileListAtom, fileVersionsAtom, readFileAtom, writeFileAtom } from "./atoms.ts"
+import {
+  editorPreferencesAtom,
+  fileListAtom,
+  fileVersionsAtom,
+  readFileAtom,
+  writeFileAtom,
+} from "./atoms.ts"
 import { EditorPane } from "./EditorPane.tsx"
 import { FileTree } from "./FileTree.tsx"
 import { QuickOpen } from "./QuickOpen.tsx"
@@ -54,6 +60,10 @@ export default function FilesPanel({
   const diff = useAtomValue(sessionDiffAtom(session.id))
   const refreshListing = useAtomRefresh(fileListAtom(session.id))
   const refreshDiff = useAtomRefresh(sessionDiffAtom(session.id))
+  const storedPreferences = useAtomValue(editorPreferencesAtom)
+  const preferences = AsyncResult.isSuccess(storedPreferences)
+    ? storedPreferences.value
+    : DEFAULT_EDITOR_PREFERENCES
 
   workspace.connect(
     {
@@ -62,6 +72,7 @@ export default function FilesPanel({
       write: (request) => write({ payload: { sessionId: session.id, ...request } }),
     },
     readOnly,
+    preferences,
   )
 
   useEffect(guardUnsaved, [])
@@ -187,6 +198,7 @@ export default function FilesPanel({
                   expanded={snapshot.expanded}
                   onExpandedChange={(next) => workspace.setExpanded(next)}
                   onOpen={(path) => workspace.open(path)}
+                  icons={preferences.fileIcons}
                 />
               )}
             </AsyncView>
@@ -206,6 +218,7 @@ export default function FilesPanel({
           workspace={workspace}
           snapshot={snapshot}
           readOnly={readOnly}
+          icons={preferences.fileIcons}
           onReference={
             onReference === undefined
               ? undefined
@@ -219,6 +232,7 @@ export default function FilesPanel({
         recent={snapshot.tabs.open}
         onOpenChange={setFinding}
         onPick={open}
+        icons={preferences.fileIcons}
       />
     </>
   )
