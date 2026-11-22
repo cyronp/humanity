@@ -21,6 +21,9 @@ export type SessionStatus = typeof SessionStatus.Type
 export const SessionOrigin = Schema.Literals(["humanity", "claude-code"])
 export type SessionOrigin = typeof SessionOrigin.Type
 
+export const SessionRelation = Schema.Literals(["opened", "forked"])
+export type SessionRelation = typeof SessionRelation.Type
+
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
 export type ReasoningEffort = typeof ReasoningEffort.Type
 
@@ -39,6 +42,9 @@ export const Session = Schema.Struct({
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
+  parentId: Schema.optional(Schema.NullOr(SessionId)),
+  relation: Schema.optional(Schema.NullOr(SessionRelation)),
+  forkedAtMessageId: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: Schema.String,
   updatedAt: Schema.String,
 })

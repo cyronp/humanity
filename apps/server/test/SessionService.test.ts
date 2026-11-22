@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest"
 import {
   type MessageContent,
   OPEN_THREAD_TOOL,
+  openedThreadIn,
   threadHref,
   type PlanUsage,
   type SessionEvent,
@@ -1154,6 +1155,13 @@ describe("SessionService", () => {
         assert.strictEqual(child?.provider, "kiro")
         assert.strictEqual(child?.model, "claude-sonnet-5.5")
         assert.strictEqual(child?.effort, "max")
+        assert.strictEqual(child?.parentId, parent.id)
+        assert.strictEqual(child?.relation, "opened")
+        assert.isNull((yield* sessions.get(parent.id)).parentId)
+        assert.deepStrictEqual(openedThreadIn(opened?.output?.content ?? ""), {
+          projectId: project.id,
+          sessionId: child?.id,
+        })
         assert.lengthOf(yield* sessions.list(project.id), 2)
         const childRun = (yield* Ref.get(log.runs)).find((run) => run.provider === "kiro")
         assert.strictEqual(childRun?.model, "claude-sonnet-5.5")

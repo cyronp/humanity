@@ -43,6 +43,7 @@ import {
   SessionBusy,
   SessionEnded,
   type SessionEvent,
+  type SessionRelation,
   type TranscriptPage,
   SessionId,
   SessionNotFound,
@@ -217,6 +218,12 @@ export interface LoggedBranchCommits {
   readonly more: boolean
 }
 
+export interface SessionLineage {
+  readonly parentId: SessionId
+  readonly relation: SessionRelation
+  readonly forkedAtMessageId?: string | undefined
+}
+
 export const threadBranch = (session: Session): string | null =>
   session.branch === "HEAD" ? null : session.branch
 
@@ -236,6 +243,7 @@ export class SessionService extends Context.Service<
       readonly model?: string | undefined
       readonly effort?: ReasoningEffort | undefined
       readonly autonomy?: Autonomy | undefined
+      readonly lineage?: SessionLineage | undefined
     }) => Effect.Effect<
       Session,
       | ProjectNotFound
@@ -1072,6 +1080,7 @@ export class SessionService extends Context.Service<
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
+        readonly lineage?: SessionLineage | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
         const files = yield* prepareAttachments(options.attachments ?? [])
@@ -1109,6 +1118,9 @@ export class SessionService extends Context.Service<
             options.autonomy ?? newThreadAutonomy(project, yield* preferences.pinnedDefaults),
           status: "idle",
           origin: "humanity",
+          parentId: options.lineage?.parentId ?? null,
+          relation: options.lineage?.relation ?? null,
+          forkedAtMessageId: options.lineage?.forkedAtMessageId ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         }
@@ -1169,6 +1181,7 @@ export class SessionService extends Context.Service<
               prompt,
               model,
               effort: request.effort ?? undefined,
+              lineage: { parentId: parent.id, relation: "opened" },
             }).pipe(
               Effect.mapError(
                 (error) =>

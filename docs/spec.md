@@ -202,6 +202,15 @@ The shelf gets a Files tool: the thread's folder as a tree, and an editor, as in
 - **Settings, under Editor (2026-11-22),** kept by the daemon (`EditorPreferences`, like the terminal's): auto save (off, after a delay of the human's choice, or when focus leaves the editor), the font and its size, word wrap, line numbers, and indentation (detected from the file, else tabs or spaces of a given size). Auto save is an ordinary save: it never writes over a file that changed on disk, and waits while the editor asks about one.
 - **Not yet:** creating, renaming, moving and deleting files from the tree, searching inside files, a language server, and the code theme setting for the editor (it has a light and a dark palette of its own).
 
+## Amendment: threads that open threads (2026-11-22)
+
+A thread remembers the thread it came from, and the sidebar shows them together. This adds no library to the stack of section 3.
+
+- **The link.** `sessions.parent_session_id` names the thread a thread came from, `relation` how (`opened` by the agent's `open_thread`, or `forked` from it by the human) and `forked_at_message_id` where a fork was made. Deleting a thread leaves its children, with no parent.
+- **The sidebar as a tree.** A thread is shown under the thread it came from, indented, as long as that thread is shown too; otherwise at the top level. When a thread it opened, at any depth, waits for the human, stopped on an error or is working, its row says so beside its own status.
+- **The call shows its thread.** An `open_thread` card in the chat shows the opened thread's status as it changes.
+- **Ending a thread leaves the threads it opened running.** The agent is still not told when a thread it opened finishes.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

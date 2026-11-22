@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
+import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { Search, Settings, SquarePen } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
@@ -29,6 +30,7 @@ import { openSettings } from "@/features/settings/settings"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
 import { ThreadLink } from "./ThreadLink.tsx"
+import { childAttention, threadTree } from "./threadTree.ts"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
@@ -214,13 +216,18 @@ function Conversations({
   }
   return (
     <SidebarMenu className="gap-0.5">
-      {shown.map(({ session, project }) => (
-        <SidebarMenuItem key={session.id}>
+      {threadTree(shown).map(({ thread: { session, project }, depth }) => (
+        <SidebarMenuItem
+          key={session.id}
+          style={depth === 0 ? undefined : { marginLeft: `${depth * 0.75}rem` }}
+          className={cn(depth > 0 && "border-l border-sidebar-border pl-1")}
+        >
           <ThreadLink
             session={session}
             project={project}
             active={session.id === activeId}
             onNavigate={onNavigate}
+            attention={childAttention(session.id, sessions.value)}
           />
           {session.status !== "ended" && (
             <EndSessionButton

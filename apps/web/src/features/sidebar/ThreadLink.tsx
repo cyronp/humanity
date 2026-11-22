@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   type LucideIcon,
   MessageCircleQuestionMark,
+  Network,
   SquareTerminal,
 } from "lucide-react"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
@@ -23,11 +24,13 @@ export function ThreadLink({
   project,
   active,
   onNavigate,
+  attention,
 }: {
   readonly session: Session
   readonly project: Project
   readonly active: boolean
   readonly onNavigate: () => void
+  readonly attention?: SessionStatus | undefined
 }) {
   return (
     <Link
@@ -47,6 +50,7 @@ export function ThreadLink({
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1.5">
             <ThreadStatus status={session.status} />
+            {attention !== undefined && <ChildAttention status={attention} />}
             <span aria-hidden className="text-muted-foreground/60">
               ·
             </span>
@@ -102,7 +106,7 @@ const STATE: Record<
   ended: { label: "Ended", word: "Ended", icon: Archive },
 }
 
-function ThreadStatus({ status }: { readonly status: SessionStatus }) {
+export function ThreadStatus({ status }: { readonly status: SessionStatus }) {
   const state = STATE[status]
   const tone = STATUS_TONE[status]
   return (
@@ -113,6 +117,31 @@ function ThreadStatus({ status }: { readonly status: SessionStatus }) {
       <state.icon className={cn("size-3 shrink-0", state.spin && "animate-spin")} aria-hidden />
       <span aria-hidden>{state.word}</span>
       <span className="sr-only">{state.label}</span>
+    </span>
+  )
+}
+
+const CHILD_ATTENTION: Partial<Record<SessionStatus, string>> = {
+  waiting_for_human: "A thread it opened needs input",
+  error: "A thread it opened stopped with an error",
+  running: "A thread it opened is working",
+}
+
+function ChildAttention({ status }: { readonly status: SessionStatus }) {
+  const label = CHILD_ATTENTION[status] ?? STATE[status].label
+  const tone = STATUS_TONE[status]
+  const Icon = STATE[status].icon
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-sm border px-1",
+        tone !== undefined && TONE_TEXT[tone],
+      )}
+      title={label}
+    >
+      <Network className="size-3 shrink-0" aria-hidden />
+      <Icon className={cn("size-3 shrink-0", STATE[status].spin && "animate-spin")} aria-hidden />
+      <span className="sr-only">{label}</span>
     </span>
   )
 }

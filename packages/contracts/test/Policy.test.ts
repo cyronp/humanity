@@ -6,6 +6,7 @@ import {
   formatOpenedThread,
   isTerminalToolName,
   OPEN_THREAD_TOOL,
+  openedThreadIn,
   TERMINAL_TOOLS,
   parseMcpToolName,
   parseThreadHref,
@@ -124,6 +125,19 @@ describe("open_thread", () => {
     expect(parseThreadHref("/projects/p1/sessions/s1/extra")).toBeUndefined()
     expect(parseThreadHref("https://example.com/docs")).toBeUndefined()
     expect(parseThreadHref("/projects/%E0%A4%A/sessions/s1")).toBeUndefined()
+  })
+
+  it("finds the opened thread in open_thread's result", () => {
+    const text = formatOpenedThread({
+      sessionId: SessionId.make("s 1"),
+      projectId: ProjectId.make("p1"),
+      title: "Fix [it]",
+      provider: "codex",
+      model: null,
+      effort: null,
+    })
+    expect(openedThreadIn(text)).toEqual({ projectId: "p1", sessionId: "s 1" })
+    expect(openedThreadIn("No thread was opened: the prompt is empty.")).toBeUndefined()
   })
 })
 

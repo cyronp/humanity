@@ -11,6 +11,7 @@ import {
   type Session,
   SessionId,
   SessionOrigin,
+  SessionRelation,
   SessionStatus,
   SessionUsage,
   type ToolCall,
@@ -37,6 +38,9 @@ const SessionRow = Schema.Struct({
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
+  parent_session_id: Schema.optional(Schema.NullOr(SessionId)),
+  relation: Schema.optional(Schema.NullOr(SessionRelation)),
+  forked_at_message_id: Schema.optional(Schema.NullOr(Schema.String)),
   created_at: Schema.String,
   updated_at: Schema.String,
 })
@@ -56,6 +60,9 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   autonomy: row.autonomy,
   status: row.status,
   origin: row.origin,
+  parentId: row.parent_session_id ?? null,
+  relation: row.relation ?? null,
+  forkedAtMessageId: row.forked_at_message_id ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
@@ -351,6 +358,9 @@ export class SessionRepo extends Context.Service<
             autonomy: session.autonomy,
             status: session.status,
             origin: session.origin,
+            parent_session_id: session.parentId ?? null,
+            relation: session.relation ?? null,
+            forked_at_message_id: session.forkedAtMessageId ?? null,
             created_at: session.createdAt,
             updated_at: session.updatedAt,
           })}
