@@ -7,18 +7,7 @@ import {
   type SessionId,
   type ToolCall,
 } from "@humanity/contracts"
-import {
-  ArrowRight,
-  Brain,
-  Check,
-  CircleCheck,
-  Copy,
-  GitFork,
-  History,
-  Info,
-  TriangleAlert,
-  Undo2,
-} from "lucide-react"
+import { ArrowRight, History, TriangleAlert, Undo2 } from "lucide-react"
 import { cn } from "cn"
 import { memo, type ReactNode, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -26,7 +15,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
-import { Message, MessageContent as MessageBody, MessageHeader } from "@/components/ui/message"
+import { Message, MessageContent as MessageBody } from "@/components/ui/message"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -36,21 +25,11 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/ui/message-scroller"
-import {
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceDescription,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-} from "@/components/ui/trace"
+import { Trace, TraceLine, TraceTitle } from "@/components/ui/trace"
 import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { useProviderModels } from "@/features/providers/useProviderModels"
-import { ToolCallCard } from "@/features/tools/ToolCallCard"
-import { useUiPreferences } from "@/lib/uiPreferences"
+import { AgentTurn, CopyText } from "./AgentTurn.tsx"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { Markdown } from "./Markdown.tsx"
@@ -58,7 +37,6 @@ import {
   type TranscriptActions,
   TranscriptActionsContext,
   rewindSummary,
-  type TurnEnd,
   turnEnds,
   undoableRewinds,
   useTranscriptActions,
@@ -72,13 +50,11 @@ import {
   providerSwitchStatus,
   providerSwitchSummary,
 } from "./providerSwitch.ts"
+import { itemOfMessage, transcriptItems } from "./turns.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
 const FOCUS_HIGHLIGHT_MS = 2500
-
-const isShown = (message: ChatMessage) =>
-  message.content._tag !== "tool_results" && message.content._tag !== "other"
 
 export function MessageList({
   messages,
@@ -109,7 +85,8 @@ export function MessageList({
   readonly focus?: string | undefined
   readonly onFocusMissing?: (() => void) | undefined
 }) {
-  const items = useMemo(() => messages.filter(isShown), [messages])
+  const items = useMemo(() => transcriptItems(messages), [messages])
+  const owners = useMemo(() => itemOfMessage(items), [items])
   const delivered = useMemo(() => deliveredSwitches(messages), [messages])
   const undoable = useMemo(() => undoableRewinds(messages), [messages])
   const turns = useMemo(() => turnEnds(messages), [messages])
@@ -120,6 +97,14 @@ export function MessageList({
     const timer = setTimeout(() => setHighlighted(undefined), FOCUS_HIGHLIGHT_MS)
     return () => clearTimeout(timer)
   }, [highlighted])
+  const last = items.at(-1)
+  const liveTurn =
+    working &&
+    last?._tag === "turn" &&
+    !last.messages.some((message) => message.content._tag === "result")
+      ? last.id
+      : undefined
+  const focusedItem = focus === undefined ? undefined : owners.get(focus)
   return (
     <TranscriptActionsContext value={provided}>
       <MessageScrollerProvider autoScroll defaultScrollPosition="end">
@@ -139,31 +124,41 @@ export function MessageList({
               )}
               {focus !== undefined && (
                 <FocusMessage
-                  messageId={focus}
-                  present={items.some((message) => message.id === focus)}
+                  focus={focus}
+                  itemId={focusedItem ?? focus}
+                  present={focusedItem !== undefined}
                   onMissing={onFocusMissing}
                   onFocused={setHighlighted}
                 />
               )}
-              {items.map((message) => (
+              {items.map((item) => (
                 <MessageScrollerItem
-                  key={message.id}
-                  messageId={message.id}
-                  scrollAnchor={message.content._tag === "user"}
+                  key={item.id}
+                  messageId={item.id}
+                  scrollAnchor={item._tag === "message" && item.message.content._tag === "user"}
                   className={cn(
                     "rounded-lg ring-offset-4 ring-offset-background transition-shadow duration-700",
-                    message.id === highlighted && "ring-2 ring-primary/40",
+                    item.id === highlighted && "ring-2 ring-primary/40",
                   )}
                 >
-                  <TranscriptEntry
-                    message={message}
-                    delivered={delivered.has(message.id)}
-                    undoable={undoable.has(message.id)}
-                    turn={turns.get(message.id)}
-                    toolCalls={toolCalls}
-                    approvals={approvals}
-                    worktreePath={worktreePath}
-                  />
+                  {item._tag === "turn" ? (
+                    <AgentTurn
+                      messages={item.messages}
+                      startedAt={item.startedAt}
+                      live={item.id === liveTurn}
+                      focused={item.id === focusedItem}
+                      end={turnEndOf(item.messages, turns)}
+                      toolCalls={toolCalls}
+                      approvals={approvals}
+                      worktreePath={worktreePath}
+                    />
+                  ) : (
+                    <TranscriptEntry
+                      message={item.message}
+                      delivered={delivered.has(item.id)}
+                      undoable={undoable.has(item.id)}
+                    />
+                  )}
                 </MessageScrollerItem>
               ))}
               {draft !== "" && (
@@ -175,7 +170,7 @@ export function MessageList({
                   </Message>
                 </MessageScrollerItem>
               )}
-              {draft === "" && working && (
+              {draft === "" && working && liveTurn === undefined && (
                 <MessageScrollerItem messageId="working">
                   <Trace>
                     <TraceLine status="running" className="text-xs">
@@ -196,6 +191,11 @@ export function MessageList({
   )
 }
 
+const turnEndOf = (messages: ReadonlyArray<ChatMessage>, ends: ReturnType<typeof turnEnds>) => {
+  const result = messages.find((message) => message.content._tag === "result")
+  return result === undefined ? undefined : ends.get(result.id)
+}
+
 const deliveredSwitches = (messages: ReadonlyArray<ChatMessage>): ReadonlySet<string> => {
   const delivered = new Set<string>()
   let waiting: Array<string> = []
@@ -213,41 +213,12 @@ const TranscriptEntry = memo(function TranscriptEntry({
   message,
   delivered,
   undoable,
-  turn,
-  toolCalls,
-  approvals,
-  worktreePath,
 }: {
   readonly message: ChatMessage
   readonly delivered: boolean
   readonly undoable: boolean
-  readonly turn: TurnEnd | undefined
-  readonly toolCalls: Readonly<Record<string, ToolCall>>
-  readonly approvals: ReadonlyMap<string, Approval>
-  readonly worktreePath: string
 }) {
-  return renderContent(
-    message,
-    message.content,
-    toolCalls,
-    approvals,
-    worktreePath,
-    delivered,
-    undoable,
-    turn,
-  )
-})
-
-const renderContent = (
-  message: ChatMessage,
-  content: MessageContent,
-  toolCalls: Readonly<Record<string, ToolCall>>,
-  approvals: ReadonlyMap<string, Approval>,
-  worktreePath: string,
-  delivered: boolean,
-  undoable: boolean,
-  turn: TurnEnd | undefined,
-) => {
+  const content = message.content
   switch (content._tag) {
     case "user":
       return (
@@ -259,30 +230,16 @@ const renderContent = (
           mentions={content.mentions ?? NO_MENTIONS}
         />
       )
-    case "assistant":
-      return (
-        <AssistantMessage
-          content={content}
-          toolCalls={toolCalls}
-          approvals={approvals}
-          worktreePath={worktreePath}
-        />
-      )
-    case "result":
-      return <TurnFooter content={content} turn={turn} />
-    case "system_init":
-      return <InitLine content={content} />
     case "notice":
       return <Notice content={content} />
     case "provider_switch":
       return <ProviderSwitchLine content={content} delivered={delivered} />
     case "rewind":
       return <RewindLine messageId={message.id} content={content} undoable={undoable} />
-    case "tool_results":
-    case "other":
+    default:
       return null
   }
-}
+})
 
 const NO_MENTIONS: ReadonlyArray<string> = []
 
@@ -337,214 +294,6 @@ function UserMessage({
 
 const REVEAL_USER =
   "opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
-
-const REVEAL_TURN =
-  "opacity-0 transition-opacity group-focus-within/turn:opacity-100 group-hover/turn:opacity-100 pointer-coarse:opacity-100"
-
-function CopyText({
-  text,
-  label,
-  className,
-}: {
-  readonly text: string
-  readonly label: string
-  readonly className?: string
-}) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [copied])
-  const copy = () => {
-    void navigator.clipboard?.writeText(text).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    )
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="muted"
-          size="icon-xs"
-          className={className}
-          aria-label={copied ? "Copied" : label}
-          onClick={copy}
-        >
-          {copied ? <Check /> : <Copy />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{copied ? "Copied" : label}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function TurnActions({ turn }: { readonly turn: TurnEnd | undefined }) {
-  const { onFork } = useTranscriptActions()
-  if (turn === undefined) return null
-  return (
-    <div className="flex shrink-0 items-center gap-1">
-      {turn.reply !== "" && (
-        <CopyText text={turn.reply} label="Copy response" className={REVEAL_TURN} />
-      )}
-      {onFork !== undefined && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-xs"
-              className={REVEAL_TURN}
-              aria-label="Fork from here"
-              onClick={() => onFork(turn)}
-            >
-              <GitFork />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Fork from here</TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  )
-}
-
-function AssistantMessage({
-  content,
-  toolCalls,
-  approvals,
-  worktreePath,
-}: {
-  readonly content: Content<"assistant">
-  readonly toolCalls: Readonly<Record<string, ToolCall>>
-  readonly approvals: ReadonlyMap<string, Approval>
-  readonly worktreePath: string
-}) {
-  const nested = content.parentToolUseId !== null
-  return (
-    <Message className={nested ? "ml-4 border-l pl-3 opacity-80" : undefined}>
-      <MessageBody className="gap-2">
-        {nested && <MessageHeader className="px-0">subagent</MessageHeader>}
-        {content.blocks.map((block, position) => {
-          switch (block._tag) {
-            case "text":
-              return <Markdown key={position} text={block.text} />
-            case "thinking":
-              return block.text === "" ? null : <Thinking key={position} text={block.text} />
-            case "tool_use":
-              return (
-                <ToolCallCard
-                  key={block.toolUseId}
-                  toolName={block.toolName}
-                  input={block.input}
-                  call={toolCalls[block.toolUseId]}
-                  approval={approvals.get(block.toolUseId)}
-                  worktreePath={worktreePath}
-                />
-              )
-          }
-        })}
-      </MessageBody>
-    </Message>
-  )
-}
-
-function Thinking({ text }: { readonly text: string }) {
-  const [{ expandThinking }] = useUiPreferences()
-  return (
-    <Trace>
-      <TraceCollapsible defaultOpen={expandThinking}>
-        <TraceCollapsibleTrigger className="text-xs">
-          <TraceLine className="text-xs">
-            <TraceIcon>
-              <Brain className="size-3.5" />
-            </TraceIcon>
-            <TraceTitle>Thought</TraceTitle>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="text-xs whitespace-pre-wrap">
-          {text}
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
-}
-
-const formatDuration = (ms: number) =>
-  ms < 1000
-    ? `${ms} ms`
-    : ms < 60_000
-      ? `${(ms / 1000).toFixed(1)} s`
-      : `${Math.round(ms / 60_000)} min`
-
-function TurnFooter({
-  content,
-  turn,
-}: {
-  readonly content: Content<"result">
-  readonly turn: TurnEnd | undefined
-}) {
-  const details = [
-    content.numTurns > 0 ? `${content.numTurns} turn${content.numTurns === 1 ? "" : "s"}` : null,
-    content.durationMs > 0 ? formatDuration(content.durationMs) : null,
-  ].filter((part) => part !== null)
-
-  if (content.isError) {
-    const reason =
-      content.subtype === "error_during_execution"
-        ? "Stopped before finishing."
-        : (content.text ?? content.subtype)
-    return (
-      <div className="group/turn flex items-center gap-2">
-        <Trace className="min-w-0 flex-1">
-          <TraceLine status="error" className="text-xs">
-            <TraceIcon>
-              <TriangleAlert className="size-3.5" />
-            </TraceIcon>
-            <TraceTitle title={reason}>{reason}</TraceTitle>
-            {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
-          </TraceLine>
-        </Trace>
-        <TurnActions turn={turn} />
-      </div>
-    )
-  }
-  return (
-    <div className="group/turn flex items-center gap-2 border-t pt-2">
-      <Trace className="min-w-0 flex-1">
-        <TraceLine className="text-xs">
-          <TraceIcon>
-            <CircleCheck className="size-3.5" />
-          </TraceIcon>
-          <TraceTitle>Done</TraceTitle>
-          {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
-        </TraceLine>
-      </Trace>
-      <TurnActions turn={turn} />
-    </div>
-  )
-}
-
-function InitLine({ content }: { readonly content: Content<"system_init"> }) {
-  const parts = [
-    content.model,
-    `${content.tools.length} tools`,
-    content.skills.length > 0 ? `skills: ${content.skills.join(", ")}` : null,
-    content.mcpServers.length > 0
-      ? `MCP: ${content.mcpServers.map((server) => `${server.name} (${server.status})`).join(", ")}`
-      : null,
-  ].filter((part) => part !== null)
-  const summary = `Agent started · ${parts.join(" · ")}`
-  return (
-    <Trace>
-      <TraceLine className="text-xs">
-        <TraceIcon>
-          <Info className="size-3.5" />
-        </TraceIcon>
-        <TraceTitle title={summary}>{summary}</TraceTitle>
-      </TraceLine>
-    </Trace>
-  )
-}
 
 const WEIGHT_CLASS: Record<HandoffWeight, string> = {
   light: "bg-success/10 text-success",
@@ -659,30 +408,32 @@ function RewindLine({
 }
 
 function FocusMessage({
-  messageId,
+  focus,
+  itemId,
   present,
   onMissing,
   onFocused,
 }: {
-  readonly messageId: string
+  readonly focus: string
+  readonly itemId: string
   readonly present: boolean
   readonly onMissing: (() => void) | undefined
-  readonly onFocused: (messageId: string) => void
+  readonly onFocused: (itemId: string) => void
 }) {
   const { scrollToMessage } = useMessageScroller()
   const [done, setDone] = useState<string>()
   useEffect(() => {
-    if (done === messageId) return
+    if (done === focus) return
     if (!present) {
       onMissing?.()
       return
     }
     const frame = requestAnimationFrame(() => {
-      if (!scrollToMessage(messageId, { behavior: "smooth" })) return
-      setDone(messageId)
-      onFocused(messageId)
+      if (!scrollToMessage(itemId, { behavior: "smooth" })) return
+      setDone(focus)
+      onFocused(itemId)
     })
     return () => cancelAnimationFrame(frame)
-  }, [done, messageId, onFocused, onMissing, present, scrollToMessage])
+  }, [done, focus, itemId, onFocused, onMissing, present, scrollToMessage])
   return null
 }

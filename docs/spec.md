@@ -293,6 +293,14 @@ The human runs the same first message on two to four models at once and keeps th
 - **In the sidebar,** a run is marked as one of several runs compared.
 - **Not yet:** a run's diff against another run's, and merging a run's branch from the comparison.
 
+## Amendment: a turn folded into phases (2026-11-23)
+
+The chat shows each of the agent's turns as its reply under one line, "Worked for 2m 14s · 9 tool calls", that opens into what the agent did. This changes the chat of section 10 and adds no library to the stack of section 3. Every tool call is still rendered, one click away.
+
+- **The fold.** Everything from the human's message to the turn's end is one turn. Its reply, the agent's text after its last tool call, stays outside the fold; the rest goes in it: the "Agent started" line, thoughts, the agent's text along the way and every call, a sub-agent's work under the call that started it. The "Done" row is gone; Copy and Fork from here sit on the fold's line, shown on hover. A turn that stopped on an error keeps its reason under the reply. A notice in the middle of a turn stays where it was, between two folds.
+- **Phases.** Opened, the fold shows phases: consecutive reads and searches are one "Explored" phase, file changes one "Edited" phase, commands and the terminal tools one "Ran" phase, each opening into its calls; any other tool is a phase of its own, its call as it was. Thoughts and text go with the phase they follow. A phase says how many of its calls failed or were denied.
+- **While the agent works,** the line reads "Working for …" and the fold stays open, with the phase in progress named in the present ("Running npm test"). It closes when the turn ends, unless the human opened or closed it. A call waiting for the human opens its fold and phase. "Tool calls start expanded" opens folds and phases too, and a search hit inside a fold opens it.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
