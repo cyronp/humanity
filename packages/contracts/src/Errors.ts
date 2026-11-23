@@ -469,3 +469,12 @@ export class ForkUnavailable extends Schema.TaggedError<ForkUnavailable>()("Fork
     return this.reason
   }
 }
+
+export class CompareUnavailable extends Schema.TaggedError<CompareUnavailable>()(
+  "CompareUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}

@@ -46,6 +46,7 @@ export const Session = Schema.Struct({
   parentId: Schema.optional(Schema.NullOr(SessionId)),
   relation: Schema.optional(Schema.NullOr(SessionRelation)),
   forkedAtMessageId: Schema.optional(Schema.NullOr(Schema.String)),
+  groupId: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: Schema.String,
   updatedAt: Schema.String,
 })

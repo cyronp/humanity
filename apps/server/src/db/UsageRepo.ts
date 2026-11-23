@@ -73,6 +73,7 @@ export class UsageRepo extends Context.Service<
       plan: PlanUsage,
       sampledAt: string,
     ) => Effect.Effect<void>
+    readonly sessionTotal: (sessionId: string) => Effect.Effect<UsageAmount>
     readonly report: (options: {
       readonly from: string
       readonly to: string
@@ -270,7 +271,31 @@ export class UsageRepo extends Context.Service<
           } satisfies UsageReport
         }).pipe(Effect.orDie)
 
-      return UsageRepo.of({ recordTurn, recordPlan, report })
+      const findSessionTotal = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct(AmountFields),
+        execute: (sessionId) =>
+          sql.unsafe(`SELECT ${AMOUNT_COLUMNS} FROM turn_usage WHERE session_id = ?`, [sessionId]),
+      })
+
+      const sessionTotal = (sessionId: string) =>
+        findSessionTotal(sessionId).pipe(
+          Effect.map(([row]) =>
+            row === undefined
+              ? {
+                  turns: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  cacheReadTokens: 0,
+                  cacheCreationTokens: 0,
+                  costUsd: null,
+                }
+              : toAmount(row),
+          ),
+          Effect.orDie,
+        )
+
+      return UsageRepo.of({ recordTurn, recordPlan, report, sessionTotal })
     }),
   )
 }

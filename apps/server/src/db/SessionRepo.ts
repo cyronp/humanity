@@ -49,6 +49,7 @@ const SessionRow = Schema.Struct({
   parent_session_id: Schema.optional(Schema.NullOr(SessionId)),
   relation: Schema.optional(Schema.NullOr(SessionRelation)),
   forked_at_message_id: Schema.optional(Schema.NullOr(Schema.String)),
+  group_id: Schema.optional(Schema.NullOr(Schema.String)),
   created_at: Schema.String,
   updated_at: Schema.String,
 })
@@ -71,6 +72,7 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   parentId: row.parent_session_id ?? null,
   relation: row.relation ?? null,
   forkedAtMessageId: row.forked_at_message_id ?? null,
+  groupId: row.group_id ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
@@ -315,6 +317,10 @@ export class SessionRepo extends Context.Service<
       messageId: string,
     ) => Effect.Effect<ReadonlyArray<ChatMessage>>
     readonly forgetParked: (sessionId: string) => Effect.Effect<void>
+    readonly setGroupBase: (sessionId: string, base: string) => Effect.Effect<void>
+    readonly listGroup: (
+      groupId: string,
+    ) => Effect.Effect<{ readonly sessions: ReadonlyArray<Session>; readonly base: string | null }>
     readonly search: (options: {
       readonly query: string
       readonly projectIds?: ReadonlyArray<string> | undefined
@@ -412,6 +418,7 @@ export class SessionRepo extends Context.Service<
             parent_session_id: session.parentId ?? null,
             relation: session.relation ?? null,
             forked_at_message_id: session.forkedAtMessageId ?? null,
+            group_id: session.groupId ?? null,
             created_at: session.createdAt,
             updated_at: session.updatedAt,
           })}
@@ -950,7 +957,34 @@ export class SessionRepo extends Context.Service<
 
       const pruneSearch = pruneOrphans(sql).pipe(Effect.orDie)
 
+      const setGroupBase = (sessionId: string, base: string) =>
+        sql`UPDATE sessions SET group_base = ${base} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const findGroup = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({
+          ...SessionRow.fields,
+          group_base: Schema.optional(Schema.NullOr(Schema.String)),
+        }),
+        execute: (groupId) =>
+          sql`SELECT * FROM sessions WHERE group_id = ${groupId} ORDER BY created_at, rowid`,
+      })
+
+      const listGroup = (groupId: string) =>
+        findGroup(groupId).pipe(
+          Effect.map((rows) => ({
+            sessions: rows.map(toSession),
+            base: rows.find((row) => row.group_base != null)?.group_base ?? null,
+          })),
+          Effect.orDie,
+        )
+
       return SessionRepo.of({
+        setGroupBase,
+        listGroup,
         search,
         pruneSearch,
         getPendingFork,

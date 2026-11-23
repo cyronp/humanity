@@ -6,6 +6,7 @@ import {
   CircleAlert,
   CircleCheck,
   CirclePause,
+  Columns3,
   GitBranch,
   GitFork,
   LoaderCircle,
@@ -57,6 +58,12 @@ export function ThreadLink({
             <span className="truncate">{project.name}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
+            {session.groupId != null && (
+              <span title="One of several runs compared">
+                <Columns3 className="size-3.5" aria-hidden />
+                <span className="sr-only">One of several runs compared</span>
+              </span>
+            )}
             {session.origin === "claude-code" && (
               <span title="Started in Claude Code">
                 <SquareTerminal className="size-3.5" aria-hidden />

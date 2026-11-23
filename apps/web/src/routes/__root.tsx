@@ -6,6 +6,7 @@ import { NotificationWatcher } from "@/features/notifications/NotificationWatche
 import { CommandPalette, type MessageSearch } from "@/features/palette/CommandPalette"
 import { MessageResults } from "@/features/palette/MessageResults"
 import { UsageDialog } from "@/features/usage/UsageDialog"
+import { CompareDialog } from "@/features/compare/CompareDialog"
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
@@ -73,6 +74,7 @@ function RootLayout() {
       <AddRepositoryDialog />
       <CommandPalette messages={MESSAGE_SEARCH} />
       <UsageDialog />
+      <CompareDialog />
     </SidebarProvider>
   )
 }

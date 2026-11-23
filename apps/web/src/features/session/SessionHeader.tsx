@@ -1,5 +1,6 @@
 import type { Project, Session } from "@humanity/contracts"
-import { GitFork } from "lucide-react"
+import { Columns3, GitFork } from "lucide-react"
+import { openCompare } from "@/features/compare/compare"
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -21,6 +22,21 @@ export function SessionHeader({
     <AppHeader
       actions={
         <>
+          {session.groupId != null && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="muted"
+                  size="icon"
+                  aria-label="Compare runs"
+                  onClick={() => openCompare(session.groupId ?? "")}
+                >
+                  <Columns3 />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Compare runs</TooltipContent>
+            </Tooltip>
+          )}
           {onFork !== undefined && (
             <Tooltip>
               <TooltipTrigger asChild>

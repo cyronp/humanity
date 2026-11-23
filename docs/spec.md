@@ -278,6 +278,16 @@ The human sees where tokens, money and plan limits go. This adds to the stack of
 - **`Sessions.usageReport`** takes a range and the browser's offset from UTC, and answers the totals, the tokens per local day and provider, and the providers and models, projects and threads that used the most (ten of each), with the plan samples in the range.
 - **The Usage page**, from the sidebar's footer and the command palette: today, 7, 30 or 90 days; the tokens, output tokens, turns and cost; tokens per day stacked by provider; each account's five-hour limit over time; and the top models, projects and threads. Cost is said to be Claude Code's alone. Humanity keeps no price list, so it estimates no cost for a provider that reports none.
 
+## Amendment: one prompt on several models (2026-11-22)
+
+The human runs the same first message on two to four models at once and keeps the run they like. This adds no library to the stack of section 3, and every rule of "Autonomy first" holds for each run.
+
+- **From the new-thread page.** Beside the model picker, "Compare with another model" adds a model, up to four in all, each picked like the first (any signed-in provider, account and model); the reasoning effort, the mode and the branch are the same for all. Sending starts the group (`Sessions.createGroup`): every run is a thread of its own, in a worktree of its own, all from the commit the checkout is on (`sessions.group_base`), linked by `sessions.group_id`, titled with its model, in the project's default mode unless the human picked one. If one cannot start, the ones that did are ended and their worktrees removed. Each run uses its own provider's quota.
+- **The comparison** (`Sessions.compareGroup`), opened when the group starts, from a run's header and from the command palette: a column per run with its status, tokens, cost where reported, turns, the files it changed against the group's commit (committed or not), each opening into its diff and marked when another run changed it too, and its last message. It follows the runs while they work.
+- **Keep this one** ends the other runs, like ending a thread: their agents stop, their branches are kept, and their worktrees are deleted only when the human checks that, the project's "ending a thread" setting choosing the default. The kept run goes on as any thread; nothing is merged.
+- **In the sidebar,** a run is marked as one of several runs compared.
+- **Not yet:** a run's diff against another run's, and merging a run's branch from the comparison.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

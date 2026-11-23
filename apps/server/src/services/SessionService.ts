@@ -13,6 +13,10 @@ import {
   type FileEntry,
   BranchNotCheckedOut,
   ChangeId,
+  COMPARE_RUNS,
+  type CompareRunRequest,
+  CompareUnavailable,
+  type GroupComparison,
   ForkUnavailable,
   DEFAULT_AUTONOMY,
   mentionedPaths,
@@ -256,6 +260,8 @@ export class SessionService extends Context.Service<
       readonly autonomy?: Autonomy | undefined
       readonly lineage?: SessionLineage | undefined
       readonly worktreeBase?: string | undefined
+      readonly groupId?: string | undefined
+      readonly accountId?: string | undefined
     }) => Effect.Effect<
       Session,
       | ProjectNotFound
@@ -358,6 +364,26 @@ export class SessionService extends Context.Service<
       sessionId: string,
       messageId: string,
     ) => Effect.Effect<void, SessionNotFound | SessionEnded | RewindUnavailable>
+    readonly createGroup: (options: {
+      readonly projectId: string
+      readonly prompt: string
+      readonly title?: string | undefined
+      readonly baseBranch?: string | undefined
+      readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+      readonly mentions?: ReadonlyArray<string> | undefined
+      readonly autonomy?: Autonomy | undefined
+      readonly runs: ReadonlyArray<CompareRunRequest>
+    }) => Effect.Effect<
+      ReadonlyArray<Session>,
+      | CompareUnavailable
+      | ProjectNotFound
+      | GitError
+      | GitBranchExists
+      | GitInvalidBranchName
+      | GitRefNotFound
+      | AttachmentRejected
+    >
+    readonly compareGroup: (groupId: string) => Effect.Effect<GroupComparison, CompareUnavailable>
     readonly fork: (
       sessionId: string,
       messageId: string | undefined,
@@ -1220,6 +1246,8 @@ export class SessionService extends Context.Service<
         readonly autonomy?: Autonomy | undefined
         readonly lineage?: SessionLineage | undefined
         readonly worktreeBase?: string | undefined
+        readonly groupId?: string | undefined
+        readonly accountId?: string | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
         const files = yield* prepareAttachments(options.attachments ?? [])
@@ -1260,11 +1288,12 @@ export class SessionService extends Context.Service<
           parentId: options.lineage?.parentId ?? null,
           relation: options.lineage?.relation ?? null,
           forkedAtMessageId: options.lineage?.forkedAtMessageId ?? null,
+          groupId: options.groupId ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
-        const accountId = yield* accountsOf(provider).activeId
+        const accountId = options.accountId ?? (yield* accountsOf(provider).activeId)
         if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
         if (options.worktreeBase !== undefined || project.settings.worktreeForNewThreads) {
@@ -2259,6 +2288,108 @@ export class SessionService extends Context.Service<
         return updated
       })
 
+      const runLabel = (run: CompareRunRequest) =>
+        [run.model ?? PROVIDER_NAMES[run.provider], run.effort].filter(Boolean).join(" ")
+
+      const createGroup = Effect.fn("SessionService.createGroup")(function* (options: {
+        readonly projectId: string
+        readonly prompt: string
+        readonly title?: string | undefined
+        readonly baseBranch?: string | undefined
+        readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+        readonly mentions?: ReadonlyArray<string> | undefined
+        readonly autonomy?: Autonomy | undefined
+        readonly runs: ReadonlyArray<CompareRunRequest>
+      }) {
+        const refuse = (reason: string) => new CompareUnavailable({ reason })
+        if (options.runs.length < COMPARE_RUNS.min || options.runs.length > COMPARE_RUNS.max) {
+          return yield* refuse(
+            `Pick from ${COMPARE_RUNS.min} to ${COMPARE_RUNS.max} models to compare.`,
+          )
+        }
+        const prompt = options.prompt.trim()
+        if (prompt === "") return yield* refuse("Write the prompt the models will work on.")
+        const project = yield* projects.get(options.projectId)
+        const requested = options.baseBranch?.trim()
+        if (requested) yield* switchCheckout(project.localPath, requested)
+        const base = yield* git.revParse(project.localPath, "HEAD")
+        if (base === undefined) {
+          return yield* refuse(
+            "The repository has no commit yet, so there is nothing to start from.",
+          )
+        }
+        const title = options.title?.trim() || prompt.split("\n")[0]?.slice(0, 60) || "Compare"
+        const groupId = randomUUID()
+        const created: Array<Session> = []
+        const undo = Effect.forEach(
+          created,
+          (session) => end(session.id, { removeWorktree: true }).pipe(Effect.ignore),
+          { discard: true },
+        )
+        for (const run of options.runs) {
+          const session = yield* create({
+            projectId: project.id,
+            title: `${title} · ${runLabel(run)}`,
+            prompt,
+            attachments: options.attachments,
+            mentions: options.mentions,
+            provider: run.provider,
+            model: run.model,
+            effort: run.effort,
+            autonomy: options.autonomy,
+            worktreeBase: base,
+            groupId,
+            accountId: run.accountId,
+          }).pipe(Effect.tapError(() => undo))
+          yield* repo.setGroupBase(session.id, base)
+          created.push(session)
+        }
+        yield* events.publishListChanged
+        return created
+      })
+
+      const lastAgentText = (messages: ReadonlyArray<ChatMessage>): string | null => {
+        for (let index = messages.length - 1; index >= 0; index--) {
+          const content = messages[index]?.content
+          if (content?._tag !== "assistant" || content.parentToolUseId !== null) continue
+          const text = content.blocks
+            .flatMap((block) => (block._tag === "text" ? [block.text] : []))
+            .join("\n")
+            .trim()
+          if (text !== "") return text.length > 2_000 ? `${text.slice(0, 2_000)}…` : text
+        }
+        return null
+      }
+
+      const compareGroup = Effect.fn("SessionService.compareGroup")(function* (groupId: string) {
+        const { sessions, base } = yield* repo.listGroup(groupId)
+        if (sessions.length === 0) {
+          return yield* new CompareUnavailable({
+            reason: "These runs are not in Humanity any more.",
+          })
+        }
+        const runs = yield* Effect.forEach(
+          sessions,
+          (session) =>
+            Effect.gen(function* () {
+              const diff =
+                base === null || session.status === "ended"
+                  ? null
+                  : yield* git
+                      .diff(session.worktreePath, base)
+                      .pipe(Effect.orElseSucceed(() => null))
+              return {
+                session,
+                diff,
+                amount: yield* usageRepo.sessionTotal(session.id),
+                lastMessage: lastAgentText(yield* repo.listMessages(session.id)),
+              }
+            }),
+          { concurrency: 4 },
+        )
+        return { groupId, base, runs } satisfies GroupComparison
+      })
+
       const subscribe = (sessionId: string) =>
         Stream.unwrap(
           Effect.gen(function* () {
@@ -2331,6 +2462,8 @@ export class SessionService extends Context.Service<
         rewind,
         undoRewind,
         fork,
+        createGroup,
+        compareGroup,
         search: repo.search,
         usageReport: usageRepo.report,
         subscribe,

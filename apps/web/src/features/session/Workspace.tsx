@@ -37,6 +37,7 @@ import { ForkDialog, type ForkTarget } from "./ForkDialog.tsx"
 import { RewindDialog } from "./RewindDialog.tsx"
 import { interruptAtom, undoRewindAtom } from "./atoms.ts"
 import { useSetupWorktree } from "./panel/useSetupWorktree.ts"
+import { openCompare } from "@/features/compare/compare"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import type { TranscriptActions } from "@/features/chat/transcriptActions"
 import { describeCause } from "@/lib/errors"
@@ -106,9 +107,22 @@ export function Workspace({
   const canSetupWorktree = setupWorktree.available
   const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
   const paletteCommands = useMemo((): ReadonlyArray<PaletteCommand> => {
-    if (session.status === "ended") return []
+    const compare: ReadonlyArray<PaletteCommand> =
+      session.groupId == null
+        ? []
+        : [
+            {
+              id: "thread.compare",
+              title: "Compare runs",
+              group: "This thread",
+              keywords: ["models", "group", "keep"],
+              run: () => openCompare(session.groupId ?? ""),
+            },
+          ]
+    if (session.status === "ended") return compare
     const working = session.status === "running" || session.status === "waiting_for_human"
     return [
+      ...compare,
       {
         id: "thread.fork",
         title: "Fork this thread",

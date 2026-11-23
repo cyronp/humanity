@@ -60,3 +60,56 @@ describe("usage report", () => {
     }),
   )
 })
+
+describe("compare runs", () => {
+  it.live("starts every run in a worktree of its own from one commit, and compares them", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup({ "a.txt": "start\n" })
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const project = yield* addProject(repo)
+        const refused = yield* Effect.flip(
+          sessions.createGroup({
+            projectId: project.id,
+            prompt: "fix it",
+            runs: [{ provider: "claude-code" }],
+          }),
+        )
+        assert.strictEqual(refused._tag, "CompareUnavailable")
+
+        const runs = yield* sessions.createGroup({
+          projectId: project.id,
+          prompt: "fix it",
+          runs: [{ provider: "claude-code", model: "opus" }, { provider: "claude-code" }],
+        })
+        assert.lengthOf(runs, 2)
+        const [first, second] = runs
+        assert.isTrue(first!.inWorktree && second!.inWorktree)
+        assert.notStrictEqual(first!.worktreePath, second!.worktreePath)
+        assert.strictEqual(first!.groupId, second!.groupId)
+        assert.include(first!.title, "opus")
+        yield* waitForStatus(first!.id, "idle")
+        yield* waitForStatus(second!.id, "idle")
+
+        const comparison = yield* sessions.compareGroup(first!.groupId!)
+        assert.lengthOf(comparison.runs, 2)
+        assert.isNotNull(comparison.base)
+        const written = comparison.runs.map((run) => run.diff?.files.map((file) => file.filePath))
+        assert.deepStrictEqual(written, [["a.txt"], ["a.txt"]])
+        assert.strictEqual(comparison.runs[0]?.lastMessage, "done")
+        assert.strictEqual(comparison.runs[0]?.amount.turns, 1)
+
+        const missing = yield* Effect.flip(sessions.compareGroup("nope"))
+        assert.strictEqual(missing._tag, "CompareUnavailable")
+      }).pipe(
+        Effect.provide(
+          services(home, () => [
+            { tool: "Write", input: { file_path: "a.txt", content: "changed\n" } },
+            { text: "done" },
+          ]),
+        ),
+      )
+    }),
+  )
+})

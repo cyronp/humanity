@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { RewindPreview } from "../domain/Checkpoint.ts"
+import { CompareRunRequest, GroupComparison } from "../domain/Compare.ts"
 import { MessageHit } from "../domain/Search.ts"
 import { UsageReport } from "../domain/Usage.ts"
 import { Autonomy } from "../domain/Policy.ts"
@@ -21,6 +22,7 @@ import {
   AttachmentNotFound,
   AttachmentRejected,
   BranchNotCheckedOut,
+  CompareUnavailable,
   ForkUnavailable,
   GitBranchExists,
   GitCommandFailed,
@@ -245,6 +247,35 @@ export const SessionsRpcs = RpcGroup.make(
   Rpc.make("Sessions.usageReport", {
     payload: { from: Schema.String, to: Schema.String, utcOffsetMinutes: Schema.Number },
     success: UsageReport,
+  }),
+  Rpc.make("Sessions.createGroup", {
+    payload: {
+      projectId: ProjectId,
+      prompt: Schema.NonEmptyString,
+      title: Schema.optional(Schema.String),
+      baseBranch: Schema.optional(Schema.String),
+      attachments: Schema.optional(Schema.Array(AttachmentUpload)),
+      mentions: Schema.optional(FileMentions),
+      autonomy: Schema.optional(Autonomy),
+      runs: Schema.Array(CompareRunRequest),
+    },
+    success: Schema.Array(Session),
+    error: Schema.Union([
+      CompareUnavailable,
+      ProjectNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+      GitBranchExists,
+      GitInvalidBranchName,
+      GitRefNotFound,
+      AttachmentRejected,
+    ]),
+  }),
+  Rpc.make("Sessions.compareGroup", {
+    payload: { groupId: Schema.String },
+    success: GroupComparison,
+    error: CompareUnavailable,
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },
