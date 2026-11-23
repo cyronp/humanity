@@ -52,12 +52,14 @@ function ChartTooltipContent({
   label,
   formatValue = (value) => String(value),
   formatLabel = (value) => String(value),
+  showTotal = false,
 }: {
   readonly active?: boolean
   readonly payload?: ReadonlyArray<TooltipEntry>
   readonly label?: unknown
   readonly formatValue?: (value: number) => string
   readonly formatLabel?: (label: unknown) => string
+  readonly showTotal?: boolean
 }) {
   const config = useChart()
   if (active !== true || payload === undefined || payload.length === 0) return null
@@ -81,6 +83,14 @@ function ChartTooltipContent({
           </div>
         )
       })}
+      {showTotal && rows.length > 1 && (
+        <div className="flex items-center gap-2 border-t pt-1.5">
+          <span className="text-muted-foreground">Total</span>
+          <span className="ml-auto font-mono font-medium tabular-nums">
+            {formatValue(rows.reduce((sum, entry) => sum + (entry.value as number), 0))}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

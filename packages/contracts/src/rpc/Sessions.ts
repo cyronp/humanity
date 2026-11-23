@@ -245,7 +245,12 @@ export const SessionsRpcs = RpcGroup.make(
     success: Schema.Array(MessageHit),
   }),
   Rpc.make("Sessions.usageReport", {
-    payload: { from: Schema.String, to: Schema.String, utcOffsetMinutes: Schema.Number },
+    payload: {
+      from: Schema.String,
+      to: Schema.String,
+      utcOffsetMinutes: Schema.Number,
+      hourly: Schema.optional(Schema.Boolean),
+    },
     success: UsageReport,
   }),
   Rpc.make("Sessions.createGroup", {

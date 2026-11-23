@@ -78,6 +78,7 @@ export class UsageRepo extends Context.Service<
       readonly from: string
       readonly to: string
       readonly utcOffsetMinutes: number
+      readonly hourly?: boolean | undefined
     }) => Effect.Effect<UsageReport>
   }
 >()("humanity/UsageRepo") {
@@ -143,6 +144,15 @@ export class UsageRepo extends Context.Service<
             [offset, from, to],
           ),
       })
+      const byHour = SqlSchema.findAll({
+        Request: Range,
+        Result: Schema.Struct({ hour: Schema.String, provider: AgentProvider, ...AmountFields }),
+        execute: ({ from, to, offset }) =>
+          sql.unsafe(
+            `SELECT strftime('%Y-%m-%dT%H', ended_at, ?) AS hour, provider, ${AMOUNT_COLUMNS} FROM turn_usage WHERE ended_at >= ? AND ended_at < ? GROUP BY hour, provider ORDER BY hour, provider`,
+            [offset, from, to],
+          ),
+      })
       const byProvider = SqlSchema.findAll({
         Request: Range,
         Result: Schema.Struct({ provider: AgentProvider, ...AmountFields }),
@@ -192,8 +202,8 @@ export class UsageRepo extends Context.Service<
             [from, to],
           ),
       })
-      const planSamples = SqlSchema.findAll({
-        Request: Range,
+      const latestPlanSamples = SqlSchema.findAll({
+        Request: Schema.Void,
         Result: Schema.Struct({
           provider: AgentProvider,
           account_key: Schema.String,
@@ -202,8 +212,23 @@ export class UsageRepo extends Context.Service<
           resets_at: Schema.NullOr(Schema.String),
           sampled_at: Schema.String,
         }),
-        execute: ({ from, to }) =>
-          sql`SELECT * FROM plan_usage_samples WHERE sampled_at >= ${from} AND sampled_at < ${to} ORDER BY sampled_at`,
+        execute: () =>
+          sql`
+            SELECT sample.provider, sample.account_key, sample.window, sample.utilization,
+              sample.resets_at, sample.sampled_at
+            FROM plan_usage_samples AS sample
+            JOIN (
+              SELECT provider, account_key, window, MAX(sampled_at) AS latest
+              FROM plan_usage_samples
+              GROUP BY provider, account_key, window
+            ) AS newest
+              ON newest.provider = sample.provider
+              AND newest.account_key = sample.account_key
+              AND newest.window = sample.window
+              AND newest.latest = sample.sampled_at
+            GROUP BY sample.provider, sample.account_key, sample.window
+            ORDER BY sample.provider, sample.account_key, sample.window
+          `,
       })
 
       const offsetOf = (minutes: number) => {
@@ -215,6 +240,7 @@ export class UsageRepo extends Context.Service<
         readonly from: string
         readonly to: string
         readonly utcOffsetMinutes: number
+        readonly hourly?: boolean | undefined
       }) =>
         Effect.gen(function* () {
           const range = {
@@ -242,6 +268,14 @@ export class UsageRepo extends Context.Service<
               provider: row.provider,
               amount: toAmount(row),
             })),
+            byHour:
+              options.hourly === true
+                ? (yield* byHour(range)).map((row) => ({
+                    hour: row.hour,
+                    provider: row.provider,
+                    amount: toAmount(row),
+                  }))
+                : [],
             byProvider: (yield* byProvider(range)).map((row) => ({
               provider: row.provider,
               amount: toAmount(row),
@@ -260,7 +294,7 @@ export class UsageRepo extends Context.Service<
               projectId: row.project_id,
               amount: toAmount(row),
             })),
-            plan: (yield* planSamples(range)).map((row) => ({
+            limits: (yield* latestPlanSamples(undefined)).map((row) => ({
               provider: row.provider,
               accountKey: row.account_key,
               window: row.window,

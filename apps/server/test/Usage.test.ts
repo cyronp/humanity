@@ -25,6 +25,7 @@ describe("usage report", () => {
           from: new Date(now - DAY).toISOString(),
           to: new Date(now + DAY).toISOString(),
           utcOffsetMinutes: 0,
+          hourly: true,
         })
         assert.strictEqual(report.totals.turns, 2)
         assert.strictEqual(report.totals.costUsd, 0)
@@ -42,10 +43,16 @@ describe("usage report", () => {
         )
         assert.lengthOf(report.byDay, 1)
         assert.strictEqual(report.byDay[0]?.day, new Date(now).toISOString().slice(0, 10))
+        assert.isAbove(report.byHour.length, 0)
+        assert.isTrue(report.byHour.every((row) => row.hour.startsWith(report.byDay[0]!.day)))
+        assert.strictEqual(
+          report.byHour.reduce((sum, row) => sum + row.amount.turns, 0),
+          2,
+        )
         assert.strictEqual(totalTokens(report.totals), totalTokens(report.byProvider[0]!.amount))
         if (refreshed.plan?.fiveHour != null) {
-          assert.isAbove(report.plan.length, 0)
-          assert.strictEqual(report.plan[0]?.window, "five_hour")
+          assert.isAbove(report.limits.length, 0)
+          assert.isTrue(report.limits.some((row) => row.window === "five_hour"))
         }
 
         const before = yield* sessions.usageReport({
@@ -56,6 +63,8 @@ describe("usage report", () => {
         assert.strictEqual(before.totals.turns, 0)
         assert.isNull(before.totals.costUsd)
         assert.deepStrictEqual(before.byDay, [])
+        assert.deepStrictEqual(before.byHour, [])
+        assert.strictEqual(before.limits.length, report.limits.length)
       }).pipe(Effect.provide(services(home, () => [{ text: "hi" }])))
     }),
   )

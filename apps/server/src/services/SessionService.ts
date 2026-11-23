@@ -401,6 +401,7 @@ export class SessionService extends Context.Service<
       readonly from: string
       readonly to: string
       readonly utcOffsetMinutes: number
+      readonly hourly?: boolean | undefined
     }) => Effect.Effect<UsageReport>
     readonly search: (options: {
       readonly query: string

@@ -23,6 +23,9 @@ export const UsageReport = Schema.Struct({
   byDay: Schema.Array(
     Schema.Struct({ day: Schema.String, provider: AgentProvider, amount: UsageAmount }),
   ),
+  byHour: Schema.Array(
+    Schema.Struct({ hour: Schema.String, provider: AgentProvider, amount: UsageAmount }),
+  ),
   byProvider: Schema.Array(Schema.Struct({ provider: AgentProvider, amount: UsageAmount })),
   byModel: Schema.Array(
     Schema.Struct({
@@ -35,7 +38,7 @@ export const UsageReport = Schema.Struct({
   bySession: Schema.Array(
     Schema.Struct({ sessionId: SessionId, projectId: ProjectId, amount: UsageAmount }),
   ),
-  plan: Schema.Array(
+  limits: Schema.Array(
     Schema.Struct({
       provider: AgentProvider,
       accountKey: Schema.String,
