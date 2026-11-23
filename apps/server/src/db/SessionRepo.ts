@@ -23,6 +23,7 @@ import {
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+import type { HandoffSource } from "../agent/handoff.ts"
 import {
   indexMessage,
   pruneOrphans,
@@ -30,6 +31,16 @@ import {
   unindexMessages,
   unindexSession,
 } from "./searchIndex.ts"
+
+const HandoffSourceJson = Schema.Struct({
+  since: Schema.Number,
+  from: AgentProvider,
+  to: AgentProvider,
+  resumed: Schema.Boolean,
+  plan: Schema.optional(Schema.String),
+  entryCount: Schema.Number,
+  excluded: Schema.Array(Schema.Number),
+})
 
 const SessionRow = Schema.Struct({
   id: SessionId,
@@ -266,7 +277,12 @@ export class SessionRepo extends Context.Service<
       accountId: string | null,
     ) => Effect.Effect<Option.Option<ParkedProvider>>
     readonly getPendingHandoff: (sessionId: string) => Effect.Effect<string | null>
-    readonly setPendingHandoff: (sessionId: string, text: string | null) => Effect.Effect<void>
+    readonly setPendingHandoff: (
+      sessionId: string,
+      text: string | null,
+      source?: HandoffSource | undefined,
+    ) => Effect.Effect<void>
+    readonly getPendingHandoffSource: (sessionId: string) => Effect.Effect<HandoffSource | null>
     readonly hasProviderSwitch: (sessionId: string) => Effect.Effect<boolean>
     readonly getUsage: (sessionId: string) => Effect.Effect<SessionUsage>
     readonly setUsage: (sessionId: string, usage: SessionUsage) => Effect.Effect<void>
@@ -583,9 +599,38 @@ export class SessionRepo extends Context.Service<
           Effect.orDie,
         )
 
-      const setPendingHandoff = (sessionId: string, text: string | null) =>
-        sql`UPDATE sessions SET pending_handoff = ${text} WHERE id = ${sessionId}`.pipe(
+      const setPendingHandoff = (
+        sessionId: string,
+        text: string | null,
+        source?: HandoffSource | undefined,
+      ) => {
+        const encoded =
+          text === null || source === undefined
+            ? null
+            : JSON.stringify(Schema.encodeSync(HandoffSourceJson)(source))
+        return sql`UPDATE sessions SET pending_handoff = ${text}, pending_handoff_source = ${encoded} WHERE id = ${sessionId}`.pipe(
           Effect.asVoid,
+          Effect.orDie,
+        )
+      }
+
+      const findPendingHandoffSource = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ pending_handoff_source: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT pending_handoff_source FROM sessions WHERE id = ${id}`,
+      })
+
+      const getPendingHandoffSource = (sessionId: string) =>
+        findPendingHandoffSource(sessionId).pipe(
+          Effect.map((row) => {
+            const raw = Option.isSome(row) ? row.value.pending_handoff_source : null
+            if (raw === null) return null
+            try {
+              return Schema.decodeUnknownSync(HandoffSourceJson)(JSON.parse(raw))
+            } catch {
+              return null
+            }
+          }),
           Effect.orDie,
         )
 
@@ -1013,6 +1058,7 @@ export class SessionRepo extends Context.Service<
         insertMessage,
         deleteMessage,
         updateMessage,
+        getPendingHandoffSource,
         listMessages,
         transcriptPage,
         insertToolCall,

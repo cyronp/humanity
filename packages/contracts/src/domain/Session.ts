@@ -165,6 +165,7 @@ export const MessageContent = Schema.Union([
     resumed: Schema.Boolean,
     included: Schema.Number,
     omitted: Schema.Number,
+    cut: Schema.optional(Schema.Number),
     tokens: Schema.optional(Schema.Number),
   }),
   Schema.TaggedStruct("rewind", {

@@ -57,6 +57,8 @@ import {
   type TranscriptPage,
   SessionId,
   SessionNotFound,
+  HandoffUnavailable,
+  type HandoffPreview,
   type SessionStatus,
   type SessionUsage,
   NothingToCommit,
@@ -92,7 +94,14 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { makeSkillTool } from "../extensions/skillTool.ts"
-import { buildHandoff, historyEntries, latestPlan, readThreadHistory } from "../agent/handoff.ts"
+import {
+  buildHandoff,
+  type Handoff,
+  type HandoffSource,
+  historyEntries,
+  latestPlan,
+  readThreadHistory,
+} from "../agent/handoff.ts"
 import { FORK_SEARCH_LIMIT, forkPoint } from "../agent/forkPoint.ts"
 import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts"
 import { CheckpointRepo } from "../db/CheckpointRepo.ts"
@@ -302,6 +311,13 @@ export class SessionService extends Context.Service<
       model: string | null,
       accountId?: string | undefined,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded | ProviderSwitchUnavailable>
+    readonly handoffPreview: (
+      sessionId: string,
+    ) => Effect.Effect<HandoffPreview | null, SessionNotFound>
+    readonly trimHandoff: (
+      sessionId: string,
+      excluded: ReadonlyArray<number>,
+    ) => Effect.Effect<HandoffPreview, SessionNotFound | HandoffUnavailable>
     readonly sendMessage: (
       sessionId: string,
       text: string,
@@ -1620,7 +1636,7 @@ export class SessionService extends Context.Service<
         }
         const kept =
           replaced === undefined ? messages : messages.filter((each) => each.id !== replaced.id)
-        const entries = historyEntries(kept, toolCalls, session.provider)
+        const entries = historyEntries(kept, toolCalls, origin.provider)
 
         const unheard = (yield* repo.getPendingHandoff(sessionId)) !== null
         if (session.sdkSessionId !== null && !unheard) {
@@ -1647,6 +1663,18 @@ export class SessionService extends Context.Service<
           resumed: false,
           plan,
         })
+        const source: HandoffSource = {
+          since: Option.match(parked, {
+            onNone: () => 1,
+            onSome: (earlier) => earlier.seenEntries + 1,
+          }),
+          from: origin.provider,
+          to: provider,
+          resumed: Option.isSome(parked),
+          ...(Option.isNone(parked) && plan !== undefined ? { plan } : {}),
+          entryCount: entries.length,
+          excluded: [],
+        }
         const handoff = Option.match(parked, {
           onNone: () => whole,
           onSome: (earlier) =>
@@ -1659,7 +1687,7 @@ export class SessionService extends Context.Service<
             }),
         })
 
-        yield* repo.setPendingHandoff(sessionId, handoff?.text ?? null)
+        yield* repo.setPendingHandoff(sessionId, handoff?.text ?? null, source)
         yield* repo.update(sessionId, {
           provider,
           model,
@@ -1706,6 +1734,112 @@ export class SessionService extends Context.Service<
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
         yield* events.publishListChanged
         return updated
+      })
+
+      const isBusy = (session: Session) =>
+        session.status === "running" || session.status === "waiting_for_human"
+
+      const previewOf = (handoff: Handoff, editable: boolean): HandoffPreview => ({
+        text: handoff.text,
+        tokens: handoff.tokens,
+        included: handoff.included,
+        omitted: handoff.omitted,
+        cut: handoff.cut,
+        editable,
+        entries: editable ? handoff.entries : [],
+      })
+
+      const rebuildHandoff = (
+        messages: ReadonlyArray<ChatMessage>,
+        toolCalls: ReadonlyArray<ToolCall>,
+        session: Session,
+        source: HandoffSource,
+      ) =>
+        buildHandoff({
+          entries: historyEntries(messages, toolCalls, session.provider).filter(
+            (entry) => entry.index <= source.entryCount,
+          ),
+          since: source.since,
+          from: source.from,
+          to: source.to,
+          resumed: source.resumed,
+          plan: source.plan,
+          excluded: source.excluded,
+        })
+
+      const handoffPreview = Effect.fn("SessionService.handoffPreview")(function* (
+        sessionId: string,
+      ) {
+        const session = yield* get(sessionId)
+        const text = yield* repo.getPendingHandoff(sessionId)
+        if (text === null) return null
+        const source = yield* repo.getPendingHandoffSource(sessionId)
+        const messages = yield* repo.listMessages(sessionId)
+        const unsent = unsentSwitch(messages)
+        const rebuilt =
+          source === null || unsent === undefined
+            ? undefined
+            : rebuildHandoff(messages, yield* repo.listToolCalls(sessionId), session, source)
+        if (rebuilt === undefined || rebuilt.text !== text) {
+          return {
+            text,
+            tokens: Math.ceil(text.length / 4),
+            included: unsent?.content.included ?? 0,
+            omitted: unsent?.content.omitted ?? 0,
+            cut: unsent?.content.cut ?? 0,
+            editable: false,
+            entries: [],
+          }
+        }
+        return previewOf(rebuilt, acceptsMessages(session) && !isBusy(session))
+      })
+
+      const trimHandoff = Effect.fn("SessionService.trimHandoff")(function* (
+        sessionId: string,
+        excluded: ReadonlyArray<number>,
+      ) {
+        const session = yield* get(sessionId)
+        const refused = (reason: string) => new HandoffUnavailable({ reason })
+        if (!acceptsMessages(session)) return yield* refused("This thread has ended.")
+        if (isBusy(session)) {
+          return yield* refused("The agent is working: its handoff was already sent.")
+        }
+        const source = yield* repo.getPendingHandoffSource(sessionId)
+        const messages = yield* repo.listMessages(sessionId)
+        const unsent = unsentSwitch(messages)
+        if (source === null || unsent === undefined) {
+          return yield* refused("There is no handoff waiting to be sent in this thread.")
+        }
+        const toolCalls = yield* repo.listToolCalls(sessionId)
+        const next: HandoffSource = { ...source, excluded: [...new Set(excluded)].toSorted() }
+        const handoff = rebuildHandoff(messages, toolCalls, session, next)
+        if (handoff === undefined) {
+          return yield* refused("There is nothing of the conversation left to hand off.")
+        }
+        yield* repo.setPendingHandoff(sessionId, handoff.text, next)
+        const fallback = resumeFallback.get(sessionId)
+        if (fallback !== undefined && source.resumed) {
+          const whole = rebuildHandoff(messages, toolCalls, session, {
+            ...next,
+            since: 1,
+            resumed: false,
+            ...(latestPlan(toolCalls) === undefined ? {} : { plan: latestPlan(toolCalls) }),
+          })
+          if (whole !== undefined) resumeFallback.set(sessionId, whole.text)
+        }
+        const message: ChatMessage = {
+          ...unsent,
+          content: {
+            ...unsent.content,
+            included: handoff.included,
+            omitted: handoff.omitted,
+            cut: handoff.cut,
+            tokens: handoff.tokens,
+          },
+        }
+        yield* repo.updateMessage(message)
+        yield* events.publish(sessionId, { _tag: "MessageUpdated", message })
+        return previewOf(handoff, true)
       })
 
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
@@ -2443,6 +2577,8 @@ export class SessionService extends Context.Service<
         setModel,
         setEffort,
         switchProvider,
+        handoffPreview,
+        trimHandoff,
         sendMessage,
         attachment,
         interrupt,

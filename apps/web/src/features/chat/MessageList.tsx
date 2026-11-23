@@ -7,7 +7,7 @@ import {
   type SessionId,
   type ToolCall,
 } from "@humanity/contracts"
-import { ArrowRight, History, TriangleAlert, Undo2 } from "lucide-react"
+import { ArrowRight, Eye, History, TriangleAlert, Undo2 } from "lucide-react"
 import { cn } from "cn"
 import { memo, type ReactNode, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ import { useProviderModels } from "@/features/providers/useProviderModels"
 import { AgentTurn, CopyText } from "./AgentTurn.tsx"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
+import { HandoffDialog } from "./HandoffDialog.tsx"
 import { Markdown } from "./Markdown.tsx"
 import {
   type TranscriptActions,
@@ -233,7 +234,9 @@ const TranscriptEntry = memo(function TranscriptEntry({
     case "notice":
       return <Notice content={content} />
     case "provider_switch":
-      return <ProviderSwitchLine content={content} delivered={delivered} />
+      return (
+        <ProviderSwitchLine sessionId={message.sessionId} content={content} delivered={delivered} />
+      )
     case "rewind":
       return <RewindLine messageId={message.id} content={content} undoable={undoable} />
     default:
@@ -302,13 +305,16 @@ const WEIGHT_CLASS: Record<HandoffWeight, string> = {
 }
 
 function ProviderSwitchLine({
+  sessionId,
   content,
   delivered,
 }: {
+  readonly sessionId: SessionId
   readonly content: Content<"provider_switch">
   readonly delivered: boolean
 }) {
   const { models } = useProviderModels()
+  const [previewing, setPreviewing] = useState(false)
   const withAccount = (name: string, account: string | undefined) =>
     account === undefined ? name : `${name} (${account})`
   const names = {
@@ -352,7 +358,21 @@ ${providerSwitchDetail(content)}`}
           </>
         )}
       </span>
+      {!delivered && content.included + (content.cut ?? 0) > 0 && (
+        <Button variant="muted" size="xs" onClick={() => setPreviewing(true)}>
+          <Eye />
+          Preview
+        </Button>
+      )}
       <span className="h-px min-w-4 flex-1 bg-border" />
+      {!delivered && previewing && (
+        <HandoffDialog
+          sessionId={sessionId}
+          target={names.to}
+          open={previewing}
+          onClose={() => setPreviewing(false)}
+        />
+      )}
     </div>
   )
 }
