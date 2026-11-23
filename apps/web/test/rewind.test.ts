@@ -1,6 +1,6 @@
 import { type ChatMessage, type MessageContent, SessionId } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
-import { rewindSummary, undoableRewinds } from "@/features/chat/transcriptActions"
+import { rewindSummary, turnEnds, undoableRewinds } from "@/features/chat/transcriptActions"
 import { rewindWarnings } from "@/features/session/RewindDialog"
 
 const message = (id: string, content: MessageContent): ChatMessage => ({
@@ -65,5 +65,59 @@ describe("rewindWarnings", () => {
     expect(
       rewindWarnings({ ...preview, changed: 0, sharedCheckout: true, busyTerminals: 2 }),
     ).toEqual(["2 terminals of this thread are running a command, which may change files again."])
+  })
+})
+
+const said = (text: string, parentToolUseId: string | null = null): MessageContent => ({
+  _tag: "assistant",
+  blocks: [{ _tag: "text", text }],
+  parentToolUseId,
+})
+
+const called = (toolUseId: string): MessageContent => ({
+  _tag: "assistant",
+  blocks: [{ _tag: "tool_use", toolUseId, toolName: "Read", input: {} }],
+  parentToolUseId: null,
+})
+
+const done: MessageContent = {
+  _tag: "result",
+  subtype: "success",
+  isError: false,
+  text: null,
+  durationMs: 0,
+  numTurns: 1,
+  costUsd: 0,
+  usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+}
+
+describe("turnEnds", () => {
+  it("copies the agent's text after its last tool call, without a sub-agent's", () => {
+    const ends = turnEnds([
+      message("u1", { _tag: "user", text: "hi" }),
+      message("a1", said("Let me look.")),
+      message("a2", called("t1")),
+      message("a3", said("Inside the sub-agent", "t1")),
+      message("a4", said("Found it.")),
+      message("a5", said("All done.")),
+      message("r1", done),
+    ])
+    expect(ends.get("r1")?.reply).toBe("Found it.\n\nAll done.")
+  })
+
+  it("forks from before the next message of the human, else from the end", () => {
+    const next = message("u2", { _tag: "user", text: "again" })
+    const ends = turnEnds([
+      message("u1", { _tag: "user", text: "hi" }),
+      message("a1", said("One.")),
+      message("r1", done),
+      message("n1", { _tag: "notice", level: "info", text: "note" }),
+      next,
+      message("a2", called("t1")),
+      message("r2", done),
+    ])
+    expect(ends.get("r1")?.nextMessage).toBe(next)
+    expect(ends.get("r2")).toEqual({ reply: "", nextMessage: undefined })
+    expect(ends.has("u1")).toBe(false)
   })
 })

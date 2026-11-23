@@ -2194,7 +2194,7 @@ export class SessionService extends Context.Service<
           const checkpoint = yield* checkpointRepo.find(sessionId, messageId, "turn")
           if (Option.isNone(checkpoint)) {
             return yield* forkRefused(
-              "Humanity has no checkpoint of the files from before this message, so it can't fork from there. Fork the whole thread instead.",
+              "Humanity has no checkpoint of the files from that point, so it can't fork from there. Fork the whole thread instead.",
             )
           }
           commit = checkpoint.value.commit
@@ -2273,15 +2273,13 @@ export class SessionService extends Context.Service<
           yield* repo.setPendingHandoff(created.id, whole?.text ?? null)
         }
 
-        const where =
-          forkedAt?.content._tag === "user" ? ` before “${firstLine(forkedAt.content.text)}”` : ""
         yield* addMessage(created.id, {
           _tag: "notice",
           level: filesCopied === undefined ? "info" : "warning",
           text:
             filesCopied === undefined
-              ? `Forked from “${source.title}”${where}, in a worktree of its own with the files as they were then. The agent gets the conversation above with your first message.`
-              : `Forked from “${source.title}”${where}, but its files were not copied (${filesCopied}): the worktree has the files of the branch. The agent gets the conversation above with your first message.`,
+              ? `Forked from “${source.title}”, in a worktree of its own with the files as they were then. The agent gets the conversation above with your first message.`
+              : `Forked from “${source.title}”, but its files were not copied (${filesCopied}): the worktree has the files of the branch. The agent gets the conversation above with your first message.`,
         })
         const updated = yield* get(created.id)
         yield* events.publish(created.id, { _tag: "SessionUpdated", session: updated })

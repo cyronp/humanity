@@ -10,7 +10,9 @@ import {
 import {
   ArrowRight,
   Brain,
+  Check,
   CircleCheck,
+  Copy,
   GitFork,
   History,
   Info,
@@ -56,6 +58,8 @@ import {
   type TranscriptActions,
   TranscriptActionsContext,
   rewindSummary,
+  type TurnEnd,
+  turnEnds,
   undoableRewinds,
   useTranscriptActions,
 } from "./transcriptActions.ts"
@@ -108,6 +112,7 @@ export function MessageList({
   const items = useMemo(() => messages.filter(isShown), [messages])
   const delivered = useMemo(() => deliveredSwitches(messages), [messages])
   const undoable = useMemo(() => undoableRewinds(messages), [messages])
+  const turns = useMemo(() => turnEnds(messages), [messages])
   const provided = useMemo(() => actions ?? {}, [actions])
   const [highlighted, setHighlighted] = useState<string>()
   useEffect(() => {
@@ -154,6 +159,7 @@ export function MessageList({
                     message={message}
                     delivered={delivered.has(message.id)}
                     undoable={undoable.has(message.id)}
+                    turn={turns.get(message.id)}
                     toolCalls={toolCalls}
                     approvals={approvals}
                     worktreePath={worktreePath}
@@ -207,6 +213,7 @@ const TranscriptEntry = memo(function TranscriptEntry({
   message,
   delivered,
   undoable,
+  turn,
   toolCalls,
   approvals,
   worktreePath,
@@ -214,6 +221,7 @@ const TranscriptEntry = memo(function TranscriptEntry({
   readonly message: ChatMessage
   readonly delivered: boolean
   readonly undoable: boolean
+  readonly turn: TurnEnd | undefined
   readonly toolCalls: Readonly<Record<string, ToolCall>>
   readonly approvals: ReadonlyMap<string, Approval>
   readonly worktreePath: string
@@ -226,6 +234,7 @@ const TranscriptEntry = memo(function TranscriptEntry({
     worktreePath,
     delivered,
     undoable,
+    turn,
   )
 })
 
@@ -237,6 +246,7 @@ const renderContent = (
   worktreePath: string,
   delivered: boolean,
   undoable: boolean,
+  turn: TurnEnd | undefined,
 ) => {
   switch (content._tag) {
     case "user":
@@ -259,7 +269,7 @@ const renderContent = (
         />
       )
     case "result":
-      return <TurnFooter content={content} />
+      return <TurnFooter content={content} turn={turn} />
     case "system_init":
       return <InitLine content={content} />
     case "notice":
@@ -289,7 +299,7 @@ function UserMessage({
   readonly attachments: ReadonlyArray<Attachment>
   readonly mentions: ReadonlyArray<string>
 }) {
-  const { onRewind, onFork } = useTranscriptActions()
+  const { onRewind } = useTranscriptActions()
   return (
     <Message align="end" className="group/user">
       <MessageBody>
@@ -297,29 +307,14 @@ function UserMessage({
           <MessageAttachments sessionId={sessionId} attachments={attachments} />
         )}
         <div className="flex items-start justify-end gap-1">
-          {onFork !== undefined && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-xs"
-                  className="mt-1.5 opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
-                  aria-label="Fork from before this message"
-                  onClick={() => onFork(message)}
-                >
-                  <GitFork />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Fork from before this message</TooltipContent>
-            </Tooltip>
-          )}
+          <CopyText text={text} label="Copy message" className={cn("mt-1.5", REVEAL_USER)} />
           {onRewind !== undefined && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="muted"
                   size="icon-xs"
-                  className="mt-1.5 opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
+                  className={cn("mt-1.5", REVEAL_USER)}
                   aria-label="Rewind to before this message"
                   onClick={() => onRewind(message)}
                 >
@@ -337,6 +332,79 @@ function UserMessage({
         </div>
       </MessageBody>
     </Message>
+  )
+}
+
+const REVEAL_USER =
+  "opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100 pointer-coarse:opacity-100"
+
+const REVEAL_TURN =
+  "opacity-0 transition-opacity group-focus-within/turn:opacity-100 group-hover/turn:opacity-100 pointer-coarse:opacity-100"
+
+function CopyText({
+  text,
+  label,
+  className,
+}: {
+  readonly text: string
+  readonly label: string
+  readonly className?: string
+}) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  const copy = () => {
+    void navigator.clipboard?.writeText(text).then(
+      () => setCopied(true),
+      () => setCopied(false),
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          size="icon-xs"
+          className={className}
+          aria-label={copied ? "Copied" : label}
+          onClick={copy}
+        >
+          {copied ? <Check /> : <Copy />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{copied ? "Copied" : label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function TurnActions({ turn }: { readonly turn: TurnEnd | undefined }) {
+  const { onFork } = useTranscriptActions()
+  if (turn === undefined) return null
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {turn.reply !== "" && (
+        <CopyText text={turn.reply} label="Copy response" className={REVEAL_TURN} />
+      )}
+      {onFork !== undefined && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="muted"
+              size="icon-xs"
+              className={REVEAL_TURN}
+              aria-label="Fork from here"
+              onClick={() => onFork(turn)}
+            >
+              <GitFork />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Fork from here</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
   )
 }
 
@@ -408,7 +476,13 @@ const formatDuration = (ms: number) =>
       ? `${(ms / 1000).toFixed(1)} s`
       : `${Math.round(ms / 60_000)} min`
 
-function TurnFooter({ content }: { readonly content: Content<"result"> }) {
+function TurnFooter({
+  content,
+  turn,
+}: {
+  readonly content: Content<"result">
+  readonly turn: TurnEnd | undefined
+}) {
   const details = [
     content.numTurns > 0 ? `${content.numTurns} turn${content.numTurns === 1 ? "" : "s"}` : null,
     content.durationMs > 0 ? formatDuration(content.durationMs) : null,
@@ -420,27 +494,33 @@ function TurnFooter({ content }: { readonly content: Content<"result"> }) {
         ? "Stopped before finishing."
         : (content.text ?? content.subtype)
     return (
-      <Trace>
-        <TraceLine status="error" className="text-xs">
-          <TraceIcon>
-            <TriangleAlert className="size-3.5" />
-          </TraceIcon>
-          <TraceTitle title={reason}>{reason}</TraceTitle>
-          {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
-        </TraceLine>
-      </Trace>
+      <div className="group/turn flex items-center gap-2">
+        <Trace className="min-w-0 flex-1">
+          <TraceLine status="error" className="text-xs">
+            <TraceIcon>
+              <TriangleAlert className="size-3.5" />
+            </TraceIcon>
+            <TraceTitle title={reason}>{reason}</TraceTitle>
+            {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
+          </TraceLine>
+        </Trace>
+        <TurnActions turn={turn} />
+      </div>
     )
   }
   return (
-    <Trace className="border-t pt-2">
-      <TraceLine className="text-xs">
-        <TraceIcon>
-          <CircleCheck className="size-3.5" />
-        </TraceIcon>
-        <TraceTitle>Done</TraceTitle>
-        {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
-      </TraceLine>
-    </Trace>
+    <div className="group/turn flex items-center gap-2 border-t pt-2">
+      <Trace className="min-w-0 flex-1">
+        <TraceLine className="text-xs">
+          <TraceIcon>
+            <CircleCheck className="size-3.5" />
+          </TraceIcon>
+          <TraceTitle>Done</TraceTitle>
+          {details.length > 0 && <TraceDescription>{details.join(" · ")}</TraceDescription>}
+        </TraceLine>
+      </Trace>
+      <TurnActions turn={turn} />
+    </div>
   )
 }
 

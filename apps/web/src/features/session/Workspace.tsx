@@ -91,7 +91,7 @@ export function Workspace({
       acceptsMessages(session) && session.status !== "ended"
         ? {
             onRewind: setRewinding,
-            onFork: (message) => setForking({ message }),
+            onFork: (turn) => setForking({ turn }),
             onUndoRewind: async (messageId) => {
               const exit = await undoRewind({ payload: { sessionId: session.id, messageId } })
               return Exit.isSuccess(exit) ? undefined : describeCause(exit.cause)
