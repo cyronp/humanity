@@ -10,11 +10,13 @@ import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Bot, type LucideIcon, User, Wrench } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import type { Session } from "@humanity/contracts"
 import { CommandGroup, CommandItem } from "@/components/ui/command"
 import { Spinner } from "@/components/ui/spinner"
 import { projectsAtom } from "@/features/projects/atoms"
 import { allSessionsAtom, searchMessagesAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
+import { hasFilters, NO_FILTERS, type ThreadFilters, threadMatches } from "./filters.ts"
 
 const SEARCH_DELAY_MS = 200
 
@@ -26,9 +28,11 @@ const KIND_ICON: Record<SearchHitKind, { readonly icon: LucideIcon; readonly lab
 
 export function MessageResults({
   query,
+  filters = NO_FILTERS,
   onPick,
 }: {
   readonly query: string
+  readonly filters?: ThreadFilters | undefined
   readonly onPick: () => void
 }) {
   const search = useAtomSet(searchMessagesAtom, { mode: "promiseExit" })
@@ -41,17 +45,32 @@ export function MessageResults({
     readonly error?: string
   }>()
   const searchable = [...query.trim()].length >= SEARCH_MIN_LENGTH
+  const projectIds = useMemo(
+    () =>
+      filters.project.length === 0 || !AsyncResult.isSuccess(projects)
+        ? undefined
+        : projects.value
+            .filter((project) =>
+              filters.project.some((value) => project.name.toLowerCase().includes(value)),
+            )
+            .map((project) => project.id),
+    [filters.project, projects],
+  )
+  const searchKey = `${query}
+${projectIds?.join(",") ?? ""}`
 
   useEffect(() => {
     if (!searchable) return
     let current = true
     const timer = setTimeout(() => {
-      void search({ payload: { query } }).then((exit) => {
+      void search({
+        payload: { query, ...(projectIds === undefined ? {} : { projectIds: [...projectIds] }) },
+      }).then((exit) => {
         if (!current) return
         setFound(
           Exit.isSuccess(exit)
-            ? { query, hits: exit.value }
-            : { query, hits: [], error: describeCause(exit.cause) },
+            ? { query: searchKey, hits: exit.value }
+            : { query: searchKey, hits: [], error: describeCause(exit.cause) },
         )
       })
     }, SEARCH_DELAY_MS)
@@ -59,14 +78,21 @@ export function MessageResults({
       current = false
       clearTimeout(timer)
     }
-  }, [query, search, searchable])
+  }, [projectIds, query, search, searchKey, searchable])
 
   const titles = useMemo(() => {
-    const map = new Map<string, { readonly title: string; readonly project: string }>()
+    const map = new Map<
+      string,
+      { readonly title: string; readonly project: string; readonly session: Session }
+    >()
     if (!AsyncResult.isSuccess(sessions) || !AsyncResult.isSuccess(projects)) return map
     const names = new Map(projects.value.map((project) => [project.id, project.name] as const))
     for (const session of sessions.value) {
-      map.set(session.id, { title: session.title, project: names.get(session.projectId) ?? "" })
+      map.set(session.id, {
+        title: session.title,
+        project: names.get(session.projectId) ?? "",
+        session,
+      })
     }
     return map
   }, [projects, sessions])
@@ -78,7 +104,14 @@ export function MessageResults({
       </p>
     )
   }
-  if (found?.query !== query) {
+  if (projectIds !== undefined && projectIds.length === 0) {
+    return (
+      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+        No project matches that filter.
+      </p>
+    )
+  }
+  if (found?.query !== searchKey) {
     return (
       <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
         <Spinner /> Searching…
@@ -88,14 +121,20 @@ export function MessageResults({
   if (found.error !== undefined) {
     return <p className="px-3 py-6 text-center text-sm text-destructive">{found.error}</p>
   }
-  if (found.hits.length === 0) {
+  const hits = found.hits.filter((hit) => {
+    const thread = titles.get(hit.sessionId)
+    return thread === undefined
+      ? !hasFilters(filters)
+      : threadMatches(thread.session, thread.project, filters)
+  })
+  if (hits.length === 0) {
     return (
       <p className="px-3 py-6 text-center text-sm text-muted-foreground">No message matches.</p>
     )
   }
   return (
     <CommandGroup heading="Messages">
-      {found.hits.map((hit, index) => {
+      {hits.map((hit, index) => {
         const thread = titles.get(hit.sessionId)
         const kind = KIND_ICON[hit.kind]
         return (

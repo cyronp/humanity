@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react"
 import {
   DEFAULT_BROWSER_PREFERENCES,
+  terminalLabel,
   type TerminalOwner,
   terminalOwnerKey,
 } from "@humanity/contracts"
@@ -19,6 +20,8 @@ import {
   setBrowserDefaults,
   setLinkTarget,
 } from "@/features/browser/browser"
+import { onOpenFileRequest } from "@/features/files/openRequest"
+import { ServerResults } from "@/features/browser/ServerResults"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
 import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
@@ -40,9 +43,19 @@ import {
 } from "@/features/terminal/dock"
 import { terminalsAtom } from "@/features/terminal/atoms"
 import { isMac, shortcutLabel, terminalCommand } from "@/features/terminal/keys"
-import { onShowTerminal, type ShowTerminalRequest } from "@/features/terminal/showTerminal"
+import {
+  onShowTerminal,
+  type ShowTerminalRequest,
+  showTerminal,
+} from "@/features/terminal/showTerminal"
 import { type DockCommands, TerminalDock } from "@/features/terminal/TerminalDock"
 import { useStoredWidth } from "@/lib/resize"
+
+const SHELF_KEYWORDS: Readonly<Record<ShelfTool, ReadonlyArray<string>>> = {
+  files: ["editor", "tree", "explorer"],
+  git: ["commit", "push", "pull request", "changes", "diff", "commits", "checks", "merge"],
+  browser: ["preview", "localhost", "web", "page"],
+}
 
 const PANEL_MIN_WIDTH = 320
 const CHAT_MIN_WIDTH = 360
@@ -102,6 +115,19 @@ export function WorkspaceFrame({
     [device, zoom, appearance],
   )
 
+  useEffect(
+    () =>
+      onOpenFileRequest(() => {
+        setRailShown(true)
+        setShelfState(() => {
+          const next = { open: true, tool: "files" as const }
+          storeShelf(next)
+          return next
+        })
+      }),
+    [setRailShown],
+  )
+
   const hasPanel = panel !== undefined
   const hasRail = rail !== undefined
   const hasTerminals = terminals !== undefined
@@ -140,7 +166,7 @@ export function WorkspaceFrame({
             id: `shelf.${tool}`,
             title: `Open ${SHELF_LABELS[tool]}`,
             group: "View",
-            keywords: ["tool", "shelf", tool],
+            keywords: ["tool", "shelf", tool, ...SHELF_KEYWORDS[tool]],
             run: () => {
               setRailShown(true)
               setShelfState(() => {
@@ -150,6 +176,21 @@ export function WorkspaceFrame({
               })
             },
           }))
+        : []),
+      ...(hasRail && hasPanel
+        ? [
+            {
+              id: "browser.servers",
+              title: "Open a local server",
+              group: "View",
+              keywords: ["localhost", "browser", "preview", "port", "dev server"],
+              page: {
+                title: "Open a local server",
+                placeholder: "Search the servers running on this machine…",
+                Results: ServerResults,
+              },
+            } satisfies PaletteCommand,
+          ]
         : []),
     ],
     [hasPanel, hasRail, hasTerminals, railShown, setRailShown, setTerminalsOpen, terminalsOpen],
@@ -213,6 +254,7 @@ export function WorkspaceFrame({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {terminals !== undefined && <TerminalPaletteCommands owner={terminals.owner} />}
       {header(
         <LayoutButtons
           terminalsOwner={terminals?.owner}
@@ -299,6 +341,41 @@ export function WorkspaceFrame({
       </div>
     </div>
   )
+}
+
+function TerminalPaletteCommands({ owner }: { readonly owner: TerminalOwner }) {
+  const result = useAtomValue(terminalsAtom(JSON.stringify(owner)))
+  const commands = useMemo((): ReadonlyArray<PaletteCommand> => {
+    const terminals = AsyncResult.isSuccess(result) ? result.value : []
+    if (terminals.length === 0) return []
+    return [
+      {
+        id: "terminal.goto",
+        title: "Go to a terminal",
+        group: "Terminal",
+        keywords: ["tab", "shell", "switch"],
+        page: {
+          title: "Go to a terminal",
+          placeholder: "Search the terminals…",
+          items: terminals.map((terminal): PaletteCommand => ({
+            id: `terminal.goto.${terminal.ordinal}`,
+            title: terminalLabel(terminal),
+            group: "Terminals",
+            keywords: [terminal.shellName, terminal.cwd],
+            detail:
+              terminal.busy === true
+                ? "Running a command"
+                : terminal.opener === "agent"
+                  ? "Opened by the agent"
+                  : terminal.cwd,
+            run: () => showTerminal(terminal.id),
+          })),
+        },
+      },
+    ]
+  }, [result])
+  usePaletteCommands("terminals", commands)
+  return null
 }
 
 function BusyBadge({ owner }: { readonly owner: TerminalOwner }) {

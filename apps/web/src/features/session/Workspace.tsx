@@ -39,6 +39,7 @@ import { interruptAtom, undoRewindAtom } from "./atoms.ts"
 import { useSetupWorktree } from "./panel/useSetupWorktree.ts"
 import { openCompare } from "@/features/compare/compare"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
+import { useThreadPalette } from "./useThreadPalette.tsx"
 import type { TranscriptActions } from "@/features/chat/transcriptActions"
 import { describeCause } from "@/lib/errors"
 import { useTranscript } from "./useTranscript.ts"
@@ -130,17 +131,6 @@ export function Workspace({
         keywords: ["branch", "copy", "duplicate"],
         run: () => setForking({}),
       },
-      ...(acceptsMessages(session)
-        ? [
-            {
-              id: "thread.model",
-              title: "Change the model",
-              group: "This thread",
-              keywords: ["provider", "switch", "agent"],
-              run: () => composer.current?.openModelPicker(),
-            },
-          ]
-        : []),
       ...(canSetupWorktree && !working
         ? [
             {
@@ -166,6 +156,7 @@ export function Workspace({
     ]
   }, [canSetupWorktree, interrupt, session])
   usePaletteCommands("thread", paletteCommands)
+  useThreadPalette(session, composer)
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [typing, setTyping] = useState(false)
   const keyHint = useKeyHintShown()

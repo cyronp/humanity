@@ -14,7 +14,7 @@ import {
   SquareTerminal,
   Wrench,
 } from "lucide-react"
-import { type ComponentType, Fragment, useRef, useState } from "react"
+import { type ComponentType, Fragment, type RefObject, useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
@@ -65,10 +65,12 @@ const SECTION_VIEWS: Record<
 }
 
 export function SettingsDialog() {
-  const { open, section } = useSettings()
+  const { open, section, focus } = useSettings()
   const [query, setQuery] = useState("")
   const { View } = SECTION_VIEWS[section]
   const searchRef = useRef<HTMLInputElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  useSettingFocus(content, open ? focus : undefined)
 
   const close = () => {
     closeSettings()
@@ -125,7 +127,7 @@ export function SettingsDialog() {
             <SectionList query={query} current={section} />
           </nav>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div ref={content} className="flex min-h-0 min-w-0 flex-1 flex-col">
             <View />
           </div>
         </div>
@@ -196,3 +198,36 @@ function SectionList({
 const isTyping = (target: EventTarget): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+
+const FOCUS_ATTEMPTS = 40
+const HIGHLIGHT_MS = 1600
+
+function useSettingFocus(
+  content: RefObject<HTMLDivElement | null>,
+  focus: { readonly label: string; readonly nonce: number } | undefined,
+) {
+  useEffect(() => {
+    if (focus === undefined) return
+    let frame = 0
+    let attempts = 0
+    let timer: number | undefined
+    const find = () => {
+      const row = [
+        ...(content.current?.querySelectorAll<HTMLElement>("[data-setting]") ?? []),
+      ].find((element) => element.dataset.setting === focus.label)
+      if (row === undefined) {
+        attempts += 1
+        if (attempts < FOCUS_ATTEMPTS) frame = requestAnimationFrame(find)
+        return
+      }
+      row.scrollIntoView({ block: "center" })
+      row.setAttribute("data-highlight", "")
+      timer = window.setTimeout(() => row.removeAttribute("data-highlight"), HIGHLIGHT_MS)
+    }
+    frame = requestAnimationFrame(find)
+    return () => {
+      cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [content, focus])
+}

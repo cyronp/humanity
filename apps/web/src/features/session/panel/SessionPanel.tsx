@@ -17,7 +17,8 @@ import {
   RefreshCw,
   X,
 } from "lucide-react"
-import { lazy, type ReactNode, Suspense, useEffect, useId, useState } from "react"
+import { lazy, type ReactNode, Suspense, useEffect, useId, useMemo, useState } from "react"
+import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -378,6 +379,28 @@ function GitBody({
 
   const files = AsyncResult.isSuccess(diff) ? diff.value.files : []
   const pullRequest = feed?.pullRequest ?? null
+  const pullRequestCommands = useMemo((): ReadonlyArray<PaletteCommand> => {
+    if (pullRequest === null) return []
+    const terms = forgeTerms(pullRequest.forge)
+    return [
+      {
+        id: "pr.open",
+        title: `Open the ${terms.noun} in ${terms.site}`,
+        group: "Source control",
+        detail: `${terms.symbol}${pullRequest.number} ${pullRequest.title}`,
+        keywords: ["pr", "mr", "forge", "review"],
+        run: () => void window.open(pullRequest.url, "_blank", "noopener,noreferrer"),
+      },
+      {
+        id: "pr.copy",
+        title: `Copy the ${terms.noun}'s link`,
+        group: "Source control",
+        keywords: ["pr", "mr", "url", "clipboard"],
+        run: () => void navigator.clipboard?.writeText(pullRequest.url),
+      },
+    ]
+  }, [pullRequest])
+  usePaletteCommands("pull-request", pullRequestCommands)
   const views = GIT_VIEWS.filter((each) => each !== "checks" || pullRequest !== null)
   const view = views.includes(stored) ? stored : "overview"
   const setView = (next: GitView) => {

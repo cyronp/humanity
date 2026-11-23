@@ -31,6 +31,7 @@ import { type EntryAction, isUnder, movedPath } from "./entries.ts"
 import { FileSearch } from "./FileSearch.tsx"
 import { FileTree } from "./FileTree.tsx"
 import { QuickOpen } from "./QuickOpen.tsx"
+import { onOpenFileRequest, takeOpenFileRequest } from "./openRequest.ts"
 import { ancestorsOf, treeChanges } from "./tree.ts"
 import { anyUnsaved, workspaceFor } from "./workspace.ts"
 
@@ -146,6 +147,19 @@ export default function FilesPanel({
     workspace.expand(ancestorsOf(path))
     workspace.open(path, { focus: true })
   }
+
+  useEffect(() => {
+    const take = () => {
+      const path = takeOpenFileRequest(session.id)
+      if (path === undefined) return
+      workspace.expand(ancestorsOf(path))
+      workspace.open(path, { focus: true })
+    }
+    take()
+    return onOpenFileRequest((sessionId) => {
+      if (sessionId === session.id) take()
+    })
+  }, [session.id, workspace])
 
   const listed = AsyncResult.isSuccess(listing) ? listing.value.files : NO_FILES
   const tracked = (path: string) =>

@@ -228,6 +228,7 @@ interface SettingsState {
   readonly open: boolean
   readonly section: SettingsSection
   readonly items: Partial<Record<SettingsSection, string>>
+  readonly focus?: { readonly label: string; readonly nonce: number } | undefined
 }
 
 let state: SettingsState = { open: false, section: "general", items: {} }
@@ -250,7 +251,12 @@ export const openSettings = (section: SettingsSection = state.section, item?: st
     items: item === undefined ? state.items : { ...state.items, [section]: item },
   })
 
-export const closeSettings = (): void => setState({ ...state, open: false })
+let focusNonce = 0
+
+export const openSetting = (section: SettingsSection, label: string): void =>
+  setState({ ...state, open: true, section, focus: { label, nonce: ++focusNonce } })
+
+export const closeSettings = (): void => setState({ ...state, open: false, focus: undefined })
 
 export const selectSettingsItem = (section: SettingsSection, item: string): void =>
   setState({ ...state, items: { ...state.items, [section]: item } })

@@ -34,12 +34,14 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  onEscapeKeyDown?: React.ComponentProps<typeof DialogContent>["onEscapeKeyDown"]
 }) {
   return (
     <Dialog {...props}>
@@ -50,6 +52,7 @@ function CommandDialog({
       <DialogContent
         className={cn("top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0", className)}
         showCloseButton={showCloseButton}
+        onEscapeKeyDown={onEscapeKeyDown}
       >
         {children}
       </DialogContent>
