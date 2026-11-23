@@ -563,12 +563,7 @@ function Limits({ report, now }: { readonly report: UsageReport; readonly now: n
   }
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-medium">Plan limits</h3>
-        <p className="text-xs text-muted-foreground">
-          As Humanity last read them. The mark on each bar is where even use would be by now.
-        </p>
-      </div>
+      <h3 className="text-sm font-medium">Plan limits</h3>
       <div className="flex flex-col gap-4">
         {rows.map((row) => (
           <div key={row.key} className="flex flex-col gap-2">
