@@ -59,6 +59,7 @@ export const rewindPreviewAtom = HumanityClient.mutation("Sessions.rewindPreview
 export const rewindAtom = HumanityClient.mutation("Sessions.rewind")
 export const undoRewindAtom = HumanityClient.mutation("Sessions.undoRewind")
 export const forkAtom = HumanityClient.mutation("Sessions.fork")
+export const searchMessagesAtom = HumanityClient.mutation("Sessions.search")
 export const refreshUsageAtom = HumanityClient.mutation("Sessions.refreshUsage")
 export const otherAccountsUsageAtom = HumanityClient.mutation("Sessions.otherAccountsUsage")
 export const endSessionAtom = HumanityClient.mutation("Sessions.end")

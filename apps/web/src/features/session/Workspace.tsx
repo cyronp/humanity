@@ -44,6 +44,7 @@ import { useTranscript } from "./useTranscript.ts"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
+  readonly message?: string | undefined
 }
 
 export function Workspace({
@@ -229,6 +230,12 @@ export function Workspace({
             onRewound={(text) => composer.current?.replace(text)}
           />
           <MessageList
+            focus={search.message}
+            onFocusMissing={
+              transcript.hasEarlier && !transcript.loading
+                ? () => void transcript.loadEarlier()
+                : undefined
+            }
             actions={transcriptActions}
             bottomInset={dockHeight}
             messages={transcript.messages}

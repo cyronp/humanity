@@ -240,6 +240,15 @@ One keyboard entry to everything the app can do. It adds no library to the stack
 - **Prefixes.** `>` lists actions only, `#` threads only, `?` searches the messages of every thread.
 - **A registry, not a list.** A feature registers its own actions while it is on screen, with what they need; the palette knows none of them.
 
+## Amendment: searching every thread (2026-11-22)
+
+The human finds a thread by what was said or done in it. This adds no library to the stack of section 3: SQLite's FTS5, which the Node of the daemon and of the desktop app's Electron both carry.
+
+- **An index in `humanity.db`.** `search_index` is an FTS5 table with the `trigram` tokenizer, so a part of a word, a path or an identifier matches, without regard to case. It holds the human's messages, the agent's text and one line per tool call (what it did, as the handoff describes it: the command, the file, the pattern); thinking, notices and tools' output are left out. Humanity keeps it in step with the messages as they are written, changed, removed or rewound; a thread that no longer exists is dropped from it when the daemon starts. The threads there before are indexed once, by the migration that adds it.
+- **`Sessions.search`** takes the text, optionally projects and a limit (50 by default), and answers the best matches with a snippet, the hit marked. Each word of three characters or more must match; shorter words are left out, and a search of only short words finds nothing.
+- **In the command palette,** `?` searches: each hit shows the thread, its project, who said it (the human, the agent or a tool call) and the snippet. Picking one opens the thread at that message (`?message=` on the thread's address): the chat loads earlier messages until it holds it, scrolls to it and marks it for a moment.
+- **Not yet:** searching from the sidebar's own search field, which still matches titles, projects and branches only.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

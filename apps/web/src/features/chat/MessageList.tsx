@@ -18,7 +18,7 @@ import {
   Undo2,
 } from "lucide-react"
 import { cn } from "cn"
-import { memo, type ReactNode, useMemo, useState } from "react"
+import { memo, type ReactNode, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -32,6 +32,7 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from "@/components/ui/message-scroller"
 import {
   Trace,
@@ -70,6 +71,8 @@ import {
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
+const FOCUS_HIGHLIGHT_MS = 2500
+
 const isShown = (message: ChatMessage) =>
   message.content._tag !== "tool_results" && message.content._tag !== "other"
 
@@ -85,6 +88,8 @@ export function MessageList({
   footer,
   bottomInset = 0,
   actions,
+  focus,
+  onFocusMissing,
 }: {
   readonly messages: ReadonlyArray<ChatMessage>
   readonly toolCalls: Readonly<Record<string, ToolCall>>
@@ -97,11 +102,19 @@ export function MessageList({
   readonly footer?: ReactNode
   readonly bottomInset?: number
   readonly actions?: TranscriptActions | undefined
+  readonly focus?: string | undefined
+  readonly onFocusMissing?: (() => void) | undefined
 }) {
   const items = useMemo(() => messages.filter(isShown), [messages])
   const delivered = useMemo(() => deliveredSwitches(messages), [messages])
   const undoable = useMemo(() => undoableRewinds(messages), [messages])
   const provided = useMemo(() => actions ?? {}, [actions])
+  const [highlighted, setHighlighted] = useState<string>()
+  useEffect(() => {
+    if (highlighted === undefined) return
+    const timer = setTimeout(() => setHighlighted(undefined), FOCUS_HIGHLIGHT_MS)
+    return () => clearTimeout(timer)
+  }, [highlighted])
   return (
     <TranscriptActionsContext value={provided}>
       <MessageScrollerProvider autoScroll defaultScrollPosition="end">
@@ -119,11 +132,23 @@ export function MessageList({
               {earlier !== undefined && (
                 <MessageScrollerItem messageId="earlier">{earlier}</MessageScrollerItem>
               )}
+              {focus !== undefined && (
+                <FocusMessage
+                  messageId={focus}
+                  present={items.some((message) => message.id === focus)}
+                  onMissing={onFocusMissing}
+                  onFocused={setHighlighted}
+                />
+              )}
               {items.map((message) => (
                 <MessageScrollerItem
                   key={message.id}
                   messageId={message.id}
                   scrollAnchor={message.content._tag === "user"}
+                  className={cn(
+                    "rounded-lg ring-offset-4 ring-offset-background transition-shadow duration-700",
+                    message.id === highlighted && "ring-2 ring-primary/40",
+                  )}
                 >
                   <TranscriptEntry
                     message={message}
@@ -551,4 +576,33 @@ function RewindLine({
       {error !== undefined && <p className="text-center text-xs text-destructive">{error}</p>}
     </div>
   )
+}
+
+function FocusMessage({
+  messageId,
+  present,
+  onMissing,
+  onFocused,
+}: {
+  readonly messageId: string
+  readonly present: boolean
+  readonly onMissing: (() => void) | undefined
+  readonly onFocused: (messageId: string) => void
+}) {
+  const { scrollToMessage } = useMessageScroller()
+  const [done, setDone] = useState<string>()
+  useEffect(() => {
+    if (done === messageId) return
+    if (!present) {
+      onMissing?.()
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      if (!scrollToMessage(messageId, { behavior: "smooth" })) return
+      setDone(messageId)
+      onFocused(messageId)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [done, messageId, onFocused, onMissing, present, scrollToMessage])
+  return null
 }

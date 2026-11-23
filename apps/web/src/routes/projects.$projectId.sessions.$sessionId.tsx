@@ -17,12 +17,17 @@ import { describeCause } from "@/lib/errors"
 
 const WorkspaceSearch = Schema.Struct({
   file: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
 })
 
 export const Route = createFileRoute("/projects/$projectId/sessions/$sessionId")({
   validateSearch: (search: Record<string, unknown>) =>
     Schema.decodeUnknownSync(WorkspaceSearch)(
-      typeof search["file"] === "string" ? { file: search["file"] } : {},
+      Object.fromEntries(
+        (["file", "message"] as const).flatMap((key) =>
+          typeof search[key] === "string" ? [[key, search[key]]] : [],
+        ),
+      ),
     ),
   component: SessionRoute,
 })
