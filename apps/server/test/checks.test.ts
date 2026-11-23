@@ -54,6 +54,7 @@ describe("running a project's checks", () => {
         assert.strictEqual(failed.outcome, "failed")
         assert.strictEqual(failed.exitCode, 1)
         assert.include(failed.output, "expected 2, got 3")
+        assert.notMatch(failed.output, /\$\s*$/)
         assert.notStrictEqual(failed.terminalId, passed.terminalId)
 
         const message = checksMessage(failed)

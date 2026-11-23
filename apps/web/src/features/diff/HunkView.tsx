@@ -135,6 +135,8 @@ export function HunkButtons({ hunk, filePath, onReference, editorRoot }: HunkLin
   )
 }
 
+const PINNED_TO_VIEW = "sticky left-0 w-[100cqw] px-2"
+
 export function HunkLines({ hunk, filePath, onReference, editorRoot, comments }: HunkLinkProps) {
   const [writing, setWriting] = useState<CommentAnchor>()
   const rows = useMemo(() => toDiffLines(hunk), [hunk])
@@ -143,7 +145,7 @@ export function HunkLines({ hunk, filePath, onReference, editorRoot, comments }:
   const tokens = useHighlightedLines(texts, languageForPath(filePath))
 
   return (
-    <ScrollArea orientation="horizontal">
+    <ScrollArea orientation="horizontal" className="@container/hunk">
       <table className="w-full border-collapse font-mono text-xs leading-5">
         <tbody>
           {rows.map((row, position) => {
@@ -206,8 +208,10 @@ export function HunkLines({ hunk, filePath, onReference, editorRoot, comments }:
                 {comments !== undefined &&
                   attached.map((comment) => (
                     <tr key={comment.id}>
-                      <td colSpan={span} className="border-y bg-muted/40 p-2 font-sans">
-                        <CommentCard comment={comment} comments={comments} />
+                      <td colSpan={span} className="border-y bg-muted/40 py-2 font-sans">
+                        <div className={PINNED_TO_VIEW}>
+                          <CommentCard comment={comment} comments={comments} />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -216,15 +220,17 @@ export function HunkLines({ hunk, filePath, onReference, editorRoot, comments }:
                   writing !== undefined &&
                   sameAnchor(writing, anchor) && (
                     <tr>
-                      <td colSpan={span} className="border-y bg-muted/40 p-2 font-sans">
-                        <CommentEditor
-                          initial=""
-                          onCancel={() => setWriting(undefined)}
-                          onSave={(body) => {
-                            comments.add(anchor, body)
-                            setWriting(undefined)
-                          }}
-                        />
+                      <td colSpan={span} className="border-y bg-muted/40 py-2 font-sans">
+                        <div className={PINNED_TO_VIEW}>
+                          <CommentEditor
+                            initial=""
+                            onCancel={() => setWriting(undefined)}
+                            onSave={(body) => {
+                              comments.add(anchor, body)
+                              setWriting(undefined)
+                            }}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )}

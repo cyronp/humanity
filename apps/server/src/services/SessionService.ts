@@ -199,6 +199,11 @@ export const sessionBranchName = (
 ): string => `${prefix}${sessionId.slice(0, 8)}-${slugify(title)}`
 
 const SHELL_READY_MS = 15_000
+
+export const withoutPromptLine = (text: string): string => {
+  const lines = text.replace(/\s+$/, "").split("\n")
+  return lines.length <= 1 ? text : lines.slice(0, -1).join("\n")
+}
 const SHELL_READY_POLL_MS = 100
 
 export const setupCommand = (script: string | null): string | undefined => {
@@ -1584,7 +1589,7 @@ export class SessionService extends Context.Service<
             command,
             outcome,
             exitCode: waited.exitCode,
-            output: waited.text,
+            output: waited.outcome === "command" ? withoutPromptLine(waited.text) : waited.text,
           }
         }).pipe(Effect.mapError((error) => refused(`The checks did not start: ${error.message}`)))
       })
