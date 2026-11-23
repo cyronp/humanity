@@ -1,6 +1,16 @@
-import { type AgentProvider, OPEN_THREAD_TOOL, PROVIDER_NAMES } from "@humanity/contracts"
+import { useAtomValue } from "@effect/atom-react"
+import {
+  type AgentProvider,
+  OPEN_THREAD_TOOL,
+  openedThreadIn,
+  PROVIDER_NAMES,
+  type SessionId,
+} from "@humanity/contracts"
+import { AsyncResult } from "effect/reactivity"
 import { MessageSquarePlus } from "lucide-react"
 import { Markdown } from "@/features/chat/Markdown"
+import { allSessionsAtom } from "@/features/session/atoms"
+import { ThreadStatus } from "@/features/sidebar/ThreadLink"
 import { stringField } from "../inputs.ts"
 import type { ToolRenderer } from "../registry.ts"
 import { Field, OutputText } from "./common.tsx"
@@ -22,6 +32,9 @@ export const threadRenderer: ToolRenderer = {
       <span className="truncate">
         {stringField(input, "title") ?? stringField(input, "prompt")}
       </span>
+      {call?.status === "succeeded" && call.output !== null && (
+        <OpenedThreadStatus text={call.output.content} />
+      )}
     </span>
   ),
   Detail: ({ input, call }) => {
@@ -62,4 +75,22 @@ export const threadRenderer: ToolRenderer = {
       </div>
     )
   },
+}
+
+function OpenedThreadStatus({ text }: { readonly text: string }) {
+  const opened = openedThreadIn(text)
+  return opened === undefined ? null : <ChildStatus sessionId={opened.sessionId} />
+}
+
+function ChildStatus({ sessionId }: { readonly sessionId: SessionId }) {
+  const sessions = useAtomValue(allSessionsAtom)
+  const child = AsyncResult.isSuccess(sessions)
+    ? sessions.value.find((session) => session.id === sessionId)
+    : undefined
+  if (child === undefined) return null
+  return (
+    <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">
+      <ThreadStatus status={child.status} />
+    </span>
+  )
 }

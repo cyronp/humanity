@@ -1,4 +1,3 @@
-
 export interface SkillFile {
   readonly name: string | undefined
   readonly description: string | undefined
@@ -10,8 +9,7 @@ const unquote = (value: string): string => {
     try {
       const parsed: unknown = JSON.parse(value)
       if (typeof parsed === "string") return parsed
-    } catch {
-    }
+    } catch {}
     return value.slice(1, -1)
   }
   if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {

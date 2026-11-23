@@ -3,6 +3,10 @@ import type { CSSProperties } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppHeaderHost } from "@/features/layout/AppHeader"
 import { NotificationWatcher } from "@/features/notifications/NotificationWatcher"
+import { CommandPalette, type MessageSearch } from "@/features/palette/CommandPalette"
+import { MessageResults } from "@/features/palette/MessageResults"
+import { UsageDialog } from "@/features/usage/UsageDialog"
+import { CompareDialog } from "@/features/compare/CompareDialog"
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
@@ -15,6 +19,8 @@ const SIDEBAR_DEFAULT_WIDTH = 320
 const SIDEBAR_MIN_WIDTH = 240
 const SIDEBAR_MAX_WIDTH = 520
 const SIDEBAR_MAX_SHARE = 0.4
+
+const MESSAGE_SEARCH: MessageSearch = { Results: MessageResults }
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -66,6 +72,9 @@ function RootLayout() {
       <SettingsDialog />
       <NotificationWatcher />
       <AddRepositoryDialog />
+      <CommandPalette messages={MESSAGE_SEARCH} />
+      <UsageDialog />
+      <CompareDialog />
     </SidebarProvider>
   )
 }

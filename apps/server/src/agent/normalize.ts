@@ -1,7 +1,6 @@
 import type { AssistantBlock, MessageContent, ToolResult } from "@humanity/contracts"
 import { Option, Schema } from "effect"
 
-
 const InitMessage = Schema.Struct({
   type: Schema.Literal("system"),
   subtype: Schema.Literal("init"),

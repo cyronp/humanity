@@ -7,7 +7,24 @@ import {
 import { useTree } from "@headless-tree/react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { cn } from "cn"
-import { ChevronRight, File, Folder, FolderOpen } from "lucide-react"
+import {
+  ChevronRight,
+  Ellipsis,
+  File,
+  FilePlus,
+  Folder,
+  FolderOpen,
+  Pencil,
+  Trash2,
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { type EntryAction, parentOf } from "./entries.ts"
 import { FileIcon } from "./FileIcon.tsx"
 import { useEffect, useMemo, useRef } from "react"
 import { FILE_STATUS, fileNameClass } from "@/features/diff/FileStatus"
@@ -24,7 +41,9 @@ export function FileTree({
   onExpandedChange,
   onOpen,
   icons,
+  onAction,
 }: {
+  readonly onAction?: ((action: EntryAction) => void) | undefined
   readonly icons: boolean
   readonly files: ReadonlyArray<string>
   readonly changes: TreeChanges
@@ -105,6 +124,7 @@ export function FileTree({
               active={item.getId() === active}
               changes={changes}
               icons={icons}
+              onAction={onAction}
             />
           )
         })}
@@ -119,7 +139,9 @@ function TreeRow({
   active,
   changes,
   icons,
+  onAction,
 }: {
+  readonly onAction: ((action: EntryAction) => void) | undefined
   readonly icons: boolean
   readonly item: ItemInstance<FileNode>
   readonly top: number
@@ -138,7 +160,7 @@ function TreeRow({
       {...props}
       title={node.id}
       className={cn(
-        "absolute inset-x-0 flex cursor-pointer items-center gap-1 pr-2 text-[0.8125rem] outline-none select-none",
+        "group/row absolute inset-x-0 flex cursor-pointer items-center gap-1 pr-2 text-[0.8125rem] outline-none select-none",
         active ? "bg-accent text-accent-foreground" : "hover:bg-muted/60",
         "focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset",
       )}
@@ -180,6 +202,55 @@ function TreeRow({
       {changedInside && (
         <span aria-label="Has changes" className="size-1.5 shrink-0 rounded-full bg-git-modified" />
       )}
+      {onAction !== undefined && <RowMenu node={node} onAction={onAction} />}
     </div>
+  )
+}
+
+function RowMenu({
+  node,
+  onAction,
+}: {
+  readonly node: FileNode
+  readonly onAction: (action: EntryAction) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Actions for ${node.name}`}
+          className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <Ellipsis className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuItem
+          onSelect={() =>
+            onAction({ kind: "new", folder: node.folder ? node.id : parentOf(node.id) })
+          }
+        >
+          <FilePlus />
+          New file{node.folder ? " here" : " beside it"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => onAction({ kind: "rename", path: node.id, folder: node.folder })}
+        >
+          <Pencil />
+          Rename or move
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => onAction({ kind: "delete", path: node.id, folder: node.folder })}
+        >
+          <Trash2 />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

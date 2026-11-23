@@ -1,6 +1,10 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
+import { RewindPreview } from "../domain/Checkpoint.ts"
+import { CompareRunRequest, GroupComparison } from "../domain/Compare.ts"
+import { MessageHit } from "../domain/Search.ts"
+import { UsageReport } from "../domain/Usage.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
@@ -18,6 +22,8 @@ import {
   AttachmentNotFound,
   AttachmentRejected,
   BranchNotCheckedOut,
+  CompareUnavailable,
+  ForkUnavailable,
   GitBranchExists,
   GitCommandFailed,
   GitInvalidBranchName,
@@ -28,6 +34,7 @@ import {
   PlanUsageUnavailable,
   ProjectNotFound,
   ProviderSwitchUnavailable,
+  RewindUnavailable,
   SessionBusy,
   SessionEnded,
   SessionNotFound,
@@ -194,6 +201,86 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { sessionId: SessionId, before: Schema.String },
     success: TranscriptPage,
     error: SessionNotFound,
+  }),
+  Rpc.make("Sessions.rewindPreview", {
+    payload: { sessionId: SessionId, messageId: Schema.String },
+    success: RewindPreview,
+    error: Schema.Union([SessionNotFound, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.rewind", {
+    payload: {
+      sessionId: SessionId,
+      messageId: Schema.String,
+      files: Schema.Boolean,
+      conversation: Schema.Boolean,
+    },
+    success: Session,
+    error: Schema.Union([SessionNotFound, SessionEnded, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.undoRewind", {
+    payload: { sessionId: SessionId, messageId: Schema.String },
+    error: Schema.Union([SessionNotFound, SessionEnded, RewindUnavailable]),
+  }),
+  Rpc.make("Sessions.fork", {
+    payload: { sessionId: SessionId, messageId: Schema.optional(Schema.String) },
+    success: Session,
+    error: Schema.Union([
+      SessionNotFound,
+      ForkUnavailable,
+      ProjectNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+      GitBranchExists,
+      GitInvalidBranchName,
+      GitRefNotFound,
+    ]),
+  }),
+  Rpc.make("Sessions.search", {
+    payload: {
+      query: Schema.String,
+      projectIds: Schema.optional(Schema.Array(ProjectId)),
+      limit: Schema.optional(Schema.Number),
+    },
+    success: Schema.Array(MessageHit),
+  }),
+  Rpc.make("Sessions.usageReport", {
+    payload: {
+      from: Schema.String,
+      to: Schema.String,
+      utcOffsetMinutes: Schema.Number,
+      hourly: Schema.optional(Schema.Boolean),
+    },
+    success: UsageReport,
+  }),
+  Rpc.make("Sessions.createGroup", {
+    payload: {
+      projectId: ProjectId,
+      prompt: Schema.NonEmptyString,
+      title: Schema.optional(Schema.String),
+      baseBranch: Schema.optional(Schema.String),
+      attachments: Schema.optional(Schema.Array(AttachmentUpload)),
+      mentions: Schema.optional(FileMentions),
+      autonomy: Schema.optional(Autonomy),
+      runs: Schema.Array(CompareRunRequest),
+    },
+    success: Schema.Array(Session),
+    error: Schema.Union([
+      CompareUnavailable,
+      ProjectNotFound,
+      GitNotARepository,
+      GitNotInstalled,
+      GitCommandFailed,
+      GitBranchExists,
+      GitInvalidBranchName,
+      GitRefNotFound,
+      AttachmentRejected,
+    ]),
+  }),
+  Rpc.make("Sessions.compareGroup", {
+    payload: { groupId: Schema.String },
+    success: GroupComparison,
+    error: CompareUnavailable,
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },

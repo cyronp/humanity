@@ -53,6 +53,10 @@ export interface ComposerHandle {
   readonly insert: (insertion: PromptInsertion) => void
   readonly attach: (files: ReadonlyArray<File>) => void
   readonly openModelPicker: () => void
+  readonly replace: (text: string) => void
+  readonly changeAutonomy: (autonomy: Autonomy) => void
+  readonly changeModel: (choice: ModelChoice) => void
+  readonly changeEffort: (effort: ReasoningEffort | null) => void
 }
 
 export const Composer = memo(function Composer({
@@ -101,6 +105,13 @@ export const Composer = memo(function Composer({
     insert,
     attach: (added) => void files.add(added),
     openModelPicker: () => setPickerOpen(true),
+    replace: (next) => {
+      setText(next)
+      textarea.current?.focus()
+    },
+    changeAutonomy: (next) => void changeAutonomy(next),
+    changeModel: (choice) => void changeModel(choice),
+    changeEffort: (next) => void changeEffort(next),
   }))
   const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
   const mentions = useFileMention({

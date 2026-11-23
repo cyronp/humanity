@@ -6,11 +6,14 @@ import {
   CircleAlert,
   CircleCheck,
   CirclePause,
+  CircleStop,
+  Columns3,
   GitBranch,
   GitFork,
   LoaderCircle,
   type LucideIcon,
   MessageCircleQuestionMark,
+  Network,
   SquareTerminal,
 } from "lucide-react"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
@@ -23,11 +26,13 @@ export function ThreadLink({
   project,
   active,
   onNavigate,
+  attention,
 }: {
   readonly session: Session
   readonly project: Project
   readonly active: boolean
   readonly onNavigate: () => void
+  readonly attention?: SessionStatus | undefined
 }) {
   return (
     <Link
@@ -41,18 +46,36 @@ export function ThreadLink({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-medium">{session.title}</span>
-          <ThreadTime session={session} />
+          <span className="grid shrink-0 justify-items-end">
+            <ThreadTime session={session} />
+            {session.status !== "ended" && (
+              <span
+                aria-hidden
+                className="invisible col-start-1 row-start-1 hidden items-center gap-1 border border-transparent px-2 text-xs font-medium whitespace-nowrap group-focus-within/menu-item:inline-flex group-hover/menu-item:inline-flex pointer-coarse:inline-flex"
+              >
+                <CircleStop className="size-3" />
+                End thread
+              </span>
+            )}
+          </span>
         </div>
         <ThreadBranch session={session} />
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1.5">
             <ThreadStatus status={session.status} />
+            {attention !== undefined && <ChildAttention status={attention} />}
             <span aria-hidden className="text-muted-foreground/60">
               ·
             </span>
             <span className="truncate">{project.name}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
+            {session.groupId != null && (
+              <span title="One of several runs compared">
+                <Columns3 className="size-3.5" aria-hidden />
+                <span className="sr-only">One of several runs compared</span>
+              </span>
+            )}
             {session.origin === "claude-code" && (
               <span title="Started in Claude Code">
                 <SquareTerminal className="size-3.5" aria-hidden />
@@ -102,7 +125,7 @@ const STATE: Record<
   ended: { label: "Ended", word: "Ended", icon: Archive },
 }
 
-function ThreadStatus({ status }: { readonly status: SessionStatus }) {
+export function ThreadStatus({ status }: { readonly status: SessionStatus }) {
   const state = STATE[status]
   const tone = STATUS_TONE[status]
   return (
@@ -117,6 +140,31 @@ function ThreadStatus({ status }: { readonly status: SessionStatus }) {
   )
 }
 
+const CHILD_ATTENTION: Partial<Record<SessionStatus, string>> = {
+  waiting_for_human: "A thread started from it needs input",
+  error: "A thread started from it stopped with an error",
+  running: "A thread started from it is working",
+}
+
+function ChildAttention({ status }: { readonly status: SessionStatus }) {
+  const label = CHILD_ATTENTION[status] ?? STATE[status].label
+  const tone = STATUS_TONE[status]
+  const Icon = STATE[status].icon
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-0.5 rounded-sm border px-1",
+        tone !== undefined && TONE_TEXT[tone],
+      )}
+      title={label}
+    >
+      <Network className="size-3 shrink-0" aria-hidden />
+      <Icon className={cn("size-3 shrink-0", STATE[status].spin && "animate-spin")} aria-hidden />
+      <span className="sr-only">{label}</span>
+    </span>
+  )
+}
+
 function ThreadTime({ session }: { readonly session: Session }) {
   const live = session.status === "running" || session.status === "waiting_for_human"
   const now = useNow(live ? 1000 : 30_000)
@@ -125,7 +173,7 @@ function ThreadTime({ session }: { readonly session: Session }) {
     <time
       dateTime={session.updatedAt}
       className={cn(
-        "shrink-0 text-xs text-muted-foreground tabular-nums",
+        "col-start-1 row-start-1 text-xs text-muted-foreground tabular-nums",
         session.status !== "ended" &&
           "transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0 pointer-coarse:opacity-0",
       )}

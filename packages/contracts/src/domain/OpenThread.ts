@@ -41,6 +41,15 @@ export const threadMarkdownLink = (
 ): string =>
   `[${thread.title.replace(/[\\[\]]/g, "\\$&")}](${threadHref(thread.projectId, thread.sessionId)})`
 
+const MARKDOWN_HREF = /\]\((\/projects\/[^)\s]+)\)/
+
+export const openedThreadIn = (
+  text: string,
+): { readonly projectId: ProjectId; readonly sessionId: SessionId } | undefined => {
+  const href = MARKDOWN_HREF.exec(text)?.[1]
+  return href === undefined ? undefined : parseThreadHref(href)
+}
+
 export const formatOpenedThread = (thread: OpenedThread): string => {
   const runsOn = [
     thread.model ?? "the default model",

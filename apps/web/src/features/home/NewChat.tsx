@@ -10,6 +10,7 @@ import type {
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
+import { COMPARE_RUNS } from "@humanity/contracts"
 import { FolderPlus } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useId, useMemo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -29,6 +30,7 @@ import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu
 import { MentionTextarea } from "@/features/chat/MentionTextarea"
 import { useFileMention } from "@/features/chat/useFileMention"
 import { claudeStatusAtom } from "@/features/claude/atoms"
+import { compareRuns, openCompare } from "@/features/compare/compare"
 import { codexStatusAtom } from "@/features/codex/atoms"
 import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
@@ -42,7 +44,7 @@ import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import type { ModelChoice } from "@/features/providers/models"
 import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
-import { allSessionsAtom, createSessionAtom } from "@/features/session/atoms"
+import { allSessionsAtom, createGroupAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
@@ -148,6 +150,8 @@ function NewChatForm({
   readonly initialPrompt: string | undefined
 }) {
   const create = useAtomSet(createSessionAtom, { mode: "promiseExit" })
+  const createGroup = useAtomSet(createGroupAtom, { mode: "promiseExit" })
+  const [extra, setExtra] = useState<ReadonlyArray<ModelChoice>>([])
   const navigate = useNavigate()
   const [chosenModel, setModel] = useState<ModelChoice>()
   const [chosenEffort, setEffort] = useState<ReasoningEffort | null>()
@@ -186,6 +190,39 @@ function NewChatForm({
     if (prompt === "" || pending || files.reading) return
     setPending(true)
     setError(undefined)
+    if (extra.length > 0) {
+      const group = await createGroup({
+        payload: {
+          projectId: project.id,
+          ...(chosen === undefined ? {} : { baseBranch: chosen }),
+          prompt,
+          ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
+          ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
+          autonomy,
+          runs: [...compareRuns({ provider, model }, extra, effort)],
+        },
+        reactivityKeys: [keys.sessions(project.id), keys.git(project.id)],
+      })
+      setPending(false)
+      if (Exit.isFailure(group)) {
+        setError(describeCause(group.cause))
+        return
+      }
+      noteMessageSent()
+      setText("")
+      setExtra([])
+      mentions.sent()
+      files.clear()
+      const [first] = group.value
+      if (first !== undefined) {
+        void navigate({
+          to: "/projects/$projectId/sessions/$sessionId",
+          params: { projectId: project.id, sessionId: first.id },
+        })
+        if (first.groupId != null) openCompare(first.groupId)
+      }
+      return
+    }
     const exit = await create({
       payload: {
         projectId: project.id,
@@ -272,11 +309,23 @@ function NewChatForm({
           <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={setEffort} disabled={pending} />
-            <ModelPicker provider={provider} value={model} onChange={setModel} />
+            <ModelPicker
+              provider={provider}
+              value={model}
+              onChange={setModel}
+              disabled={pending}
+              compare={{ others: extra, max: COMPARE_RUNS.max, onOthersChange: setExtra }}
+            />
             <SendButton
               ready={text.trim() !== "" && !pending && !files.reading}
               disabled={pending || files.reading || text.trim() === ""}
-              label={pending ? "Creating the session" : "Start the session"}
+              label={
+                pending
+                  ? "Creating the session"
+                  : extra.length > 0
+                    ? `Start ${extra.length + 1} runs to compare`
+                    : "Start the session"
+              }
             />
           </div>
         </ChatBoxFooter>
@@ -284,9 +333,11 @@ function NewChatForm({
       {!pending && <KeyHint typing={text.trim() !== ""} className="flex justify-center" />}
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
-          {chosen === undefined || chosen === current
-            ? "Starting the session…"
-            : `Switching your checkout to ${chosen}…`}
+          {extra.length > 0
+            ? `Starting ${extra.length + 1} runs, each in a worktree of its own…`
+            : chosen === undefined || chosen === current
+              ? "Starting the session…"
+              : `Switching your checkout to ${chosen}…`}
         </p>
       )}
       {error !== undefined && <ErrorNote title="Could not start the session" message={error} />}

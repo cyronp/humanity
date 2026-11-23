@@ -22,8 +22,7 @@ export const readToken = (): string | undefined => {
 export const storeToken = (token: string): void => {
   try {
     window.localStorage.setItem(STORAGE_KEY, token.trim())
-  } catch {
-  }
+  } catch {}
 }
 
 export const tokenFromInput = (input: string): string => {

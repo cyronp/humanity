@@ -1,5 +1,7 @@
 appId: dev.humanity.desktop
 productName: Humanity
+extraMetadata:
+  name: humanity
 directories:
   output: release
 icon: build/icon.png

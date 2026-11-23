@@ -1,6 +1,14 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { FileListing, FileVersion, OpenedFile, SavedFile } from "../domain/Files.ts"
+import {
+  FileListing,
+  FileSearchOptions,
+  FileSearchResult,
+  FileVersion,
+  NewEntryKind,
+  OpenedFile,
+  SavedFile,
+} from "../domain/Files.ts"
 import { SessionId } from "../domain/Session.ts"
 import {
   FileAccessFailed,
@@ -46,6 +54,41 @@ export const FilesRpcs = RpcGroup.make(
       FileRefused,
       FileNotFound,
       FileChangedOnDisk,
+      FileAccessFailed,
+    ]),
+  }),
+  Rpc.make("Files.search", {
+    payload: { sessionId: SessionId, options: FileSearchOptions },
+    success: FileSearchResult,
+    error: Schema.Union([SessionNotFound, GitNotInstalled, GitCommandFailed, FileRefused]),
+  }),
+  Rpc.make("Files.create", {
+    payload: { sessionId: SessionId, path: Schema.String, kind: NewEntryKind },
+    error: Schema.Union([
+      SessionNotFound,
+      SessionEnded,
+      FileRefused,
+      FileNotFound,
+      FileAccessFailed,
+    ]),
+  }),
+  Rpc.make("Files.rename", {
+    payload: { sessionId: SessionId, from: Schema.String, to: Schema.String },
+    error: Schema.Union([
+      SessionNotFound,
+      SessionEnded,
+      FileRefused,
+      FileNotFound,
+      FileAccessFailed,
+    ]),
+  }),
+  Rpc.make("Files.delete", {
+    payload: { sessionId: SessionId, paths: Schema.Array(Schema.String) },
+    error: Schema.Union([
+      SessionNotFound,
+      SessionEnded,
+      FileRefused,
+      FileNotFound,
       FileAccessFailed,
     ]),
   }),

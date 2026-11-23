@@ -37,6 +37,17 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
         sessions.commit(sessionId, message, paths),
       "Sessions.earlierMessages": ({ sessionId, before }) =>
         sessions.earlierMessages(sessionId, before),
+      "Sessions.rewindPreview": ({ sessionId, messageId }) =>
+        sessions.rewindPreview(sessionId, messageId),
+      "Sessions.rewind": ({ sessionId, messageId, files, conversation }) =>
+        sessions.rewind(sessionId, messageId, { files, conversation }),
+      "Sessions.undoRewind": ({ sessionId, messageId }) =>
+        sessions.undoRewind(sessionId, messageId),
+      "Sessions.fork": ({ sessionId, messageId }) => sessions.fork(sessionId, messageId),
+      "Sessions.search": (payload) => sessions.search(payload),
+      "Sessions.createGroup": (payload) => sessions.createGroup(payload),
+      "Sessions.compareGroup": ({ groupId }) => sessions.compareGroup(groupId),
+      "Sessions.usageReport": (payload) => sessions.usageReport(payload),
       "Sessions.subscribe": ({ sessionId }) => sessions.subscribe(sessionId),
     })
   }),

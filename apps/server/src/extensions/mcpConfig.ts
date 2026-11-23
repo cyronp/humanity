@@ -1,7 +1,6 @@
 import type { McpServer, McpTransportInput } from "@humanity/contracts"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 
-
 export type McpConfig =
   | {
       readonly _tag: "stdio"

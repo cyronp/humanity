@@ -3,7 +3,7 @@ import { cn } from "cn"
 import { DEFAULT_ACCOUNT } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronLeft, ChevronRight, Star, TriangleAlert } from "lucide-react"
-import { type KeyboardEvent, type ReactNode, useState } from "react"
+import { type KeyboardEvent, type ReactNode, useRef, useState } from "react"
 import {
   Command,
   CommandEmpty,
@@ -59,6 +59,15 @@ const useFavoriteModels = () => {
 
 type Section = "favorites" | ProviderId
 
+const sameModel = (choice: ModelChoice, model: Pick<PickerModel, "provider" | "value">) =>
+  choice.provider === model.provider && (choice.model ?? DEFAULT_MODEL) === model.value
+
+export interface CompareChoices {
+  readonly others: ReadonlyArray<ModelChoice>
+  readonly max: number
+  readonly onOthersChange: (others: ReadonlyArray<ModelChoice>) => void
+}
+
 interface ModelPickerProps {
   readonly provider: ProviderId
   readonly value: string | null
@@ -69,6 +78,7 @@ interface ModelPickerProps {
   readonly disabled?: boolean
   readonly open?: boolean
   readonly onOpenChange?: (open: boolean) => void
+  readonly compare?: CompareChoices | undefined
 }
 
 export function ModelPicker(props: ModelPickerProps) {
@@ -94,6 +104,7 @@ function PickerBody({
   disabled = false,
   open: openFromOutside,
   onOpenChange: tellOpen,
+  compare,
   accounts,
 }: ModelPickerProps & {
   readonly accounts: Readonly<Record<ProviderId, ReadonlyArray<PickerAccount>>> | undefined
@@ -147,14 +158,48 @@ function PickerBody({
         ? legacy
         : inSection.filter((model) => !model.legacy)
 
-  const choose = (model: PickerModel) => {
-    onChange({
-      provider: model.provider,
-      model: model.value === DEFAULT_MODEL ? null : model.value,
-      ...(accounts === undefined ? {} : { accountId: accountFor(model.provider) }),
-    })
+  const others = compare?.others ?? []
+  const isOther = (model: PickerModel) => others.some((choice) => sameModel(choice, model))
+  const additive = useRef(false)
+
+  const choiceOf = (model: PickerModel): ModelChoice => ({
+    provider: model.provider,
+    model: model.value === DEFAULT_MODEL ? null : model.value,
+    ...(accounts === undefined ? {} : { accountId: accountFor(model.provider) }),
+  })
+
+  const toggle = (compared: CompareChoices, model: PickerModel) => {
+    if (isSelected(model)) {
+      const [next, ...rest] = others
+      if (next === undefined) return
+      onChange(next)
+      compared.onOthersChange(rest)
+      return
+    }
+    if (isOther(model)) {
+      compared.onOthersChange(others.filter((choice) => !sameModel(choice, model)))
+      return
+    }
+    if (others.length + 1 >= compared.max) return
+    compared.onOthersChange([...others, choiceOf(model)])
+  }
+
+  const choose = (model: PickerModel, add = false) => {
+    if (add && compare !== undefined) {
+      toggle(compare, model)
+      return
+    }
+    onChange(choiceOf(model))
+    if (others.length > 0) compare?.onOthersChange([])
     setOpen(false)
   }
+
+  const nameOf = (choice: ModelChoice) => {
+    const found = modelsOf(choice.provider).find((model) => sameModel(choice, model))
+    return found === undefined ? (choice.model ?? DEFAULT_MODEL) : shortModelName(found)
+  }
+  const currentName = current === undefined ? selected : shortModelName(current)
+  const allNames = [currentName, ...others.map(nameOf)].join(", ")
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
@@ -168,12 +213,13 @@ function PickerBody({
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
+    additive.current = event.shiftKey
     const digit = /^Digit([1-9])$/.exec(event.code)?.[1]
     if (!event.altKey || digit === undefined || searching) return
     const model = rows[Number(digit) - 1]
     if (model === undefined) return
     event.preventDefault()
-    choose(model)
+    choose(model, event.shiftKey)
   }
 
   const showSection = (next: Section) => {
@@ -189,12 +235,18 @@ function PickerBody({
           variant="muted"
           size="sm"
           className="max-w-48"
-          aria-label={`Model: ${current === undefined ? selected : current.displayName}`}
+          aria-label={
+            others.length === 0
+              ? `Model: ${current === undefined ? selected : current.displayName}`
+              : `Models: ${allNames}`
+          }
+          title={others.length === 0 ? undefined : allNames}
         >
           <ProviderIcon provider={provider} className="size-4" />
-          <span className="truncate">
-            {current === undefined ? selected : shortModelName(current)}
-          </span>
+          <span className="truncate">{currentName}</span>
+          {others.length > 0 && (
+            <span className="shrink-0 text-muted-foreground">+{others.length}</span>
+          )}
         </InputGroupButton>
       </PopoverTrigger>
       <PopoverContent
@@ -228,10 +280,20 @@ function PickerBody({
         <Command
           shouldFilter={searching}
           onKeyDown={onKeyDown}
+          onPointerDownCapture={(event) => {
+            additive.current = event.shiftKey
+          }}
           className="min-w-0 flex-1 rounded-none! bg-transparent"
         >
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
-          <CommandList className="h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))] max-h-none">
+          <CommandList
+            className={cn(
+              "max-h-none",
+              compare === undefined
+                ? "h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))]"
+                : "h-[min(20rem,calc(var(--radix-popover-content-available-height)-6rem))]",
+            )}
+          >
             <CommandEmpty>No model matches.</CommandEmpty>
             {section !== "favorites" &&
               !searching &&
@@ -268,10 +330,10 @@ function PickerBody({
               <ModelRow
                 key={modelKey(model)}
                 model={model}
-                selected={isSelected(model)}
+                selected={isSelected(model) || isOther(model)}
                 favorite={favorites.includes(modelKey(model))}
                 shortcut={searching || index >= 9 ? undefined : `${SHORTCUT_PREFIX}${index + 1}`}
-                onSelect={() => choose(model)}
+                onSelect={() => choose(model, additive.current)}
                 onToggleFavorite={() => toggleFavorite(modelKey(model))}
               />
             ))}
@@ -305,6 +367,13 @@ function PickerBody({
               </CommandItem>
             )}
           </CommandList>
+          {compare !== undefined && (
+            <p className="border-t px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+              {others.length === 0
+                ? "Shift+click to run this prompt on several models and compare them."
+                : `${others.length + 1} models, each in a worktree of its own. Shift+click adds or removes one, up to ${compare.max}.`}
+            </p>
+          )}
         </Command>
       </PopoverContent>
     </Popover>
@@ -406,7 +475,7 @@ function ModelRow({
       keywords={[model.displayName, model.description, provider.vendor]}
       onSelect={onSelect}
       title={model.description}
-      className="gap-3 py-2 [&>svg:last-child]:hidden"
+      className="gap-3 py-2 select-none [&>svg:last-child]:hidden"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate font-medium">{model.displayName}</span>

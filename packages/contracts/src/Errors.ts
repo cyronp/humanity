@@ -452,3 +452,29 @@ export class FileAccessFailed extends Schema.TaggedError<FileAccessFailed>()("Fi
     return `Could not access ${this.path}: ${this.detail}`
   }
 }
+
+export class RewindUnavailable extends Schema.TaggedError<RewindUnavailable>()(
+  "RewindUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class ForkUnavailable extends Schema.TaggedError<ForkUnavailable>()("ForkUnavailable", {
+  reason: Schema.String,
+}) {
+  override get message() {
+    return this.reason
+  }
+}
+
+export class CompareUnavailable extends Schema.TaggedError<CompareUnavailable>()(
+  "CompareUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}

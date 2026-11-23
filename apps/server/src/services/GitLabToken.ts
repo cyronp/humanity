@@ -102,10 +102,7 @@ export class GitLabToken extends Context.Service<
         Effect.all([
           fs.writeFileString(config.gitlabTokenPath, Redacted.value(token), { mode: 0o600 }),
           fs.writeFileString(config.gitlabHostPath, host),
-        ]).pipe(
-          Effect.orDie,
-          Effect.andThen(invalidate),
-        )
+        ]).pipe(Effect.orDie, Effect.andThen(invalidate))
 
       const clear = Effect.all([
         fs.remove(config.gitlabTokenPath, { force: true }),

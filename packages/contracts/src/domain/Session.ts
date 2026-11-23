@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Attachment } from "./Attachment.ts"
+import { RewindUndo } from "./Checkpoint.ts"
 import { FileMentions } from "./Mention.ts"
 import { Autonomy } from "./Policy.ts"
 import { ProjectId } from "./Project.ts"
@@ -21,6 +22,9 @@ export type SessionStatus = typeof SessionStatus.Type
 export const SessionOrigin = Schema.Literals(["humanity", "claude-code"])
 export type SessionOrigin = typeof SessionOrigin.Type
 
+export const SessionRelation = Schema.Literals(["opened", "forked"])
+export type SessionRelation = typeof SessionRelation.Type
+
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
 export type ReasoningEffort = typeof ReasoningEffort.Type
 
@@ -39,6 +43,10 @@ export const Session = Schema.Struct({
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
+  parentId: Schema.optional(Schema.NullOr(SessionId)),
+  relation: Schema.optional(Schema.NullOr(SessionRelation)),
+  forkedAtMessageId: Schema.optional(Schema.NullOr(Schema.String)),
+  groupId: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: Schema.String,
   updatedAt: Schema.String,
 })
@@ -158,6 +166,12 @@ export const MessageContent = Schema.Union([
     included: Schema.Number,
     omitted: Schema.Number,
     tokens: Schema.optional(Schema.Number),
+  }),
+  Schema.TaggedStruct("rewind", {
+    conversation: Schema.Boolean,
+    restored: Schema.Number,
+    undo: RewindUndo,
+    message: Schema.String,
   }),
   Schema.TaggedStruct("other", { type: Schema.String, subtype: Schema.NullOr(Schema.String) }),
 ])

@@ -13,6 +13,11 @@ import {
   type FileEntry,
   BranchNotCheckedOut,
   ChangeId,
+  COMPARE_RUNS,
+  type CompareRunRequest,
+  CompareUnavailable,
+  type GroupComparison,
+  ForkUnavailable,
   DEFAULT_AUTONOMY,
   mentionedPaths,
   DEFAULT_ACCOUNT,
@@ -27,6 +32,8 @@ import {
   HUMANITY_MCP_SERVER,
   SKILL_TOOL,
   type MessageContent,
+  type MessageHit,
+  type UsageReport,
   type OpenedThread,
   type PendingConfirmation,
   type PlanUsage,
@@ -38,11 +45,15 @@ import {
   PROVIDER_NAMES,
   ProviderSwitchUnavailable,
   QUESTION_TOOL,
+  REWIND_PREVIEW_LIMIT,
+  type RewindPreview,
+  RewindUnavailable,
   type ReasoningEffort,
   type Session,
   SessionBusy,
   SessionEnded,
   type SessionEvent,
+  type SessionRelation,
   type TranscriptPage,
   SessionId,
   SessionNotFound,
@@ -82,6 +93,10 @@ import {
 } from "../agent/AgentRunner.ts"
 import { makeSkillTool } from "../extensions/skillTool.ts"
 import { buildHandoff, historyEntries, latestPlan, readThreadHistory } from "../agent/handoff.ts"
+import { FORK_SEARCH_LIMIT, forkPoint } from "../agent/forkPoint.ts"
+import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts"
+import { CheckpointRepo } from "../db/CheckpointRepo.ts"
+import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
@@ -104,7 +119,7 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { AntigravityAccountService } from "./AntigravityAccountService.ts"
-import { humanEditsNote } from "../files/humanEdits.ts"
+import { type HumanFileChange, humanChangesNote, humanEditsNote } from "../files/humanEdits.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
@@ -121,6 +136,7 @@ interface ActiveRun {
   extensionsVersion: number
   readonly humanity: AgentMcpServer | undefined
   handoffSent: boolean
+  forking: boolean
 }
 
 export const loadedSkill = (toolName: string, input: unknown): string | undefined => {
@@ -217,6 +233,12 @@ export interface LoggedBranchCommits {
   readonly more: boolean
 }
 
+export interface SessionLineage {
+  readonly parentId: SessionId
+  readonly relation: SessionRelation
+  readonly forkedAtMessageId?: string | undefined
+}
+
 export const threadBranch = (session: Session): string | null =>
   session.branch === "HEAD" ? null : session.branch
 
@@ -236,6 +258,10 @@ export class SessionService extends Context.Service<
       readonly model?: string | undefined
       readonly effort?: ReasoningEffort | undefined
       readonly autonomy?: Autonomy | undefined
+      readonly lineage?: SessionLineage | undefined
+      readonly worktreeBase?: string | undefined
+      readonly groupId?: string | undefined
+      readonly accountId?: string | undefined
     }) => Effect.Effect<
       Session,
       | ProjectNotFound
@@ -324,6 +350,64 @@ export class SessionService extends Context.Service<
       message: { readonly notice: string; readonly agent?: string | undefined },
     ) => Effect.Effect<void, SessionNotFound>
     readonly noteHumanEdit: (sessionId: string, path: string) => Effect.Effect<void>
+    readonly noteHumanChange: (sessionId: string, change: HumanFileChange) => Effect.Effect<void>
+    readonly rewindPreview: (
+      sessionId: string,
+      messageId: string,
+    ) => Effect.Effect<RewindPreview, SessionNotFound | RewindUnavailable>
+    readonly rewind: (
+      sessionId: string,
+      messageId: string,
+      options: { readonly files: boolean; readonly conversation: boolean },
+    ) => Effect.Effect<Session, SessionNotFound | SessionEnded | RewindUnavailable>
+    readonly undoRewind: (
+      sessionId: string,
+      messageId: string,
+    ) => Effect.Effect<void, SessionNotFound | SessionEnded | RewindUnavailable>
+    readonly createGroup: (options: {
+      readonly projectId: string
+      readonly prompt: string
+      readonly title?: string | undefined
+      readonly baseBranch?: string | undefined
+      readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+      readonly mentions?: ReadonlyArray<string> | undefined
+      readonly autonomy?: Autonomy | undefined
+      readonly runs: ReadonlyArray<CompareRunRequest>
+    }) => Effect.Effect<
+      ReadonlyArray<Session>,
+      | CompareUnavailable
+      | ProjectNotFound
+      | GitError
+      | GitBranchExists
+      | GitInvalidBranchName
+      | GitRefNotFound
+      | AttachmentRejected
+    >
+    readonly compareGroup: (groupId: string) => Effect.Effect<GroupComparison, CompareUnavailable>
+    readonly fork: (
+      sessionId: string,
+      messageId: string | undefined,
+    ) => Effect.Effect<
+      Session,
+      | SessionNotFound
+      | ForkUnavailable
+      | ProjectNotFound
+      | GitError
+      | GitBranchExists
+      | GitInvalidBranchName
+      | GitRefNotFound
+    >
+    readonly usageReport: (options: {
+      readonly from: string
+      readonly to: string
+      readonly utcOffsetMinutes: number
+      readonly hourly?: boolean | undefined
+    }) => Effect.Effect<UsageReport>
+    readonly search: (options: {
+      readonly query: string
+      readonly projectIds?: ReadonlyArray<string> | undefined
+      readonly limit?: number | undefined
+    }) => Effect.Effect<ReadonlyArray<MessageHit>>
     readonly subscribe: (sessionId: string) => Stream.Stream<SessionEvent, SessionNotFound>
     readonly earlierMessages: (
       sessionId: string,
@@ -354,6 +438,9 @@ export class SessionService extends Context.Service<
       const claude = yield* ClaudeCode
       const codex = yield* Codex
       const approvals = yield* ApprovalService
+      const checkpoints = yield* CheckpointStore
+      const checkpointRepo = yield* CheckpointRepo
+      const usageRepo = yield* UsageRepo
       const serviceScope = yield* Effect.scope
 
       const active = new Map<string, ActiveRun>()
@@ -378,6 +465,7 @@ export class SessionService extends Context.Service<
       const resumeFallback = new Map<string, string>()
       const agentNotes = new Map<string, Array<string>>()
       const humanEdits = new Map<string, Set<string>>()
+      const humanChanges = new Map<string, Array<HumanFileChange>>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -642,6 +730,17 @@ export class SessionService extends Context.Service<
             plan: plan ?? known.plan,
           }
           yield* repo.setUsage(sessionId, usage)
+          if (plan !== undefined) {
+            const session = yield* repo.get(sessionId)
+            if (Option.isSome(session)) {
+              yield* usageRepo.recordPlan(
+                session.value.provider,
+                yield* repo.getAccountId(sessionId),
+                plan,
+                yield* now,
+              )
+            }
+          }
           yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
           return usage
         })
@@ -728,6 +827,10 @@ export class SessionService extends Context.Service<
           const { content } = normalized
 
           if (content._tag === "system_init") {
+            if (state.forking && normalized.sdkSessionId !== undefined) {
+              state.forking = false
+              yield* repo.setPendingFork(session.id, null)
+            }
             if (normalized.sdkSessionId !== undefined) {
               yield* repo.update(session.id, {
                 sdkSessionId: normalized.sdkSessionId,
@@ -755,7 +858,8 @@ export class SessionService extends Context.Service<
             yield* repo.setPendingHandoff(session.id, null)
           }
 
-          yield* addMessage(session.id, content, raw)
+          const added = yield* addMessage(session.id, content, raw)
+          if (content._tag === "result") yield* recordTurn(session.id, added.id, content)
           yield* startToolCalls(session, content)
           yield* finishToolCalls(session, state, content, normalized.structuredResult)
 
@@ -779,6 +883,29 @@ export class SessionService extends Context.Service<
             }
             state.interrupted = false
           }
+        })
+
+      const recordTurn = (
+        sessionId: string,
+        messageId: string,
+        content: Extract<MessageContent, { _tag: "result" }>,
+      ) =>
+        Effect.gen(function* () {
+          const found = yield* repo.get(sessionId)
+          if (Option.isNone(found)) return
+          const current = found.value
+          yield* usageRepo.recordTurn({
+            id: messageId,
+            sessionId,
+            projectId: current.projectId,
+            provider: current.provider,
+            accountId: yield* repo.getAccountId(sessionId),
+            model: current.model,
+            usage: content.usage,
+            costUsd: current.provider === "claude-code" ? content.costUsd : null,
+            durationMs: content.durationMs,
+            endedAt: yield* now,
+          })
         })
 
       const stopRun = (sessionId: string) =>
@@ -808,7 +935,13 @@ export class SessionService extends Context.Service<
                   cwd: session.worktreePath,
                 })
               : []
-            const history = (yield* repo.hasProviderSwitch(session.id))
+            const pendingFork =
+              session.sdkSessionId === null ? null : yield* repo.getPendingFork(session.id)
+            const offersHistory =
+              (yield* repo.hasProviderSwitch(session.id)) ||
+              (yield* repo.getPendingHandoff(session.id)) !== null ||
+              session.relation === "forked"
+            const history = offersHistory
               ? (args: unknown) =>
                   Effect.map(threadEntries(session.id, session.provider), ({ entries }) =>
                     readThreadHistory(entries, args),
@@ -853,6 +986,7 @@ export class SessionService extends Context.Service<
               extensionsVersion: added.version,
               humanity,
               handoffSent: false,
+              forking: pendingFork !== null,
             }
             const run = yield* runner
               .start({
@@ -860,6 +994,7 @@ export class SessionService extends Context.Service<
                 cwd: session.worktreePath,
                 configDir,
                 resume: session.sdkSessionId ?? undefined,
+                ...(pendingFork === null ? {} : { forkAt: pendingFork }),
                 model: session.model ?? undefined,
                 effort: session.effort ?? undefined,
                 extensions: withHumanity(added, humanity),
@@ -886,6 +1021,7 @@ export class SessionService extends Context.Service<
                     const fallback = resumeFallback.get(session.id)
                     if (fallback !== undefined && !state.initSeen) {
                       resumeFallback.delete(session.id)
+                      yield* repo.setPendingFork(session.id, null)
                       yield* repo.update(session.id, { sdkSessionId: null, updatedAt: yield* now })
                       yield* repo.setPendingHandoff(session.id, fallback)
                       yield* addMessage(session.id, {
@@ -965,6 +1101,39 @@ export class SessionService extends Context.Service<
           }
         })
 
+      const headOf = (folder: string) =>
+        git.revParse(folder, "HEAD").pipe(
+          Effect.map((head) => head ?? null),
+          Effect.orElseSucceed(() => null),
+        )
+
+      const takeCheckpoint = (session: Session, messageId: string) =>
+        Effect.gen(function* () {
+          const latest = yield* checkpointRepo.latest(session.id)
+          const commit = yield* checkpoints.snapshot(
+            session.id,
+            session.worktreePath,
+            Option.getOrUndefined(latest)?.commit,
+          )
+          yield* checkpointRepo.insert({
+            id: randomUUID(),
+            sessionId: session.id,
+            messageId,
+            kind: "turn",
+            commit,
+            folder: session.worktreePath,
+            head: yield* headOf(session.worktreePath),
+            createdAt: yield* now,
+          })
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("could not take a checkpoint", {
+              sessionId: session.id,
+              reason: error.reason,
+            }),
+          ),
+        )
+
       const deliver = (
         session: Session,
         text: string,
@@ -978,6 +1147,8 @@ export class SessionService extends Context.Service<
           agentNotes.delete(session.id)
           const edited = humanEditsNote([...(humanEdits.get(session.id) ?? [])])
           humanEdits.delete(session.id)
+          const changed = humanChangesNote(humanChanges.get(session.id) ?? [])
+          humanChanges.delete(session.id)
           const handoff = yield* repo.getPendingHandoff(session.id)
           const forAgent = [
             ...(handoff === null ? [] : [handoff]),
@@ -988,16 +1159,18 @@ export class SessionService extends Context.Service<
                 ]),
             ...notes,
             ...(edited === undefined || session.sdkSessionId === null ? [] : [edited]),
+            ...(changed === undefined || session.sdkSessionId === null ? [] : [changed]),
             text,
           ].join("\n\n")
           const stored = yield* storeAttachments(session.id, files)
           const mentioned = mentionedPaths(text, mentions)
-          yield* addMessage(session.id, {
+          const sent = yield* addMessage(session.id, {
             _tag: "user",
             text,
             ...(stored.length === 0 ? {} : { attachments: stored }),
             ...(mentioned.length === 0 ? {} : { mentions: mentioned }),
           })
+          yield* takeCheckpoint(session, sent.id)
           const state = yield* ensureRun(session)
           state.interrupted = false
           if (handoff !== null) state.handoffSent = true
@@ -1072,6 +1245,10 @@ export class SessionService extends Context.Service<
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
+        readonly lineage?: SessionLineage | undefined
+        readonly worktreeBase?: string | undefined
+        readonly groupId?: string | undefined
+        readonly accountId?: string | undefined
       }) {
         const project: Project = yield* projects.get(options.projectId)
         const files = yield* prepareAttachments(options.attachments ?? [])
@@ -1109,15 +1286,19 @@ export class SessionService extends Context.Service<
             options.autonomy ?? newThreadAutonomy(project, yield* preferences.pinnedDefaults),
           status: "idle",
           origin: "humanity",
+          parentId: options.lineage?.parentId ?? null,
+          relation: options.lineage?.relation ?? null,
+          forkedAtMessageId: options.lineage?.forkedAtMessageId ?? null,
+          groupId: options.groupId ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         }
         yield* repo.insert(session)
-        const accountId = yield* accountsOf(provider).activeId
+        const accountId = options.accountId ?? (yield* accountsOf(provider).activeId)
         if (accountId !== DEFAULT_ACCOUNT) yield* repo.setAccountId(id, accountId)
         yield* events.publishListChanged
-        if (project.settings.worktreeForNewThreads) {
-          yield* setupWorktree(id).pipe(
+        if (options.worktreeBase !== undefined || project.settings.worktreeForNewThreads) {
+          yield* setupWorktreeFrom(id, options.worktreeBase).pipe(
             Effect.catchTags({
               SessionNotFound: Effect.die,
               SessionEnded: Effect.die,
@@ -1125,8 +1306,9 @@ export class SessionService extends Context.Service<
             }),
           )
         }
-        if (prompt) yield* deliver(session, prompt, files, options.mentions ?? [])
-        return (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
+        const current = (yield* repo.get(id)).pipe(Option.getOrElse(() => session))
+        if (prompt) yield* deliver(current, prompt, files, options.mentions ?? [])
+        return (yield* repo.get(id)).pipe(Option.getOrElse(() => current))
       })
 
       const threadModel = (provider: AgentProvider, requested: string | undefined | null) =>
@@ -1169,6 +1351,7 @@ export class SessionService extends Context.Service<
               prompt,
               model,
               effort: request.effort ?? undefined,
+              lineage: { parentId: parent.id, relation: "opened" },
             }).pipe(
               Effect.mapError(
                 (error) =>
@@ -1187,8 +1370,11 @@ export class SessionService extends Context.Service<
             }
           })
 
-      const setupWorktree = Effect.fn("SessionService.setupWorktree")(function* (
+      const setupWorktree = (sessionId: string) => setupWorktreeFrom(sessionId, undefined)
+
+      const setupWorktreeFrom = Effect.fn("SessionService.setupWorktree")(function* (
         sessionId: string,
+        from: string | undefined,
       ) {
         const session = yield* get(sessionId)
         if (session.status === "ended") return yield* new SessionEnded({ sessionId })
@@ -1201,7 +1387,7 @@ export class SessionService extends Context.Service<
         const path = join(config.worktreesDir, project.id, session.id)
         const checkout = yield* git.status(project.localPath)
         const own = threadBranch(session)
-        const base = own === null || own === checkout.branch ? "HEAD" : own
+        const base = from ?? (own === null || own === checkout.branch ? "HEAD" : own)
         yield* git.worktreeAdd(project.localPath, { path, branch, base })
 
         yield* stopRun(sessionId)
@@ -1214,11 +1400,13 @@ export class SessionService extends Context.Service<
           checkout.entries.length === 0
             ? ""
             : ` Uncommitted changes in ${project.localPath} stayed there.`
-        yield* addMessage(sessionId, {
-          _tag: "notice",
-          level: "info",
-          text: `Set up a worktree: the agent now works on ${branch}, started from ${base === "HEAD" ? (checkout.branch ?? "HEAD") : base}.${left}`,
-        })
+        if (from === undefined) {
+          yield* addMessage(sessionId, {
+            _tag: "notice",
+            level: "info",
+            text: `Set up a worktree: the agent now works on ${branch}, started from ${base === "HEAD" ? (checkout.branch ?? "HEAD") : base}.${left}`,
+          })
+        }
         const updated = yield* get(sessionId)
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
         yield* events.publishListChanged
@@ -1543,6 +1731,7 @@ export class SessionService extends Context.Service<
             yield* git.worktreeRemove(project.value.localPath, session.worktreePath)
           }
         }
+        yield* checkpoints.remove(sessionId)
         yield* setStatus(sessionId, "ended")
         return yield* get(sessionId)
       })
@@ -1623,6 +1812,13 @@ export class SessionService extends Context.Service<
           humanEdits.set(sessionId, paths)
         })
 
+      const noteHumanChange = (sessionId: string, change: HumanFileChange) =>
+        Effect.sync(() => {
+          const changes = humanChanges.get(sessionId) ?? []
+          changes.push(change)
+          humanChanges.set(sessionId, changes)
+        })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
@@ -1631,26 +1827,575 @@ export class SessionService extends Context.Service<
             (session) =>
               Effect.andThen(
                 stopRun(session.id),
-                terminals.closeOwner({ _tag: "Session", sessionId: session.id }),
+                Effect.andThen(
+                  terminals.closeOwner({ _tag: "Session", sessionId: session.id }),
+                  checkpoints.remove(session.id),
+                ),
               ),
             { discard: true },
           )
           yield* terminals.closeOwner({ _tag: "Project", projectId: ProjectId.make(projectId) })
         })
 
+      const noteForAgent = (sessionId: string, text: string) =>
+        Effect.sync(() => {
+          const notes = agentNotes.get(sessionId) ?? []
+          notes.push(text)
+          agentNotes.set(sessionId, notes)
+        })
+
+      const snapshotOf = (sessionId: string) =>
+        Effect.gen(function* () {
+          const session = yield* get(sessionId)
+          const page = yield* repo.transcriptPage(sessionId)
+          return {
+            _tag: "Snapshot",
+            session,
+            ...page,
+            approvals: yield* approvals.listForSession(sessionId),
+            usage: yield* repo.getUsage(sessionId),
+          } satisfies SessionEvent
+        })
+
+      const rewindRefused = (reason: string) => new RewindUnavailable({ reason })
+
+      const notWhileWorking = (session: Session) =>
+        session.status === "running" || session.status === "waiting_for_human"
+          ? Effect.fail(
+              rewindRefused(
+                "The agent is still working. Wait until it is idle, or stop it, before rewinding.",
+              ),
+            )
+          : Effect.void
+
+      const rewindTarget = (sessionId: string, messageId: string) =>
+        Effect.gen(function* () {
+          const messages = yield* repo.listMessages(sessionId)
+          const at = messages.findIndex((message) => message.id === messageId)
+          const target = messages[at]
+          if (target?.content._tag !== "user") {
+            return yield* rewindRefused("That message is not in this thread any more.")
+          }
+          return { messages, at, text: target.content.text }
+        })
+
+      const firstLine = (text: string) => {
+        const line = text.trim().split("\n")[0] ?? ""
+        return line.length > 80 ? `${line.slice(0, 79)}…` : line
+      }
+
+      const unreadable = (error: { readonly reason: string }) =>
+        rewindRefused(`Humanity could not read the checkpoint: ${error.reason}`)
+
+      const rewindPreview = Effect.fn("SessionService.rewindPreview")(function* (
+        sessionId: string,
+        messageId: string,
+      ) {
+        const session = yield* get(sessionId)
+        const { messages, at } = yield* rewindTarget(sessionId, messageId)
+        const checkpoint = yield* checkpointRepo.find(sessionId, messageId, "turn")
+        const busyTerminals = yield* terminals
+          .list({ _tag: "Session", sessionId: session.id })
+          .pipe(
+            Effect.map((listed) => listed.filter((terminal) => terminal.busy === true).length),
+            Effect.orElseSucceed(() => 0),
+          )
+        const base = {
+          messageId,
+          removedMessages: messages.length - at,
+          sharedCheckout: !session.inWorktree,
+          busyTerminals,
+        }
+        if (Option.isNone(checkpoint) || session.status === "ended") {
+          return { ...base, checkpoint: false, changes: [], changed: 0 } satisfies RewindPreview
+        }
+        const { changes } = yield* checkpoints
+          .changesSince(sessionId, session.worktreePath, checkpoint.value.commit)
+          .pipe(Effect.mapError(unreadable))
+        return {
+          ...base,
+          checkpoint: true,
+          changes: changes.slice(0, REWIND_PREVIEW_LIMIT),
+          changed: changes.length,
+        } satisfies RewindPreview
+      })
+
+      const rewind = Effect.fn("SessionService.rewind")(function* (
+        sessionId: string,
+        messageId: string,
+        options: { readonly files: boolean; readonly conversation: boolean },
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        yield* notWhileWorking(session)
+        if (!options.files && !options.conversation) {
+          return yield* rewindRefused("Pick what to rewind: the files, the conversation or both.")
+        }
+        const { messages, at, text } = yield* rewindTarget(sessionId, messageId)
+        const checkpoint = options.files
+          ? yield* checkpointRepo.find(sessionId, messageId, "turn")
+          : Option.none()
+        if (options.files && Option.isNone(checkpoint)) {
+          return yield* rewindRefused(
+            "Humanity has no checkpoint of the files from before this message: it was sent before Humanity kept checkpoints, or taking it failed.",
+          )
+        }
+
+        let restored = 0
+        let before: string | undefined
+        if (Option.isSome(checkpoint)) {
+          const notRestored = (error: { readonly reason: string }) =>
+            rewindRefused(`The files were not restored: ${error.reason}`)
+          const { current } = yield* checkpoints
+            .changesSince(sessionId, session.worktreePath, checkpoint.value.commit)
+            .pipe(Effect.mapError(notRestored))
+          const changes = yield* checkpoints
+            .restore(sessionId, session.worktreePath, checkpoint.value.commit, current)
+            .pipe(Effect.mapError(notRestored))
+          restored = changes.length
+          before = current
+        }
+
+        if (options.conversation) {
+          yield* stopRun(sessionId)
+          const switchedSince = messages
+            .slice(at)
+            .some((message) => message.content._tag === "provider_switch")
+          const point = forkPoint({
+            provider: session.provider,
+            sdkSessionId: session.sdkSessionId,
+            newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
+            switchedSince,
+          })
+          const removed = yield* repo.truncateFrom(sessionId, messageId)
+          yield* checkpointRepo.removeForMessages(
+            sessionId,
+            removed.map((message) => message.id),
+          )
+          yield* repo.forgetParked(sessionId)
+          const toolCalls = yield* repo.listToolCalls(sessionId)
+          const whole = buildHandoff({
+            entries: historyEntries(messages.slice(0, at), toolCalls, session.provider),
+            since: 1,
+            from: session.provider,
+            to: session.provider,
+            resumed: false,
+            plan: latestPlan(toolCalls),
+            reason: "rewind",
+          })
+          if (point._tag === "Native") {
+            yield* repo.setPendingFork(sessionId, point.at)
+            yield* repo.setPendingHandoff(sessionId, null)
+            if (whole === undefined) resumeFallback.delete(sessionId)
+            else resumeFallback.set(sessionId, whole.text)
+          } else {
+            yield* repo.setPendingFork(sessionId, null)
+            yield* repo.setPendingHandoff(sessionId, whole?.text ?? null)
+            yield* repo.update(sessionId, { sdkSessionId: null, updatedAt: yield* now })
+            resumeFallback.delete(sessionId)
+          }
+          if (!options.files) {
+            yield* noteForAgent(
+              sessionId,
+              "[Humanity] The human rewound this conversation to an earlier point but kept the files as they are now, so they may differ from what you remember. Read a file again before you rely on it or change it.",
+            )
+          }
+        } else if (restored > 0 && session.sdkSessionId !== null) {
+          yield* noteForAgent(
+            sessionId,
+            `[Humanity] The human restored the files in ${session.worktreePath} to how they were before their message "${firstLine(text)}". Changes made since then may be gone; read a file again before you rely on it or change it.`,
+          )
+        }
+
+        const notice: ChatMessage = {
+          id: randomUUID(),
+          sessionId: session.id,
+          content: {
+            _tag: "rewind",
+            conversation: options.conversation,
+            restored,
+            undo: before !== undefined && restored > 0 ? "available" : "none",
+            message: firstLine(text),
+          },
+          createdAt: yield* now,
+        }
+        yield* repo.insertMessage(notice, undefined)
+        if (before !== undefined && restored > 0) {
+          yield* checkpointRepo.insert({
+            id: randomUUID(),
+            sessionId,
+            messageId: notice.id,
+            kind: "before_rewind",
+            commit: before,
+            folder: session.worktreePath,
+            head: yield* headOf(session.worktreePath),
+            createdAt: notice.createdAt,
+          })
+        }
+        if (options.conversation) {
+          yield* events.publish(sessionId, yield* snapshotOf(sessionId))
+        } else {
+          yield* events.publish(sessionId, { _tag: "AgentMessage", message: notice })
+        }
+        const updated = yield* get(sessionId)
+        yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
+      })
+
+      const undoRewind = Effect.fn("SessionService.undoRewind")(function* (
+        sessionId: string,
+        messageId: string,
+      ) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        yield* notWhileWorking(session)
+        const messages = yield* repo.listMessages(sessionId)
+        const at = messages.findIndex((message) => message.id === messageId)
+        const notice = messages[at]
+        const later = messages.slice(at + 1).some((message) => message.content._tag === "user")
+        const checkpoint = yield* checkpointRepo.find(sessionId, messageId, "before_rewind")
+        if (
+          notice?.content._tag !== "rewind" ||
+          notice.content.undo !== "available" ||
+          later ||
+          Option.isNone(checkpoint)
+        ) {
+          return yield* rewindRefused(
+            "This restore can't be undone any more: the conversation went on since.",
+          )
+        }
+        const { current } = yield* checkpoints
+          .changesSince(sessionId, session.worktreePath, checkpoint.value.commit)
+          .pipe(Effect.mapError(unreadable))
+        yield* checkpoints
+          .restore(sessionId, session.worktreePath, checkpoint.value.commit, current)
+          .pipe(
+            Effect.mapError((error) =>
+              rewindRefused(`The files were not put back: ${error.reason}`),
+            ),
+          )
+        const message: ChatMessage = { ...notice, content: { ...notice.content, undo: "done" } }
+        yield* repo.updateMessage(message)
+        yield* events.publish(sessionId, { _tag: "MessageUpdated", message })
+        if (session.sdkSessionId !== null || (yield* repo.getPendingFork(sessionId)) !== null) {
+          yield* noteForAgent(
+            sessionId,
+            "[Humanity] The human undid a restore of the files: they are back to how they were just before it. Read a file again before you rely on it or change it.",
+          )
+        }
+      })
+
+      const forkRefused = (reason: string) => new ForkUnavailable({ reason })
+
+      const copyAttachments = (from: string, to: string, attachments: ReadonlyArray<Attachment>) =>
+        Effect.gen(function* () {
+          if (attachments.length === 0) return attachments
+          const dir = join(config.attachmentsDir, to)
+          yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.orDie)
+          const createdAt = yield* now
+          return yield* Effect.forEach(attachments, (attachment) =>
+            Effect.gen(function* () {
+              const copy: Attachment = { ...attachment, id: randomUUID() }
+              yield* fs
+                .copyFile(join(config.attachmentsDir, from, attachment.id), join(dir, copy.id))
+                .pipe(Effect.ignore)
+              yield* repo.insertAttachment(to, copy, createdAt)
+              return copy
+            }),
+          )
+        })
+
+      const copyConversation = (
+        source: Session,
+        target: SessionId,
+        messages: ReadonlyArray<ChatMessage>,
+        toolCalls: ReadonlyArray<ToolCall>,
+      ) =>
+        Effect.gen(function* () {
+          const copies: Array<ChatMessage> = []
+          for (const message of messages) {
+            const content =
+              message.content._tag === "user" && (message.content.attachments ?? []).length > 0
+                ? {
+                    ...message.content,
+                    attachments: yield* copyAttachments(
+                      source.id,
+                      target,
+                      message.content.attachments ?? [],
+                    ),
+                  }
+                : message.content
+            copies.push({ ...message, id: randomUUID(), sessionId: target, content })
+          }
+          yield* repo.insertCopies(
+            copies,
+            toolCalls.map((call) => ({ ...call, id: randomUUID(), sessionId: target })),
+          )
+        })
+
+      const matchFiles = (target: string, listed: ReadonlyArray<string>) =>
+        Effect.gen(function* () {
+          const tracked = parseNulList(yield* git.exec(target, ["ls-files", "-z"]))
+          const ignored = new Set(
+            parseNulList(
+              yield* git.exec(target, [
+                "ls-files",
+                "-z",
+                "--cached",
+                "--ignored",
+                "--exclude-standard",
+              ]),
+            ),
+          )
+          const kept = new Set(listed)
+          for (const path of tracked) {
+            if (kept.has(path) || ignored.has(path)) continue
+            const absolute = join(target, path)
+            if (!isInsideDir(target, absolute)) continue
+            yield* fs.remove(absolute, { force: true }).pipe(Effect.ignore)
+          }
+        })
+
+      const fork = Effect.fn("SessionService.fork")(function* (
+        sessionId: string,
+        messageId: string | undefined,
+      ) {
+        const source = yield* get(sessionId)
+        if (source.status === "ended") {
+          return yield* forkRefused("An ended thread can't be forked.")
+        }
+        if (source.status === "running" || source.status === "waiting_for_human") {
+          return yield* forkRefused(
+            "The agent is still working. Wait until it is idle, or stop it, before forking.",
+          )
+        }
+        const messages = yield* repo.listMessages(sessionId)
+        const at =
+          messageId === undefined
+            ? messages.length
+            : messages.findIndex((message) => message.id === messageId)
+        const forkedAt = messages[at]
+        if (messageId !== undefined && forkedAt?.content._tag !== "user") {
+          return yield* forkRefused("That message is not in this thread any more.")
+        }
+        const unreadable = (error: { readonly reason: string }) =>
+          forkRefused(`Humanity could not copy the thread's files: ${error.reason}`)
+
+        let commit: string
+        let head: string | null
+        if (messageId === undefined) {
+          const latest = yield* checkpointRepo.latest(sessionId)
+          commit = yield* checkpoints
+            .snapshot(sessionId, source.worktreePath, Option.getOrUndefined(latest)?.commit)
+            .pipe(Effect.mapError(unreadable))
+          head = yield* headOf(source.worktreePath)
+        } else {
+          const checkpoint = yield* checkpointRepo.find(sessionId, messageId, "turn")
+          if (Option.isNone(checkpoint)) {
+            return yield* forkRefused(
+              "Humanity has no checkpoint of the files from before this message, so it can't fork from there. Fork the whole thread instead.",
+            )
+          }
+          commit = checkpoint.value.commit
+          head = checkpoint.value.head ?? (yield* headOf(source.worktreePath))
+        }
+
+        const created = yield* create({
+          projectId: source.projectId,
+          title: `${source.title} (fork)`,
+          provider: source.provider,
+          model: source.model ?? undefined,
+          effort: source.effort ?? undefined,
+          lineage: {
+            parentId: source.id,
+            relation: "forked",
+            forkedAtMessageId: messageId,
+          },
+          worktreeBase: head ?? "HEAD",
+        }).pipe(Effect.catchTag("AttachmentRejected", Effect.die))
+        const accountId = yield* repo.getAccountId(sessionId)
+        yield* repo.setAccountId(created.id, accountId)
+
+        const filesCopied = yield* checkpoints
+          .materialize(sessionId, commit, created.worktreePath)
+          .pipe(
+            Effect.flatMap((listed) => matchFiles(created.worktreePath, listed)),
+            Effect.as(undefined),
+            Effect.catch((error) =>
+              Effect.succeed("reason" in error ? error.reason : error.message),
+            ),
+          )
+
+        const kept = messages.slice(0, at)
+        const used = new Set(
+          kept.flatMap((message) =>
+            message.content._tag === "assistant"
+              ? message.content.blocks.flatMap((block) =>
+                  block._tag === "tool_use" ? [block.toolUseId] : [],
+                )
+              : [],
+          ),
+        )
+        const toolCalls = (yield* repo.listToolCalls(sessionId)).filter((call) =>
+          used.has(call.toolUseId),
+        )
+        yield* copyConversation(source, created.id, kept, toolCalls)
+
+        const whole = buildHandoff({
+          entries: historyEntries(kept, toolCalls, source.provider),
+          since: 1,
+          from: source.provider,
+          to: source.provider,
+          resumed: false,
+          plan: latestPlan(toolCalls),
+          reason: "fork",
+        })
+        const point =
+          source.provider === "codex"
+            ? forkPoint({
+                provider: source.provider,
+                sdkSessionId: source.sdkSessionId,
+                newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
+                switchedSince: messages
+                  .slice(at)
+                  .some((message) => message.content._tag === "provider_switch"),
+              })
+            : ({ _tag: "Handoff" } as const)
+        if (point._tag === "Native" && source.sdkSessionId !== null) {
+          yield* repo.update(created.id, {
+            sdkSessionId: source.sdkSessionId,
+            updatedAt: created.updatedAt,
+          })
+          yield* repo.setPendingFork(created.id, point.at)
+          if (whole !== undefined) resumeFallback.set(created.id, whole.text)
+        } else {
+          yield* repo.setPendingHandoff(created.id, whole?.text ?? null)
+        }
+
+        const where =
+          forkedAt?.content._tag === "user" ? ` before “${firstLine(forkedAt.content.text)}”` : ""
+        yield* addMessage(created.id, {
+          _tag: "notice",
+          level: filesCopied === undefined ? "info" : "warning",
+          text:
+            filesCopied === undefined
+              ? `Forked from “${source.title}”${where}, in a worktree of its own with the files as they were then. The agent gets the conversation above with your first message.`
+              : `Forked from “${source.title}”${where}, but its files were not copied (${filesCopied}): the worktree has the files of the branch. The agent gets the conversation above with your first message.`,
+        })
+        const updated = yield* get(created.id)
+        yield* events.publish(created.id, { _tag: "SessionUpdated", session: updated })
+        yield* events.publishListChanged
+        return updated
+      })
+
+      const runLabel = (run: CompareRunRequest) =>
+        [run.model ?? PROVIDER_NAMES[run.provider], run.effort].filter(Boolean).join(" ")
+
+      const createGroup = Effect.fn("SessionService.createGroup")(function* (options: {
+        readonly projectId: string
+        readonly prompt: string
+        readonly title?: string | undefined
+        readonly baseBranch?: string | undefined
+        readonly attachments?: ReadonlyArray<AttachmentUpload> | undefined
+        readonly mentions?: ReadonlyArray<string> | undefined
+        readonly autonomy?: Autonomy | undefined
+        readonly runs: ReadonlyArray<CompareRunRequest>
+      }) {
+        const refuse = (reason: string) => new CompareUnavailable({ reason })
+        if (options.runs.length < COMPARE_RUNS.min || options.runs.length > COMPARE_RUNS.max) {
+          return yield* refuse(
+            `Pick from ${COMPARE_RUNS.min} to ${COMPARE_RUNS.max} models to compare.`,
+          )
+        }
+        const prompt = options.prompt.trim()
+        if (prompt === "") return yield* refuse("Write the prompt the models will work on.")
+        const project = yield* projects.get(options.projectId)
+        const requested = options.baseBranch?.trim()
+        if (requested) yield* switchCheckout(project.localPath, requested)
+        const base = yield* git.revParse(project.localPath, "HEAD")
+        if (base === undefined) {
+          return yield* refuse(
+            "The repository has no commit yet, so there is nothing to start from.",
+          )
+        }
+        const title = options.title?.trim() || prompt.split("\n")[0]?.slice(0, 60) || "Compare"
+        const groupId = randomUUID()
+        const created: Array<Session> = []
+        const undo = Effect.forEach(
+          created,
+          (session) => end(session.id, { removeWorktree: true }).pipe(Effect.ignore),
+          { discard: true },
+        )
+        for (const run of options.runs) {
+          const session = yield* create({
+            projectId: project.id,
+            title: `${title} · ${runLabel(run)}`,
+            prompt,
+            attachments: options.attachments,
+            mentions: options.mentions,
+            provider: run.provider,
+            model: run.model,
+            effort: run.effort,
+            autonomy: options.autonomy,
+            worktreeBase: base,
+            groupId,
+            accountId: run.accountId,
+          }).pipe(Effect.tapError(() => undo))
+          yield* repo.setGroupBase(session.id, base)
+          created.push(session)
+        }
+        yield* events.publishListChanged
+        return created
+      })
+
+      const lastAgentText = (messages: ReadonlyArray<ChatMessage>): string | null => {
+        for (let index = messages.length - 1; index >= 0; index--) {
+          const content = messages[index]?.content
+          if (content?._tag !== "assistant" || content.parentToolUseId !== null) continue
+          const text = content.blocks
+            .flatMap((block) => (block._tag === "text" ? [block.text] : []))
+            .join("\n")
+            .trim()
+          if (text !== "") return text.length > 2_000 ? `${text.slice(0, 2_000)}…` : text
+        }
+        return null
+      }
+
+      const compareGroup = Effect.fn("SessionService.compareGroup")(function* (groupId: string) {
+        const { sessions, base } = yield* repo.listGroup(groupId)
+        if (sessions.length === 0) {
+          return yield* new CompareUnavailable({
+            reason: "These runs are not in Humanity any more.",
+          })
+        }
+        const runs = yield* Effect.forEach(
+          sessions,
+          (session) =>
+            Effect.gen(function* () {
+              const diff =
+                base === null || session.status === "ended"
+                  ? null
+                  : yield* git
+                      .diff(session.worktreePath, base)
+                      .pipe(Effect.orElseSucceed(() => null))
+              return {
+                session,
+                diff,
+                amount: yield* usageRepo.sessionTotal(session.id),
+                lastMessage: lastAgentText(yield* repo.listMessages(session.id)),
+              }
+            }),
+          { concurrency: 4 },
+        )
+        return { groupId, base, runs } satisfies GroupComparison
+      })
+
       const subscribe = (sessionId: string) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const subscription = yield* events.subscribe(sessionId)
-            const session = yield* get(sessionId)
-            const page = yield* repo.transcriptPage(sessionId)
-            const snapshot: SessionEvent = {
-              _tag: "Snapshot",
-              session,
-              ...page,
-              approvals: yield* approvals.listForSession(sessionId),
-              usage: yield* repo.getUsage(sessionId),
-            }
+            const snapshot: SessionEvent = yield* snapshotOf(sessionId)
             return Stream.concat(Stream.make(snapshot), Stream.fromSubscription(subscription))
           }),
         )
@@ -1667,6 +2412,7 @@ export class SessionService extends Context.Service<
         }),
       )
 
+      yield* repo.pruneSearch
       const orphaned = yield* repo.listByStatus(["running", "waiting_for_human"])
       yield* Effect.forEach(
         orphaned,
@@ -1712,6 +2458,15 @@ export class SessionService extends Context.Service<
         commit,
         tell,
         noteHumanEdit,
+        noteHumanChange,
+        rewindPreview,
+        rewind,
+        undoRewind,
+        fork,
+        createGroup,
+        compareGroup,
+        search: repo.search,
+        usageReport: usageRepo.report,
         subscribe,
         earlierMessages,
         watchAll,

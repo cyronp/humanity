@@ -38,6 +38,7 @@ export interface AgentRunOptions {
   readonly cwd: string
   readonly configDir: string | undefined
   readonly resume: string | undefined
+  readonly forkAt?: string | undefined
   readonly model: string | undefined
   readonly effort: ReasoningEffort | undefined
   readonly extensions: AgentExtensions

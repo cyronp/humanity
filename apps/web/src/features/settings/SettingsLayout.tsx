@@ -150,8 +150,9 @@ export function SettingsRow({
 }) {
   return (
     <div
+      data-setting={label}
       className={cn(
-        "flex gap-3 py-4",
+        "flex scroll-my-6 gap-3 py-4 transition-colors duration-500 data-highlight:bg-muted/70",
         stacked ? "flex-col" : "flex-wrap items-center justify-between",
       )}
     >

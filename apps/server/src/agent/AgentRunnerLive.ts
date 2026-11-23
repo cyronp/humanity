@@ -186,6 +186,9 @@ export const AgentRunnerLive = Layer.effect(
             cwd: options.cwd,
             pathToClaudeCodeExecutable: claudeExecutable(launch),
             ...(options.resume === undefined ? {} : { resume: options.resume }),
+            ...(options.resume === undefined || options.forkAt === undefined
+              ? {}
+              : { forkSession: true, resumeSessionAt: options.forkAt }),
             ...(options.model === undefined ? {} : { model: options.model }),
             ...(options.effort === undefined ? {} : { effort: options.effort }),
             permissionMode: "default",

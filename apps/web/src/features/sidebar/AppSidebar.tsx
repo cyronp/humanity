@@ -1,8 +1,9 @@
 import { useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
+import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { Search, Settings, SquarePen } from "lucide-react"
+import { ChartColumn, Search, Settings, SquarePen } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
 import { Button } from "@/components/ui/button"
@@ -26,9 +27,11 @@ import { projectsAtom } from "@/features/projects/atoms"
 import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
 import { openSettings } from "@/features/settings/settings"
+import { openUsage } from "@/features/usage/usage"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
 import { ThreadLink } from "./ThreadLink.tsx"
+import { childAttention, threadTree } from "./threadTree.ts"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
@@ -108,6 +111,22 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
               variant="ghost"
               size="icon"
               className="ml-auto"
+              aria-label="Usage"
+              onClick={() => {
+                close()
+                openUsage()
+              }}
+            >
+              <ChartColumn />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Usage</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Settings"
               onClick={() => {
                 close()
@@ -214,13 +233,18 @@ function Conversations({
   }
   return (
     <SidebarMenu className="gap-0.5">
-      {shown.map(({ session, project }) => (
-        <SidebarMenuItem key={session.id}>
+      {threadTree(shown).map(({ thread: { session, project }, depth }) => (
+        <SidebarMenuItem
+          key={session.id}
+          style={depth === 0 ? undefined : { marginLeft: `${depth * 0.75}rem` }}
+          className={cn(depth > 0 && "border-l border-sidebar-border pl-1")}
+        >
           <ThreadLink
             session={session}
             project={project}
             active={session.id === activeId}
             onNavigate={onNavigate}
+            attention={childAttention(session.id, sessions.value)}
           />
           {session.status !== "ended" && (
             <EndSessionButton

@@ -5,12 +5,14 @@ import {
   Autonomy,
   type ChatMessage,
   MessageContent,
+  type MessageHit,
   NO_USAGE,
   ProjectId,
   ReasoningEffort,
   type Session,
   SessionId,
   SessionOrigin,
+  SessionRelation,
   SessionStatus,
   SessionUsage,
   type ToolCall,
@@ -21,6 +23,13 @@ import {
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+import {
+  indexMessage,
+  pruneOrphans,
+  searchMessages,
+  unindexMessages,
+  unindexSession,
+} from "./searchIndex.ts"
 
 const SessionRow = Schema.Struct({
   id: SessionId,
@@ -37,6 +46,10 @@ const SessionRow = Schema.Struct({
   autonomy: Autonomy,
   status: SessionStatus,
   origin: SessionOrigin,
+  parent_session_id: Schema.optional(Schema.NullOr(SessionId)),
+  relation: Schema.optional(Schema.NullOr(SessionRelation)),
+  forked_at_message_id: Schema.optional(Schema.NullOr(Schema.String)),
+  group_id: Schema.optional(Schema.NullOr(Schema.String)),
   created_at: Schema.String,
   updated_at: Schema.String,
 })
@@ -56,6 +69,10 @@ const toSession = (row: typeof SessionRow.Type): Session => ({
   autonomy: row.autonomy,
   status: row.status,
   origin: row.origin,
+  parentId: row.parent_session_id ?? null,
+  relation: row.relation ?? null,
+  forkedAtMessageId: row.forked_at_message_id ?? null,
+  groupId: row.group_id ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
@@ -192,6 +209,27 @@ const ParkedRow = Schema.Struct({
 
 const accountKey = (accountId: string | null) => accountId ?? ""
 
+export interface RawMessage {
+  readonly id: string
+  readonly role: string
+  readonly raw: unknown
+}
+
+const RawRow = Schema.Struct({
+  id: Schema.String,
+  role: Schema.String,
+  raw_json: Schema.NullOr(Schema.String),
+})
+
+const parseRaw = (json: string | null): unknown => {
+  if (json === null) return null
+  try {
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 export class SessionRepo extends Context.Service<
   SessionRepo,
   {
@@ -265,6 +303,32 @@ export class SessionRepo extends Context.Service<
       sessionId: string,
       attachmentId: string,
     ) => Effect.Effect<Option.Option<Attachment>>
+    readonly rawBefore: (
+      sessionId: string,
+      messageId: string | undefined,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<RawMessage>>
+    readonly insertCopies: (
+      messages: ReadonlyArray<ChatMessage>,
+      toolCalls: ReadonlyArray<ToolCall>,
+    ) => Effect.Effect<void>
+    readonly truncateFrom: (
+      sessionId: string,
+      messageId: string,
+    ) => Effect.Effect<ReadonlyArray<ChatMessage>>
+    readonly forgetParked: (sessionId: string) => Effect.Effect<void>
+    readonly setGroupBase: (sessionId: string, base: string) => Effect.Effect<void>
+    readonly listGroup: (
+      groupId: string,
+    ) => Effect.Effect<{ readonly sessions: ReadonlyArray<Session>; readonly base: string | null }>
+    readonly search: (options: {
+      readonly query: string
+      readonly projectIds?: ReadonlyArray<string> | undefined
+      readonly limit?: number | undefined
+    }) => Effect.Effect<ReadonlyArray<MessageHit>>
+    readonly pruneSearch: Effect.Effect<void>
+    readonly getPendingFork: (sessionId: string) => Effect.Effect<string | null>
+    readonly setPendingFork: (sessionId: string, at: string | null) => Effect.Effect<void>
   }
 >()("humanity/SessionRepo") {
   static readonly layer = Layer.effect(
@@ -351,6 +415,10 @@ export class SessionRepo extends Context.Service<
             autonomy: session.autonomy,
             status: session.status,
             origin: session.origin,
+            parent_session_id: session.parentId ?? null,
+            relation: session.relation ?? null,
+            forked_at_message_id: session.forkedAtMessageId ?? null,
+            group_id: session.groupId ?? null,
             created_at: session.createdAt,
             updated_at: session.updatedAt,
           })}
@@ -570,6 +638,7 @@ export class SessionRepo extends Context.Service<
               created_at: message.createdAt,
             })}
           `
+          yield* indexMessage(sql, message)
         }).pipe(Effect.orDie)
 
       const updateMessage = (message: ChatMessage) =>
@@ -582,10 +651,13 @@ export class SessionRepo extends Context.Service<
             })}
             WHERE session_id = ${message.sessionId} AND id = ${message.id}
           `
+          yield* unindexMessages(sql, message.sessionId, [message.id])
+          yield* indexMessage(sql, message)
         }).pipe(Effect.orDie)
 
       const deleteMessage = (sessionId: string, messageId: string) =>
         sql`DELETE FROM messages WHERE session_id = ${sessionId} AND id = ${messageId}`.pipe(
+          Effect.andThen(unindexMessages(sql, sessionId, [messageId])),
           Effect.asVoid,
           Effect.orDie,
         )
@@ -743,6 +815,7 @@ export class SessionRepo extends Context.Service<
               updated_at = excluded.updated_at
           `
           yield* sql`DELETE FROM messages WHERE session_id = ${session.id}`
+          yield* unindexSession(sql, session.id)
           yield* sql`DELETE FROM tool_calls WHERE session_id = ${session.id}`
           for (const { message, raw } of messages) yield* insertMessage(message, raw)
           for (const toolCall of toolCalls) {
@@ -766,7 +839,160 @@ export class SessionRepo extends Context.Service<
           return true
         }).pipe(sql.withTransaction, Effect.orDie)
 
+      const findRawBefore = SqlSchema.findAll({
+        Request: Schema.Struct({
+          sessionId: Schema.String,
+          messageId: Schema.NullOr(Schema.String),
+          limit: Schema.Number,
+        }),
+        Result: RawRow,
+        execute: ({ sessionId, messageId, limit }) =>
+          messageId === null
+            ? sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} ORDER BY rowid DESC LIMIT ${limit}`
+            : sql`SELECT id, role, raw_json FROM messages WHERE session_id = ${sessionId} AND rowid < (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid DESC LIMIT ${limit}`,
+      })
+
+      const rawBefore = (sessionId: string, messageId: string | undefined, limit: number) =>
+        findRawBefore({ sessionId, messageId: messageId ?? null, limit }).pipe(
+          Effect.map((rows) =>
+            rows.map((row): RawMessage => ({
+              id: row.id,
+              role: row.role,
+              raw: parseRaw(row.raw_json),
+            })),
+          ),
+          Effect.orDie,
+        )
+
+      const findFrom = SqlSchema.findAll({
+        Request: Schema.Struct({ sessionId: Schema.String, messageId: Schema.String }),
+        Result: MessageRow,
+        execute: ({ sessionId, messageId }) =>
+          sql`SELECT id, session_id, normalized_json, created_at FROM messages WHERE session_id = ${sessionId} AND rowid >= (SELECT rowid FROM messages WHERE id = ${messageId} AND session_id = ${sessionId}) ORDER BY rowid`,
+      })
+
+      const truncateFrom = (sessionId: string, messageId: string) =>
+        Effect.gen(function* () {
+          const removed = (yield* findFrom({ sessionId, messageId })).map(toMessage)
+          const toolUseIds = toolUseIdsOf(removed)
+          for (const chunk of chunksOf(toolUseIds, 500)) {
+            yield* sql`DELETE FROM tool_calls WHERE session_id = ${sessionId} AND ${sql.in("tool_use_id", chunk)}`
+          }
+          for (const chunk of chunksOf(
+            removed.map((message) => message.id),
+            500,
+          )) {
+            yield* sql`DELETE FROM messages WHERE session_id = ${sessionId} AND ${sql.in("id", chunk)}`
+          }
+          yield* unindexMessages(
+            sql,
+            sessionId,
+            removed.map((message) => message.id),
+          )
+          return removed
+        }).pipe(sql.withTransaction, Effect.orDie)
+
+      const insertCopies = (
+        messages: ReadonlyArray<ChatMessage>,
+        toolCalls: ReadonlyArray<ToolCall>,
+      ) =>
+        Effect.gen(function* () {
+          for (const message of messages) yield* insertMessage(message, undefined)
+          for (const toolCall of toolCalls) {
+            const output =
+              toolCall.output === null
+                ? null
+                : yield* encodeOutput({
+                    result: toolCall.output,
+                    ...(toolCall.structuredOutput === undefined
+                      ? {}
+                      : { structured: toolCall.structuredOutput }),
+                  }).pipe(Effect.catch(() => encodeOutput({ result: toolCall.output! })))
+            yield* sql`
+              INSERT INTO tool_calls ${sql.insert({
+                id: toolCall.id,
+                session_id: toolCall.sessionId,
+                tool_use_id: toolCall.toolUseId,
+                tool_name: toolCall.toolName,
+                input_json: safeJson(toolCall.input),
+                output_json: output,
+                status: toolCall.status,
+                started_at: toolCall.startedAt,
+                finished_at: toolCall.finishedAt,
+              })}
+              ON CONFLICT (session_id, tool_use_id) DO NOTHING
+            `
+          }
+        }).pipe(sql.withTransaction, Effect.orDie)
+
+      const forgetParked = (sessionId: string) =>
+        sql`DELETE FROM session_providers WHERE session_id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const findPendingFork = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: Schema.Struct({ pending_fork: Schema.NullOr(Schema.String) }),
+        execute: (id) => sql`SELECT pending_fork FROM sessions WHERE id = ${id}`,
+      })
+
+      const getPendingFork = (sessionId: string) =>
+        findPendingFork(sessionId).pipe(
+          Effect.map((row) => (Option.isSome(row) ? row.value.pending_fork : null)),
+          Effect.orDie,
+        )
+
+      const setPendingFork = (sessionId: string, at: string | null) =>
+        sql`UPDATE sessions SET pending_fork = ${at} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const search = (options: {
+        readonly query: string
+        readonly projectIds?: ReadonlyArray<string> | undefined
+        readonly limit?: number | undefined
+      }) => searchMessages(sql, options)
+
+      const pruneSearch = pruneOrphans(sql).pipe(Effect.orDie)
+
+      const setGroupBase = (sessionId: string, base: string) =>
+        sql`UPDATE sessions SET group_base = ${base} WHERE id = ${sessionId}`.pipe(
+          Effect.asVoid,
+          Effect.orDie,
+        )
+
+      const findGroup = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: Schema.Struct({
+          ...SessionRow.fields,
+          group_base: Schema.optional(Schema.NullOr(Schema.String)),
+        }),
+        execute: (groupId) =>
+          sql`SELECT * FROM sessions WHERE group_id = ${groupId} ORDER BY created_at, rowid`,
+      })
+
+      const listGroup = (groupId: string) =>
+        findGroup(groupId).pipe(
+          Effect.map((rows) => ({
+            sessions: rows.map(toSession),
+            base: rows.find((row) => row.group_base != null)?.group_base ?? null,
+          })),
+          Effect.orDie,
+        )
+
       return SessionRepo.of({
+        setGroupBase,
+        listGroup,
+        search,
+        pruneSearch,
+        getPendingFork,
+        setPendingFork,
+        rawBefore,
+        insertCopies,
+        truncateFrom,
+        forgetParked,
         insert,
         get,
         listByProject,

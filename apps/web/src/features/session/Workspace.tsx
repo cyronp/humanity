@@ -1,12 +1,14 @@
-import { useAtomValue } from "@effect/atom-react"
+import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import {
   acceptsMessages,
+  type ChatMessage,
   DEFAULT_ACCOUNT,
   parseQuestions,
   type Project,
   QUESTION_TOOL,
   type TerminalOwner,
 } from "@humanity/contracts"
+import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
@@ -31,10 +33,20 @@ import {
   type SessionView,
 } from "./state.ts"
 import { HINT_CLASS, UsageMeters } from "./UsageMeters.tsx"
+import { ForkDialog, type ForkTarget } from "./ForkDialog.tsx"
+import { RewindDialog } from "./RewindDialog.tsx"
+import { interruptAtom, undoRewindAtom } from "./atoms.ts"
+import { useSetupWorktree } from "./panel/useSetupWorktree.ts"
+import { openCompare } from "@/features/compare/compare"
+import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
+import { useThreadPalette } from "./useThreadPalette.tsx"
+import type { TranscriptActions } from "@/features/chat/transcriptActions"
+import { describeCause } from "@/lib/errors"
 import { useTranscript } from "./useTranscript.ts"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
+  readonly message?: string | undefined
 }
 
 export function Workspace({
@@ -71,6 +83,80 @@ export function Workspace({
     ? browserPreferences.value.offerLocalAddresses
     : true
 
+  const [rewinding, setRewinding] = useState<ChatMessage>()
+  const [forking, setForking] = useState<ForkTarget>()
+  const undoRewind = useAtomSet(undoRewindAtom, { mode: "promiseExit" })
+  const transcriptActions = useMemo(
+    (): TranscriptActions | undefined =>
+      acceptsMessages(session) && session.status !== "ended"
+        ? {
+            onRewind: setRewinding,
+            onFork: (message) => setForking({ message }),
+            onUndoRewind: async (messageId) => {
+              const exit = await undoRewind({ payload: { sessionId: session.id, messageId } })
+              return Exit.isSuccess(exit) ? undefined : describeCause(exit.cause)
+            },
+          }
+        : undefined,
+    [session, undoRewind],
+  )
+  const setupWorktree = useSetupWorktree(session)
+  const runSetupWorktree = useRef(setupWorktree.run)
+  useEffect(() => {
+    runSetupWorktree.current = setupWorktree.run
+  })
+  const canSetupWorktree = setupWorktree.available
+  const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
+  const paletteCommands = useMemo((): ReadonlyArray<PaletteCommand> => {
+    const compare: ReadonlyArray<PaletteCommand> =
+      session.groupId == null
+        ? []
+        : [
+            {
+              id: "thread.compare",
+              title: "Compare runs",
+              group: "This thread",
+              keywords: ["models", "group", "keep"],
+              run: () => openCompare(session.groupId ?? ""),
+            },
+          ]
+    if (session.status === "ended") return compare
+    const working = session.status === "running" || session.status === "waiting_for_human"
+    return [
+      ...compare,
+      {
+        id: "thread.fork",
+        title: "Fork this thread",
+        group: "This thread",
+        keywords: ["branch", "copy", "duplicate"],
+        run: () => setForking({}),
+      },
+      ...(canSetupWorktree && !working
+        ? [
+            {
+              id: "thread.worktree",
+              title: "Set up a worktree",
+              group: "This thread",
+              keywords: ["isolate", "branch"],
+              run: () => void runSetupWorktree.current(),
+            },
+          ]
+        : []),
+      ...(working
+        ? [
+            {
+              id: "thread.stop",
+              title: "Stop the agent",
+              group: "This thread",
+              keywords: ["interrupt", "cancel"],
+              run: () => void interrupt({ payload: { sessionId: session.id } }),
+            },
+          ]
+        : []),
+    ]
+  }, [canSetupWorktree, interrupt, session])
+  usePaletteCommands("thread", paletteCommands)
+  useThreadPalette(session, composer)
   const [dock, setDock] = useState<HTMLDivElement | null>(null)
   const [typing, setTyping] = useState(false)
   const keyHint = useKeyHintShown()
@@ -99,7 +185,14 @@ export function Workspace({
         owner: terminalOwner,
         unavailable: session.status === "ended" ? "This thread has ended." : undefined,
       }}
-      header={(actions) => <SessionHeader project={project} session={session} actions={actions} />}
+      header={(actions) => (
+        <SessionHeader
+          project={project}
+          session={session}
+          actions={actions}
+          onFork={session.status === "ended" ? undefined : () => setForking({})}
+        />
+      )}
       rail={(shelf, onSelect) => (
         <ToolRail
           session={session}
@@ -134,7 +227,21 @@ export function Workspace({
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
+          <ForkDialog session={session} target={forking} onClose={() => setForking(undefined)} />
+          <RewindDialog
+            session={session}
+            message={rewinding}
+            onClose={() => setRewinding(undefined)}
+            onRewound={(text) => composer.current?.replace(text)}
+          />
           <MessageList
+            focus={search.message}
+            onFocusMissing={
+              transcript.hasEarlier && !transcript.loading
+                ? () => void transcript.loadEarlier()
+                : undefined
+            }
+            actions={transcriptActions}
             bottomInset={dockHeight}
             messages={transcript.messages}
             toolCalls={transcript.toolCalls}

@@ -80,3 +80,19 @@ describe("the Windows app id", () => {
     expect(builder.split(/\r?\n/)).toContain(`appId: ${APP_USER_MODEL_ID}`)
   })
 })
+
+describe("the app's name", () => {
+  const builder = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8")
+  const lines = builder.split(/\r?\n/)
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { readonly productName?: string }
+
+  it("is the installer's product name in Electron too", () => {
+    expect(lines).toContain(`productName: ${manifest.productName}`)
+  })
+
+  it("names the install and updater folders without the workspace scope", () => {
+    expect(builder).toMatch(/^extraMetadata:\r?\n {2}name: humanity$/m)
+  })
+})

@@ -9,7 +9,6 @@ import {
 } from "../codex/protocol.ts"
 import { type Normalized, toolResultText } from "./normalize.ts"
 
-
 export const CODEX_READY = "humanity/ready"
 
 export interface CodexTurnUsage {

@@ -1,6 +1,5 @@
 import { type Option, Schema } from "effect"
 
-
 const nullable = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema))
 
 export const InitializeResponse = Schema.Struct({

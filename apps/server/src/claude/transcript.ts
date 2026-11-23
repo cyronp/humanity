@@ -2,7 +2,6 @@ import type { ChatMessage, MessageContent, SessionId, ToolCall } from "@humanity
 import { Option, Schema } from "effect"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 
-
 const TranscriptEntry = Schema.Struct({
   type: Schema.String,
   timestamp: Schema.optional(Schema.String),

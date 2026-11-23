@@ -1,6 +1,5 @@
 import { type Option, Schema } from "effect"
 
-
 export const PROTOCOL_VERSION = 1
 
 const nullable = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema))

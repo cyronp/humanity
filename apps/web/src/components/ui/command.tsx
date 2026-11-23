@@ -34,12 +34,14 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  onEscapeKeyDown?: React.ComponentProps<typeof DialogContent>["onEscapeKeyDown"]
 }) {
   return (
     <Dialog {...props}>
@@ -50,6 +52,7 @@ function CommandDialog({
       <DialogContent
         className={cn("top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0", className)}
         showCloseButton={showCloseButton}
+        onEscapeKeyDown={onEscapeKeyDown}
       >
         {children}
       </DialogContent>
@@ -133,8 +136,9 @@ function CommandSeparator({
 function CommandItem({
   className,
   children,
+  check = true,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+}: React.ComponentProps<typeof CommandPrimitive.Item> & { readonly check?: boolean }) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
@@ -145,7 +149,9 @@ function CommandItem({
       {...props}
     >
       {children}
-      <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      {check && (
+        <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      )}
     </CommandPrimitive.Item>
   )
 }

@@ -202,6 +202,96 @@ The shelf gets a Files tool: the thread's folder as a tree, and an editor, as in
 - **Settings, under Editor (2026-11-22),** kept by the daemon (`EditorPreferences`, like the terminal's): auto save (off, after a delay of the human's choice, or when focus leaves the editor), the font and its size, word wrap, line numbers, and indentation (detected from the file, else tabs or spaces of a given size). Auto save is an ordinary save: it never writes over a file that changed on disk, and waits while the editor asks about one.
 - **Not yet:** creating, renaming, moving and deleting files from the tree, searching inside files, a language server, and the code theme setting for the editor (it has a light and a dark palette of its own).
 
+## Amendment: threads that open threads (2026-11-22)
+
+A thread remembers the thread it came from, and the sidebar shows them together. This adds no library to the stack of section 3.
+
+- **The link.** `sessions.parent_session_id` names the thread a thread came from, `relation` how (`opened` by the agent's `open_thread`, or `forked` from it by the human) and `forked_at_message_id` where a fork was made. Deleting a thread leaves its children, with no parent.
+- **The sidebar as a tree.** A thread is shown under the thread it came from, indented, as long as that thread is shown too; otherwise at the top level. When a thread it opened, at any depth, waits for the human, stopped on an error or is working, its row says so beside its own status.
+- **The call shows its thread.** An `open_thread` card in the chat shows the opened thread's status as it changes.
+- **Ending a thread leaves the threads it opened running.** The agent is still not told when a thread it opened finishes.
+
+## Amendment: checkpoints and rewind (2026-11-22)
+
+Before each of the human's messages reaches the agent, Humanity keeps a checkpoint of the thread's folder, and the human can rewind to it. This adds no library to the stack of section 3.
+
+- **A repository of Humanity's own.** Checkpoints live in a bare git repository per thread under `~/.humanity/checkpoints/<sessionId>/`, used with the thread's folder as its work tree. It never touches the project's `.git`, refs, index or stash, and does not borrow its objects. What git ignores (`.gitignore`, and the project's `info/exclude`, copied in) is neither kept nor restored; `.git` never is. Line endings, filters and encodings are off, so a file comes back byte for byte. A checkpoint that cannot be taken is logged and never stops the message. The repository is deleted when the thread ends or its project is removed; checkpoints are kept until then.
+- **Rewind, from any of the human's messages, between turns.** A dialog lists the files that go back (restored, brought back or deleted), warns when the thread works in the project's checkout, which other threads share, and when a terminal of the thread is running a command. "Rewind" restores the files and removes that message and everything after it from the thread; the message goes back into the composer. "Restore files only" keeps the conversation, and the agent is told in front of the human's next message. A message sent before checkpoints existed rewinds the conversation only.
+- **The agent forgets what was rewound.** Claude Code resumes its session forked at the last entry before the message (`forkSession` with `resumeSessionAt`); Codex forks its thread through the last turn before it (`thread/fork` with `lastTurnId`, with Humanity's approval settings, never `never`), so the thread gets a new Codex thread id. An ACP agent, or any agent whose session began after that message (it moved provider since), starts a new session with a `<humanity-handoff>` of the conversation before it. The fork point is stored (`sessions.pending_fork`) until the agent starts, so a restart does not lose it; a fork that fails falls back to the handoff. Each provider's parked session is forgotten. The thread keeps its provider, model and mode.
+- **Undo.** Restoring takes one more checkpoint first, so the rewind's divider in the chat offers Undo, which puts the files back as they were just before it, until the human sends another message. The conversation is not brought back.
+- **Not yet:** a checkpoint per file change inside a turn, rewinding the conversation without removing it from the thread, and limiting the size of what a checkpoint keeps.
+
+## Amendment: forking a thread (2026-11-22)
+
+The human can fork a thread, from its end or from before any of their messages, to try another way without losing the first. This adds no library to the stack of section 3.
+
+- **Always a worktree of its own.** The fork is a new thread of the same project, provider, account, model and effort, in a new worktree whose branch starts at the commit its source was on then (kept with each checkpoint). Its files are the source's checkpoint from before that message, or, from the end, a checkpoint taken at once, so changes not yet committed come along; files git ignores do not. The source is left as it is. A fork needs an idle thread that has not ended; from before a message, it needs that message's checkpoint.
+- **The conversation comes along.** Humanity copies the source's messages, tool calls and attachments up to that point into the fork, and links it to its source (`relation` `forked`, `forked_at_message_id`), so the sidebar shows it under its source. Its agent gets the conversation with the human's first message, as a `<humanity-handoff>` that says it was forked. On Codex the fork's thread is Codex's own fork of the source's (`thread/fork` through the last turn before that point, in the fork's folder), with the handoff as the fallback; Claude Code and the ACP agents take the handoff, since a Claude Code session is kept by the folder it ran in.
+- **Never inherited: the mode.** A fork starts in its project's default mode, like any new thread.
+- **Where.** Each of the human's messages offers "Fork from before this message"; the thread's header offers "Fork thread".
+- **Not yet:** forking on another provider or model in one step (the fork can switch afterwards), and putting the message forked from into the new thread's composer.
+
+## Amendment: the command palette (2026-11-22)
+
+One keyboard entry to everything the app can do. It adds no library to the stack of section 3: it is `cmdk`, through shadcn/ui's Command.
+
+- **Ctrl+K, or Ctrl+Shift+P** (Cmd on a Mac) opens it anywhere, except in a terminal, which keeps its own keys (Ctrl+K clears a line in many shells). Ctrl+P still finds a file.
+- **What it lists.** Actions, grouped: what the open thread can do (fork, permissions, the model, the reasoning effort, set up a worktree, stop the agent), its source control (sync, push, copy the branch name and, while Source control is open, its pull request), the terminals and the shelf's tools, a local server to open in the Browser, a new thread, adding a repository, the color scheme and theme and each Settings page; then the threads to go to. Typing also finds a single setting, which opens Settings scrolled to it.
+- **What needs you comes first (2026-11-22).** With nothing typed, the threads that wait for the human or stopped on an error come first, then the ones working, then the rest, the most visited first, each with its status. Ended threads show only when searched for. The actions used most often and most recently come first; both are counted in the browser (`humanity.palette.usage`, `humanity.palette.threads`).
+- **Prefixes.** `>` lists actions only, `#` threads only, `?` searches the messages of every thread, `@` finds a file of the open thread and opens it in Files, `/` puts a skill in the open thread's composer, as the composer's own menu does.
+- **Filters (2026-11-22).** `#` and `?` take `is:` (waiting, running, error, idle, interrupted, open, ended), `project:`, `provider:` and `branch:`, suggested as they are typed. Values of one key are alternatives; different keys must all match. `project:` narrows the message search on the daemon; the others are applied to its hits.
+- **Steps (2026-11-22).** An action can open a list of its own in the palette (the model, permissions, the reasoning effort, the color scheme and theme, a terminal, a local server), with Backspace or Esc going back; its choices are also found from the top when typed. → or Ctrl+Enter on a thread opens its actions without opening it: open, copy its link or branch, end it (asking about its worktree as the project's settings say). An action that waits on the daemon keeps the palette open, and shows its error there.
+- **A preview (2026-11-22).** On a wide window a pane beside the list describes what is highlighted: a thread (its status, project, model, branch, permissions, the thread it came from, and its last activity), an action (what it does and whether it opens a list), a filter, or, with nothing highlighted, the prefixes. The pane stays while the palette lists actions and threads, and the palette keeps one height, so nothing moves as the highlight or the results change. A footer shows the keys.
+- **A registry, not a list.** A feature registers its own actions while it is on screen, with what they need; the palette knows none of them. So do the results of `@` and `/`, which only an open thread offers.
+
+## Amendment: searching every thread (2026-11-22)
+
+The human finds a thread by what was said or done in it. This adds no library to the stack of section 3: SQLite's FTS5, which the Node of the daemon and of the desktop app's Electron both carry.
+
+- **An index in `humanity.db`.** `search_index` is an FTS5 table with the `trigram` tokenizer, so a part of a word, a path or an identifier matches, without regard to case. It holds the human's messages, the agent's text and one line per tool call (what it did, as the handoff describes it: the command, the file, the pattern); thinking, notices and tools' output are left out. Humanity keeps it in step with the messages as they are written, changed, removed or rewound; a thread that no longer exists is dropped from it when the daemon starts. The threads there before are indexed once, by the migration that adds it.
+- **`Sessions.search`** takes the text, optionally projects and a limit (50 by default), and answers the best matches with a snippet, the hit marked. Each word of three characters or more must match; shorter words are left out, and a search of only short words finds nothing.
+- **In the command palette,** `?` searches: each hit shows the thread, its project, who said it (the human, the agent or a tool call) and the snippet. Picking one opens the thread at that message (`?message=` on the thread's address): the chat loads earlier messages until it holds it, scrolls to it and marks it for a moment.
+- **Not yet:** searching from the sidebar's own search field, which still matches titles, projects and branches only.
+
+## Amendment: searching and changing files in Files (2026-11-22)
+
+The Files tool searches inside the thread's files and creates, moves and deletes them. This supersedes the first two items of "Not yet" in "Files on the shelf", and adds no library to the stack of section 3.
+
+- **Search in files** (Ctrl+Shift+F, or its button over the tree) runs `git grep` in the thread's folder, as an argument array, over the same files the tree lists: tracked and untracked, without what git ignores, and no binaries. It matches text or, as an option, an extended regular expression, with or without case and as a whole word, in the files to include and to leave out (globs, separated by commas). At most 100 matches a file and 2,000 in all are shown, each with its line, grouped by file; picking one opens the file there with the match selected. A search is a read and changes nothing.
+- **New file, Rename or move, Delete**, from each row's menu in the tree, and New file over it. A new file's path may name folders that do not exist yet; they are made. Rename takes a new path, so it moves too. Nothing is written over a file or folder that is already there, a folder is never moved into itself, and every path stays inside the thread's folder, never under `.git` and never through a link that leads outside it. An ended thread's files are not changed.
+- **Delete is for good.** Nothing goes to a trash, since nothing of Humanity's writes outside `~/.humanity/` or the thread's folder. The dialog names what goes (a folder with how many files), and says whether git can bring it back or only a checkpoint, with Rewind. A file or folder with unsaved edits open in the editor is not renamed or deleted until they are saved or closed. Deleting several entries checks each one first, and deletes none if one is refused.
+- **These are the human's own changes,** like a save: they reach no permission check. The agent hears of them in one line in front of the human's next message (created, moved, deleted), like the files the human saved.
+- **Open tabs follow:** a renamed file's tab reopens under its new path, a deleted file's tab closes.
+- **Not yet:** an empty new folder (git does not list it, so the tree would not show it; a new file's path makes its folders), replacing in files, and dragging entries in the tree.
+
+## Amendment: comments on changes, for the agent (2026-11-22)
+
+The human reviews the agent's uncommitted changes as in a code review, and the comments become a message. This adds no library to the stack of section 3, and no request to the daemon.
+
+- **A comment on any line** of Source control → Changes, from a button in the line's gutter: on the new line, or the old one for a removed line. Comments show under their line, and can be edited or deleted. They are kept in the browser (`humanity.reviewComments.<sessionId>`), like unsaved edits, until they are used or discarded; an ended thread takes none.
+- **One bar over the changes** counts them, and says how many sit on lines that are no longer in the diff, which still go along. "Add to my message" puts them in the composer as one block (each file and line, the line quoted, then the comment), to edit and send like any message, and clears them; Discard drops them. Nothing reaches the agent until the human sends.
+- **Not yet:** comments on the pull request page's diffs, posting them to the forge as a review, and comments on a file change the agent is waiting on in "Ask me" (its Deny comment stays the place for that).
+
+## Amendment: usage over time (2026-11-22)
+
+The human sees where tokens, money and plan limits go. This adds to the stack of section 3.
+
+- **Stack addition:** Recharts (`recharts`, pinned to an exact version, `apps/web` only), approved by the human, behind a chart component in shadcn/ui's manner (`components/ui/chart.tsx`). Each provider is drawn in its own color, in every color theme: Claude Code orange (`#D97757`, its mark's), Codex the theme's foreground (white in dark mode, near black in light, where white would not show), Kiro purple (`#9046FF`) and Antigravity blue (`#3186FF`, its mark's). The Usage page is loaded only when it opens, Recharts with it.
+- **A record per turn.** `turn_usage` keeps, for each turn that ends, its thread, project, provider, account, model, the tokens (input, output, read from and written to the cache), how long it took and its cost: what Claude Code reports, and nothing (`NULL`, never 0) for the providers that report none. The turns there before are added once by the migration, from each turn's result and its thread's current provider and model, marked as estimated. A turn's record outlives its thread, so a removed project still counts.
+- **Plan limits as last read.** Each time Humanity reads a plan's limits for a thread, as it already does, it keeps a sample (`plan_usage_samples`: provider, account, window, how full, when it resets). Humanity polls nothing more for it.
+- **`Sessions.usageReport`** takes a range and the browser's offset from UTC, and answers the totals, the tokens per local day and provider, and the providers and models, projects and threads that used the most (ten of each), with each account's latest sample of each plan window, whatever the range. Asked for hours (`hourly`), it adds the tokens per local hour and provider, for the one-day range.
+- **The Usage page (2026-11-22, after t3code's, made simpler)**, from the sidebar's footer and the command palette: today, 7, 30 or 90 days (the range kept in the browser, `humanity.usage.range`) and a refresh; the total tokens with the turns and cost, beside each provider's tokens, share and cost; tokens per day (per hour for today) stacked by provider, the tooltip with a total; each account's 5-hour and 7-day limits as last read, as bars with a mark where even use would be by now, when they reset and how long ago they were read; where the tokens went (read from cache, input, written to cache, output) with the cache's share of the prompt; and one table of the top models, projects or threads, with turns, tokens, share and cost, a thread opening on click. Earlier figures stay, dimmed, while a new range loads. Cost is said to be Claude Code's alone. Humanity keeps no price list, so it estimates no cost for a provider that reports none.
+
+## Amendment: one prompt on several models (2026-11-22)
+
+The human runs the same first message on two to four models at once and keeps the run they like. This adds no library to the stack of section 3, and every rule of "Autonomy first" holds for each run.
+
+- **From the new-thread page, in the model picker (2026-11-22, after t3code's).** No button of its own, so the chat box stays as it was: Shift+click (or Shift+Enter) on a model adds it or takes it away, up to four in all, from any signed-in provider; the picker's button shows the first with how many more, a line at the picker's bottom says so, and a plain click goes back to one model. The reasoning effort, the mode and the branch are the same for all. Sending starts the group (`Sessions.createGroup`): every run is a thread of its own, in a worktree of its own, all from the commit the checkout is on (`sessions.group_base`), linked by `sessions.group_id`, titled with its model, in the project's default mode unless the human picked one. If one cannot start, the ones that did are ended and their worktrees removed. Each run uses its own provider's quota.
+- **The comparison** (`Sessions.compareGroup`), opened when the group starts, from a run's header and from the command palette: a column per run with its status, tokens, cost where reported, turns, the files it changed against the group's commit (committed or not), each opening into its diff and marked when another run changed it too, and its last message. It follows the runs while they work.
+- **Keep this one** ends the other runs, like ending a thread: their agents stop, their branches are kept, and their worktrees are deleted only when the human checks that, the project's "ending a thread" setting choosing the default. The kept run goes on as any thread; nothing is merged.
+- **In the sidebar,** a run is marked as one of several runs compared.
+- **Not yet:** a run's diff against another run's, and merging a run's branch from the comparison.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
