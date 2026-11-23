@@ -6,6 +6,7 @@ import {
   CircleAlert,
   CircleCheck,
   CirclePause,
+  CircleStop,
   Columns3,
   GitBranch,
   GitFork,
@@ -45,7 +46,18 @@ export function ThreadLink({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-medium">{session.title}</span>
-          <ThreadTime session={session} />
+          <span className="grid shrink-0 justify-items-end">
+            <ThreadTime session={session} />
+            {session.status !== "ended" && (
+              <span
+                aria-hidden
+                className="invisible col-start-1 row-start-1 hidden items-center gap-1 border border-transparent px-2 text-xs font-medium whitespace-nowrap group-focus-within/menu-item:inline-flex group-hover/menu-item:inline-flex pointer-coarse:inline-flex"
+              >
+                <CircleStop className="size-3" />
+                End thread
+              </span>
+            )}
+          </span>
         </div>
         <ThreadBranch session={session} />
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -161,7 +173,7 @@ function ThreadTime({ session }: { readonly session: Session }) {
     <time
       dateTime={session.updatedAt}
       className={cn(
-        "shrink-0 text-xs text-muted-foreground tabular-nums",
+        "col-start-1 row-start-1 text-xs text-muted-foreground tabular-nums",
         session.status !== "ended" &&
           "transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0 pointer-coarse:opacity-0",
       )}
