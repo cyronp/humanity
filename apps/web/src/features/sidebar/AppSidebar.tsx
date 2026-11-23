@@ -3,7 +3,7 @@ import type { Project } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import { Search, Settings, SquarePen } from "lucide-react"
+import { ChartColumn, Search, Settings, SquarePen } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { BrandMark } from "@/components/BrandMark"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,7 @@ import { projectsAtom } from "@/features/projects/atoms"
 import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
 import { openSettings } from "@/features/settings/settings"
+import { openUsage } from "@/features/usage/usage"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
 import { ThreadLink } from "./ThreadLink.tsx"
@@ -110,6 +111,22 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
               variant="ghost"
               size="icon"
               className="ml-auto"
+              aria-label="Usage"
+              onClick={() => {
+                close()
+                openUsage()
+              }}
+            >
+              <ChartColumn />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Usage</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Settings"
               onClick={() => {
                 close()

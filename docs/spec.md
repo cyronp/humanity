@@ -268,6 +268,16 @@ The human reviews the agent's uncommitted changes as in a code review, and the c
 - **One bar over the changes** counts them, and says how many sit on lines that are no longer in the diff, which still go along. "Add to my message" puts them in the composer as one block (each file and line, the line quoted, then the comment), to edit and send like any message, and clears them; Discard drops them. Nothing reaches the agent until the human sends.
 - **Not yet:** comments on the pull request page's diffs, posting them to the forge as a review, and comments on a file change the agent is waiting on in "Ask me" (its Deny comment stays the place for that).
 
+## Amendment: usage over time (2026-11-22)
+
+The human sees where tokens, money and plan limits go. This adds to the stack of section 3.
+
+- **Stack addition:** Recharts (`recharts`, pinned to an exact version, `apps/web` only), approved by the human, behind a chart component in shadcn/ui's manner (`components/ui/chart.tsx`) whose colors are the theme's `--chart-*` tokens, so every color theme and mode applies. The Usage page is loaded only when it opens, Recharts with it.
+- **A record per turn.** `turn_usage` keeps, for each turn that ends, its thread, project, provider, account, model, the tokens (input, output, read from and written to the cache), how long it took and its cost: what Claude Code reports, and nothing (`NULL`, never 0) for the providers that report none. The turns there before are added once by the migration, from each turn's result and its thread's current provider and model, marked as estimated. A turn's record outlives its thread, so a removed project still counts.
+- **Plan limits over time.** Each time Humanity reads a plan's limits for a thread, as it already does, it keeps a sample (`plan_usage_samples`: provider, account, window, how full, when it resets). Humanity polls nothing more for it.
+- **`Sessions.usageReport`** takes a range and the browser's offset from UTC, and answers the totals, the tokens per local day and provider, and the providers and models, projects and threads that used the most (ten of each), with the plan samples in the range.
+- **The Usage page**, from the sidebar's footer and the command palette: today, 7, 30 or 90 days; the tokens, output tokens, turns and cost; tokens per day stacked by provider; each account's five-hour limit over time; and the top models, projects and threads. Cost is said to be Claude Code's alone. Humanity keeps no price list, so it estimates no cost for a provider that reports none.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

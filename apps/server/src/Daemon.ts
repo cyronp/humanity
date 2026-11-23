@@ -13,6 +13,7 @@ import { Antigravity } from "./antigravity/Antigravity.ts"
 import { DatabaseLive } from "./db/Database.ts"
 import { CheckpointStore } from "./checkpoints/CheckpointStore.ts"
 import { CheckpointRepo } from "./db/CheckpointRepo.ts"
+import { UsageRepo } from "./db/UsageRepo.ts"
 import { SessionRepo } from "./db/SessionRepo.ts"
 import { HttpApp } from "./http/HttpApp.ts"
 import { HumanityMcp } from "./mcp/HumanityMcp.ts"
@@ -85,6 +86,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(GitService.layer),
     Layer.provideMerge(SessionRepo.layer),
     Layer.provideMerge(CheckpointRepo.layer),
+    Layer.provideMerge(UsageRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
     Layer.provideMerge(ClaudeAccountService.layer),
     Layer.provideMerge(CodexAccountService.layer),

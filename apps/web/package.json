@@ -45,6 +45,7 @@
     "radix-ui": "1.8.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "recharts": "3.10.1",
     "shadcn": "4.23.0",
     "shiki": "4.6.0",
     "streamdown": "2.7.1",

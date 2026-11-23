@@ -29,6 +29,7 @@ import {
   SKILL_TOOL,
   type MessageContent,
   type MessageHit,
+  type UsageReport,
   type OpenedThread,
   type PendingConfirmation,
   type PlanUsage,
@@ -91,6 +92,7 @@ import { buildHandoff, historyEntries, latestPlan, readThreadHistory } from "../
 import { FORK_SEARCH_LIMIT, forkPoint } from "../agent/forkPoint.ts"
 import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts"
 import { CheckpointRepo } from "../db/CheckpointRepo.ts"
+import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
@@ -369,6 +371,11 @@ export class SessionService extends Context.Service<
       | GitInvalidBranchName
       | GitRefNotFound
     >
+    readonly usageReport: (options: {
+      readonly from: string
+      readonly to: string
+      readonly utcOffsetMinutes: number
+    }) => Effect.Effect<UsageReport>
     readonly search: (options: {
       readonly query: string
       readonly projectIds?: ReadonlyArray<string> | undefined
@@ -406,6 +413,7 @@ export class SessionService extends Context.Service<
       const approvals = yield* ApprovalService
       const checkpoints = yield* CheckpointStore
       const checkpointRepo = yield* CheckpointRepo
+      const usageRepo = yield* UsageRepo
       const serviceScope = yield* Effect.scope
 
       const active = new Map<string, ActiveRun>()
@@ -695,6 +703,17 @@ export class SessionService extends Context.Service<
             plan: plan ?? known.plan,
           }
           yield* repo.setUsage(sessionId, usage)
+          if (plan !== undefined) {
+            const session = yield* repo.get(sessionId)
+            if (Option.isSome(session)) {
+              yield* usageRepo.recordPlan(
+                session.value.provider,
+                yield* repo.getAccountId(sessionId),
+                plan,
+                yield* now,
+              )
+            }
+          }
           yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
           return usage
         })
@@ -812,7 +831,8 @@ export class SessionService extends Context.Service<
             yield* repo.setPendingHandoff(session.id, null)
           }
 
-          yield* addMessage(session.id, content, raw)
+          const added = yield* addMessage(session.id, content, raw)
+          if (content._tag === "result") yield* recordTurn(session.id, added.id, content)
           yield* startToolCalls(session, content)
           yield* finishToolCalls(session, state, content, normalized.structuredResult)
 
@@ -836,6 +856,29 @@ export class SessionService extends Context.Service<
             }
             state.interrupted = false
           }
+        })
+
+      const recordTurn = (
+        sessionId: string,
+        messageId: string,
+        content: Extract<MessageContent, { _tag: "result" }>,
+      ) =>
+        Effect.gen(function* () {
+          const found = yield* repo.get(sessionId)
+          if (Option.isNone(found)) return
+          const current = found.value
+          yield* usageRepo.recordTurn({
+            id: messageId,
+            sessionId,
+            projectId: current.projectId,
+            provider: current.provider,
+            accountId: yield* repo.getAccountId(sessionId),
+            model: current.model,
+            usage: content.usage,
+            costUsd: current.provider === "claude-code" ? content.costUsd : null,
+            durationMs: content.durationMs,
+            endedAt: yield* now,
+          })
         })
 
       const stopRun = (sessionId: string) =>
@@ -2289,6 +2332,7 @@ export class SessionService extends Context.Service<
         undoRewind,
         fork,
         search: repo.search,
+        usageReport: usageRepo.report,
         subscribe,
         earlierMessages,
         watchAll,

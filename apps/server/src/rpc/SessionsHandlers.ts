@@ -45,6 +45,7 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
         sessions.undoRewind(sessionId, messageId),
       "Sessions.fork": ({ sessionId, messageId }) => sessions.fork(sessionId, messageId),
       "Sessions.search": (payload) => sessions.search(payload),
+      "Sessions.usageReport": (payload) => sessions.usageReport(payload),
       "Sessions.subscribe": ({ sessionId }) => sessions.subscribe(sessionId),
     })
   }),

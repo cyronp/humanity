@@ -22,6 +22,7 @@ import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon
 import { allSessionsAtom } from "@/features/session/atoms"
 import { openSettings, SECTION_INFO, SETTINGS_SECTIONS } from "@/features/settings/settings"
 import { isMac } from "@/features/terminal/keys"
+import { openUsage } from "@/features/usage/usage"
 import { useThemeChoice } from "@/lib/theme"
 import {
   groupCommands,
@@ -81,6 +82,13 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
         group: "General",
         keywords: ["chat", "start"],
         run: () => void navigate({ to: "/" }),
+      },
+      {
+        id: "usage.open",
+        title: "Usage: tokens and cost",
+        group: "General",
+        keywords: ["tokens", "cost", "dashboard", "limits", "spend"],
+        run: openUsage,
       },
       {
         id: "project.add",

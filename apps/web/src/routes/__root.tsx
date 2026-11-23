@@ -5,6 +5,7 @@ import { AppHeaderHost } from "@/features/layout/AppHeader"
 import { NotificationWatcher } from "@/features/notifications/NotificationWatcher"
 import { CommandPalette, type MessageSearch } from "@/features/palette/CommandPalette"
 import { MessageResults } from "@/features/palette/MessageResults"
+import { UsageDialog } from "@/features/usage/UsageDialog"
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
@@ -71,6 +72,7 @@ function RootLayout() {
       <NotificationWatcher />
       <AddRepositoryDialog />
       <CommandPalette messages={MESSAGE_SEARCH} />
+      <UsageDialog />
     </SidebarProvider>
   )
 }

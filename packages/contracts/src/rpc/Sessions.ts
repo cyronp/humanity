@@ -3,6 +3,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { RewindPreview } from "../domain/Checkpoint.ts"
 import { MessageHit } from "../domain/Search.ts"
+import { UsageReport } from "../domain/Usage.ts"
 import { Autonomy } from "../domain/Policy.ts"
 import { ProjectId } from "../domain/Project.ts"
 import { AgentProvider } from "../domain/Provider.ts"
@@ -240,6 +241,10 @@ export const SessionsRpcs = RpcGroup.make(
       limit: Schema.optional(Schema.Number),
     },
     success: Schema.Array(MessageHit),
+  }),
+  Rpc.make("Sessions.usageReport", {
+    payload: { from: Schema.String, to: Schema.String, utcOffsetMinutes: Schema.Number },
+    success: UsageReport,
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },

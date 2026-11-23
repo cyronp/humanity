@@ -31,6 +31,7 @@ import sessionLineage from "./migrations/0026_session_lineage.ts"
 import checkpoints from "./migrations/0027_checkpoints.ts"
 import checkpointHead from "./migrations/0028_checkpoint_head.ts"
 import searchIndex from "./migrations/0029_search_index.ts"
+import usageHistory from "./migrations/0030_usage_history.ts"
 
 const migrations = {
   "0001_initial": initial,
@@ -62,6 +63,7 @@ const migrations = {
   "0027_checkpoints": checkpoints,
   "0028_checkpoint_head": checkpointHead,
   "0029_search_index": searchIndex,
+  "0030_usage_history": usageHistory,
 }
 
 const Migrations = SqliteMigrator.layer({ loader: SqliteMigrator.fromRecord(migrations) })
