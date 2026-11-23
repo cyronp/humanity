@@ -18,7 +18,7 @@ import {
 } from "@codemirror/language"
 import { languages } from "@codemirror/language-data"
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search"
-import { Compartment, EditorState, type Extension } from "@codemirror/state"
+import { Compartment, EditorState, type Extension, type TransactionSpec } from "@codemirror/state"
 import {
   crosshairCursor,
   drawSelection,
@@ -246,5 +246,20 @@ export const loadLanguage = async (path: string): Promise<Extension | undefined>
     return await description.load()
   } catch {
     return undefined
+  }
+}
+
+export const revealSpec = (
+  state: EditorState,
+  line: number,
+  column: number,
+  length: number,
+): TransactionSpec => {
+  const target = state.doc.line(Math.max(1, Math.min(line, state.doc.lines)))
+  const from = Math.min(target.from + Math.max(0, column - 1), target.to)
+  const to = Math.min(from + Math.max(0, length), target.to)
+  return {
+    selection: { anchor: from, head: to },
+    effects: EditorView.scrollIntoView(from, { y: "center" }),
   }
 }

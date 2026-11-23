@@ -14,3 +14,7 @@ export const editorPreferencesAtom = HumanityClient.query("Preferences.getEditor
   reactivityKeys: [keys.preferences],
 })
 export const setEditorPreferencesAtom = HumanityClient.mutation("Preferences.setEditor")
+export const searchFilesAtom = HumanityClient.mutation("Files.search")
+export const createEntryAtom = HumanityClient.mutation("Files.create")
+export const renameEntryAtom = HumanityClient.mutation("Files.rename")
+export const deleteEntriesAtom = HumanityClient.mutation("Files.delete")

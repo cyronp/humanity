@@ -249,6 +249,17 @@ The human finds a thread by what was said or done in it. This adds no library to
 - **In the command palette,** `?` searches: each hit shows the thread, its project, who said it (the human, the agent or a tool call) and the snippet. Picking one opens the thread at that message (`?message=` on the thread's address): the chat loads earlier messages until it holds it, scrolls to it and marks it for a moment.
 - **Not yet:** searching from the sidebar's own search field, which still matches titles, projects and branches only.
 
+## Amendment: searching and changing files in Files (2026-11-22)
+
+The Files tool searches inside the thread's files and creates, moves and deletes them. This supersedes the first two items of "Not yet" in "Files on the shelf", and adds no library to the stack of section 3.
+
+- **Search in files** (Ctrl+Shift+F, or its button over the tree) runs `git grep` in the thread's folder, as an argument array, over the same files the tree lists: tracked and untracked, without what git ignores, and no binaries. It matches text or, as an option, an extended regular expression, with or without case and as a whole word, in the files to include and to leave out (globs, separated by commas). At most 100 matches a file and 2,000 in all are shown, each with its line, grouped by file; picking one opens the file there with the match selected. A search is a read and changes nothing.
+- **New file, Rename or move, Delete**, from each row's menu in the tree, and New file over it. A new file's path may name folders that do not exist yet; they are made. Rename takes a new path, so it moves too. Nothing is written over a file or folder that is already there, a folder is never moved into itself, and every path stays inside the thread's folder, never under `.git` and never through a link that leads outside it. An ended thread's files are not changed.
+- **Delete is for good.** Nothing goes to a trash, since nothing of Humanity's writes outside `~/.humanity/` or the thread's folder. The dialog names what goes (a folder with how many files), and says whether git can bring it back or only a checkpoint, with Rewind. A file or folder with unsaved edits open in the editor is not renamed or deleted until they are saved or closed. Deleting several entries checks each one first, and deletes none if one is refused.
+- **These are the human's own changes,** like a save: they reach no permission check. The agent hears of them in one line in front of the human's next message (created, moved, deleted), like the files the human saved.
+- **Open tabs follow:** a renamed file's tab reopens under its new path, a deleted file's tab closes.
+- **Not yet:** an empty new folder (git does not list it, so the tree would not show it; a new file's path makes its folders), replacing in files, and dragging entries in the tree.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

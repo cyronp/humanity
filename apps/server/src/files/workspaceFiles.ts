@@ -32,7 +32,7 @@ const isMissing = (cause: unknown) => {
 
 const detailOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
-const attempt = <A>(path: string, run: () => Promise<A>) =>
+export const attempt = <A>(path: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
     catch: (cause) =>
@@ -58,11 +58,12 @@ export const decodeText = (
 export const encodeText = (content: string, bom: boolean): Uint8Array =>
   new TextEncoder().encode(bom ? `${BOM}${content}` : content)
 
-const refuse = (path: string, reason: string) => Effect.fail(new FileRefused({ path, reason }))
+export const refuse = (path: string, reason: string) =>
+  Effect.fail(new FileRefused({ path, reason }))
 
-const realRoot = (root: string) => attempt(".", () => realpath(root))
+export const realRoot = (root: string) => attempt(".", () => realpath(root))
 
-const insideRoot = (rootReal: string, real: string) =>
+export const insideRoot = (rootReal: string, real: string) =>
   real === rootReal || isInsideDir(rootReal, real)
 
 export const resolveExisting = (root: string, path: string) =>
@@ -83,7 +84,7 @@ export const resolveExisting = (root: string, path: string) =>
     return { absolute, real, size: info.size }
   })
 
-const resolveNew = (root: string, path: string) =>
+export const resolveNew = (root: string, path: string) =>
   Effect.gen(function* () {
     const problem = workspacePathProblem(path)
     if (problem !== undefined) return yield* refuse(path, problem)

@@ -113,7 +113,7 @@ import { ClaudeAccountService } from "./ClaudeAccountService.ts"
 import { CodexAccountService } from "./CodexAccountService.ts"
 import { KiroAccountService } from "./KiroAccountService.ts"
 import { AntigravityAccountService } from "./AntigravityAccountService.ts"
-import { humanEditsNote } from "../files/humanEdits.ts"
+import { type HumanFileChange, humanChangesNote, humanEditsNote } from "../files/humanEdits.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
@@ -342,6 +342,7 @@ export class SessionService extends Context.Service<
       message: { readonly notice: string; readonly agent?: string | undefined },
     ) => Effect.Effect<void, SessionNotFound>
     readonly noteHumanEdit: (sessionId: string, path: string) => Effect.Effect<void>
+    readonly noteHumanChange: (sessionId: string, change: HumanFileChange) => Effect.Effect<void>
     readonly rewindPreview: (
       sessionId: string,
       messageId: string,
@@ -429,6 +430,7 @@ export class SessionService extends Context.Service<
       const resumeFallback = new Map<string, string>()
       const agentNotes = new Map<string, Array<string>>()
       const humanEdits = new Map<string, Set<string>>()
+      const humanChanges = new Map<string, Array<HumanFileChange>>()
       const startLock = yield* Semaphore.make(1)
 
       const now = Effect.map(DateTime.now, DateTime.formatIso)
@@ -1075,6 +1077,8 @@ export class SessionService extends Context.Service<
           agentNotes.delete(session.id)
           const edited = humanEditsNote([...(humanEdits.get(session.id) ?? [])])
           humanEdits.delete(session.id)
+          const changed = humanChangesNote(humanChanges.get(session.id) ?? [])
+          humanChanges.delete(session.id)
           const handoff = yield* repo.getPendingHandoff(session.id)
           const forAgent = [
             ...(handoff === null ? [] : [handoff]),
@@ -1085,6 +1089,7 @@ export class SessionService extends Context.Service<
                 ]),
             ...notes,
             ...(edited === undefined || session.sdkSessionId === null ? [] : [edited]),
+            ...(changed === undefined || session.sdkSessionId === null ? [] : [changed]),
             text,
           ].join("\n\n")
           const stored = yield* storeAttachments(session.id, files)
@@ -1734,6 +1739,13 @@ export class SessionService extends Context.Service<
           humanEdits.set(sessionId, paths)
         })
 
+      const noteHumanChange = (sessionId: string, change: HumanFileChange) =>
+        Effect.sync(() => {
+          const changes = humanChanges.get(sessionId) ?? []
+          changes.push(change)
+          humanChanges.set(sessionId, changes)
+        })
+
       const stopProject = (projectId: string) =>
         Effect.gen(function* () {
           const sessions = yield* repo.listByProject(projectId)
@@ -2271,6 +2283,7 @@ export class SessionService extends Context.Service<
         commit,
         tell,
         noteHumanEdit,
+        noteHumanChange,
         rewindPreview,
         rewind,
         undoRewind,

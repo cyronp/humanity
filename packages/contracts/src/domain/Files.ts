@@ -25,6 +25,37 @@ export const FileVersion = Schema.Struct({
 })
 export type FileVersion = typeof FileVersion.Type
 
+export const FileSearchOptions = Schema.Struct({
+  query: Schema.String,
+  caseSensitive: Schema.Boolean,
+  wholeWord: Schema.Boolean,
+  regex: Schema.Boolean,
+  include: Schema.optional(Schema.String),
+  exclude: Schema.optional(Schema.String),
+})
+export type FileSearchOptions = typeof FileSearchOptions.Type
+
+export const FileSearchMatch = Schema.Struct({
+  line: Schema.Number,
+  column: Schema.Number,
+  preview: Schema.String,
+})
+export type FileSearchMatch = typeof FileSearchMatch.Type
+
+export const FileSearchResult = Schema.Struct({
+  files: Schema.Array(
+    Schema.Struct({ path: Schema.String, matches: Schema.Array(FileSearchMatch) }),
+  ),
+  matches: Schema.Number,
+  truncated: Schema.Boolean,
+})
+export type FileSearchResult = typeof FileSearchResult.Type
+
+export const FILE_SEARCH_LIMITS = { matches: 2000, perFile: 100, preview: 200 } as const
+
+export const NewEntryKind = Schema.Literals(["file", "folder"])
+export type NewEntryKind = typeof NewEntryKind.Type
+
 export const SavedFile = Schema.Struct({
   path: Schema.String,
   version: Schema.String,

@@ -1,7 +1,15 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { DEFAULT_EDITOR_PREFERENCES, type Session } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
-import { FolderTree, PanelLeft, PanelRightClose, RefreshCw, Search } from "lucide-react"
+import {
+  FilePlus,
+  FolderTree,
+  PanelLeft,
+  PanelRightClose,
+  RefreshCw,
+  Search,
+  TextSearch,
+} from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ResizeHandle } from "@/components/ResizeHandle"
@@ -18,12 +26,16 @@ import {
   writeFileAtom,
 } from "./atoms.ts"
 import { EditorPane } from "./EditorPane.tsx"
+import { EntryDialog, type EntryResult } from "./EntryDialog.tsx"
+import { type EntryAction, isUnder, movedPath } from "./entries.ts"
+import { FileSearch } from "./FileSearch.tsx"
 import { FileTree } from "./FileTree.tsx"
 import { QuickOpen } from "./QuickOpen.tsx"
 import { ancestorsOf, treeChanges } from "./tree.ts"
 import { anyUnsaved, workspaceFor } from "./workspace.ts"
 
 const POLL_MS = 2000
+const NO_FILES: ReadonlyArray<string> = []
 const TREE_MIN_WIDTH = 160
 const TREE_DEFAULT_WIDTH = 240
 const EDITOR_MIN_WIDTH = 240
@@ -101,19 +113,26 @@ export default function FilesPanel({
     }
   }, [workspace])
 
+  const [treeShown, setTreeShown] = useStoredFlag("humanity.files-tree", true)
   const [finding, setFinding] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [entryAction, setEntryAction] = useState<EntryAction>()
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "p") {
         event.preventDefault()
         setFinding(true)
       }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault()
+        setTreeShown(true)
+        setSearching(true)
+      }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [])
+  }, [setTreeShown])
 
-  const [treeShown, setTreeShown] = useStoredFlag("humanity.files-tree", true)
   const [treeWidth, setTreeWidth] = useStoredWidth("humanity.files-tree-width")
   const body = useRef<HTMLDivElement>(null)
   const treeColumn = useRef<HTMLDivElement>(null)
@@ -126,6 +145,26 @@ export default function FilesPanel({
   const open = (path: string) => {
     workspace.expand(ancestorsOf(path))
     workspace.open(path, { focus: true })
+  }
+
+  const listed = AsyncResult.isSuccess(listing) ? listing.value.files : NO_FILES
+  const tracked = (path: string) =>
+    listed.some((file) => isUnder(file, path) && changes.files.get(file) !== "create")
+
+  const afterEntry = (result: EntryResult) => {
+    refreshListing()
+    refreshDiff()
+    if (result.kind === "new") {
+      open(result.path)
+      return
+    }
+    const affected = snapshot.tabs.open.filter((path) =>
+      isUnder(path, result.kind === "rename" ? result.from : result.path),
+    )
+    for (const path of affected) workspace.close(path)
+    if (result.kind === "rename") {
+      for (const path of affected) workspace.open(movedPath(path, result.from, result.to))
+    }
   }
 
   return (
@@ -148,6 +187,30 @@ export default function FilesPanel({
           >
             <Search />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              setTreeShown(true)
+              setSearching(!searching)
+            }}
+            aria-label={searching ? "Show the tree" : "Search in files"}
+            aria-pressed={searching}
+            title="Search in files (Ctrl+Shift+F)"
+          >
+            <TextSearch />
+          </Button>
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setEntryAction({ kind: "new", folder: "" })}
+              aria-label="New file"
+              title="New file"
+            >
+              <FilePlus />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -189,19 +252,31 @@ export default function FilesPanel({
             className="relative flex min-h-0 shrink-0 flex-col border-r"
             style={{ width: treeWidth ?? TREE_DEFAULT_WIDTH }}
           >
-            <AsyncView result={listing} errorTitle="Could not list the files">
-              {(value) => (
-                <FileTree
-                  files={value.files}
-                  changes={changes}
-                  active={snapshot.tabs.active}
-                  expanded={snapshot.expanded}
-                  onExpandedChange={(next) => workspace.setExpanded(next)}
-                  onOpen={(path) => workspace.open(path)}
-                  icons={preferences.fileIcons}
-                />
-              )}
-            </AsyncView>
+            {searching ? (
+              <FileSearch
+                sessionId={session.id}
+                icons={preferences.fileIcons}
+                onReveal={(path, line, column, length) => {
+                  workspace.expand(ancestorsOf(path))
+                  workspace.reveal(path, line, column, length)
+                }}
+              />
+            ) : (
+              <AsyncView result={listing} errorTitle="Could not list the files">
+                {(value) => (
+                  <FileTree
+                    onAction={readOnly ? undefined : setEntryAction}
+                    files={value.files}
+                    changes={changes}
+                    active={snapshot.tabs.active}
+                    expanded={snapshot.expanded}
+                    onExpandedChange={(next) => workspace.setExpanded(next)}
+                    onOpen={(path) => workspace.open(path)}
+                    icons={preferences.fileIcons}
+                  />
+                )}
+              </AsyncView>
+            )}
             <ResizeHandle
               edge="end"
               label="Resize the tree"
@@ -226,6 +301,17 @@ export default function FilesPanel({
           }
         />
       </div>
+      <EntryDialog
+        sessionId={session.id}
+        action={entryAction}
+        files={listed}
+        tracked={tracked}
+        dirty={(path) =>
+          snapshot.tabs.open.some((open) => isUnder(open, path) && workspace.isDirty(open))
+        }
+        onClose={() => setEntryAction(undefined)}
+        onDone={afterEntry}
+      />
       <QuickOpen
         sessionId={session.id}
         open={finding}

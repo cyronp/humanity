@@ -15,6 +15,7 @@ import {
   loadLanguage,
   readOnlyExtension,
   readOnlySlot,
+  revealSpec,
   settingsExtension,
   settingsSlot,
 } from "./editorSetup.ts"
@@ -102,6 +103,12 @@ export class FileWorkspace {
   private readOnly = false
   private polling = false
   private focusPending: string | null = null
+  private revealPending: {
+    readonly path: string
+    readonly line: number
+    readonly column: number
+    readonly length: number
+  } | null = null
   private preferences: EditorPreferences = DEFAULT_EDITOR_PREFERENCES
   private readonly autoSaves = new Map<string, number>()
 
@@ -170,6 +177,21 @@ export class FileWorkspace {
     this.emit()
   }
 
+  reveal(path: string, line: number, column: number, length: number) {
+    this.revealPending = { path, line, column, length }
+    this.open(path, { focus: true })
+    if (this.shown === path) this.applyReveal()
+  }
+
+  private applyReveal() {
+    const pending = this.revealPending
+    const view = this.view
+    if (pending === null || view === null || this.shown !== pending.path) return
+    this.revealPending = null
+    view.dispatch(revealSpec(view.state, pending.line, pending.column, pending.length))
+    view.focus()
+  }
+
   activate(path: string) {
     this.tabs = { ...this.tabs, active: path }
     this.emit()
@@ -204,6 +226,7 @@ export class FileWorkspace {
       this.focusPending = null
       view.focus()
     }
+    this.applyReveal()
   }
 
   contentOf(path: string): string | undefined {
