@@ -74,6 +74,7 @@ import {
   useRegisteredCommands,
   withUseNow,
 } from "./registry.ts"
+import { CommandPreview, EmptyPreview, FilterPreview } from "./CommandPreview.tsx"
 import { ThreadPreview } from "./ThreadPreview.tsx"
 
 const THREAD_LIMIT = 40
@@ -404,6 +405,16 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
     page === undefined && highlighted.startsWith("thread:")
       ? threads.find(({ session }) => `thread:${session.id}` === highlighted)
       : undefined
+  const commandIndex = new Map(
+    [...commands, ...flattenPages(commands), ...settingCommands, ...(page?.items ?? [])].map(
+      (command) => [command.id, command] as const,
+    ),
+  )
+  const highlightedCommand = highlighted.startsWith("cmd:")
+    ? commandIndex.get(highlighted.slice("cmd:".length))
+    : highlighted.startsWith("recent:")
+      ? commandIndex.get(highlighted.slice("recent:".length))
+      : undefined
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (pending !== undefined) {
@@ -438,6 +449,11 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
         )
       : []
   const typingFilter = parsed.last?.key !== undefined
+  const highlightedSuggestion = suggestions.find(
+    (suggestion) => `filter:${suggestion.label}` === highlighted,
+  )
+  const previewShown =
+    sourceMode === undefined && mode !== "messages" && page?.Results === undefined
   const filtering = page?.Results === undefined && sourceMode === undefined && mode !== "messages"
 
   const threadGroups = ((): ReadonlyArray<readonly [string, ReadonlyArray<Thread>]> => {
@@ -566,7 +582,7 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
               {items.map((command) => (
                 <PaletteItem
                   key={`${command.id}:${command.title}`}
-                  value={`cmd:${command.id}:${command.title}`}
+                  value={`cmd:${command.id}`}
                   command={command}
                   onRun={runCommand}
                 />
@@ -652,25 +668,36 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
               : (page.placeholder ?? `Search ${page.title}…`)
           }
         />
-        <div className="flex min-h-0">
+        <div className="flex h-[min(30rem,62svh)] min-h-0">
           <div ref={listArea} className="min-w-0 flex-1">
-            <CommandList className="max-h-[min(32rem,68svh)]">
+            <CommandList className="max-h-[min(30rem,62svh)]">
               {filtering && <CommandEmpty>Nothing matches.</CommandEmpty>}
               {page === undefined ? rootContent() : pageContent(page)}
             </CommandList>
           </div>
-          {highlightedThread !== undefined && (
-            <aside className="hidden w-64 shrink-0 border-l md:flex">
-              <ThreadPreview
-                session={highlightedThread.session}
-                project={highlightedThread.project}
-                parentTitle={
-                  highlightedThread.session.parentId == null
-                    ? undefined
-                    : titles.get(highlightedThread.session.parentId)
-                }
-                now={openedAt}
-              />
+          {previewShown && (
+            <aside
+              aria-label="Details"
+              className="hidden w-64 shrink-0 overflow-y-auto border-l md:flex"
+            >
+              {highlightedThread !== undefined ? (
+                <ThreadPreview
+                  session={highlightedThread.session}
+                  project={highlightedThread.project}
+                  parentTitle={
+                    highlightedThread.session.parentId == null
+                      ? undefined
+                      : titles.get(highlightedThread.session.parentId)
+                  }
+                  now={openedAt}
+                />
+              ) : highlightedCommand !== undefined ? (
+                <CommandPreview command={highlightedCommand} />
+              ) : highlightedSuggestion !== undefined ? (
+                <FilterPreview suggestion={highlightedSuggestion} />
+              ) : (
+                <EmptyPreview />
+              )}
             </aside>
           )}
         </div>
