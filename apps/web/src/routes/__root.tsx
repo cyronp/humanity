@@ -2,6 +2,7 @@ import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
 import type { CSSProperties } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppHeaderHost } from "@/features/layout/AppHeader"
+import { NextThreadShortcut } from "@/features/attention/NextThreadShortcut"
 import { NotificationWatcher } from "@/features/notifications/NotificationWatcher"
 import { CommandPalette, type MessageSearch } from "@/features/palette/CommandPalette"
 import { MessageResults } from "@/features/palette/MessageResults"
@@ -71,6 +72,7 @@ function RootLayout() {
       <OnboardingDialog />
       <SettingsDialog />
       <NotificationWatcher />
+      <NextThreadShortcut />
       <AddRepositoryDialog />
       <CommandPalette messages={MESSAGE_SEARCH} />
       <UsageDialog />

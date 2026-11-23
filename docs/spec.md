@@ -302,6 +302,14 @@ The chat shows each of the agent's turns as its reply under one line, "Worked fo
 - **Phases.** Opened, the fold shows phases: consecutive reads and searches are one "Explored" phase, file changes one "Edited" phase, commands and the terminal tools one "Ran" phase, each opening into its calls; any other tool is a phase of its own, its call as it was. Thoughts and text go with the phase they follow. A phase says how many of its calls failed or were denied.
 - **While the agent works,** the line reads "Working for …" and the fold stays open, with the phase in progress named in the present ("Running npm test"). It closes when the turn ends, unless the human opened or closed it. A call waiting for the human opens its fold and phase. "Tool calls start expanded" opens folds and phases too, and a search hit inside a fold opens it.
 
+## Amendment: threads that need you, from anywhere (2026-11-23)
+
+The human sees how many threads need them without looking at Humanity, and goes to each in turn. It adds no library to the stack of section 3.
+
+- **A thread needs the human** while it waits for them or stopped on an error, as the command palette already ranks them.
+- **The desktop app's taskbar.** The shell watches the daemon's thread list itself (`Sessions.watchAll`, with the token, like its updates), so the count is right whether or not the page is loaded. On Windows the taskbar button carries an overlay badge with that count (9+ past nine), amber, or red while one of them stopped on an error, described in words for screen readers; on macOS and Linux the app's badge count. When the count grows and the window is not focused, the taskbar button flashes until it is. The shell draws the badge itself and writes nothing.
+- **Ctrl+J (Cmd+J on a Mac)** goes to the next thread that needs the human, anywhere in the app except a terminal, which keeps its keys: the waiting threads first, the one waiting longest first, then those stopped on an error, round from the thread that is open. The command palette lists it as an action while one needs the human.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
