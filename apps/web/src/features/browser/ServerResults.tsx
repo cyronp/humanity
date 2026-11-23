@@ -15,6 +15,7 @@ export function ServerResults({ close }: PaletteResultsProps) {
             <CommandItem
               key={server.port}
               value={`server ${server.port}`}
+              check={false}
               keywords={[server.url, server.processName ?? ""]}
               onSelect={() => {
                 close()

@@ -65,6 +65,7 @@ export function FileResults({
             <CommandItem
               key={entry.path}
               value={`file ${entry.path}`}
+              check={false}
               onSelect={() => {
                 close()
                 requestOpenFile(sessionId, entry.path)
@@ -72,7 +73,7 @@ export function FileResults({
             >
               {icons ? <FileIcon path={entry.path} /> : <File className="text-muted-foreground" />}
               <span className="shrink-0 truncate">{nameOf(entry.path)}</span>
-              <span className="ml-auto min-w-0 truncate text-right font-mono text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-right font-mono text-xs text-muted-foreground">
                 {entry.path}
               </span>
             </CommandItem>

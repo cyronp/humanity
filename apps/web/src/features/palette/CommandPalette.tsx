@@ -5,7 +5,7 @@ import { defaultFilter } from "cmdk"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { Check, ChevronLeft, ChevronRight, CornerDownLeft, Filter } from "lucide-react"
+import { ChevronLeft, ChevronRight, CornerDownLeft, Filter } from "lucide-react"
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -498,6 +498,7 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
         <CommandItem
           key={suggestion.label}
           value={`filter:${suggestion.label}`}
+          check={false}
           forceMount
           onSelect={() => {
             if (parsed.last === undefined) return
@@ -508,8 +509,8 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
           }}
         >
           <Filter className="text-muted-foreground" />
-          <span className="font-mono text-xs">{suggestion.label}</span>
-          <span className="ml-auto truncate text-right text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs">{suggestion.label}</span>
+          <span className="min-w-0 max-w-[55%] truncate text-right text-xs text-muted-foreground">
             {suggestion.detail}
           </span>
         </CommandItem>
@@ -697,6 +698,7 @@ function ThreadItem({
   return (
     <CommandItem
       value={`thread:${session.id}`}
+      check={false}
       keywords={[session.title, project.name, session.branch, session.provider]}
       onSelect={onSelect}
     >
@@ -706,7 +708,7 @@ function ThreadItem({
         <ProjectIcon project={project} className="size-3.5" />
         <span className="max-w-32 truncate">{project.name}</span>
       </span>
-      <span className="w-24 shrink-0 text-xs text-muted-foreground">
+      <span className="flex w-24 shrink-0 justify-end text-xs text-muted-foreground">
         <ThreadStatus status={session.status} />
       </span>
     </CommandItem>
@@ -727,19 +729,19 @@ function PaletteItem({
       value={value}
       keywords={[command.title, command.group, command.detail ?? "", ...(command.keywords ?? [])]}
       onSelect={() => void onRun(command)}
+      check={command.checked !== undefined}
+      data-checked={command.checked === true}
+      aria-current={command.checked === true ? "true" : undefined}
     >
       {command.icon ?? <CornerDownLeft className="size-4 text-muted-foreground" />}
-      <span className="shrink-0 truncate">{command.title}</span>
+      <span className="min-w-0 flex-1 truncate">{command.title}</span>
       {command.detail !== undefined && (
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span className="min-w-0 max-w-[55%] truncate text-right text-xs text-muted-foreground">
           {command.detail}
         </span>
       )}
-      <span className="ml-auto flex shrink-0 items-center gap-2">
-        {command.shortcut !== undefined && <CommandShortcut>{command.shortcut}</CommandShortcut>}
-        {command.checked === true && <Check className="size-4" aria-label="Current" />}
-        {command.page !== undefined && <ChevronRight className="size-4 text-muted-foreground" />}
-      </span>
+      {command.shortcut !== undefined && <CommandShortcut>{command.shortcut}</CommandShortcut>}
+      {command.page !== undefined && <ChevronRight className="size-4 text-muted-foreground" />}
     </CommandItem>
   )
 }

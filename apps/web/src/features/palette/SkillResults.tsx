@@ -52,6 +52,7 @@ export function SkillResults({
             <CommandItem
               key={`${skill.source}:${skill.location}:${skill.name}`}
               value={`skill ${skill.source} ${skill.location} ${skill.name}`}
+              check={false}
               keywords={[skill.name, skill.invocation, skill.description]}
               onSelect={() => {
                 close()
@@ -62,7 +63,7 @@ export function SkillResults({
               <Sparkles className="mt-0.5 text-muted-foreground" />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-center gap-2">
-                  <span className="truncate font-medium">{skill.name}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{skill.name}</span>
                   {SOURCE_LABEL[skill.source] !== undefined && (
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {SOURCE_LABEL[skill.source]}

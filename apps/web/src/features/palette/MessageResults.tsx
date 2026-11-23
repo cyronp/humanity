@@ -141,6 +141,7 @@ ${projectIds?.join(",") ?? ""}`
           <CommandItem
             key={`${hit.messageId}-${index}`}
             value={`${hit.messageId}-${index}`}
+            check={false}
             onSelect={() => {
               onPick()
               void navigate({
