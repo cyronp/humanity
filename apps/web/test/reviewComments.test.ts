@@ -74,8 +74,7 @@ describe("review comments", () => {
 
   it("takes another heading, and copies comments to another store with ids of their own", () => {
     const pending = [comment("1", "src/a.ts", 42, "Not here.")]
-    expect(formatReviewComments(pending, "My comments on this change:").split("
-")[0]).toBe(
+    expect(formatReviewComments(pending, "My comments on this change:").split("\n")[0]).toBe(
       "My comments on this change:",
     )
     const store = reviewComments("moved-comments")
