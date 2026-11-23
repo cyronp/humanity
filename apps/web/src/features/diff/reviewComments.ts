@@ -66,9 +66,16 @@ const set = (sessionId: string, next: ReadonlyArray<ReviewComment>) => {
   for (const listener of listeners.get(sessionId) ?? []) listener()
 }
 
+export const pendingChangeKey = (changeId: string) => `change-${changeId}`
+
 export const reviewComments = (sessionId: string) => ({
   add: (anchor: CommentAnchor, body: string) =>
     set(sessionId, [...current(sessionId), { ...anchor, id: crypto.randomUUID(), body }]),
+  addAll: (comments: ReadonlyArray<ReviewComment>) =>
+    set(sessionId, [
+      ...current(sessionId),
+      ...comments.map((comment) => ({ ...comment, id: crypto.randomUUID() })),
+    ]),
   update: (id: string, body: string) =>
     set(
       sessionId,
@@ -106,7 +113,10 @@ const quote = (text: string) => {
 const sortKey = (comment: ReviewComment) =>
   `${comment.path}\u0000${String(comment.line).padStart(8, "0")}`
 
-export const formatReviewComments = (comments: ReadonlyArray<ReviewComment>): string => {
+export const formatReviewComments = (
+  comments: ReadonlyArray<ReviewComment>,
+  heading = `My review comments on the uncommitted changes (${comments.length}):`,
+): string => {
   const sorted = [...comments].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
   const entries = sorted.map((comment) =>
     [
@@ -115,9 +125,7 @@ export const formatReviewComments = (comments: ReadonlyArray<ReviewComment>): st
       comment.body.trim(),
     ].join("\n"),
   )
-  return [`My review comments on the uncommitted changes (${comments.length}):`, ...entries].join(
-    "\n\n",
-  )
+  return [heading, ...entries].join("\n\n")
 }
 
 export const staleComments = (

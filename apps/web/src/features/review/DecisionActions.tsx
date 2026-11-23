@@ -14,10 +14,12 @@ export function DecisionActions({
   toolName,
   pending,
   onDecide,
+  lineComments = 0,
 }: {
   readonly toolName: string
   readonly pending: boolean
   readonly onDecide: (verdict: Verdict) => void
+  readonly lineComments?: number
 }) {
   const [comment, setComment] = useState("")
   const decide = (decision: ApprovalDecision, allowForSession = false) => {
@@ -34,7 +36,11 @@ export function DecisionActions({
       <Input
         value={comment}
         onChange={(event) => setComment(event.target.value)}
-        placeholder="Optional comment (sent to the agent if you deny)"
+        placeholder={
+          lineComments === 0
+            ? "Optional comment (sent to the agent if you deny)"
+            : "Optional comment, sent with your line comments if you deny"
+        }
         aria-label="Comment for the agent"
         data-decide="comment"
       />
@@ -46,7 +52,9 @@ export function DecisionActions({
           data-decide="deny"
         >
           <X />
-          Deny
+          {lineComments === 0
+            ? "Deny"
+            : `Deny with ${lineComments} comment${lineComments === 1 ? "" : "s"}`}
         </Button>
         <Button
           variant="outline"

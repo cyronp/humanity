@@ -38,6 +38,7 @@ export function HunkView({
   onReference,
   editorRoot,
   className,
+  comments,
 }: {
   readonly hunk: DiffHunk
   readonly filePath: string
@@ -46,6 +47,7 @@ export function HunkView({
   readonly onReference?: ((reference: string) => void) | undefined
   readonly editorRoot?: string | undefined
   readonly className?: string
+  readonly comments?: LineComments | undefined
 }) {
   return (
     <div className={cn("overflow-hidden rounded-md border bg-card", className)}>
@@ -70,6 +72,7 @@ export function HunkView({
         filePath={filePath}
         onReference={onReference}
         editorRoot={editorRoot}
+        comments={comments}
       />
       {footer}
     </div>
