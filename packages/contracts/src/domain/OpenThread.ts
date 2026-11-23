@@ -41,12 +41,28 @@ export const threadMarkdownLink = (
 ): string =>
   `[${thread.title.replace(/[\\[\]]/g, "\\$&")}](${threadHref(thread.projectId, thread.sessionId)})`
 
-const MARKDOWN_HREF = /\]\((\/projects\/[^)\s]+)\)/
+const MARKDOWN_LINK_START = "](/projects/"
+
+const endsHref = (character: string) => character === ")" || /\s/.test(character)
+
+const firstMarkdownThreadHref = (text: string): string | undefined => {
+  let from = 0
+  for (;;) {
+    const start = text.indexOf(MARKDOWN_LINK_START, from)
+    if (start === -1) return undefined
+    const hrefStart = start + 2
+    const pathStart = start + MARKDOWN_LINK_START.length
+    let end = pathStart
+    while (end < text.length && !endsHref(text.charAt(end))) end++
+    if (end > pathStart && text.charAt(end) === ")") return text.slice(hrefStart, end)
+    from = Math.max(end, start + 1)
+  }
+}
 
 export const openedThreadIn = (
   text: string,
 ): { readonly projectId: ProjectId; readonly sessionId: SessionId } | undefined => {
-  const href = MARKDOWN_HREF.exec(text)?.[1]
+  const href = firstMarkdownThreadHref(text)
   return href === undefined ? undefined : parseThreadHref(href)
 }
 
