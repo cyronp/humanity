@@ -221,6 +221,7 @@ export function ToolPanel({
           activity={activity}
           onClose={onClose}
           onReference={onReference}
+          onInsert={onCapture?.block}
           openFiles={openFiles}
           onFileOpenChange={setFileOpen}
         />
@@ -242,12 +243,14 @@ function GitPanel({
   activity,
   onClose,
   onReference,
+  onInsert,
   openFiles,
   onFileOpenChange,
 }: {
   readonly session: Session
   readonly activity: number
   readonly onClose: () => void
+  readonly onInsert?: ((text: string) => void) | undefined
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
   readonly onFileOpenChange: (key: string, open: boolean) => void
@@ -276,6 +279,7 @@ function GitPanel({
   const body = {
     session,
     onReference,
+    onInsert,
     openFiles,
     onFileOpenChange,
     onOpenPullRequest: () => setOpening(true),
@@ -339,6 +343,7 @@ function GitPanel({
 
 interface GitBodyProps {
   readonly session: Session
+  readonly onInsert?: ((text: string) => void) | undefined
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
   readonly onFileOpenChange: (key: string, open: boolean) => void
@@ -355,6 +360,7 @@ function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPub
 function GitBody({
   session,
   onReference,
+  onInsert,
   openFiles,
   onFileOpenChange,
   onOpenPullRequest,
@@ -453,6 +459,7 @@ function GitBody({
             <DiffTab
               session={session}
               onReference={onReference}
+              onInsert={onInsert}
               open={openFiles}
               onOpenChange={onFileOpenChange}
             />

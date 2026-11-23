@@ -11,7 +11,7 @@ import {
 import { type ReactNode, useState } from "react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { FILE_STATUS, fileNameClass, FileStatusLetter } from "./FileStatus.tsx"
-import { HunkButtons, HunkLines } from "./HunkView.tsx"
+import { HunkButtons, HunkLines, type LineComments } from "./HunkView.tsx"
 
 const ICON = {
   create: FilePlus,
@@ -43,7 +43,9 @@ export function FileDiffView({
   onOpenChange,
   headerActions,
   flat = false,
+  comments,
 }: {
+  readonly comments?: LineComments | undefined
   readonly file: FileDiff
   readonly flat?: boolean
   readonly headerActions?: ReactNode
@@ -112,7 +114,7 @@ export function FileDiffView({
           )}
         </header>
         <CollapsibleContent>
-          <FileDiffBody file={file} links={links} />
+          <FileDiffBody file={file} links={links} comments={comments} />
         </CollapsibleContent>
       </section>
     </Collapsible>
@@ -122,7 +124,9 @@ export function FileDiffView({
 function FileDiffBody({
   file,
   links,
+  comments,
 }: {
+  readonly comments: LineComments | undefined
   readonly file: FileDiff
   readonly links: {
     readonly filePath: string
@@ -141,7 +145,7 @@ function FileDiffBody({
         </p>
       ) : (
         <>
-          <HunkLines hunk={first} {...links} />
+          <HunkLines hunk={first} {...links} comments={comments} />
           {rest.map((hunk) => (
             <div key={hunk.index}>
               <div className="flex items-center justify-between gap-2 border-y bg-muted/30 px-3 py-0.5">
@@ -150,7 +154,7 @@ function FileDiffBody({
                   <HunkButtons hunk={hunk} {...links} />
                 </div>
               </div>
-              <HunkLines hunk={hunk} {...links} />
+              <HunkLines hunk={hunk} {...links} comments={comments} />
             </div>
           ))}
         </>

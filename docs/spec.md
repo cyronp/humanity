@@ -260,6 +260,14 @@ The Files tool searches inside the thread's files and creates, moves and deletes
 - **Open tabs follow:** a renamed file's tab reopens under its new path, a deleted file's tab closes.
 - **Not yet:** an empty new folder (git does not list it, so the tree would not show it; a new file's path makes its folders), replacing in files, and dragging entries in the tree.
 
+## Amendment: comments on changes, for the agent (2026-11-22)
+
+The human reviews the agent's uncommitted changes as in a code review, and the comments become a message. This adds no library to the stack of section 3, and no request to the daemon.
+
+- **A comment on any line** of Source control → Changes, from a button in the line's gutter: on the new line, or the old one for a removed line. Comments show under their line, and can be edited or deleted. They are kept in the browser (`humanity.reviewComments.<sessionId>`), like unsaved edits, until they are used or discarded; an ended thread takes none.
+- **One bar over the changes** counts them, and says how many sit on lines that are no longer in the diff, which still go along. "Add to my message" puts them in the composer as one block (each file and line, the line quoted, then the comment), to edit and send like any message, and clears them; Discard drops them. Nothing reaches the agent until the human sends.
+- **Not yet:** comments on the pull request page's diffs, posting them to the forge as a review, and comments on a file change the agent is waiting on in "Ask me" (its Deny comment stays the place for that).
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.
