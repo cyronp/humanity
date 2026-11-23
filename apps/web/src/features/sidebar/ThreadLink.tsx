@@ -1,4 +1,4 @@
-import type { Project, Session, SessionStatus } from "@humanity/contracts"
+import type { MessageHit, Project, Session, SessionStatus } from "@humanity/contracts"
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import {
@@ -16,6 +16,7 @@ import {
   Network,
   SquareTerminal,
 } from "lucide-react"
+import { SearchSnippet } from "@/components/SearchSnippet"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon"
 import { STATUS_TONE, TONE_TEXT } from "@/features/session/statusTone"
@@ -27,17 +28,20 @@ export function ThreadLink({
   active,
   onNavigate,
   attention,
+  hit,
 }: {
   readonly session: Session
   readonly project: Project
   readonly active: boolean
   readonly onNavigate: () => void
   readonly attention?: SessionStatus | undefined
+  readonly hit?: MessageHit | undefined
 }) {
   return (
     <Link
       to="/projects/$projectId/sessions/$sessionId"
       params={{ projectId: project.id, sessionId: session.id }}
+      search={hit === undefined ? {} : { message: hit.messageId }}
       onClick={onNavigate}
       data-active={active}
       aria-current={active ? "page" : undefined}
@@ -60,6 +64,12 @@ export function ThreadLink({
           </span>
         </div>
         <ThreadBranch session={session} />
+        {hit !== undefined && (
+          <SearchSnippet
+            snippet={hit.snippet}
+            className="line-clamp-2 text-xs text-muted-foreground"
+          />
+        )}
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1.5">
             <ThreadStatus status={session.status} />

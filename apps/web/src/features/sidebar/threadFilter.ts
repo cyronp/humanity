@@ -1,4 +1,4 @@
-import type { Project, Session, SessionStatus } from "@humanity/contracts"
+import type { MessageHit, Project, Session, SessionStatus } from "@humanity/contracts"
 
 export type ThreadOrder = "newest" | "oldest"
 
@@ -39,7 +39,17 @@ export const isDefaultFilter = (filter: ThreadFilter): boolean =>
   sameMembers(filter.statuses, DEFAULT_THREAD_FILTER.statuses) &&
   filter.order === DEFAULT_THREAD_FILTER.order
 
-const matchesQuery = (thread: Thread, query: string) => {
+export type MessageMatches = ReadonlyMap<string, MessageHit>
+
+const NO_MATCHES: MessageMatches = new Map()
+
+export const firstHitPerThread = (hits: ReadonlyArray<MessageHit>): MessageMatches => {
+  const matches = new Map<string, MessageHit>()
+  for (const hit of hits) if (!matches.has(hit.sessionId)) matches.set(hit.sessionId, hit)
+  return matches
+}
+
+export const matchesQuery = (thread: Thread, query: string) => {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) return true
   const haystack = [thread.session.title, thread.project.name, thread.session.branch]
@@ -52,6 +62,7 @@ export const selectThreads = (
   threads: ReadonlyArray<Thread>,
   query: string,
   filter: ThreadFilter,
+  messages: MessageMatches = NO_MATCHES,
 ): ReadonlyArray<Thread> => {
   const projectIds = filter.projectIds.filter((id) =>
     threads.some((thread) => thread.project.id === id),
@@ -62,7 +73,7 @@ export const selectThreads = (
       (thread) =>
         (projectIds.length === 0 || projectIds.includes(thread.project.id)) &&
         filter.statuses.includes(thread.session.status) &&
-        matchesQuery(thread, query),
+        (matchesQuery(thread, query) || messages.has(thread.session.id)),
     )
     .toSorted((a, b) => sign * (Date.parse(a.session.updatedAt) - Date.parse(b.session.updatedAt)))
 }
@@ -71,12 +82,14 @@ export const selectHistory = (
   threads: ReadonlyArray<Thread>,
   query: string,
   filter: ThreadFilter,
+  messages: MessageMatches = NO_MATCHES,
 ): ReadonlyArray<Thread> =>
-  selectThreads(threads, query, {
-    projectIds: filter.projectIds,
-    statuses: ["ended"],
-    order: "newest",
-  })
+  selectThreads(
+    threads,
+    query,
+    { projectIds: filter.projectIds, statuses: ["ended"], order: "newest" },
+    messages,
+  )
 
 const STORAGE_KEY = "humanity.threadFilter"
 

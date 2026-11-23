@@ -13,7 +13,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { allSessionsAtom } from "@/features/session/atoms"
-import { selectHistory, type ThreadFilter } from "./threadFilter.ts"
+import {
+  matchesQuery,
+  type MessageMatches,
+  selectHistory,
+  type ThreadFilter,
+} from "./threadFilter.ts"
 import { ThreadLink } from "./ThreadLink.tsx"
 
 const FIRST_PAGE = 10
@@ -25,11 +30,13 @@ const DIVIDER_BUTTON =
 export function ThreadHistory({
   projects,
   query,
+  messages,
   filter,
   onNavigate,
 }: {
   readonly projects: ReadonlyArray<Project>
   readonly query: string
+  readonly messages: MessageMatches
   readonly filter: ThreadFilter
   readonly onNavigate: () => void
 }) {
@@ -45,7 +52,7 @@ export function ThreadHistory({
     const project = projects.find((candidate) => candidate.id === session.projectId)
     return project === undefined ? [] : [{ session, project }]
   })
-  const ended = selectHistory(threads, query, filter)
+  const ended = selectHistory(threads, query, filter, messages)
   const shown = ended.slice(0, limit)
   const remaining = ended.length - shown.length
 
@@ -74,13 +81,14 @@ export function ThreadHistory({
             </p>
           ) : (
             <SidebarMenu className="gap-0.5">
-              {shown.map(({ session, project }) => (
-                <SidebarMenuItem key={session.id}>
+              {shown.map((thread) => (
+                <SidebarMenuItem key={thread.session.id}>
                   <ThreadLink
-                    session={session}
-                    project={project}
-                    active={session.id === activeId}
+                    session={thread.session}
+                    project={thread.project}
+                    active={thread.session.id === activeId}
                     onNavigate={onNavigate}
+                    hit={matchesQuery(thread, query) ? undefined : messages.get(thread.session.id)}
                   />
                 </SidebarMenuItem>
               ))}

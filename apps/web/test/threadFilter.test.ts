@@ -1,5 +1,6 @@
 import {
   DEFAULT_PROJECT_SETTINGS,
+  type MessageHit,
   type Project,
   ProjectId,
   type Session,
@@ -9,6 +10,7 @@ import {
 import { describe, expect, it } from "vitest"
 import {
   DEFAULT_THREAD_FILTER,
+  firstHitPerThread,
   isDefaultFilter,
   selectHistory,
   selectThreads,
@@ -99,6 +101,29 @@ describe("selectThreads", () => {
   it("ignores a chosen project that no longer exists", () => {
     const filter = { ...DEFAULT_THREAD_FILTER, projectIds: ["gone"] }
     expect(ids(selectThreads(threads, "", filter))).toEqual(["b", "a", "d"])
+  })
+})
+
+const hit = (sessionId: string, messageId: string): MessageHit => ({
+  sessionId: SessionId.make(sessionId),
+  projectId: ProjectId.make("p1"),
+  messageId,
+  kind: "agent",
+  snippet: "a match",
+  createdAt: "2026-11-10T10:00:00.000Z",
+})
+
+describe("message matches", () => {
+  it("keeps each thread's best hit, the first the search answered", () => {
+    const matches = firstHitPerThread([hit("a", "m1"), hit("c", "m2"), hit("a", "m3")])
+    expect([...matches.keys()]).toEqual(["a", "c"])
+    expect(matches.get("a")?.messageId).toBe("m1")
+  })
+
+  it("adds threads whose messages match to those whose names do, within the filter", () => {
+    const matches = firstHitPerThread([hit("d", "m1"), hit("c", "m2")])
+    expect(ids(selectThreads(threads, "login", DEFAULT_THREAD_FILTER, matches))).toEqual(["a", "d"])
+    expect(ids(selectHistory(threads, "login", DEFAULT_THREAD_FILTER, matches))).toEqual(["c"])
   })
 })
 
