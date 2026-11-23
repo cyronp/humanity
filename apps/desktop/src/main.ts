@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import brandMark from "../../web/public/favicon.svg"
-import { APP_USER_MODEL_ID, resolveDesktopConfig } from "./config.ts"
+import { APP_NAME, APP_USER_MODEL_ID, resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { makeElectronUpdater } from "./electronUpdater.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
@@ -23,6 +23,8 @@ import { installPreview } from "./preview.ts"
 import { backdropColor, splashUrl } from "./splash.ts"
 import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
 import { connectUpdates } from "./updatesClient.ts"
+
+app.setName(APP_NAME)
 
 const config = resolveDesktopConfig({
   env: process.env,
@@ -71,7 +73,7 @@ const createWindow = () => {
     height: 900,
     minWidth: 800,
     minHeight: 560,
-    title: "Humanity",
+    title: APP_NAME,
     autoHideMenuBar: true,
     backgroundColor: backdropColor(dark),
     ...frame(),
@@ -175,7 +177,7 @@ const start = () => {
     finished = true
     if (output === undefined) return
     dialog.showErrorBox(
-      "Humanity could not start",
+      `${APP_NAME} could not start`,
       `Its daemon did not come up on ${config.origin}.\n\n${output}`,
     )
     app.quit()
@@ -190,6 +192,11 @@ const start = () => {
     if (finished) return
     event.preventDefault()
     void stopDaemon().then(() => app.quit())
+  })
+
+  app.on("browser-window-created", (_event, created) => {
+    created.setTitle(APP_NAME)
+    created.on("page-title-updated", (event) => event.preventDefault())
   })
 
   let preview: ReturnType<typeof installPreview> | undefined

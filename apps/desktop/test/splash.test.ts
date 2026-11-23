@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { APP_NAME } from "../src/config.ts"
 import { backdropColor, splashUrl } from "../src/splash.ts"
 
 const mark = '<svg viewBox="0 0 24 24"><path d="M0 0h1v1h-1z"/></svg>'
@@ -9,6 +10,7 @@ describe("splashUrl", () => {
     const url = splashUrl(mark, true)
     expect(url.startsWith("data:text/html;charset=utf-8,")).toBe(true)
     expect(pageOf(url)).toContain(`<body>${mark}</body>`)
+    expect(pageOf(url)).toContain(`<title>${APP_NAME}</title>`)
   })
 
   it("sits on the sidebar's colour of the theme", () => {

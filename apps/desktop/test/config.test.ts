@@ -2,7 +2,7 @@ import { DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT } from "@humanity/contracts"
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { APP_USER_MODEL_ID, resolveDesktopConfig } from "../src/config.ts"
+import { APP_NAME, APP_USER_MODEL_ID, resolveDesktopConfig } from "../src/config.ts"
 
 const input = {
   env: {},
@@ -89,7 +89,8 @@ describe("the app's name", () => {
   ) as { readonly productName?: string }
 
   it("is the installer's product name in Electron too", () => {
-    expect(lines).toContain(`productName: ${manifest.productName}`)
+    expect(manifest.productName).toBe(APP_NAME)
+    expect(lines).toContain(`productName: ${APP_NAME}`)
   })
 
   it("names the install and updater folders without the workspace scope", () => {
