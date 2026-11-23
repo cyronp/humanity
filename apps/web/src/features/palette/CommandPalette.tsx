@@ -704,11 +704,11 @@ function ThreadItem({
     >
       <ProviderIcon provider={sessionProvider(session)} className="size-4" />
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
-        <ProjectIcon project={project} className="size-3.5" />
-        <span className="max-w-32 truncate">{project.name}</span>
-      </span>
-      <span className="flex w-24 shrink-0 justify-end text-xs text-muted-foreground">
+      <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+        <span className="hidden items-center gap-1 sm:flex">
+          <ProjectIcon project={project} className="size-3.5" />
+          <span className="max-w-32 truncate">{project.name}</span>
+        </span>
         <ThreadStatus status={session.status} />
       </span>
     </CommandItem>
