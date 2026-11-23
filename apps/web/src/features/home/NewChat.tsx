@@ -11,7 +11,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { COMPARE_RUNS } from "@humanity/contracts"
-import { Columns3, FolderPlus, X } from "lucide-react"
+import { FolderPlus } from "lucide-react"
 import { type FormEvent, type KeyboardEvent, useId, useMemo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
@@ -309,62 +309,35 @@ function NewChatForm({
           <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
             <ReasoningPicker value={effort} onChange={setEffort} disabled={pending} />
-            <ModelPicker provider={provider} value={model} onChange={setModel} />
-            {extra.length + 1 < COMPARE_RUNS.max && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={pending}
-                onClick={() => setExtra([...extra, { provider, model }])}
-                aria-label="Compare with another model"
-                title="Compare with another model: the same prompt runs on each, in worktrees of their own"
-              >
-                <Columns3 />
-              </Button>
-            )}
+            <ModelPicker
+              provider={provider}
+              value={model}
+              onChange={setModel}
+              disabled={pending}
+              compare={{ others: extra, max: COMPARE_RUNS.max, onOthersChange: setExtra }}
+            />
             <SendButton
               ready={text.trim() !== "" && !pending && !files.reading}
               disabled={pending || files.reading || text.trim() === ""}
-              label={pending ? "Creating the session" : "Start the session"}
+              label={
+                pending
+                  ? "Creating the session"
+                  : extra.length > 0
+                    ? `Start ${extra.length + 1} runs to compare`
+                    : "Start the session"
+              }
             />
           </div>
         </ChatBoxFooter>
       </ChatBox>
-      {extra.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Columns3 className="size-3.5" />
-          <span>Also on</span>
-          {extra.map((choice, index) => (
-            <span key={index} className="flex items-center gap-0.5 rounded-md border pr-0.5">
-              <ModelPicker
-                provider={choice.provider}
-                value={choice.model}
-                onChange={(next) => setExtra(extra.map((each, at) => (at === index ? next : each)))}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setExtra(extra.filter((_, at) => at !== index))}
-                aria-label="Remove this model"
-                title="Remove"
-              >
-                <X />
-              </Button>
-            </span>
-          ))}
-          <span>
-            · {extra.length + 1} runs, each in a worktree of its own, from {shownBranch}
-          </span>
-        </div>
-      )}
       {!pending && <KeyHint typing={text.trim() !== ""} className="flex justify-center" />}
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">
-          {chosen === undefined || chosen === current
-            ? "Starting the session…"
-            : `Switching your checkout to ${chosen}…`}
+          {extra.length > 0
+            ? `Starting ${extra.length + 1} runs, each in a worktree of its own…`
+            : chosen === undefined || chosen === current
+              ? "Starting the session…"
+              : `Switching your checkout to ${chosen}…`}
         </p>
       )}
       {error !== undefined && <ErrorNote title="Could not start the session" message={error} />}
