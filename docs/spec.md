@@ -304,6 +304,14 @@ The chat shows each of the agent's turns as its reply under one line, "Worked fo
 - **Phases.** Opened, the fold shows phases: consecutive reads and searches are one "Explored" phase, file changes one "Edited" phase, commands and the terminal tools one "Ran" phase, each opening into its calls; any other tool is a phase of its own, its call as it was. Thoughts and text go with the phase they follow. A phase says how many of its calls failed or were denied.
 - **While the agent works,** the line reads "Working for …" and the fold stays open, with the phase in progress named in the present ("Running npm test"). It closes when the turn ends, unless the human opened or closed it. A call waiting for the human opens its fold and phase. "Tool calls start expanded" opens folds and phases too, and a search hit inside a fold opens it.
 
+## Amendment: checks in one click (2026-11-23)
+
+The human runs a project's checks (lint, typecheck, tests) from a thread, and hands what fails to the agent. It adds no library to the stack of section 3.
+
+- **Set per project.** Settings, under Projects, has Checks: one command per line, kept in `Project.settings` (`checkScript`), run joined with `&&` like the setup script. A project without checks offers the button anyway, which opens that setting.
+- **Run checks** sits in Source control's header beside Sync, and in the command palette. `Sessions.runChecks` opens a new terminal of the thread, as the human's (titled Checks), waits for its shell to report it is ready, types the commands and waits for them to end (shell integration), at most 30 minutes. They are the human's own command, like the setup script, and reach no permission check. It answers how they ended (passed, failed with the exit code, still running, or a shell that cannot tell) with the last 200 lines they printed.
+- **The result** shows in a bar over Source control's tabs, kept in the page until dismissed: a button to show its terminal and, when they failed, "Add to my message", which puts the command, the exit code and the output's last 80 lines in the composer, in a fence their backticks cannot close, to edit and send. Nothing reaches the agent until the human sends.
+
 ## Amendment: threads that need you, from anywhere (2026-11-23)
 
 The human sees how many threads need them without looking at Humanity, and goes to each in turn. It adds no library to the stack of section 3.

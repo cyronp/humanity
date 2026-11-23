@@ -289,6 +289,15 @@ export class AccountFolderInvalid extends Schema.TaggedError<AccountFolderInvali
   }
 }
 
+export class ChecksUnavailable extends Schema.TaggedError<ChecksUnavailable>()(
+  "ChecksUnavailable",
+  { reason: Schema.String },
+) {
+  override get message() {
+    return this.reason
+  }
+}
+
 export class HandoffUnavailable extends Schema.TaggedError<HandoffUnavailable>()(
   "HandoffUnavailable",
   { reason: Schema.String },

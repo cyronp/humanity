@@ -58,6 +58,10 @@ import {
   SessionId,
   SessionNotFound,
   HandoffUnavailable,
+  ChecksUnavailable,
+  CHECKS_OUTPUT_LINES,
+  CHECKS_TIMEOUT_MS,
+  type ChecksResult,
   type HandoffPreview,
   type SessionStatus,
   type SessionUsage,
@@ -194,6 +198,9 @@ export const sessionBranchName = (
   prefix: string = DEFAULT_BRANCH_PREFIX,
 ): string => `${prefix}${sessionId.slice(0, 8)}-${slugify(title)}`
 
+const SHELL_READY_MS = 15_000
+const SHELL_READY_POLL_MS = 100
+
 export const setupCommand = (script: string | null): string | undefined => {
   const lines = (script ?? "")
     .split(/\r?\n/)
@@ -319,6 +326,9 @@ export class SessionService extends Context.Service<
       model: string | null,
       accountId?: string | undefined,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded | ProviderSwitchUnavailable>
+    readonly runChecks: (
+      sessionId: string,
+    ) => Effect.Effect<ChecksResult, SessionNotFound | SessionEnded | ChecksUnavailable>
     readonly handoffPreview: (
       sessionId: string,
     ) => Effect.Effect<HandoffPreview | null, SessionNotFound>
@@ -1513,6 +1523,72 @@ export class SessionService extends Context.Service<
           ),
         )
 
+      const shellReady = (terminalId: string) =>
+        Effect.gen(function* () {
+          const deadline = (yield* Clock.currentTimeMillis) + SHELL_READY_MS
+          for (;;) {
+            const info = yield* terminals.info(terminalId)
+            if (info.integration) return true
+            if (info.state === "exited") return false
+            if ((yield* Clock.currentTimeMillis) >= deadline) return false
+            yield* Effect.sleep(SHELL_READY_POLL_MS)
+          }
+        })
+
+      const runChecks = Effect.fn("SessionService.runChecks")(function* (sessionId: string) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        const refused = (reason: string) => new ChecksUnavailable({ reason })
+        const project = yield* projects
+          .get(session.projectId)
+          .pipe(Effect.mapError(() => refused("This thread's project is gone.")))
+        const command = setupCommand(project.settings.checkScript)
+        if (command === undefined) {
+          return yield* refused(
+            `No checks are set for ${project.name}. Add them in Settings, under Projects.`,
+          )
+        }
+        return yield* Effect.gen(function* () {
+          const terminal = yield* terminals.open(
+            { _tag: "Session", sessionId: session.id },
+            { opener: "human", title: "Checks" },
+          )
+          const tracked = yield* shellReady(terminal.id)
+          const cursor = yield* terminals.agentCursor(terminal.id)
+          yield* terminals.agentWrite(terminal.id, `${command}\r`)
+          if (!tracked) {
+            return {
+              terminalId: terminal.id,
+              command,
+              outcome: "untracked" as const,
+              exitCode: null,
+              output: "",
+            }
+          }
+          const waited = yield* terminals.agentWait(terminal.id, {
+            for: { _tag: "command" },
+            since: cursor,
+            timeoutMs: CHECKS_TIMEOUT_MS,
+            maxLines: CHECKS_OUTPUT_LINES,
+          })
+          const outcome =
+            waited.outcome === "timeout"
+              ? ("timeout" as const)
+              : waited.outcome === "unsupported"
+                ? ("untracked" as const)
+                : waited.exitCode === 0
+                  ? ("passed" as const)
+                  : ("failed" as const)
+          return {
+            terminalId: terminal.id,
+            command,
+            outcome,
+            exitCode: waited.exitCode,
+            output: waited.text,
+          }
+        }).pipe(Effect.mapError((error) => refused(`The checks did not start: ${error.message}`)))
+      })
+
       const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
         sessionId: string,
         autonomy: Autonomy,
@@ -2643,6 +2719,7 @@ export class SessionService extends Context.Service<
         switchProvider,
         handoffPreview,
         trimHandoff,
+        runChecks,
         sendMessage,
         attachment,
         interrupt,

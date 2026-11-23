@@ -27,6 +27,7 @@ import { useProviderAccounts, useProviderModels } from "@/features/providers/use
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { pushAtom, syncAtom } from "./atoms.ts"
+import { useCheckScript, useRunChecks } from "./ChecksButton.tsx"
 
 const outcomeOf = (exit: Exit.Exit<unknown, unknown>): PaletteOutcome =>
   Exit.isSuccess(exit) ? undefined : { error: describeCause(exit.cause) }
@@ -44,6 +45,8 @@ export function useThreadPalette(
   const modelItems = useModelItems(session, busy, composer)
   const push = useAtomSet(pushAtom, { mode: "promiseExit" })
   const sync = useAtomSet(syncAtom, { mode: "promiseExit" })
+  const checkScript = useCheckScript(session)
+  const runChecks = useRunChecks(session)
 
   const commands = useMemo((): ReadonlyArray<PaletteCommand> => {
     const sourceControl: ReadonlyArray<PaletteCommand> = [
@@ -77,6 +80,18 @@ export function useThreadPalette(
                   }),
                 ),
             } satisfies PaletteCommand,
+            ...(checkScript === null
+              ? []
+              : [
+                  {
+                    id: "git.checks",
+                    title: "Run checks",
+                    group: "Source control",
+                    detail: checkScript.trim().split(/\r?\n/).filter(Boolean).join(" && "),
+                    keywords: ["lint", "typecheck", "test", "ci", "verify"],
+                    run: () => void runChecks(),
+                  } satisfies PaletteCommand,
+                ]),
             {
               id: "git.push",
               title: "Push",
@@ -146,7 +161,7 @@ export function useThreadPalette(
       },
       ...sourceControl,
     ]
-  }, [composer, modelItems, push, session, sync, writable])
+  }, [checkScript, composer, modelItems, push, runChecks, session, sync, writable])
   usePaletteCommands("thread-extras", commands)
 
   const files = useMemo(

@@ -34,6 +34,8 @@ import {
   sessionCommitsAtom,
   sessionDiffAtom,
 } from "../atoms.ts"
+import { ChecksBar } from "../ChecksBar.tsx"
+import { ChecksButton } from "../ChecksButton.tsx"
 import { SyncButton } from "../SyncButton.tsx"
 import { CHECK_ICON, ChecksTab } from "./ChecksTab.tsx"
 import { CommitsTab } from "./CommitsTab.tsx"
@@ -312,6 +314,7 @@ function GitPanel({
           <PanelHeading session={session} publication={branch} />
         )}
         <div className="flex shrink-0 items-center gap-1">
+          <ChecksButton session={session} />
           <SyncButton session={session} />
           <Button
             variant="ghost"
@@ -333,6 +336,7 @@ function GitPanel({
           </Button>
         </div>
       </div>
+      <ChecksBar sessionId={session.id} onInsert={onInsert} />
       {branch === undefined ? (
         <GitBody {...body} publication={undefined} feed={undefined} />
       ) : (
