@@ -106,6 +106,7 @@ describe("open_thread", () => {
         'Opened the thread "Fix [login]" on Claude Code, opus, high effort. It is working now.',
         "When you tell the human about it, link to it inline in your sentence, with exactly this markdown: [Fix \\[login\\]](/projects/p1/sessions/s1)",
         "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
+        'To wait for it to finish, or to read what it did, call thread_result with thread_id "s1".',
       ].join("\n"),
     )
     expect(
