@@ -75,5 +75,6 @@ export const formatOpenedThread = (thread: OpenedThread): string => {
     `Opened the thread "${thread.title}" on ${PROVIDER_NAMES[thread.provider]}, ${runsOn}. It is working now.`,
     `When you tell the human about it, link to it inline in your sentence, with exactly this markdown: ${threadMarkdownLink(thread)}`,
     "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
+    `To wait for it to finish, or to read what it did, call thread_result with thread_id "${thread.sessionId}".`,
   ].join("\n")
 }

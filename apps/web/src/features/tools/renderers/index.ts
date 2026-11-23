@@ -11,7 +11,7 @@ import { patchRenderer } from "./patch.tsx"
 import { searchRenderer } from "./search.tsx"
 import { shellRenderer } from "./shell.tsx"
 import { terminalRenderer } from "./terminal.tsx"
-import { threadRenderer } from "./thread.tsx"
+import { threadRenderer, threadResultRenderer } from "./thread.tsx"
 
 export const toolRenderers: ReadonlyArray<ToolRenderer> = [
   readRenderer,
@@ -23,6 +23,7 @@ export const toolRenderers: ReadonlyArray<ToolRenderer> = [
   subagentRenderer,
   questionRenderer,
   threadRenderer,
+  threadResultRenderer,
   terminalRenderer,
   mcpRenderer,
   genericRenderer,

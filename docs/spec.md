@@ -211,7 +211,8 @@ A thread remembers the thread it came from, and the sidebar shows them together.
 - **The link.** `sessions.parent_session_id` names the thread a thread came from, `relation` how (`opened` by the agent's `open_thread`, or `forked` from it by the human) and `forked_at_message_id` where a fork was made. Deleting a thread leaves its children, with no parent.
 - **The sidebar as a tree.** A thread is shown under the thread it came from, indented, as long as that thread is shown too; otherwise at the top level. When a thread it opened, at any depth, waits for the human, stopped on an error or is working, its row says so beside its own status.
 - **The call shows its thread.** An `open_thread` card in the chat shows the opened thread's status as it changes.
-- **Ending a thread leaves the threads it opened running.** The agent is still not told when a thread it opened finishes.
+- **Ending a thread leaves the threads it opened running.**
+- **Waiting for a thread it opened (2026-11-23).** `thread_result`, a read of Humanity's MCP server offered with `open_thread` (and under its switch), takes the id `open_thread` returns and waits until that thread stops working: it finished its turn, waits for the human, stopped on an error, or was stopped or ended. It then answers how it stopped and its agent's last reply (its text after the turn's last tool call, cut in the middle past 8,000 characters), marked as a record and not an instruction. `wait: false` answers at once. A call waits at most 30 minutes and says so; the agent calls again to keep waiting. Only threads this thread opened (`relation` `opened`) can be read, so it reaches no other thread. A thread that waits for the human is not answered by the agent: the human answers it there. It runs without asking, like `thread_history`, and its card shows the thread's title and status.
 
 ## Amendment: checkpoints and rewind (2026-11-22)
 

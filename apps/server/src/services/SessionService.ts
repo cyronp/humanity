@@ -72,6 +72,7 @@ import {
 } from "@humanity/contracts"
 import { changeKind } from "@humanity/diff"
 import {
+  Clock,
   Context,
   DateTime,
   Effect,
@@ -95,6 +96,13 @@ import {
 } from "../agent/AgentRunner.ts"
 import { makeSkillTool } from "../extensions/skillTool.ts"
 import {
+  decodeThreadResult,
+  formatThreadResult,
+  stillWorking,
+  THREAD_RESULT_MAX_WAIT_MS,
+  THREAD_RESULT_POLL_MS,
+} from "../agent/threadResult.ts"
+import {
   buildHandoff,
   type Handoff,
   type HandoffSource,
@@ -107,7 +115,7 @@ import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts
 import { CheckpointRepo } from "../db/CheckpointRepo.ts"
 import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
-import { makeTerminalTools } from "../terminal/agentTools.ts"
+import { makeTerminalTools, type ToolText } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
@@ -970,7 +978,9 @@ export class SessionService extends Context.Service<
               history !== undefined
                 ? yield* mcp
                     .serve({
-                      ...(offered.openThread ? { openThread: openThread(session) } : {}),
+                      ...(offered.openThread
+                        ? { openThread: openThread(session), threadResult: threadResult(session) }
+                        : {}),
                       ...(skillCatalog.length > 0
                         ? {
                             skills: {
@@ -1383,6 +1393,60 @@ export class SessionService extends Context.Service<
               provider: opened.provider,
               model: opened.model,
               effort: opened.effort,
+            }
+          })
+
+      const threadResult =
+        (parent: Session) =>
+        (args: unknown): Effect.Effect<ToolText> =>
+          Effect.gen(function* () {
+            const request = decodeThreadResult(args)
+            if (request === undefined) {
+              return {
+                text: "Pass `thread_id` as a string, the id open_thread gave, and `wait` as true or false.",
+                isError: true,
+              }
+            }
+            const opened = (id: string) =>
+              repo
+                .get(id)
+                .pipe(
+                  Effect.map(
+                    Option.filter(
+                      (child) => child.parentId === parent.id && child.relation === "opened",
+                    ),
+                  ),
+                )
+            const found = yield* opened(request.thread_id)
+            if (Option.isNone(found)) {
+              return {
+                text: `No thread this thread opened has the id "${request.thread_id}". Use the id open_thread gave.`,
+                isError: true,
+              }
+            }
+            let child = found.value
+            let waitedOut = false
+            if (request.wait !== false) {
+              const deadline = (yield* Clock.currentTimeMillis) + THREAD_RESULT_MAX_WAIT_MS
+              while (stillWorking(child.status)) {
+                if ((yield* Clock.currentTimeMillis) >= deadline) {
+                  waitedOut = true
+                  break
+                }
+                yield* Effect.sleep(THREAD_RESULT_POLL_MS)
+                const next = yield* opened(child.id)
+                if (Option.isNone(next)) break
+                child = next.value
+              }
+            }
+            return {
+              text: formatThreadResult({
+                title: child.title,
+                status: child.status,
+                messages: yield* repo.listMessages(child.id),
+                waitedOut,
+              }),
+              isError: false,
             }
           })
 

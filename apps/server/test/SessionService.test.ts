@@ -1169,6 +1169,64 @@ describe("SessionService", () => {
     }),
   )
 
+  it.live("waits for a thread it opened and reads its agent's last reply", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const script: FakeScript = (prompt) =>
+        prompt === "delegate"
+          ? [{ tool: OPEN_THREAD_TOOL, input: { prompt: "Fix the flaky test" } }]
+          : prompt === "Fix the flaky test"
+            ? [
+                { text: "Looking." },
+                { tool: "Read", input: { file_path: "a.ts" } },
+                { text: "Fixed it in a.ts." },
+              ]
+            : []
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const mcp = yield* HumanityMcp
+        const log = yield* FakeAgentLog
+        const project = yield* addProject(repo)
+        const parent = yield* sessions.create({ projectId: project.id, prompt: "delegate" })
+        yield* waitForStatus(parent.id, "idle")
+        const [opened] = (yield* contents(parent.id)).toolCalls
+        assert.include(opened?.output?.content, "call thread_result with thread_id")
+        const child = openedThreadIn(opened?.output?.content ?? "")
+        assert.isDefined(child)
+
+        const parentRun = (yield* Ref.get(log.runs))[0]
+        const server = parentRun?.extensions.mcpServers["humanity"]
+        const tools = mcp.toolsFor(server?.type === "http" ? server.headers["Authorization"] : "")
+        assert.isDefined(tools?.threadResult)
+        const call = (args: unknown) =>
+          Effect.map(
+            answerMcp(tools!, {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: { name: "thread_result", arguments: args },
+            }),
+            (reply) =>
+              (reply.body as { result: { content: Array<{ text: string }>; isError?: boolean } })
+                .result,
+          )
+
+        const waited = yield* call({ thread_id: child?.sessionId })
+        assert.isUndefined(waited.isError)
+        assert.include(waited.content[0]?.text, "It finished its turn.")
+        assert.include(waited.content[0]?.text, "Fixed it in a.ts.")
+        assert.notInclude(waited.content[0]?.text, "Looking.")
+
+        const stranger = yield* call({ thread_id: parent.id })
+        assert.isTrue(stranger.isError)
+        assert.include(stranger.content[0]?.text, "No thread this thread opened")
+        const malformed = yield* call({ wait: true })
+        assert.isTrue(malformed.isError)
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
   it.live("opens no thread on a provider nobody is signed in to", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()
