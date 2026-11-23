@@ -155,6 +155,7 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
       onOpenChange={(next) => (next ? setOpen(true) : close())}
       title="Command palette"
       description="Run a command, go to a thread, or search messages"
+      className="top-[12svh] sm:max-w-2xl"
     >
       <Command
         filter={(value, text, keywords) =>
@@ -169,7 +170,7 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
           onValueChange={setSearch}
           placeholder="Type a command, # for threads, ? to search messages"
         />
-        <CommandList>
+        <CommandList className="max-h-[min(32rem,72svh)]">
           <CommandEmpty>Nothing matches.</CommandEmpty>
           {query.mode === "messages" && messages !== undefined && (
             <messages.Results query={query.text} onPick={close} />
