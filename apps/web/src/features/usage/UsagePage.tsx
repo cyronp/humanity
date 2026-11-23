@@ -35,10 +35,10 @@ import {
 } from "./usage.ts"
 
 const PROVIDER_COLOR: Record<AgentProvider, string> = {
-  "claude-code": "var(--chart-1)",
-  codex: "var(--chart-2)",
-  kiro: "var(--chart-3)",
-  antigravity: "var(--chart-4)",
+  "claude-code": "#D97757",
+  codex: "var(--foreground)",
+  kiro: "#9046FF",
+  antigravity: "#3186FF",
 }
 
 const providerConfig: ChartConfig = Object.fromEntries(
@@ -196,6 +196,7 @@ function Report({
             key: `${row.provider}:${row.model ?? ""}`,
             label: `${PROVIDER_NAMES[row.provider]} · ${row.model ?? "default model"}`,
             amount: row.amount,
+            color: PROVIDER_COLOR[row.provider],
           }))}
           total={total}
         />
@@ -226,15 +227,22 @@ function Stat({
 
 function PlanChart({ plans }: { readonly plans: ReturnType<typeof planSeries> }) {
   const config: ChartConfig = Object.fromEntries(
-    plans.map((plan, index) => [
+    plans.map((plan) => [
       plan.key.replace(/[^a-zA-Z0-9-]/g, "_"),
       {
         label: `${PROVIDER_NAMES[plan.provider]}${plan.accountKey === "" ? "" : ` (${plan.accountKey.slice(0, 8)})`}`,
-        color: `var(--chart-${(index % 5) + 1})`,
+        color: PROVIDER_COLOR[plan.provider],
       },
     ]),
   )
   const keys = Object.keys(config)
+  const dashed = new Set(
+    plans.flatMap((plan, index) =>
+      plans.slice(0, index).some((earlier) => earlier.provider === plan.provider)
+        ? [keys[index] ?? ""]
+        : [],
+    ),
+  )
   const rows = plans
     .flatMap((plan, index) =>
       plan.points.map((point) => ({ at: point.at, [keys[index] ?? ""]: point.utilization })),
@@ -283,6 +291,7 @@ function PlanChart({ plans }: { readonly plans: ReturnType<typeof planSeries> })
               dataKey={key}
               stroke={`var(--color-${key})`}
               strokeWidth={2}
+              {...(dashed.has(key) ? { strokeDasharray: "5 4" } : {})}
               dot={false}
               connectNulls
               type="monotone"
@@ -299,6 +308,7 @@ interface TopRow {
   readonly key: string
   readonly label: string
   readonly amount: UsageAmount
+  readonly color?: string | undefined
 }
 
 function TopList({
@@ -336,7 +346,10 @@ function TopList({
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-chart-2"
-                    style={{ width: `${shareOf(tokens, total) * 100}%` }}
+                    style={{
+                      width: `${shareOf(tokens, total) * 100}%`,
+                      ...(row.color === undefined ? {} : { background: row.color }),
+                    }}
                   />
                 </div>
               </li>
