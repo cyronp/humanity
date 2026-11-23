@@ -1,3 +1,4 @@
+import type { PlacedComment } from "./reviewPlacement.ts"
 import {
   type CheckStatus,
   type GitHubBranch,
@@ -283,6 +284,15 @@ export class GitHubService extends Context.Service<
       fullName: string,
       number: number,
       body: string,
+    ) => Effect.Effect<void, GitHubError>
+    readonly reviewPullRequest: (
+      fullName: string,
+      number: number,
+      review: {
+        readonly commitId: string
+        readonly body: string
+        readonly comments: ReadonlyArray<PlacedComment>
+      },
     ) => Effect.Effect<void, GitHubError>
     readonly setPullRequestOpen: (
       fullName: string,
@@ -629,6 +639,34 @@ ${absolute(url)}`
           yield* post(`/repos/${fullName}/issues/${number}/comments`, { body }, token)
         })
 
+      const reviewPullRequest = (
+        fullName: string,
+        number: number,
+        review: {
+          readonly commitId: string
+          readonly body: string
+          readonly comments: ReadonlyArray<PlacedComment>
+        },
+      ) =>
+        Effect.gen(function* () {
+          const token = yield* requireToken
+          yield* post(
+            `/repos/${fullName}/pulls/${number}/reviews`,
+            {
+              commit_id: review.commitId,
+              event: "COMMENT",
+              ...(review.body.trim() === "" ? {} : { body: review.body.trim() }),
+              comments: review.comments.map((comment) => ({
+                path: comment.side === "old" ? comment.previousPath : comment.path,
+                line: comment.line,
+                side: comment.side === "old" ? "LEFT" : "RIGHT",
+                body: comment.body,
+              })),
+            },
+            token,
+          )
+        })
+
       const setPullRequestOpen = (fullName: string, number: number, open: boolean) =>
         Effect.gen(function* () {
           const token = yield* requireToken
@@ -781,6 +819,7 @@ ${absolute(url)}`
         getPullRequest,
         mergePullRequest,
         commentOnPullRequest,
+        reviewPullRequest,
         setPullRequestOpen,
         setPullRequestDraft,
         checks,

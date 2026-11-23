@@ -145,6 +145,8 @@ export const syncAtom = HumanityClient.mutation("PullRequests.sync")
 export const pushAtom = HumanityClient.mutation("PullRequests.push")
 export const createPullRequestAtom = HumanityClient.mutation("PullRequests.create")
 export const mergePullRequestAtom = HumanityClient.mutation("PullRequests.merge")
+export const pullRequestFilesAtom = HumanityClient.mutation("PullRequests.files")
+export const reviewPullRequestAtom = HumanityClient.mutation("PullRequests.review")
 export const setPullRequestOpenAtom = HumanityClient.mutation("PullRequests.setOpen")
 export const setPullRequestDraftAtom = HumanityClient.mutation("PullRequests.setDraft")
 

@@ -6,6 +6,8 @@ import {
   NewPullRequest,
   PullRequest,
   PullRequestFeed,
+  PullRequestFiles,
+  PullRequestReview,
   SyncResult,
   SyncStatus,
 } from "../domain/PullRequest.ts"
@@ -77,6 +79,16 @@ export const PullRequestsRpcs = RpcGroup.make(
   }),
   Rpc.make("PullRequests.setDraft", {
     payload: { sessionId: SessionId, draft: Schema.Boolean },
+    success: PullRequest,
+    error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
+  }),
+  Rpc.make("PullRequests.files", {
+    payload: { sessionId: SessionId },
+    success: PullRequestFiles,
+    error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
+  }),
+  Rpc.make("PullRequests.review", {
+    payload: { sessionId: SessionId, review: PullRequestReview },
     success: PullRequest,
     error: Schema.Union([...Base, ...Forge, PullRequestUnavailable]),
   }),

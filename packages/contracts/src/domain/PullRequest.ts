@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { FileDiff } from "./Diff.ts"
 
 export const Forge = Schema.Literals(["github", "gitlab"])
 export type Forge = typeof Forge.Type
@@ -109,6 +110,29 @@ export const NewPullRequest = Schema.Struct({
   draft: Schema.Boolean,
 })
 export type NewPullRequest = typeof NewPullRequest.Type
+
+export const PullRequestReviewComment = Schema.Struct({
+  path: Schema.String,
+  side: Schema.Literals(["new", "old"]),
+  line: Schema.Int,
+  body: Schema.NonEmptyString,
+})
+export type PullRequestReviewComment = typeof PullRequestReviewComment.Type
+
+export const PullRequestReview = Schema.Struct({
+  headSha: Schema.String,
+  body: Schema.String,
+  comments: Schema.Array(PullRequestReviewComment),
+})
+export type PullRequestReview = typeof PullRequestReview.Type
+
+export const PullRequestFiles = Schema.Struct({
+  number: Schema.Int,
+  base: Schema.String,
+  headSha: Schema.String,
+  files: Schema.Array(FileDiff),
+})
+export type PullRequestFiles = typeof PullRequestFiles.Type
 
 export const MergeMethod = Schema.Literals(["squash", "merge", "rebase"])
 export type MergeMethod = typeof MergeMethod.Type

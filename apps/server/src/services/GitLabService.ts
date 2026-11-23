@@ -1,3 +1,4 @@
+import type { PlacedComment } from "./reviewPlacement.ts"
 import {
   type CheckStatus,
   type GitLabBranch,
@@ -85,6 +86,18 @@ const toRepo = (repo: typeof RepoJson.Type): GitLabRepo => ({
 })
 
 const MAX_ITEMS = 1000
+
+const DiffRefsJson = Schema.Struct({
+  diff_refs: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        base_sha: Schema.String,
+        start_sha: Schema.String,
+        head_sha: Schema.String,
+      }),
+    ),
+  ),
+})
 
 const MergeRequestJson = Schema.Struct({
   iid: Schema.Int,
@@ -226,6 +239,11 @@ export class GitLabService extends Context.Service<
       fullPath: string,
       iid: number,
       body: string,
+    ) => Effect.Effect<void, GitLabError>
+    readonly reviewMergeRequest: (
+      fullPath: string,
+      iid: number,
+      review: { readonly body: string; readonly comments: ReadonlyArray<PlacedComment> },
     ) => Effect.Effect<void, GitLabError>
     readonly setMergeRequestOpen: (
       fullPath: string,
@@ -547,6 +565,48 @@ ${path}`
           yield* post(`${project(fullPath)}/merge_requests/${iid}/notes`, { body }, using)
         })
 
+      const reviewMergeRequest = (
+        fullPath: string,
+        iid: number,
+        review: { readonly body: string; readonly comments: ReadonlyArray<PlacedComment> },
+      ) =>
+        Effect.gen(function* () {
+          const using = yield* requireToken
+          const refs = yield* read(`${project(fullPath)}/merge_requests/${iid}`, using).pipe(
+            Effect.flatMap(decode(DiffRefsJson)),
+          )
+          if (refs.diff_refs == null) {
+            return yield* new GitLabRequestFailed({
+              status: 200,
+              detail: "GitLab did not say which commits the merge request compares.",
+            })
+          }
+          const { base_sha, start_sha, head_sha } = refs.diff_refs
+          for (const comment of review.comments) {
+            yield* post(
+              `${project(fullPath)}/merge_requests/${iid}/discussions`,
+              {
+                body: comment.body,
+                position: {
+                  position_type: "text",
+                  base_sha,
+                  start_sha,
+                  head_sha,
+                  old_path: comment.previousPath,
+                  new_path: comment.path,
+                  ...(comment.oldLine === undefined ? {} : { old_line: comment.oldLine }),
+                  ...(comment.newLine === undefined ? {} : { new_line: comment.newLine }),
+                },
+              },
+              using,
+            )
+          }
+          const body = review.body.trim()
+          if (body !== "") {
+            yield* post(`${project(fullPath)}/merge_requests/${iid}/notes`, { body }, using)
+          }
+        })
+
       const updateMergeRequest = (fullPath: string, iid: number, body: unknown) =>
         Effect.gen(function* () {
           const using = yield* requireToken
@@ -643,6 +703,7 @@ ${path}`
         createMergeRequest,
         mergeMergeRequest,
         commentOnMergeRequest,
+        reviewMergeRequest,
         setMergeRequestOpen,
         setMergeRequestDraft,
         checks,

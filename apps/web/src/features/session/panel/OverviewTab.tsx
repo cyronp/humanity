@@ -18,6 +18,7 @@ import { feedKey, publicationAtom, pullRequestFeedAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { FeedNote } from "./FeedNote.tsx"
 import { checkoutMoved, forgeTerms, remoteStatus } from "./publication.ts"
+import { PullRequestFiles } from "./PullRequestFiles.tsx"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 
 export function OverviewTab({ session }: { readonly session: Session }) {
@@ -70,7 +71,7 @@ function Followed({
         <div className="flex flex-col gap-4">
           <FeedNote feed={value} forge={forge} />
           {value.pullRequest !== null ? (
-            <PullRequestView pullRequest={value.pullRequest} feed={value} />
+            <PullRequestView session={session} pullRequest={value.pullRequest} feed={value} />
           ) : (
             branch !== null &&
             value.fetchedAt !== null && (
@@ -98,9 +99,11 @@ function Followed({
 }
 
 function PullRequestView({
+  session,
   pullRequest,
   feed,
 }: {
+  readonly session: Session
   readonly pullRequest: PullRequest
   readonly feed: PullRequestFeed
 }) {
@@ -112,6 +115,7 @@ function PullRequestView({
           <Markdown text={pullRequest.body} />
         </div>
       )}
+      <PullRequestFiles session={session} pullRequest={pullRequest} />
       <CommentsSection comments={feed.comments} />
     </div>
   )
