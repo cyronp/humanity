@@ -9,6 +9,7 @@ import {
   openedThreadIn,
   TERMINAL_TOOLS,
   parseMcpToolName,
+  stricterAutonomy,
   parseThreadHref,
   ProjectId,
   SessionId,
@@ -187,5 +188,14 @@ describe("applyAutonomy", () => {
 
   it("is what a thread starts with unless a default says otherwise", () => {
     expect(DEFAULT_AUTONOMY).toBe("auto")
+  })
+})
+
+describe("stricterAutonomy", () => {
+  it("keeps the mode that asks about more", () => {
+    expect(stricterAutonomy("auto", "ask")).toBe("ask")
+    expect(stricterAutonomy("ask", "accept_edits")).toBe("ask")
+    expect(stricterAutonomy("accept_edits", "auto")).toBe("accept_edits")
+    expect(stricterAutonomy("auto", "auto")).toBe("auto")
   })
 })

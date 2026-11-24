@@ -68,6 +68,7 @@ import {
   NothingToCommit,
   NO_USAGE,
   newThreadAutonomy,
+  stricterAutonomy,
   toolMode,
   trimCharacters,
   trimTrailing,
@@ -126,7 +127,7 @@ import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
 import { ClaudeCode } from "../claude/ClaudeCode.ts"
 import { Codex } from "../codex/Codex.ts"
-import { outsideWorktreeDenial, planChange, reviewTarget } from "../agent/review.ts"
+import { placeEdit, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import type { AccountRegistry } from "./accountRegistry.ts"
 import { makeAccountsUsage, type UsageAccount } from "./accountsUsage.ts"
@@ -662,22 +663,26 @@ export class SessionService extends Context.Service<
             const decision: PermissionDecision = yield* Effect.gen(function* () {
               const tool = toolMode(request.toolName)
               const autonomy = yield* currentAutonomy(session.id)
-              const mode =
+              const placement =
+                tool === "review"
+                  ? yield* placeEdit(request.toolName, request.input, session.worktreePath)
+                  : undefined
+              if (placement?.denial !== undefined) {
+                return { behavior: "deny", message: placement.denial } as const
+              }
+              const granted =
                 request.toolName === QUESTION_TOOL
                   ? tool
                   : approvals.allowsInSession(session.id, request.toolName)
                     ? "auto"
                     : applyAutonomy(autonomy, tool)
+              const mode =
+                granted === "auto" && autonomy !== "auto" && placement?.protectedPath !== undefined
+                  ? "review"
+                  : granted
               switch (mode) {
-                case "auto": {
-                  const denial =
-                    tool === "review"
-                      ? outsideWorktreeDenial(request.toolName, request.input, session.worktreePath)
-                      : undefined
-                  return denial === undefined
-                    ? ({ behavior: "allow" } as const)
-                    : ({ behavior: "deny", message: denial } as const)
-                }
+                case "auto":
+                  return { behavior: "allow" } as const
                 case "review":
                   return yield* review(session, request)
                 case "confirm":
@@ -1041,6 +1046,10 @@ export class SessionService extends Context.Service<
                 extensions: withHumanity(added, humanity),
                 allowedTools: AUTO_TOOLS,
                 offersOpenThread: offered.openThread,
+                trustProjectSettings: yield* projects.get(session.projectId).pipe(
+                  Effect.map((project) => project.settings.trustRepositorySettings),
+                  Effect.orElseSucceed(() => false),
+                ),
                 canUseTool: decide(session, state),
               })
               .pipe(Scope.provide(scope))
@@ -1286,6 +1295,7 @@ export class SessionService extends Context.Service<
         readonly model?: string | undefined
         readonly effort?: ReasoningEffort | undefined
         readonly autonomy?: Autonomy | undefined
+        readonly atLeast?: Autonomy | undefined
         readonly lineage?: SessionLineage | undefined
         readonly worktreeBase?: string | undefined
         readonly groupId?: string | undefined
@@ -1323,8 +1333,10 @@ export class SessionService extends Context.Service<
           inWorktree: false,
           model: options.model?.trim() || null,
           effort: options.effort ?? null,
-          autonomy:
+          autonomy: stricterAutonomy(
             options.autonomy ?? newThreadAutonomy(project, yield* preferences.pinnedDefaults),
+            options.atLeast ?? "auto",
+          ),
           status: "idle",
           origin: "humanity",
           parentId: options.lineage?.parentId ?? null,
@@ -1392,6 +1404,7 @@ export class SessionService extends Context.Service<
               prompt,
               model,
               effort: request.effort ?? undefined,
+              atLeast: yield* currentAutonomy(parent.id),
               lineage: { parentId: parent.id, relation: "opened" },
             }).pipe(
               Effect.mapError(

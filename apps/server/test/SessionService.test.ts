@@ -1049,7 +1049,7 @@ describe("SessionService", () => {
   )
 
   it.live(
-    "opens a thread the agent asked for, on its model and effort, even from one that asks",
+    "opens a thread the agent asked for, on its model and effort, asking there too when its opener asks",
     () =>
       Effect.gen(function* () {
         const { home, repo } = yield* setup()
@@ -1096,7 +1096,7 @@ describe("SessionService", () => {
           const child = yield* waitForStatus(opened?.id ?? "", "idle")
           assert.strictEqual(child.title, "Flaky login")
           assert.strictEqual(child.worktreePath, project.localPath)
-          assert.strictEqual(child.autonomy, "auto")
+          assert.strictEqual(child.autonomy, "ask")
           const childRun = (yield* Ref.get(log.runs))[1]
           assert.strictEqual(childRun?.model, "opus")
           assert.strictEqual(childRun?.effort, "high")

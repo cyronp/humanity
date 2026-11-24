@@ -62,6 +62,11 @@ export const SETTINGS_INDEX: ReadonlyArray<SettingEntry> = [
   { section: "projects", label: "When a thread ends", keywords: ["worktree", "delete"] },
   { section: "projects", label: "Merge method", keywords: ["squash", "rebase"] },
   { section: "projects", label: "Open as a draft", keywords: ["pull request"] },
+  {
+    section: "projects",
+    label: "Use this repository's Claude Code settings",
+    keywords: ["trust", "hooks", "settings.json"],
+  },
   { section: "updates", label: "Update track", keywords: ["nightly", "stable"] },
   { section: "updates", label: "Check automatically" },
   { section: "updates", label: "Release notes", keywords: ["changelog"] },

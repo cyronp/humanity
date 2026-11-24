@@ -6,8 +6,9 @@ import {
   simulateWrite,
 } from "@humanity/diff"
 import { PATCH_TOOL } from "@humanity/contracts"
-import { Predicate } from "effect"
-import { isAbsolute, relative, resolve, sep } from "node:path"
+import { Effect, Predicate } from "effect"
+import { lstat, realpath } from "node:fs/promises"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { isInsideDir } from "../paths.ts"
 
 const SIMULATORS: Record<string, (original: string, input: Record<string, unknown>) => Simulation> =
@@ -135,3 +136,118 @@ export const planChange = (options: {
   }
   return { _tag: "Change", proposedContent: simulation.content, hunks }
 }
+
+const PROTECTED_FOLDERS = new Set([
+  ".git",
+  ".claude",
+  ".codex",
+  ".kiro",
+  ".gemini",
+  ".vscode",
+  ".idea",
+  ".husky",
+])
+
+const PROTECTED_FILES = new Set([
+  ".mcp.json",
+  ".gitmodules",
+  ".gitconfig",
+  ".bashrc",
+  ".bash_profile",
+  ".zshrc",
+  ".zprofile",
+  ".zshenv",
+  ".profile",
+])
+
+export const isProtectedPath = (relativePath: string): boolean => {
+  const segments = relativePath
+    .split(/[\\/]/)
+    .filter((segment) => segment !== "")
+    .map((segment) => segment.toLowerCase())
+  const last = segments.at(-1)
+  return (
+    segments.some((segment) => PROTECTED_FOLDERS.has(segment)) ||
+    (last !== undefined && PROTECTED_FILES.has(last))
+  )
+}
+
+export const editedPaths = (
+  toolName: string,
+  input: Record<string, unknown>,
+): ReadonlyArray<string> => {
+  if (toolName === PATCH_TOOL) {
+    const changes = input["changes"]
+    if (!Array.isArray(changes)) return []
+    return (changes as ReadonlyArray<unknown>).flatMap((change) => {
+      const file = Predicate.isObject(change) ? (change as Record<string, unknown>) : {}
+      return [file["path"], file["movePath"]].filter(
+        (path): path is string => Predicate.isString(path) && path.trim() !== "",
+      )
+    })
+  }
+  return ["file_path", "notebook_path"].flatMap((key) => {
+    const path = input[key]
+    return Predicate.isString(path) && path.trim() !== "" ? [path] : []
+  })
+}
+
+const isMissing = (cause: unknown) =>
+  Predicate.isObject(cause) &&
+  "code" in cause &&
+  (cause.code === "ENOENT" || cause.code === "ENOTDIR")
+
+const realPathOf = async (path: string): Promise<string | undefined> => {
+  const rest: Array<string> = []
+  let existing = path
+  for (;;) {
+    try {
+      return join(await realpath(existing), ...rest)
+    } catch (cause) {
+      if (!isMissing(cause)) return undefined
+      const dangling = await lstat(existing).then(
+        () => true,
+        () => false,
+      )
+      if (dangling) return undefined
+      const parent = dirname(existing)
+      if (parent === existing) return undefined
+      rest.unshift(basename(existing))
+      existing = parent
+    }
+  }
+}
+
+export interface EditPlacement {
+  readonly denial: string | undefined
+  readonly protectedPath: string | undefined
+}
+
+export const placeEdit = (
+  toolName: string,
+  input: Record<string, unknown>,
+  worktree: string,
+): Effect.Effect<EditPlacement> =>
+  Effect.promise(async (): Promise<EditPlacement> => {
+    const lexical = outsideWorktreeDenial(toolName, input, worktree)
+    if (lexical !== undefined) return { denial: lexical, protectedPath: undefined }
+    const root = await realpath(worktree).catch(() => undefined)
+    let protectedPath: string | undefined
+    for (const rawPath of editedPaths(toolName, input)) {
+      const absolutePath = isAbsolute(rawPath) ? resolve(rawPath) : resolve(worktree, rawPath)
+      const real = root === undefined ? undefined : await realPathOf(absolutePath)
+      if (root === undefined || real === undefined || !isInsideDir(root, real)) {
+        return {
+          denial: `DENIED: ${rawPath} leads outside the folder this session works in (${worktree}), through a link. Only files inside it can be changed.`,
+          protectedPath: undefined,
+        }
+      }
+      if (
+        protectedPath === undefined &&
+        (isProtectedPath(relative(worktree, absolutePath)) || isProtectedPath(relative(root, real)))
+      ) {
+        protectedPath = rawPath
+      }
+    }
+    return { denial: undefined, protectedPath }
+  })

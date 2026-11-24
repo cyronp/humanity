@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
 import { FILE_OPEN_LIMIT_BYTES } from "@humanity/contracts"
 import { Effect } from "effect"
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { humanEditsNote } from "../src/files/humanEdits.ts"
 import {
@@ -192,6 +192,26 @@ describe("writeWorkspaceFile", () => {
       const root = yield* folder({})
       const error = yield* Effect.flip(save(root, "../escape.txt", "x", null, true))
       assert.strictEqual(error._tag, "FileRefused")
+    }),
+  )
+
+  it.effect("never writes through a link to a file that does not exist yet", () =>
+    Effect.gen(function* () {
+      const outside = yield* folder({})
+      const root = yield* folder({})
+      symlinkSync(join(outside, "missing"), join(root, "gone"), "junction")
+      const error = yield* Effect.flip(save(root, "gone", "x", null, true))
+      assert.strictEqual(error._tag, "FileRefused")
+      const linked = yield* Effect.try(() =>
+        symlinkSync(join(outside, "planted.txt"), join(root, "notes.md"), "file"),
+      ).pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      )
+      if (!linked) return
+      const write = yield* Effect.flip(save(root, "notes.md", "x", null, true))
+      assert.strictEqual(write._tag, "FileRefused")
+      assert.isFalse(existsSync(join(outside, "planted.txt")))
     }),
   )
 })

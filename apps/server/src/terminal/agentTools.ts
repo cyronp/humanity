@@ -76,7 +76,7 @@ export const TERMINAL_TOOL_DEFINITIONS = [
     name: "terminal_send",
     title: "Type into a terminal",
     description:
-      "Types into a terminal: `text`, followed by Enter unless `enter` is false, and/or `keys` (enter, tab, escape, backspace, delete, up, down, left, right, home, end, pageup, pagedown, space, ctrl+<letter> such as ctrl+c). The human sees it typed in the dock. It is a command: in a thread that asks first, the human allows or denies it before anything is typed, as for your shell tool. Returns a cursor: pass it as `since` to terminal_wait or terminal_read to get what followed.",
+      "Types into a terminal: `text`, followed by Enter unless `enter` is false, and/or `keys` (enter, tab, escape, backspace, delete, up, down, left, right, home, end, pageup, pagedown, space, ctrl+<letter> such as ctrl+c). `text` takes no control or invisible characters other than a newline: press keys such as Tab with `keys`. The human sees it typed in the dock. It is a command: in a thread that asks first, the human allows or denies it before anything is typed, as for your shell tool. Returns a cursor: pass it as `since` to terminal_wait or terminal_read to get what followed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -128,7 +128,10 @@ export const TERMINAL_TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         title: { type: "string", description: "A short name for the tab, such as `dev server`." },
-        command: { type: "string", description: "A command line to run in it." },
+        command: {
+          type: "string",
+          description: "A command line to run in it, with no control or invisible characters.",
+        },
       },
       additionalProperties: false,
     },
@@ -214,6 +217,25 @@ export const keySequence = (key: string): string | undefined => {
     ? undefined
     : String.fromCharCode(letter.toUpperCase().charCodeAt(0) & 0x1f)
 }
+
+const isHidden = (code: number) =>
+  (code < 0x20 && code !== 0x0a) ||
+  (code >= 0x7f && code <= 0x9f) ||
+  (code >= 0x200b && code <= 0x200f) ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2060 && code <= 0x2069) ||
+  code === 0xfeff
+
+export const hiddenCharacterIn = (text: string): string | undefined => {
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0
+    if (isHidden(code)) return `U+${code.toString(16).toUpperCase().padStart(4, "0")}`
+  }
+  return undefined
+}
+
+const hiddenRefusal = (what: string, character: string) =>
+  `${what} has a control or invisible character (${character}), which the human would not see in what they allow. Type keys such as Tab, Escape or Ctrl+C with \`keys\` instead.`
 
 export const typedCommand = (text: string, keys: ReadonlyArray<string>) =>
   [text, ...keys.map((key) => `[${key.trim().toLowerCase()}]`)]
@@ -344,6 +366,8 @@ export const makeTerminalTools = (deps: TerminalToolsDeps) => {
       const unknown = keys.filter((_, index) => sequences[index] === undefined)
       if (unknown.length > 0) return fail(`Unknown key: ${unknown.join(", ")}.`)
       if (text === "" && keys.length === 0) return fail("Nothing to type: pass `text` or `keys`.")
+      const hidden = hiddenCharacterIn(text)
+      if (hidden !== undefined) return fail(`Nothing was typed: ${hiddenRefusal("`text`", hidden)}`)
       const terminal = yield* resolve(reference)
       if (terminal === undefined) return noTerminal(reference)
 
@@ -396,6 +420,10 @@ export const makeTerminalTools = (deps: TerminalToolsDeps) => {
       if (Option.isNone(parsed)) return invalid("terminal_open")
       const command = parsed.value.command?.trim() ?? ""
       const title = parsed.value.title?.trim() || undefined
+      const hidden = hiddenCharacterIn(command)
+      if (hidden !== undefined) {
+        return fail(`No terminal was opened: ${hiddenRefusal("`command`", hidden)}`)
+      }
       if (command !== "") {
         const decision = yield* asBash(
           command,

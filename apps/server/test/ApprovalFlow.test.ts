@@ -9,7 +9,7 @@ import {
   TALK_ABOUT_IT_MESSAGE,
 } from "@humanity/contracts"
 import { Effect, Ref } from "effect"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs"
 import { join } from "node:path"
 import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { ApprovalService, changeDeniedMessage } from "../src/services/ApprovalService.ts"
@@ -657,6 +657,42 @@ describe("autonomy", () => {
         }
         assert.lengthOf(asked, 2)
         assert.isFalse(existsSync(outside))
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("accept_edits still asks before changing git's or an agent's own files", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const script: FakeScript = () => [
+        { tool: "Write", input: { file_path: ".git/hooks/pre-commit", content: "#!/bin/sh\n" } },
+      ]
+
+      yield* Effect.gen(function* () {
+        const { session } = yield* createWith(repo, "accept_edits")
+        const change = yield* pendingChange(session.id)
+        assert.strictEqual(change.filePath, ".git/hooks/pre-commit")
+        assert.isFalse(existsSync(join(session.worktreePath, ".git", "hooks", "pre-commit")))
+      }).pipe(Effect.provide(services(home, script)))
+    }),
+  )
+
+  it.live("denies, in every mode, an edit that leads outside the worktree through a link", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      const outside = join(home, "elsewhere")
+      mkdirSync(outside)
+      symlinkSync(outside, join(repo, "linked"), "junction")
+      const script: FakeScript = () => [
+        { tool: "Write", input: { file_path: "linked/escaped.txt", content: "nope\n" } },
+      ]
+
+      yield* Effect.gen(function* () {
+        const { session } = yield* createWith(repo, "auto")
+        yield* waitForStatus(session.id, "idle")
+        const { decision } = yield* decisionFor("Write")
+        assert.strictEqual(decision === "interrupted" ? undefined : decision.behavior, "deny")
+        assert.isFalse(existsSync(join(outside, "escaped.txt")))
       }).pipe(Effect.provide(services(home, script)))
     }),
   )

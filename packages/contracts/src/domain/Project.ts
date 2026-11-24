@@ -33,6 +33,7 @@ export const ProjectSettings = Schema.Struct({
   mergeMethod: Schema.NullOr(MergeMethod),
   draftPullRequests: Schema.Boolean,
   worktreeOnEnd: WorktreeOnEnd,
+  trustRepositorySettings: Schema.Boolean,
 })
 export type ProjectSettings = typeof ProjectSettings.Type
 
@@ -45,6 +46,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   mergeMethod: null,
   draftPullRequests: false,
   worktreeOnEnd: "ask",
+  trustRepositorySettings: false,
 }
 
 export const StoredProjectSettings = Schema.Struct({
@@ -65,6 +67,9 @@ export const StoredProjectSettings = Schema.Struct({
   draftPullRequests: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   worktreeOnEnd: WorktreeOnEnd.pipe(
     Schema.withDecodingDefaultKey(Effect.succeed<WorktreeOnEnd>("ask")),
+  ),
+  trustRepositorySettings: Schema.Boolean.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
   ),
 })
 
