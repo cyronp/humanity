@@ -30,11 +30,14 @@ import { openSettings } from "@/features/settings/settings"
 import { openUsage } from "@/features/usage/usage"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
+import { useMessageMatches } from "./messageMatches.ts"
 import { ThreadLink } from "./ThreadLink.tsx"
 import { childAttention, threadTree } from "./threadTree.ts"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
+  matchesQuery,
+  type MessageMatches,
   readStoredFilter,
   selectThreads,
   storeFilter,
@@ -47,6 +50,7 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
   const projectsResult = useAtomValue(projectsAtom)
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
   const [query, setQuery] = useState("")
+  const messages = useMessageMatches(query)
   const [filter, setFilterState] = useState(readStoredFilter)
   const setFilter = (next: ThreadFilter) => {
     setFilterState(next)
@@ -93,6 +97,7 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
               onNavigate={close}
               projects={projects}
               query={query}
+              messages={messages}
               filter={filter}
               onReset={() => {
                 setQuery("")
@@ -101,7 +106,13 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
             />
           </SidebarGroupContent>
         </SidebarGroup>
-        <ThreadHistory projects={projects} query={query} filter={filter} onNavigate={close} />
+        <ThreadHistory
+          projects={projects}
+          query={query}
+          messages={messages}
+          filter={filter}
+          onNavigate={close}
+        />
       </SidebarContent>
       <SidebarFooter className="flex-row items-center gap-1">
         <AccountSwitcher onNavigate={close} />
@@ -180,12 +191,14 @@ function Conversations({
   onNavigate,
   projects,
   query,
+  messages,
   filter,
   onReset,
 }: {
   readonly onNavigate: () => void
   readonly projects: ReadonlyArray<Project>
   readonly query: string
+  readonly messages: MessageMatches
   readonly filter: ThreadFilter
   readonly onReset: () => void
 }) {
@@ -215,7 +228,7 @@ function Conversations({
     const project = byId.get(session.projectId)
     return project === undefined ? [] : [{ session, project }]
   })
-  const shown = selectThreads(all, query, filter)
+  const shown = selectThreads(all, query, filter, messages)
   if (shown.length === 0) {
     const narrowed = query.trim() !== "" || !isDefaultFilter(filter)
     return narrowed ? (
@@ -233,7 +246,7 @@ function Conversations({
   }
   return (
     <SidebarMenu className="gap-0.5">
-      {threadTree(shown).map(({ thread: { session, project }, depth }) => (
+      {threadTree(shown).map(({ thread, thread: { session, project }, depth }) => (
         <SidebarMenuItem
           key={session.id}
           style={depth === 0 ? undefined : { marginLeft: `${depth * 0.75}rem` }}
@@ -245,6 +258,7 @@ function Conversations({
             active={session.id === activeId}
             onNavigate={onNavigate}
             attention={childAttention(session.id, sessions.value)}
+            hit={matchesQuery(thread, query) ? undefined : messages.get(session.id)}
           />
           {session.status !== "ended" && (
             <EndSessionButton

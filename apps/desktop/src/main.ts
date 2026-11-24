@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   type BrowserWindowConstructorOptions,
   dialog,
+  nativeImage,
   nativeTheme,
   shell,
   type WebContents,
@@ -15,7 +16,16 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import brandMark from "../../web/public/favicon.svg"
-import { APP_USER_MODEL_ID, resolveDesktopConfig } from "./config.ts"
+import {
+  type Attention,
+  attentionLabel,
+  attentionTotal,
+  BADGE_SIZE,
+  badgeBitmap,
+  NO_ATTENTION,
+} from "./attention.ts"
+import { watchAttention } from "./attentionClient.ts"
+import { APP_NAME, APP_USER_MODEL_ID, resolveDesktopConfig } from "./config.ts"
 import { supervise } from "./daemon.ts"
 import { makeElectronUpdater } from "./electronUpdater.ts"
 import { appUrl, destinationOf } from "./navigation.ts"
@@ -23,6 +33,8 @@ import { installPreview } from "./preview.ts"
 import { backdropColor, splashUrl } from "./splash.ts"
 import { isDarkColor, titleBarOverlay } from "./titlebar.ts"
 import { connectUpdates } from "./updatesClient.ts"
+
+app.setName(APP_NAME)
 
 const config = resolveDesktopConfig({
   env: process.env,
@@ -51,6 +63,33 @@ const frame = (): BrowserWindowConstructorOptions =>
 
 let window: BrowserWindow | undefined
 let daemonReady = false
+let attention = NO_ATTENTION
+
+const showAttention = () => {
+  const total = attentionTotal(attention)
+  if (process.platform !== "win32") {
+    app.setBadgeCount(total)
+    return
+  }
+  if (window === undefined) return
+  window.setOverlayIcon(
+    total === 0
+      ? null
+      : nativeImage.createFromBitmap(badgeBitmap(attention), {
+          width: BADGE_SIZE,
+          height: BADGE_SIZE,
+          scaleFactor: 2,
+        }),
+    attentionLabel(attention),
+  )
+}
+
+const noticeAttention = (next: Attention) => {
+  const grew = attentionTotal(next) > attentionTotal(attention)
+  attention = next
+  showAttention()
+  if (grew && window !== undefined && !window.isFocused()) window.flashFrame(true)
+}
 
 const readToken = () => readFileSync(config.authTokenPath, "utf8").trim()
 
@@ -71,7 +110,7 @@ const createWindow = () => {
     height: 900,
     minWidth: 800,
     minHeight: 560,
-    title: "Humanity",
+    title: APP_NAME,
     autoHideMenuBar: true,
     backgroundColor: backdropColor(dark),
     ...frame(),
@@ -94,9 +133,11 @@ const createWindow = () => {
     created.setBackgroundColor(backdropColor(dark))
     writeFileSync(themePath, dark ? "dark" : "light")
   })
+  window.on("focus", () => created.flashFrame(false))
   window.on("closed", () => {
     window = undefined
   })
+  showAttention()
   if (daemonReady) loadApp()
   else void window.loadURL(splashUrl(brandMark, dark))
 }
@@ -132,6 +173,7 @@ const start = () => {
   const startUpdates = () => {
     if (updatesStarted) return
     updatesStarted = true
+    runtime.runFork(watchAttention({ origin: config.origin, readToken, onChange: noticeAttention }))
     const unsupported = updatesUnsupported()
     runtime.runFork(
       connectUpdates({
@@ -175,7 +217,7 @@ const start = () => {
     finished = true
     if (output === undefined) return
     dialog.showErrorBox(
-      "Humanity could not start",
+      `${APP_NAME} could not start`,
       `Its daemon did not come up on ${config.origin}.\n\n${output}`,
     )
     app.quit()
@@ -190,6 +232,11 @@ const start = () => {
     if (finished) return
     event.preventDefault()
     void stopDaemon().then(() => app.quit())
+  })
+
+  app.on("browser-window-created", (_event, created) => {
+    created.setTitle(APP_NAME)
+    created.on("page-title-updated", (event) => event.preventDefault())
   })
 
   let preview: ReturnType<typeof installPreview> | undefined

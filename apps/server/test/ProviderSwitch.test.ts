@@ -125,6 +125,73 @@ describe("moving a thread to another provider", () => {
       }),
   )
 
+  it.live("previews the handoff and sends it without the entries the human cut", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const sessionRepo = yield* SessionRepo
+        const project = yield* addProject(repo)
+        const created = yield* sessions.create({
+          projectId: project.id,
+          prompt: "Fix the login bug",
+        })
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.sendMessage(created.id, "A wrong idea")
+        yield* waitForStatus(created.id, "idle")
+        yield* sessions.switchProvider(created.id, "kiro", "Sonnet 5.5")
+
+        const preview = yield* sessions.handoffPreview(created.id)
+        assert.isTrue(preview?.editable)
+        assert.deepStrictEqual(
+          preview?.entries.map((entry) => [entry.index, entry.kind, entry.state]),
+          [
+            [1, "human", "included"],
+            [2, "agent", "included"],
+            [3, "human", "included"],
+            [4, "agent", "included"],
+          ],
+        )
+        assert.strictEqual(preview?.text, yield* sessionRepo.getPendingHandoff(created.id))
+
+        const trimmed = yield* sessions.trimHandoff(created.id, [3, 4])
+        assert.strictEqual(trimmed.cut, 2)
+        assert.strictEqual(trimmed.included, 2)
+        assert.include(trimmed.text, "[#3–#4 left out by the human: 2 entries.]")
+        assert.notInclude(trimmed.text, "A wrong idea")
+        assert.strictEqual(trimmed.tokens, estimateTokens(trimmed.text))
+        const divider = (yield* contents(created.id)).messages.at(-1)?.content
+        assert.deepInclude(divider, { included: 2, cut: 2, tokens: trimmed.tokens })
+        assert.strictEqual((yield* sessions.handoffPreview(created.id))?.text, trimmed.text)
+
+        const restored = yield* sessions.trimHandoff(created.id, [])
+        assert.strictEqual(restored.text, preview?.text)
+
+        yield* sessions.trimHandoff(created.id, [4])
+        yield* sessions.sendMessage(created.id, "Go on")
+        const sent = yield* eventually(
+          "the handoff sent to Kiro",
+          Effect.map(sentTexts, (texts) => texts[2]),
+        )
+        assert.include(sent, "#3 Human: A wrong idea")
+        assert.include(sent, "[#4 left out by the human: 1 entry.]")
+        const late = yield* Effect.flip(sessions.trimHandoff(created.id, []))
+        assert.strictEqual(late._tag, "HandoffUnavailable")
+      }).pipe(
+        Effect.provide(
+          services(
+            home,
+            () => [{ text: "Looked at it." }],
+            undefined,
+            undefined,
+            undefined,
+            signedInKiro,
+          ),
+        ),
+      )
+    }),
+  )
+
   it.live("an agent that comes back resumes its own conversation and hears what it missed", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

@@ -12,6 +12,8 @@ import {
   type Project,
   type ProjectNotFound,
   type PullRequest,
+  type PullRequestFiles,
+  type PullRequestReview,
   type PullRequestFeed,
   PullRequestUnavailable,
   type RepoStatus,
@@ -28,6 +30,7 @@ import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { ProjectService } from "./ProjectService.ts"
+import { placeReviewComments } from "./reviewPlacement.ts"
 import type { LoggedCommit } from "./gitParsers.ts"
 import { COMMIT_LIST_LIMIT, SessionService, threadBranch } from "./SessionService.ts"
 
@@ -131,6 +134,13 @@ export class PullRequestService extends Context.Service<
     readonly setOpen: (
       sessionId: string,
       open: boolean,
+    ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    readonly files: (
+      sessionId: string,
+    ) => Effect.Effect<PullRequestFiles, Base | GitHubError | GitLabError | PullRequestUnavailable>
+    readonly review: (
+      sessionId: string,
+      review: PullRequestReview,
     ) => Effect.Effect<PullRequest, Base | GitHubError | GitLabError | PullRequestUnavailable>
     readonly setDraft: (
       sessionId: string,
@@ -450,6 +460,85 @@ export class PullRequestService extends Context.Service<
           notice: `Merged ${symbol}${merged.number} into ${merged.base}, ${MERGED_HOW[input.method]}.`,
         })
         return merged
+      })
+
+      const filesOf = (cwd: string, pullRequest: PullRequest) =>
+        Effect.gen(function* () {
+          const noun = forgeName(pullRequest.forge)
+          let against: string | undefined
+          for (const candidate of [`origin/${pullRequest.base}`, pullRequest.base]) {
+            if (yield* git.hasCommit(cwd, candidate)) {
+              against = candidate
+              break
+            }
+          }
+          if (against === undefined) {
+            return yield* new PullRequestUnavailable({
+              reason: `There is no branch named ${pullRequest.base} here, so the ${noun}'s files cannot be shown. Sync, then look again.`,
+            })
+          }
+          if (!(yield* git.hasCommit(cwd, pullRequest.headSha))) {
+            return yield* new PullRequestUnavailable({
+              reason: `The ${noun}'s latest commit is not here yet. Sync, then look again.`,
+            })
+          }
+          return yield* git.diffRange(cwd, against, pullRequest.headSha)
+        })
+
+      const pullRequestFiles = Effect.fn("PullRequestService.files")(function* (sessionId: string) {
+        const { session, pullRequest } = yield* current(sessionId)
+        return {
+          number: pullRequest.number,
+          base: pullRequest.base,
+          headSha: pullRequest.headSha,
+          files: yield* filesOf(session.worktreePath, pullRequest),
+        }
+      })
+
+      const review = Effect.fn("PullRequestService.review")(function* (
+        sessionId: string,
+        input: PullRequestReview,
+      ) {
+        const { session, remote, pullRequest } = yield* current(sessionId)
+        const noun = forgeName(remote.forge)
+        if (pullRequest.state === "merged" || pullRequest.state === "closed") {
+          return yield* notOpen(pullRequest)
+        }
+        if (input.headSha === "" || pullRequest.headSha !== input.headSha) {
+          return yield* new PullRequestUnavailable({
+            reason: `This ${noun} has new commits since you looked at it, so nothing was posted. Look at its files again, then post.`,
+          })
+        }
+        if (input.comments.length === 0 && input.body.trim() === "") {
+          return yield* new PullRequestUnavailable({ reason: "There is nothing to post." })
+        }
+        const { placed, missing } = placeReviewComments(
+          yield* filesOf(session.worktreePath, pullRequest),
+          input.comments,
+        )
+        if (missing.length > 0) {
+          const where = missing.map((comment) => `${comment.path}:${comment.line}`).join(", ")
+          return yield* new PullRequestUnavailable({
+            reason: `Nothing was posted: ${missing.length === 1 ? "a comment is" : `${missing.length} comments are`} on a line the ${noun} no longer changes (${where}). Move or delete ${missing.length === 1 ? "it" : "them"}, then post.`,
+          })
+        }
+        if (remote.forge === "github") {
+          yield* github.reviewPullRequest(remote.fullName, pullRequest.number, {
+            commitId: pullRequest.headSha,
+            body: input.body,
+            comments: placed,
+          })
+        } else {
+          yield* gitlab.reviewMergeRequest(remote.fullPath, pullRequest.number, {
+            body: input.body,
+            comments: placed,
+          })
+        }
+        const symbol = remote.forge === "github" ? "#" : "!"
+        yield* sessions.tell(session.id, {
+          notice: `Posted a review on ${symbol}${pullRequest.number} with ${placed.length} comment${placed.length === 1 ? "" : "s"}.`,
+        })
+        return pullRequest
       })
 
       const setOpen = Effect.fn("PullRequestService.setOpen")(function* (
@@ -879,6 +968,8 @@ export class PullRequestService extends Context.Service<
         push,
         create,
         merge,
+        files: pullRequestFiles,
+        review,
         setOpen,
         setDraft,
         watch,

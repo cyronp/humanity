@@ -106,6 +106,7 @@ describe("open_thread", () => {
         'Opened the thread "Fix [login]" on Claude Code, opus, high effort. It is working now.',
         "When you tell the human about it, link to it inline in your sentence, with exactly this markdown: [Fix \\[login\\]](/projects/p1/sessions/s1)",
         "Humanity shows that link as the project's icon and the thread's title, so add no id, path or separate link.",
+        'To wait for it to finish, or to read what it did, call thread_result with thread_id "s1".',
       ].join("\n"),
     )
     expect(
@@ -138,6 +139,30 @@ describe("open_thread", () => {
     })
     expect(openedThreadIn(text)).toEqual({ projectId: "p1", sessionId: "s 1" })
     expect(openedThreadIn("No thread was opened: the prompt is empty.")).toBeUndefined()
+  })
+
+  it("reads a thread link the way the markdown regex did, and no further", () => {
+    expect(
+      openedThreadIn("see [a](/projects/p1/sessions/s1) and [b](/projects/p2/sessions/s2)"),
+    ).toEqual({ projectId: "p1", sessionId: "s1" })
+    expect(openedThreadIn("[a](/projects/ x) then [b](/projects/p2/sessions/s2)")).toEqual({
+      projectId: "p2",
+      sessionId: "s2",
+    })
+    expect(openedThreadIn("[a](/projects/)")).toBeUndefined()
+    expect(openedThreadIn("[a](/projects/) [b](/projects/p3/sessions/s3)")).toEqual({
+      projectId: "p3",
+      sessionId: "s3",
+    })
+    expect(openedThreadIn("[a](/projects/p1/sessions/s1")).toBeUndefined()
+    expect(openedThreadIn("[a](/projects/](/projects/p1/sessions/s1)")).toBeUndefined()
+  })
+
+  it("takes linear time on text made to make a regular expression backtrack", () => {
+    const started = performance.now()
+    expect(openedThreadIn("](/projects/".repeat(200_000))).toBeUndefined()
+    expect(openedThreadIn(`${"](/projects/".repeat(100_000)} `)).toBeUndefined()
+    expect(performance.now() - started).toBeLessThan(1_000)
   })
 })
 

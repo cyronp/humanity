@@ -4,10 +4,11 @@ import {
   OPEN_THREAD_TOOL,
   openedThreadIn,
   PROVIDER_NAMES,
-  type SessionId,
+  SessionId,
+  THREAD_RESULT_TOOL,
 } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
-import { MessageSquarePlus } from "lucide-react"
+import { Hourglass, MessageSquarePlus } from "lucide-react"
 import { Markdown } from "@/features/chat/Markdown"
 import { allSessionsAtom } from "@/features/session/atoms"
 import { ThreadStatus } from "@/features/sidebar/ThreadLink"
@@ -75,6 +76,47 @@ export const threadRenderer: ToolRenderer = {
       </div>
     )
   },
+}
+
+export const threadResultRenderer: ToolRenderer = {
+  name: "Thread result",
+  match: (toolName) => toolName === THREAD_RESULT_TOOL,
+  Summary: ({ input, call }) => {
+    const threadId = stringField(input, "thread_id")
+    const waits =
+      input !== null && typeof input === "object" && Reflect.get(input, "wait") !== false
+    const done = call !== undefined && call.status !== "running"
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Hourglass className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 text-muted-foreground">
+          {!waits ? "Read thread" : done ? "Waited for thread" : "Waiting for thread"}
+        </span>
+        {threadId !== undefined && <ThreadTitle sessionId={SessionId.make(threadId)} />}
+        {threadId !== undefined && <ChildStatus sessionId={SessionId.make(threadId)} />}
+      </span>
+    )
+  },
+  Detail: ({ call }) =>
+    call?.output == null ? null : (
+      <Field label={call.output.isError ? "Error" : "Result"}>
+        {call.output.isError ? (
+          <OutputText text={call.output.content} error />
+        ) : (
+          <div className="rounded-md border p-2">
+            <Markdown text={call.output.content} />
+          </div>
+        )}
+      </Field>
+    ),
+}
+
+function ThreadTitle({ sessionId }: { readonly sessionId: SessionId }) {
+  const sessions = useAtomValue(allSessionsAtom)
+  const title = AsyncResult.isSuccess(sessions)
+    ? sessions.value.find((session) => session.id === sessionId)?.title
+    : undefined
+  return <span className="truncate">{title ?? sessionId}</span>
 }
 
 function OpenedThreadStatus({ text }: { readonly text: string }) {

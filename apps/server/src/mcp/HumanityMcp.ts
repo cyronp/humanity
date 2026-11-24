@@ -10,11 +10,13 @@ import {
   SKILL_TOOL_NAME,
   type TerminalToolName,
   THREAD_HISTORY_TOOL_NAME,
+  THREAD_RESULT_TOOL_NAME,
 } from "@humanity/contracts"
 import { Context, Data, Effect, Layer, Option, Schema, type Scope } from "effect"
 import { randomBytes } from "node:crypto"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
 import { THREAD_HISTORY_TOOL_DEFINITION } from "../agent/handoff.ts"
+import { THREAD_RESULT_TOOL_DEFINITION } from "../agent/threadResult.ts"
 import type { ServedSkill } from "../extensions/skillCatalog.ts"
 import { skillToolDefinition } from "../extensions/skillTool.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -59,6 +61,7 @@ export interface HumanityTools {
     readonly load: (args: unknown) => Effect.Effect<ToolText>
   }
   readonly history?: (args: unknown) => Effect.Effect<ToolText>
+  readonly threadResult?: (args: unknown) => Effect.Effect<ToolText>
 }
 
 const providers = AgentProvider.literals
@@ -66,7 +69,7 @@ const providers = AgentProvider.literals
   .join(", ")
 
 const OPEN_THREAD_DESCRIPTION = `Opens a new thread in Humanity, in the same project as this one, and starts it on the given prompt. Use it only when the human asks you to open, start or hand work to another thread, optionally on a specific provider, model or reasoning effort; never on your own initiative.
-The new thread is a separate conversation with its own agent: it sees nothing of this one, so the prompt must stand on its own (the problem, the files involved, what done looks like). It starts in the project's checkout, which this thread may also be working in. You are not told when it finishes or what it did.
+The new thread is a separate conversation with its own agent: it sees nothing of this one, so the prompt must stand on its own (the problem, the files involved, what done looks like). It starts in the project's checkout, which this thread may also be working in. To wait for it to finish and read its reply, call thread_result with the id the result gives.
 The result gives you a markdown link to the new thread. Use it inline in your reply, where you mention the thread: the human sees it as the project's icon and the thread's title, and clicks it to go there.`
 
 export const OPEN_THREAD_TOOL_DEFINITION = {
@@ -109,6 +112,7 @@ export const OPEN_THREAD_TOOL_DEFINITION = {
 
 const listTools = (tools: HumanityTools): ReadonlyArray<unknown> => [
   ...(tools.openThread === undefined ? [] : [OPEN_THREAD_TOOL_DEFINITION]),
+  ...(tools.threadResult === undefined ? [] : [THREAD_RESULT_TOOL_DEFINITION]),
   ...(tools.terminal === undefined ? [] : TERMINAL_TOOL_DEFINITIONS),
   ...(tools.skills === undefined || tools.skills.catalog.length === 0
     ? []
@@ -144,7 +148,15 @@ const INVALID_PARAMS = -32602
 
 const callTool = (tools: HumanityTools, params: Record<string, unknown>) => {
   const name = params["name"]
-  const { terminal, openThread, skills, history } = tools
+  const { terminal, openThread, skills, history, threadResult } = tools
+  if (name === THREAD_RESULT_TOOL_NAME) {
+    if (threadResult === undefined) return Option.none()
+    return Option.some(
+      Effect.map(threadResult(params["arguments"] ?? {}), (said) =>
+        toolText(said.text, said.isError),
+      ),
+    )
+  }
   if (name === THREAD_HISTORY_TOOL_NAME) {
     if (history === undefined) return Option.none()
     return Option.some(

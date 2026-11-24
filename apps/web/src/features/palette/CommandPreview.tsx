@@ -1,4 +1,4 @@
-import { Check, ChevronRight, CornerDownLeft, Filter } from "lucide-react"
+import { Check, ChevronRight, CornerDownLeft, Filter, Keyboard } from "lucide-react"
 import type { ReactNode } from "react"
 import { Kbd } from "@/components/ui/kbd"
 import type { FilterSuggestion } from "./filters.ts"
@@ -29,7 +29,9 @@ export function CommandPreview({ command }: { readonly command: PaletteCommand }
           <Line icon={<CornerDownLeft className="size-3.5" />}>Runs at once</Line>
         )}
         {command.shortcut !== undefined && (
-          <Line icon={<Kbd>{command.shortcut}</Kbd>}>Its shortcut</Line>
+          <Line icon={<Keyboard className="size-3.5" />}>
+            Its shortcut <Kbd>{command.shortcut}</Kbd>
+          </Line>
         )}
       </dl>
     </div>

@@ -3,6 +3,8 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { AttachmentContent, AttachmentUpload } from "../domain/Attachment.ts"
 import { RewindPreview } from "../domain/Checkpoint.ts"
 import { CompareRunRequest, GroupComparison } from "../domain/Compare.ts"
+import { ChecksResult } from "../domain/Checks.ts"
+import { HandoffPreview } from "../domain/Handoff.ts"
 import { MessageHit } from "../domain/Search.ts"
 import { UsageReport } from "../domain/Usage.ts"
 import { Autonomy } from "../domain/Policy.ts"
@@ -22,6 +24,7 @@ import {
   AttachmentNotFound,
   AttachmentRejected,
   BranchNotCheckedOut,
+  ChecksUnavailable,
   CompareUnavailable,
   ForkUnavailable,
   GitBranchExists,
@@ -30,6 +33,7 @@ import {
   GitNotARepository,
   GitNotInstalled,
   GitRefNotFound,
+  HandoffUnavailable,
   NothingToCommit,
   PlanUsageUnavailable,
   ProjectNotFound,
@@ -281,6 +285,21 @@ export const SessionsRpcs = RpcGroup.make(
     payload: { groupId: Schema.String },
     success: GroupComparison,
     error: CompareUnavailable,
+  }),
+  Rpc.make("Sessions.handoffPreview", {
+    payload: { sessionId: SessionId },
+    success: Schema.NullOr(HandoffPreview),
+    error: SessionNotFound,
+  }),
+  Rpc.make("Sessions.trimHandoff", {
+    payload: { sessionId: SessionId, excluded: Schema.Array(Schema.Number) },
+    success: HandoffPreview,
+    error: Schema.Union([SessionNotFound, HandoffUnavailable]),
+  }),
+  Rpc.make("Sessions.runChecks", {
+    payload: { sessionId: SessionId },
+    success: ChecksResult,
+    error: Schema.Union([SessionNotFound, SessionEnded, ChecksUnavailable]),
   }),
   Rpc.make("Sessions.subscribe", {
     payload: { sessionId: SessionId },

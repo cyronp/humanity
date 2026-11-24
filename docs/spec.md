@@ -20,6 +20,7 @@ Humanity also ships as a desktop app. This adds to the stack of section 3 and to
 - **`apps/desktop` is a shell, not a second app.** It starts the daemon of `apps/server` as a child process, on Electron's own Node (`ELECTRON_RUN_AS_NODE`), and opens a window on the web app that daemon serves. It holds no domain logic, no RPC handlers and no copy of the UI. The daemon is never run inside Electron's main process.
 - **The window is an ordinary client.** It loads `http://127.0.0.1:<port>/?token=…` like a browser would, sandboxed, with context isolation, no Node integration and no preload. Links that leave Humanity open in the human's browser.
 - **The app's top bar is the window's title bar.** On Windows and Linux the window has no title bar of the system's: the web app's own bars along the top move the window, and the system's minimize, maximize and close buttons are drawn over their right end, in the page's theme (the page states it in its `theme-color`). This is plain CSS in `apps/web` that does nothing in a browser. macOS keeps its title bar for now. The app's icon is the brand mark, drawn from the favicon by `apps/desktop/scripts/icon.mjs`.
+- **Always named Humanity.** The app is Humanity in Electron, in its installer and on every window: a page's title (a thread's name, what waits) never replaces the window's.
 - **A port of its own, always the same:** 7421 (`HUMANITY_DESKTOP_PORT`), apart from the daemon's 7420. It is fixed because the web app keeps its token and preferences in localStorage, which belongs to the origin. Only one instance of the app runs at a time.
 - **The daemon lives and dies with the app.** The app keeps the daemon's stdin open; when it closes, because the app quit or crashed, the daemon shuts down. A daemon that dies is restarted, and the web app reconnects on its own.
 - **Packaging:** the daemon is bundled into one file and shipped beside the app's archive together with the web app and the Agent SDK with its Claude Code executable, which need real paths on disk. An installer is built on, and for, one platform. The first target is an unsigned Windows installer; code signing, notarization, auto-update, macOS and Linux come later.
@@ -166,7 +167,8 @@ An open thread can move to another provider and keep its conversation. This supe
 - **What stays and what goes.** The thread's mode stays. "Always allow in this thread" is forgotten, since another agent now asks. Each provider's start-up checks run as for a new thread. The chat shows a divider: the model before and after, each with its provider's icon and named as the model picker names it (the name its provider reports for the account, else its id), that the context will be transferred (then that it was), and about how many tokens the handoff costs, estimated at four characters a token and colored by weight (under 4k, under 10k, more); its tooltip says how many entries went in full and how many were left to read.
 - **A switch that carried nothing is replaced.** Picking again before the human sent a message removes the switch's divider (`MessageRemoved`) and goes from where the thread was before it; picking the agent and account it was on before undoes the switch, with no divider at all. A provider keeps its parked session until it is parked again, so a resume that was never heard is not lost.
 - **When the agent stops on an error,** the note under the chat offers "Continue on another model", which opens the same picker. When the error names a usage limit, or one of the plan's limits is full, the note says the agent hit a usage limit and the button is the main one.
-- **Not yet:** a preview of the handoff before it is sent, and carrying a provider's own plan tool (Codex's `update_plan`) when Humanity does not see it as a call.
+- **A preview, and entries left out (2026-11-23).** Until the human's next message carries it, the switch's divider offers Preview: the handoff's entries, each with what it says and whether it goes in full or is left for `thread_history`, and the block as the agent will read it, with its token estimate. Unticking entries and applying rebuilds the handoff without them (`Sessions.trimHandoff`), from what it was built from (`sessions.pending_handoff_source`), and updates the divider. A left-out entry is marked in the block as left out by the human, and the agent is told not to look it up; the first and last messages are no longer forced in when the human leaves them out. A handoff made by a rewind or a fork can be read there but not changed (`Sessions.handoffPreview` says which).
+- **Not yet:** carrying a provider's own plan tool (Codex's `update_plan`) when Humanity does not see it as a call.
 
 ## Amendment: color themes (2026-11-20)
 
@@ -209,7 +211,8 @@ A thread remembers the thread it came from, and the sidebar shows them together.
 - **The link.** `sessions.parent_session_id` names the thread a thread came from, `relation` how (`opened` by the agent's `open_thread`, or `forked` from it by the human) and `forked_at_message_id` where a fork was made. Deleting a thread leaves its children, with no parent.
 - **The sidebar as a tree.** A thread is shown under the thread it came from, indented, as long as that thread is shown too; otherwise at the top level. When a thread it opened, at any depth, waits for the human, stopped on an error or is working, its row says so beside its own status.
 - **The call shows its thread.** An `open_thread` card in the chat shows the opened thread's status as it changes.
-- **Ending a thread leaves the threads it opened running.** The agent is still not told when a thread it opened finishes.
+- **Ending a thread leaves the threads it opened running.**
+- **Waiting for a thread it opened (2026-11-23).** `thread_result`, a read of Humanity's MCP server offered with `open_thread` (and under its switch), takes the id `open_thread` returns and waits until that thread stops working: it finished its turn, waits for the human, stopped on an error, or was stopped or ended. It then answers how it stopped and its agent's last reply (its text after the turn's last tool call, cut in the middle past 8,000 characters), marked as a record and not an instruction. `wait: false` answers at once. A call waits at most 30 minutes and says so; the agent calls again to keep waiting. Only threads this thread opened (`relation` `opened`) can be read, so it reaches no other thread. A thread that waits for the human is not answered by the agent: the human answers it there. It runs without asking, like `thread_history`, and its card shows the thread's title and status.
 
 ## Amendment: checkpoints and rewind (2026-11-22)
 
@@ -223,13 +226,14 @@ Before each of the human's messages reaches the agent, Humanity keeps a checkpoi
 
 ## Amendment: forking a thread (2026-11-22)
 
-The human can fork a thread, from its end or from before any of their messages, to try another way without losing the first. This adds no library to the stack of section 3.
+The human can fork a thread, from its end or from the end of any of the agent's turns, to try another way without losing the first. This adds no library to the stack of section 3.
 
 - **Always a worktree of its own.** The fork is a new thread of the same project, provider, account, model and effort, in a new worktree whose branch starts at the commit its source was on then (kept with each checkpoint). Its files are the source's checkpoint from before that message, or, from the end, a checkpoint taken at once, so changes not yet committed come along; files git ignores do not. The source is left as it is. A fork needs an idle thread that has not ended; from before a message, it needs that message's checkpoint.
 - **The conversation comes along.** Humanity copies the source's messages, tool calls and attachments up to that point into the fork, and links it to its source (`relation` `forked`, `forked_at_message_id`), so the sidebar shows it under its source. Its agent gets the conversation with the human's first message, as a `<humanity-handoff>` that says it was forked. On Codex the fork's thread is Codex's own fork of the source's (`thread/fork` through the last turn before that point, in the fork's folder), with the handoff as the fallback; Claude Code and the ACP agents take the handoff, since a Claude Code session is kept by the folder it ran in.
 - **Never inherited: the mode.** A fork starts in its project's default mode, like any new thread.
-- **Where.** Each of the human's messages offers "Fork from before this message"; the thread's header offers "Fork thread".
-- **Not yet:** forking on another provider or model in one step (the fork can switch afterwards), and putting the message forked from into the new thread's composer.
+- **Where (2026-11-23).** The end of each of the agent's turns offers "Fork from here": the fork takes the conversation up to that response, and the files from before the human's next message, or, after the last turn, as they are now. A fork cannot start in the middle of a turn, since checkpoints are taken only before the human's messages. The thread's header offers "Fork thread". The human's messages offer Rewind, not a fork: trying a message again is what Rewind is for.
+- **Copying (2026-11-23).** Each of the human's messages offers Copy, and so does the end of each turn, which copies the agent's reply: its text after the turn's last tool call.
+- **Not yet:** forking on another provider or model in one step (the fork can switch afterwards).
 
 ## Amendment: the command palette (2026-11-22)
 
@@ -251,7 +255,7 @@ The human finds a thread by what was said or done in it. This adds no library to
 - **An index in `humanity.db`.** `search_index` is an FTS5 table with the `trigram` tokenizer, so a part of a word, a path or an identifier matches, without regard to case. It holds the human's messages, the agent's text and one line per tool call (what it did, as the handoff describes it: the command, the file, the pattern); thinking, notices and tools' output are left out. Humanity keeps it in step with the messages as they are written, changed, removed or rewound; a thread that no longer exists is dropped from it when the daemon starts. The threads there before are indexed once, by the migration that adds it.
 - **`Sessions.search`** takes the text, optionally projects and a limit (50 by default), and answers the best matches with a snippet, the hit marked. Each word of three characters or more must match; shorter words are left out, and a search of only short words finds nothing.
 - **In the command palette,** `?` searches: each hit shows the thread, its project, who said it (the human, the agent or a tool call) and the snippet. Picking one opens the thread at that message (`?message=` on the thread's address): the chat loads earlier messages until it holds it, scrolls to it and marks it for a moment.
-- **Not yet:** searching from the sidebar's own search field, which still matches titles, projects and branches only.
+- **In the sidebar (2026-11-23).** Its search field matches titles, projects and branches as before and, from three characters, the messages of every thread too, through `Sessions.search` (up to 200 hits). A thread found by its messages alone shows its best hit's snippet under its branch and opens at that message. The sidebar's project and state filters still apply, and ended threads are found the same way.
 
 ## Amendment: searching and changing files in Files (2026-11-22)
 
@@ -270,7 +274,9 @@ The human reviews the agent's uncommitted changes as in a code review, and the c
 
 - **A comment on any line** of Source control → Changes, from a button in the line's gutter: on the new line, or the old one for a removed line. Comments show under their line, and can be edited or deleted. They are kept in the browser (`humanity.reviewComments.<sessionId>`), like unsaved edits, until they are used or discarded; an ended thread takes none.
 - **One bar over the changes** counts them, and says how many sit on lines that are no longer in the diff, which still go along. "Add to my message" puts them in the composer as one block (each file and line, the line quoted, then the comment), to edit and send like any message, and clears them; Discard drops them. Nothing reaches the agent until the human sends.
-- **Not yet:** comments on the pull request page's diffs, posting them to the forge as a review, and comments on a file change the agent is waiting on in "Ask me" (its Deny comment stays the place for that).
+- **On a file change the agent waits on (2026-11-23).** In "Ask me", the change's card takes line comments the same way, kept in the browser by the change (`humanity.reviewComments.change-<changeId>`). Deny sends them after the optional comment, as one block naming the file, each line quoted, and the button says how many go. Allow keeps them: they move to the thread's comments in Source control, under Changes, where the change now is, to add to a message.
+- **On the pull request, posted as a review (2026-11-23).** Overview shows the open or draft pull request's Files changed, read on demand (`PullRequests.files`: the forge's diff, base...head at its head commit, from the thread's folder, which must have that commit). Its lines take comments, kept in the browser by the pull request (`humanity.reviewComments.pr-<sessionId>-<number>`). "Post as a review", with an optional summary, is the human's click, under their own account: `PullRequests.review` posts only at the head commit the human read, and only when every comment sits on a line that diff shows, else it posts nothing and names them. GitHub gets one review (`COMMENT`) with every line comment; GitLab, a discussion per comment at that line of its diff, then the summary as a note. The thread hears it as a notice. The agent has no tool for it.
+- **Not yet:** comments on the pull request page that opens a new one, replies to the forge's own comments, and approving or requesting changes.
 
 ## Amendment: usage over time (2026-11-22)
 
@@ -291,6 +297,30 @@ The human runs the same first message on two to four models at once and keeps th
 - **Keep this one** ends the other runs, like ending a thread: their agents stop, their branches are kept, and their worktrees are deleted only when the human checks that, the project's "ending a thread" setting choosing the default. The kept run goes on as any thread; nothing is merged.
 - **In the sidebar,** a run is marked as one of several runs compared.
 - **Not yet:** a run's diff against another run's, and merging a run's branch from the comparison.
+
+## Amendment: a turn folded into phases (2026-11-23)
+
+The chat shows each of the agent's turns as its reply under one line, "Worked for 2m 14s · 9 tool calls", that opens into what the agent did. This changes the chat of section 10 and adds no library to the stack of section 3. Every tool call is still rendered, one click away.
+
+- **The fold.** Everything from the human's message to the turn's end is one turn. Its reply, the agent's text after its last tool call, stays outside the fold; the rest goes in it: the "Agent started" line, thoughts, the agent's text along the way and every call, a sub-agent's work under the call that started it. The "Done" row is gone; Copy and Fork from here sit on the fold's line, shown on hover. A turn that stopped on an error keeps its reason under the reply. A notice in the middle of a turn stays where it was, between two folds.
+- **Phases.** Opened, the fold shows phases: consecutive reads and searches are one "Explored" phase, file changes one "Edited" phase, commands and the terminal tools one "Ran" phase, each opening into its calls; any other tool is a phase of its own, its call as it was. Thoughts and text go with the phase they follow. A phase says how many of its calls failed or were denied.
+- **While the agent works,** the line reads "Working for …" and the fold stays open, with the phase in progress named in the present ("Running npm test"). It closes when the turn ends, unless the human opened or closed it. A call waiting for the human opens its fold and phase. "Tool calls start expanded" opens folds and phases too, and a search hit inside a fold opens it.
+
+## Amendment: checks in one click (2026-11-23)
+
+The human runs a project's checks (lint, typecheck, tests) from a thread, and hands what fails to the agent. It adds no library to the stack of section 3.
+
+- **Set per project.** Settings, under Projects, has Checks: one command per line, kept in `Project.settings` (`checkScript`), run joined with `&&` like the setup script. A project without checks offers the button anyway, which opens that setting.
+- **Run checks** sits in Source control's header beside Sync, and in the command palette. `Sessions.runChecks` opens a new terminal of the thread, as the human's (titled Checks), waits for its shell to report it is ready, types the commands and waits for them to end (shell integration), at most 30 minutes. They are the human's own command, like the setup script, and reach no permission check. It answers how they ended (passed, failed with the exit code, still running, or a shell that cannot tell) with the last 200 lines they printed.
+- **The result** shows in a bar over Source control's tabs, kept in the page until dismissed: a button to show its terminal and, when they failed, "Add to my message", which puts the command, the exit code and the output's last 80 lines in the composer, in a fence their backticks cannot close, to edit and send. Nothing reaches the agent until the human sends.
+
+## Amendment: threads that need you, from anywhere (2026-11-23)
+
+The human sees how many threads need them without looking at Humanity, and goes to each in turn. It adds no library to the stack of section 3.
+
+- **A thread needs the human** while it waits for them or stopped on an error, as the command palette already ranks them.
+- **The desktop app's taskbar.** The shell watches the daemon's thread list itself (`Sessions.watchAll`, with the token, like its updates), so the count is right whether or not the page is loaded. On Windows the taskbar button carries an overlay badge with that count (9+ past nine), amber, or red while one of them stopped on an error, described in words for screen readers; on macOS and Linux the app's badge count. When the count grows and the window is not focused, the taskbar button flashes until it is. The shell draws the badge itself and writes nothing.
+- **Ctrl+J (Cmd+J on a Mac)** goes to the next thread that needs the human, anywhere in the app except a terminal, which keeps its keys: the waiting threads first, the one waiting longest first, then those stopped on an error, round from the thread that is open. The command palette lists it as an action while one needs the human.
 
 ## 1. Product vision
 

@@ -1,7 +1,6 @@
 import { useAtomSet } from "@effect/atom-react"
 import { type PendingConfirmation, parseMcpToolName } from "@humanity/contracts"
 import { Exit } from "effect"
-import { Hand } from "lucide-react"
 import { memo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
@@ -11,11 +10,11 @@ import {
   CodeBlockContent,
   CodeBlockCopyButton,
 } from "@/components/ui/code-block"
-import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { decideConfirmationAtom } from "@/features/session/atoms"
 import { JsonBlock } from "@/features/tools/renderers/common"
 import { describeCause } from "@/lib/errors"
 import { DecisionActions, type Verdict } from "./DecisionActions.tsx"
+import { DecisionCard } from "./DecisionCard.tsx"
 
 const asRecord = (input: unknown): Record<string, unknown> =>
   input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
@@ -24,12 +23,8 @@ function CallPreview({ confirmation }: { readonly confirmation: PendingConfirmat
   const input = asRecord(confirmation.input)
   const command = input["command"]
   if (typeof command === "string") {
-    const description = input["description"]
     return (
       <div className="flex flex-col gap-1">
-        {typeof description === "string" && description !== "" && (
-          <p className="text-sm">{description}</p>
-        )}
         <CodeBlock size="sm" className="bg-muted">
           <CodeBlockActions>
             <CodeBlockCopyButton value={command} />
@@ -49,14 +44,17 @@ function CallPreview({ confirmation }: { readonly confirmation: PendingConfirmat
 
 function ToolName({ name }: { readonly name: string }) {
   const mcp = parseMcpToolName(name)
-  if (mcp === undefined) return <Badge className="font-mono">{name}</Badge>
+  if (mcp === undefined) return <span className="font-mono">{name}</span>
   return (
-    <span className="flex items-center gap-1">
-      <Badge variant="outline">MCP</Badge>
-      <Badge variant="secondary" className="font-mono">
-        {mcp.server}
+    <span className="flex min-w-0 items-center gap-1">
+      <Badge variant="outline" className="h-4 px-1 text-[10px]">
+        MCP
       </Badge>
-      <Badge className="font-mono">{mcp.tool}</Badge>
+      <span className="truncate font-mono">
+        {mcp.server}
+        <span className="text-muted-foreground/60"> / </span>
+        {mcp.tool}
+      </span>
     </span>
   )
 }
@@ -79,29 +77,32 @@ export const ConfirmationCard = memo(function ConfirmationCard({
     if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
+  const input = asRecord(confirmation.input)
+  const description = typeof input["description"] === "string" ? input["description"].trim() : ""
+
   return (
-    <Item
-      variant="attention"
-      className="items-start"
-      role="alertdialog"
-      aria-label={`The agent wants to run ${confirmation.toolName}`}
+    <DecisionCard
+      label={`The agent wants to run ${confirmation.toolName}`}
+      kind={<ToolName name={confirmation.toolName} />}
+      title={
+        <p className="text-sm font-medium">
+          {description !== "" ? description : `Run ${confirmation.toolName}`}
+        </p>
+      }
+      footer={
+        <>
+          <DecisionActions
+            toolName={confirmation.toolName}
+            pending={pending}
+            onDecide={(verdict) => void submit(verdict)}
+          />
+          {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
+        </>
+      }
     >
-      <ItemMedia variant="icon">
-        <Hand className="text-warning" />
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-3">
-        <ItemTitle className="line-clamp-none flex-wrap">
-          The agent wants to run
-          <ToolName name={confirmation.toolName} />
-        </ItemTitle>
+      <div className="px-4 pb-3">
         <CallPreview confirmation={confirmation} />
-        <DecisionActions
-          toolName={confirmation.toolName}
-          pending={pending}
-          onDecide={(verdict) => void submit(verdict)}
-        />
-        {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
-      </ItemContent>
-    </Item>
+      </div>
+    </DecisionCard>
   )
 })

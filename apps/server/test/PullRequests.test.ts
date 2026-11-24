@@ -90,6 +90,21 @@ const pull = (extra: Record<string, unknown> = {}) => ({
 const user = { login: "octocat", avatar_url: "https://x/o.png" }
 const REPO = `${GITHUB_API}/repos/acme/app`
 
+const placed = (
+  side: "new" | "old",
+  line: number,
+  oldLine: number | undefined,
+  newLine: number | undefined,
+) => ({
+  path: "src/login.ts",
+  previousPath: "src/auth.ts",
+  side,
+  line,
+  oldLine,
+  newLine,
+  body: "Why here?",
+})
+
 describe("CI status mapping", () => {
   it("reads a GitHub check run's status and conclusion", () => {
     expect(githubCheckRunStatus("queued", null)).toBe("queued")
@@ -225,6 +240,35 @@ describe("GitHub pull requests", () => {
       ).pipe(Effect.provide(github(client, "tok")))
       assert.strictEqual(error._tag, "GitHubRequestFailed")
       assert.include(error.message, "Merge commits are not allowed")
+    }),
+  )
+
+  it.effect("posts a review of line comments at the commit the human saw", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`POST ${REPO}/pulls/7/reviews`]: { body: { id: 9 } },
+      })
+      yield* GitHubService.use((service) =>
+        service.reviewPullRequest("acme/app", 7, {
+          commitId: "abc123",
+          body: " Looks close ",
+          comments: [placed("new", 12, undefined, 12), placed("old", 4, 4, undefined)],
+        }),
+      ).pipe(Effect.provide(github(client, "tok")))
+      assert.deepStrictEqual(
+        (yield* Ref.get(requests)).map((request) => request.body),
+        [
+          {
+            commit_id: "abc123",
+            event: "COMMENT",
+            body: "Looks close",
+            comments: [
+              { path: "src/login.ts", line: 12, side: "RIGHT", body: "Why here?" },
+              { path: "src/auth.ts", line: 4, side: "LEFT", body: "Why here?" },
+            ],
+          },
+        ],
+      )
     }),
   )
 
@@ -484,6 +528,64 @@ describe("GitLab merge requests", () => {
         [
           ["POST", { body: "Shipping it" }],
           ["PUT", { squash: true, sha: "def456" }],
+        ],
+      )
+    }),
+  )
+
+  it.effect("posts each line comment as a discussion on the merge request's diff", () =>
+    Effect.gen(function* () {
+      const { client, requests } = yield* fakeApi({
+        [`GET ${GITLAB}/merge_requests/5`]: {
+          body: mergeRequest({
+            diff_refs: { base_sha: "b1", start_sha: "s1", head_sha: "def456" },
+          }),
+        },
+        [`POST ${GITLAB}/merge_requests/5/discussions`]: { status: 201, body: { id: "d" } },
+        [`POST ${GITLAB}/merge_requests/5/notes`]: { status: 201, body: { id: 3 } },
+      })
+      yield* GitLabService.use((service) =>
+        service.reviewMergeRequest("acme/app", 5, {
+          body: "Overall fine",
+          comments: [placed("new", 12, 10, 12), placed("old", 4, 4, undefined)],
+        }),
+      ).pipe(Effect.provide(gitlab(client, "glpat")))
+      const position = {
+        position_type: "text",
+        base_sha: "b1",
+        start_sha: "s1",
+        head_sha: "def456",
+      }
+      assert.deepStrictEqual(
+        (yield* Ref.get(requests)).map((request) => [request.method, request.body]),
+        [
+          ["GET", undefined],
+          [
+            "POST",
+            {
+              body: "Why here?",
+              position: {
+                ...position,
+                old_path: "src/auth.ts",
+                new_path: "src/login.ts",
+                old_line: 10,
+                new_line: 12,
+              },
+            },
+          ],
+          [
+            "POST",
+            {
+              body: "Why here?",
+              position: {
+                ...position,
+                old_path: "src/auth.ts",
+                new_path: "src/login.ts",
+                old_line: 4,
+              },
+            },
+          ],
+          ["POST", { body: "Overall fine" }],
         ],
       )
     }),

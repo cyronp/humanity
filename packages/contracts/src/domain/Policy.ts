@@ -20,6 +20,10 @@ export const THREAD_HISTORY_TOOL_NAME = "thread_history"
 
 export const THREAD_HISTORY_TOOL = humanityTool(THREAD_HISTORY_TOOL_NAME)
 
+export const THREAD_RESULT_TOOL_NAME = "thread_result"
+
+export const THREAD_RESULT_TOOL = humanityTool(THREAD_RESULT_TOOL_NAME)
+
 export const TERMINAL_TOOL_NAMES = [
   "terminal_list",
   "terminal_read",
@@ -44,6 +48,7 @@ export const AUTO_TOOLS: ReadonlyArray<string> = [
   OPEN_THREAD_TOOL,
   SKILL_TOOL,
   THREAD_HISTORY_TOOL,
+  THREAD_RESULT_TOOL,
   ...TERMINAL_TOOLS,
 ]
 

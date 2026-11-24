@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { ChatMessage, Session } from "@humanity/contracts"
+import type { Session } from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { GitFork } from "lucide-react"
@@ -16,10 +16,11 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import type { TurnEnd } from "@/features/chat/transcriptActions"
 import { forkAtom } from "./atoms.ts"
 
 export interface ForkTarget {
-  readonly message?: ChatMessage | undefined
+  readonly turn?: TurnEnd | undefined
 }
 
 export function ForkDialog({
@@ -35,8 +36,8 @@ export function ForkDialog({
   const navigate = useNavigate()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const message = target?.message
-  const text = message?.content._tag === "user" ? message.content.text : undefined
+  const turn = target?.turn
+  const message = turn?.nextMessage
   const busy = session.status === "running" || session.status === "waiting_for_human"
 
   const close = () => {
@@ -72,17 +73,21 @@ export function ForkDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitFork className="size-4" />
-            {text === undefined ? "Fork this thread?" : "Fork from before this message?"}
+            {turn === undefined ? "Fork this thread?" : "Fork from this response?"}
           </DialogTitle>
-          {text !== undefined && (
-            <DialogDescription className="line-clamp-2 wrap-anywhere">“{text}”</DialogDescription>
+          {turn !== undefined && turn.reply !== "" && (
+            <DialogDescription className="line-clamp-2 wrap-anywhere">
+              “{turn.reply}”
+            </DialogDescription>
           )}
         </DialogHeader>
         <div className="flex flex-col gap-2 text-sm">
           <p>
-            {text === undefined
+            {turn === undefined
               ? "A new thread starts in a worktree of its own, with this thread’s files as they are now and its whole conversation."
-              : "A new thread starts in a worktree of its own, with the files as they were before this message and the conversation before it."}{" "}
+              : message === undefined
+                ? "A new thread starts in a worktree of its own, with this thread’s files as they are now and the conversation up to this response."
+                : "A new thread starts in a worktree of its own, with the files as they were before your next message and the conversation up to this response."}{" "}
             This thread stays as it is.
           </p>
           <p className="text-muted-foreground">

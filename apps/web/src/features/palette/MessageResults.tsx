@@ -1,16 +1,12 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import {
-  type MessageHit,
-  SEARCH_MIN_LENGTH,
-  type SearchHitKind,
-  snippetParts,
-} from "@humanity/contracts"
+import { type MessageHit, SEARCH_MIN_LENGTH, type SearchHitKind } from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Bot, type LucideIcon, User, Wrench } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import type { Session } from "@humanity/contracts"
+import { SearchSnippet } from "@/components/SearchSnippet"
 import { CommandGroup, CommandItem } from "@/components/ui/command"
 import { Spinner } from "@/components/ui/spinner"
 import { projectsAtom } from "@/features/projects/atoms"
@@ -159,17 +155,7 @@ ${projectIds?.join(",") ?? ""}`
               </span>
               <span className="shrink-0">{thread?.project}</span>
             </span>
-            <span className="line-clamp-2 w-full text-sm wrap-anywhere">
-              {snippetParts(hit.snippet).map((part, position) =>
-                part.marked ? (
-                  <mark key={position} className="rounded-sm bg-warning/25 px-0.5 text-foreground">
-                    {part.text}
-                  </mark>
-                ) : (
-                  <span key={position}>{part.text}</span>
-                ),
-              )}
-            </span>
+            <SearchSnippet snippet={hit.snippet} className="line-clamp-2 w-full text-sm" />
           </CommandItem>
         )
       })}

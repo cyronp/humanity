@@ -3,8 +3,40 @@ import { createContext, useContext } from "react"
 
 export interface TranscriptActions {
   readonly onRewind?: ((message: ChatMessage) => void) | undefined
-  readonly onFork?: ((message: ChatMessage) => void) | undefined
+  readonly onFork?: ((turn: TurnEnd) => void) | undefined
   readonly onUndoRewind?: ((messageId: string) => Promise<string | undefined>) | undefined
+}
+
+export interface TurnEnd {
+  readonly reply: string
+  readonly nextMessage: ChatMessage | undefined
+}
+
+export const turnEnds = (messages: ReadonlyArray<ChatMessage>): ReadonlyMap<string, TurnEnd> => {
+  const ends = new Map<string, TurnEnd>()
+  let reply: Array<string> = []
+  let waiting: Array<{ readonly id: string; readonly reply: string }> = []
+  const settle = (nextMessage: ChatMessage | undefined) => {
+    for (const end of waiting) ends.set(end.id, { reply: end.reply, nextMessage })
+    waiting = []
+  }
+  for (const message of messages) {
+    const content = message.content
+    if (content._tag === "user") {
+      settle(message)
+      reply = []
+    } else if (content._tag === "assistant" && content.parentToolUseId === null) {
+      for (const block of content.blocks) {
+        if (block._tag === "tool_use") reply = []
+        if (block._tag === "text" && block.text.trim() !== "") reply.push(block.text)
+      }
+    } else if (content._tag === "result") {
+      waiting.push({ id: message.id, reply: reply.join("\n\n") })
+      reply = []
+    }
+  }
+  settle(undefined)
+  return ends
 }
 
 const NO_ACTIONS: TranscriptActions = {}

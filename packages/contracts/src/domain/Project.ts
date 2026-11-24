@@ -28,6 +28,7 @@ export const ProjectSettings = Schema.Struct({
   defaultModel: Schema.NullOr(ModelDefault),
   worktreeForNewThreads: Schema.Boolean,
   setupScript: Schema.NullOr(Schema.String.check(Schema.isMaxLength(MAX_SETUP_SCRIPT_LENGTH))),
+  checkScript: Schema.NullOr(Schema.String.check(Schema.isMaxLength(MAX_SETUP_SCRIPT_LENGTH))),
   branchPrefix: BranchPrefix,
   mergeMethod: Schema.NullOr(MergeMethod),
   draftPullRequests: Schema.Boolean,
@@ -39,6 +40,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   defaultModel: null,
   worktreeForNewThreads: false,
   setupScript: null,
+  checkScript: null,
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   mergeMethod: null,
   draftPullRequests: false,
@@ -51,6 +53,9 @@ export const StoredProjectSettings = Schema.Struct({
   ),
   worktreeForNewThreads: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   setupScript: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
+  checkScript: Schema.NullOr(Schema.String).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed(null)),
   ),
   branchPrefix: BranchPrefix.pipe(

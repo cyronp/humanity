@@ -45,6 +45,10 @@ export const SessionsHandlers = SessionsRpcs.toLayer(
         sessions.undoRewind(sessionId, messageId),
       "Sessions.fork": ({ sessionId, messageId }) => sessions.fork(sessionId, messageId),
       "Sessions.search": (payload) => sessions.search(payload),
+      "Sessions.handoffPreview": ({ sessionId }) => sessions.handoffPreview(sessionId),
+      "Sessions.runChecks": ({ sessionId }) => sessions.runChecks(sessionId),
+      "Sessions.trimHandoff": ({ sessionId, excluded }) =>
+        sessions.trimHandoff(sessionId, excluded),
       "Sessions.createGroup": (payload) => sessions.createGroup(payload),
       "Sessions.compareGroup": ({ groupId }) => sessions.compareGroup(groupId),
       "Sessions.usageReport": (payload) => sessions.usageReport(payload),

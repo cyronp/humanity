@@ -134,6 +134,7 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
   const autoId = useId()
   const prefixId = useId()
   const scriptId = useId()
+  const checksId = useId()
   const endId = useId()
   const [prefixError, setPrefixError] = useState<string>()
 
@@ -200,6 +201,29 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
               const saved = settings.setupScript ?? ""
               if (next.trim() !== saved.trim()) {
                 void change({ setupScript: next.trim() === "" ? null : next })
+              }
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Checks"
+          labelId={checksId}
+          stacked
+          detail="Run checks, in Source control, runs these in a new terminal of the thread, one command per line, each only if the one before passed. When they fail, their output can go into your message. They run as you, like a command you typed."
+        >
+          <Textarea
+            key={settings.checkScript ?? ""}
+            aria-labelledby={checksId}
+            className="font-mono text-xs"
+            rows={3}
+            maxLength={MAX_SETUP_SCRIPT_LENGTH}
+            placeholder={"npm run lint\nnpm run typecheck\nnpm test"}
+            defaultValue={settings.checkScript ?? ""}
+            onBlur={(event) => {
+              const next = event.currentTarget.value
+              const saved = settings.checkScript ?? ""
+              if (next.trim() !== saved.trim()) {
+                void change({ checkScript: next.trim() === "" ? null : next })
               }
             }}
           />

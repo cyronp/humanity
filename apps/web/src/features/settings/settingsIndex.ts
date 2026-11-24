@@ -58,6 +58,7 @@ export const SETTINGS_INDEX: ReadonlyArray<SettingEntry> = [
   { section: "projects", label: "Start new threads in a worktree" },
   { section: "projects", label: "Branch prefix", keywords: ["worktree"] },
   { section: "projects", label: "Setup script", keywords: ["worktree", "install"] },
+  { section: "projects", label: "Checks", keywords: ["lint", "typecheck", "test", "ci"] },
   { section: "projects", label: "When a thread ends", keywords: ["worktree", "delete"] },
   { section: "projects", label: "Merge method", keywords: ["squash", "rebase"] },
   { section: "projects", label: "Open as a draft", keywords: ["pull request"] },

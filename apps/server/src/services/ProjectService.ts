@@ -249,7 +249,8 @@ export class ProjectService extends Context.Service<
       ) {
         const project = yield* get(projectId)
         const setupScript = settings.setupScript?.trim() ? settings.setupScript : null
-        const next: ProjectSettings = { ...settings, setupScript }
+        const checkScript = settings.checkScript?.trim() ? settings.checkScript : null
+        const next: ProjectSettings = { ...settings, setupScript, checkScript }
         yield* sql`UPDATE projects SET settings_json = ${encodeSettings(next)} WHERE id = ${projectId}`.pipe(
           Effect.orDie,
         )

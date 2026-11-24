@@ -57,6 +57,12 @@ import {
   type TranscriptPage,
   SessionId,
   SessionNotFound,
+  HandoffUnavailable,
+  ChecksUnavailable,
+  CHECKS_OUTPUT_LINES,
+  CHECKS_TIMEOUT_MS,
+  type ChecksResult,
+  type HandoffPreview,
   type SessionStatus,
   type SessionUsage,
   NothingToCommit,
@@ -70,6 +76,7 @@ import {
 } from "@humanity/contracts"
 import { changeKind } from "@humanity/diff"
 import {
+  Clock,
   Context,
   DateTime,
   Effect,
@@ -92,13 +99,27 @@ import {
   type ToolPermissionRequest,
 } from "../agent/AgentRunner.ts"
 import { makeSkillTool } from "../extensions/skillTool.ts"
-import { buildHandoff, historyEntries, latestPlan, readThreadHistory } from "../agent/handoff.ts"
+import {
+  decodeThreadResult,
+  formatThreadResult,
+  stillWorking,
+  THREAD_RESULT_MAX_WAIT_MS,
+  THREAD_RESULT_POLL_MS,
+} from "../agent/threadResult.ts"
+import {
+  buildHandoff,
+  type Handoff,
+  type HandoffSource,
+  historyEntries,
+  latestPlan,
+  readThreadHistory,
+} from "../agent/handoff.ts"
 import { FORK_SEARCH_LIMIT, forkPoint } from "../agent/forkPoint.ts"
 import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts"
 import { CheckpointRepo } from "../db/CheckpointRepo.ts"
 import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
-import { makeTerminalTools } from "../terminal/agentTools.ts"
+import { makeTerminalTools, type ToolText } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
@@ -176,6 +197,14 @@ export const sessionBranchName = (
   title: string,
   prefix: string = DEFAULT_BRANCH_PREFIX,
 ): string => `${prefix}${sessionId.slice(0, 8)}-${slugify(title)}`
+
+const SHELL_READY_MS = 15_000
+
+export const withoutPromptLine = (text: string): string => {
+  const lines = text.replace(/\s+$/, "").split("\n")
+  return lines.length <= 1 ? text : lines.slice(0, -1).join("\n")
+}
+const SHELL_READY_POLL_MS = 100
 
 export const setupCommand = (script: string | null): string | undefined => {
   const lines = (script ?? "")
@@ -302,6 +331,16 @@ export class SessionService extends Context.Service<
       model: string | null,
       accountId?: string | undefined,
     ) => Effect.Effect<Session, SessionNotFound | SessionEnded | ProviderSwitchUnavailable>
+    readonly runChecks: (
+      sessionId: string,
+    ) => Effect.Effect<ChecksResult, SessionNotFound | SessionEnded | ChecksUnavailable>
+    readonly handoffPreview: (
+      sessionId: string,
+    ) => Effect.Effect<HandoffPreview | null, SessionNotFound>
+    readonly trimHandoff: (
+      sessionId: string,
+      excluded: ReadonlyArray<number>,
+    ) => Effect.Effect<HandoffPreview, SessionNotFound | HandoffUnavailable>
     readonly sendMessage: (
       sessionId: string,
       text: string,
@@ -954,7 +993,9 @@ export class SessionService extends Context.Service<
               history !== undefined
                 ? yield* mcp
                     .serve({
-                      ...(offered.openThread ? { openThread: openThread(session) } : {}),
+                      ...(offered.openThread
+                        ? { openThread: openThread(session), threadResult: threadResult(session) }
+                        : {}),
                       ...(skillCatalog.length > 0
                         ? {
                             skills: {
@@ -1370,6 +1411,60 @@ export class SessionService extends Context.Service<
             }
           })
 
+      const threadResult =
+        (parent: Session) =>
+        (args: unknown): Effect.Effect<ToolText> =>
+          Effect.gen(function* () {
+            const request = decodeThreadResult(args)
+            if (request === undefined) {
+              return {
+                text: "Pass `thread_id` as a string, the id open_thread gave, and `wait` as true or false.",
+                isError: true,
+              }
+            }
+            const opened = (id: string) =>
+              repo
+                .get(id)
+                .pipe(
+                  Effect.map(
+                    Option.filter(
+                      (child) => child.parentId === parent.id && child.relation === "opened",
+                    ),
+                  ),
+                )
+            const found = yield* opened(request.thread_id)
+            if (Option.isNone(found)) {
+              return {
+                text: `No thread this thread opened has the id "${request.thread_id}". Use the id open_thread gave.`,
+                isError: true,
+              }
+            }
+            let child = found.value
+            let waitedOut = false
+            if (request.wait !== false) {
+              const deadline = (yield* Clock.currentTimeMillis) + THREAD_RESULT_MAX_WAIT_MS
+              while (stillWorking(child.status)) {
+                if ((yield* Clock.currentTimeMillis) >= deadline) {
+                  waitedOut = true
+                  break
+                }
+                yield* Effect.sleep(THREAD_RESULT_POLL_MS)
+                const next = yield* opened(child.id)
+                if (Option.isNone(next)) break
+                child = next.value
+              }
+            }
+            return {
+              text: formatThreadResult({
+                title: child.title,
+                status: child.status,
+                messages: yield* repo.listMessages(child.id),
+                waitedOut,
+              }),
+              isError: false,
+            }
+          })
+
       const setupWorktree = (sessionId: string) => setupWorktreeFrom(sessionId, undefined)
 
       const setupWorktreeFrom = Effect.fn("SessionService.setupWorktree")(function* (
@@ -1432,6 +1527,72 @@ export class SessionService extends Context.Service<
             }),
           ),
         )
+
+      const shellReady = (terminalId: string) =>
+        Effect.gen(function* () {
+          const deadline = (yield* Clock.currentTimeMillis) + SHELL_READY_MS
+          for (;;) {
+            const info = yield* terminals.info(terminalId)
+            if (info.integration) return true
+            if (info.state === "exited") return false
+            if ((yield* Clock.currentTimeMillis) >= deadline) return false
+            yield* Effect.sleep(SHELL_READY_POLL_MS)
+          }
+        })
+
+      const runChecks = Effect.fn("SessionService.runChecks")(function* (sessionId: string) {
+        const session = yield* get(sessionId)
+        if (session.status === "ended") return yield* new SessionEnded({ sessionId })
+        const refused = (reason: string) => new ChecksUnavailable({ reason })
+        const project = yield* projects
+          .get(session.projectId)
+          .pipe(Effect.mapError(() => refused("This thread's project is gone.")))
+        const command = setupCommand(project.settings.checkScript)
+        if (command === undefined) {
+          return yield* refused(
+            `No checks are set for ${project.name}. Add them in Settings, under Projects.`,
+          )
+        }
+        return yield* Effect.gen(function* () {
+          const terminal = yield* terminals.open(
+            { _tag: "Session", sessionId: session.id },
+            { opener: "human", title: "Checks" },
+          )
+          const tracked = yield* shellReady(terminal.id)
+          const cursor = yield* terminals.agentCursor(terminal.id)
+          yield* terminals.agentWrite(terminal.id, `${command}\r`)
+          if (!tracked) {
+            return {
+              terminalId: terminal.id,
+              command,
+              outcome: "untracked" as const,
+              exitCode: null,
+              output: "",
+            }
+          }
+          const waited = yield* terminals.agentWait(terminal.id, {
+            for: { _tag: "command" },
+            since: cursor,
+            timeoutMs: CHECKS_TIMEOUT_MS,
+            maxLines: CHECKS_OUTPUT_LINES,
+          })
+          const outcome =
+            waited.outcome === "timeout"
+              ? ("timeout" as const)
+              : waited.outcome === "unsupported"
+                ? ("untracked" as const)
+                : waited.exitCode === 0
+                  ? ("passed" as const)
+                  : ("failed" as const)
+          return {
+            terminalId: terminal.id,
+            command,
+            outcome,
+            exitCode: waited.exitCode,
+            output: waited.outcome === "command" ? withoutPromptLine(waited.text) : waited.text,
+          }
+        }).pipe(Effect.mapError((error) => refused(`The checks did not start: ${error.message}`)))
+      })
 
       const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
         sessionId: string,
@@ -1620,7 +1781,7 @@ export class SessionService extends Context.Service<
         }
         const kept =
           replaced === undefined ? messages : messages.filter((each) => each.id !== replaced.id)
-        const entries = historyEntries(kept, toolCalls, session.provider)
+        const entries = historyEntries(kept, toolCalls, origin.provider)
 
         const unheard = (yield* repo.getPendingHandoff(sessionId)) !== null
         if (session.sdkSessionId !== null && !unheard) {
@@ -1647,6 +1808,18 @@ export class SessionService extends Context.Service<
           resumed: false,
           plan,
         })
+        const source: HandoffSource = {
+          since: Option.match(parked, {
+            onNone: () => 1,
+            onSome: (earlier) => earlier.seenEntries + 1,
+          }),
+          from: origin.provider,
+          to: provider,
+          resumed: Option.isSome(parked),
+          ...(Option.isNone(parked) && plan !== undefined ? { plan } : {}),
+          entryCount: entries.length,
+          excluded: [],
+        }
         const handoff = Option.match(parked, {
           onNone: () => whole,
           onSome: (earlier) =>
@@ -1659,7 +1832,7 @@ export class SessionService extends Context.Service<
             }),
         })
 
-        yield* repo.setPendingHandoff(sessionId, handoff?.text ?? null)
+        yield* repo.setPendingHandoff(sessionId, handoff?.text ?? null, source)
         yield* repo.update(sessionId, {
           provider,
           model,
@@ -1706,6 +1879,112 @@ export class SessionService extends Context.Service<
         yield* events.publish(sessionId, { _tag: "SessionUpdated", session: updated })
         yield* events.publishListChanged
         return updated
+      })
+
+      const isBusy = (session: Session) =>
+        session.status === "running" || session.status === "waiting_for_human"
+
+      const previewOf = (handoff: Handoff, editable: boolean): HandoffPreview => ({
+        text: handoff.text,
+        tokens: handoff.tokens,
+        included: handoff.included,
+        omitted: handoff.omitted,
+        cut: handoff.cut,
+        editable,
+        entries: editable ? handoff.entries : [],
+      })
+
+      const rebuildHandoff = (
+        messages: ReadonlyArray<ChatMessage>,
+        toolCalls: ReadonlyArray<ToolCall>,
+        session: Session,
+        source: HandoffSource,
+      ) =>
+        buildHandoff({
+          entries: historyEntries(messages, toolCalls, session.provider).filter(
+            (entry) => entry.index <= source.entryCount,
+          ),
+          since: source.since,
+          from: source.from,
+          to: source.to,
+          resumed: source.resumed,
+          plan: source.plan,
+          excluded: source.excluded,
+        })
+
+      const handoffPreview = Effect.fn("SessionService.handoffPreview")(function* (
+        sessionId: string,
+      ) {
+        const session = yield* get(sessionId)
+        const text = yield* repo.getPendingHandoff(sessionId)
+        if (text === null) return null
+        const source = yield* repo.getPendingHandoffSource(sessionId)
+        const messages = yield* repo.listMessages(sessionId)
+        const unsent = unsentSwitch(messages)
+        const rebuilt =
+          source === null || unsent === undefined
+            ? undefined
+            : rebuildHandoff(messages, yield* repo.listToolCalls(sessionId), session, source)
+        if (rebuilt === undefined || rebuilt.text !== text) {
+          return {
+            text,
+            tokens: Math.ceil(text.length / 4),
+            included: unsent?.content.included ?? 0,
+            omitted: unsent?.content.omitted ?? 0,
+            cut: unsent?.content.cut ?? 0,
+            editable: false,
+            entries: [],
+          }
+        }
+        return previewOf(rebuilt, acceptsMessages(session) && !isBusy(session))
+      })
+
+      const trimHandoff = Effect.fn("SessionService.trimHandoff")(function* (
+        sessionId: string,
+        excluded: ReadonlyArray<number>,
+      ) {
+        const session = yield* get(sessionId)
+        const refused = (reason: string) => new HandoffUnavailable({ reason })
+        if (!acceptsMessages(session)) return yield* refused("This thread has ended.")
+        if (isBusy(session)) {
+          return yield* refused("The agent is working: its handoff was already sent.")
+        }
+        const source = yield* repo.getPendingHandoffSource(sessionId)
+        const messages = yield* repo.listMessages(sessionId)
+        const unsent = unsentSwitch(messages)
+        if (source === null || unsent === undefined) {
+          return yield* refused("There is no handoff waiting to be sent in this thread.")
+        }
+        const toolCalls = yield* repo.listToolCalls(sessionId)
+        const next: HandoffSource = { ...source, excluded: [...new Set(excluded)].toSorted() }
+        const handoff = rebuildHandoff(messages, toolCalls, session, next)
+        if (handoff === undefined) {
+          return yield* refused("There is nothing of the conversation left to hand off.")
+        }
+        yield* repo.setPendingHandoff(sessionId, handoff.text, next)
+        const fallback = resumeFallback.get(sessionId)
+        if (fallback !== undefined && source.resumed) {
+          const whole = rebuildHandoff(messages, toolCalls, session, {
+            ...next,
+            since: 1,
+            resumed: false,
+            ...(latestPlan(toolCalls) === undefined ? {} : { plan: latestPlan(toolCalls) }),
+          })
+          if (whole !== undefined) resumeFallback.set(sessionId, whole.text)
+        }
+        const message: ChatMessage = {
+          ...unsent,
+          content: {
+            ...unsent.content,
+            included: handoff.included,
+            omitted: handoff.omitted,
+            cut: handoff.cut,
+            tokens: handoff.tokens,
+          },
+        }
+        yield* repo.updateMessage(message)
+        yield* events.publish(sessionId, { _tag: "MessageUpdated", message })
+        return previewOf(handoff, true)
       })
 
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
@@ -2194,7 +2473,7 @@ export class SessionService extends Context.Service<
           const checkpoint = yield* checkpointRepo.find(sessionId, messageId, "turn")
           if (Option.isNone(checkpoint)) {
             return yield* forkRefused(
-              "Humanity has no checkpoint of the files from before this message, so it can't fork from there. Fork the whole thread instead.",
+              "Humanity has no checkpoint of the files from that point, so it can't fork from there. Fork the whole thread instead.",
             )
           }
           commit = checkpoint.value.commit
@@ -2273,15 +2552,13 @@ export class SessionService extends Context.Service<
           yield* repo.setPendingHandoff(created.id, whole?.text ?? null)
         }
 
-        const where =
-          forkedAt?.content._tag === "user" ? ` before “${firstLine(forkedAt.content.text)}”` : ""
         yield* addMessage(created.id, {
           _tag: "notice",
           level: filesCopied === undefined ? "info" : "warning",
           text:
             filesCopied === undefined
-              ? `Forked from “${source.title}”${where}, in a worktree of its own with the files as they were then. The agent gets the conversation above with your first message.`
-              : `Forked from “${source.title}”${where}, but its files were not copied (${filesCopied}): the worktree has the files of the branch. The agent gets the conversation above with your first message.`,
+              ? `Forked from “${source.title}”, in a worktree of its own with the files as they were then. The agent gets the conversation above with your first message.`
+              : `Forked from “${source.title}”, but its files were not copied (${filesCopied}): the worktree has the files of the branch. The agent gets the conversation above with your first message.`,
         })
         const updated = yield* get(created.id)
         yield* events.publish(created.id, { _tag: "SessionUpdated", session: updated })
@@ -2445,6 +2722,9 @@ export class SessionService extends Context.Service<
         setModel,
         setEffort,
         switchProvider,
+        handoffPreview,
+        trimHandoff,
+        runChecks,
         sendMessage,
         attachment,
         interrupt,

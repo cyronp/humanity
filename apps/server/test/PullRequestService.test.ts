@@ -145,6 +145,66 @@ describe("PullRequestService", () => {
     }),
   )
 
+  it.live("shows the pull request's files and posts line comments on them as a review", () =>
+    Effect.gen(function* () {
+      const { home, repo } = yield* setup()
+      git(repo, "remote", "add", "origin", "https://github.com/acme/app.git")
+      git(repo, "checkout", "--quiet", "-b", "feat/login")
+      writeFileSync(join(repo, "login.ts"), "export const login = () => true\n")
+      git(repo, "add", "login.ts")
+      git(repo, "commit", "--quiet", "-m", "add login")
+      const sha = git(repo, "rev-parse", "HEAD").trim()
+      const { writes, layer } = fakeForge(() => ({
+        ...pull,
+        head: { ref: "feat/login", sha },
+      }))
+
+      yield* Effect.gen(function* () {
+        const sessions = yield* SessionService
+        const pullRequests = yield* PullRequestService
+        const project = yield* addProject(repo)
+        const session = yield* sessions.create({ projectId: project.id, prompt: "hello" })
+        yield* waitForStatus(session.id, "idle")
+
+        const shown = yield* pullRequests.files(session.id)
+        assert.strictEqual(shown.headSha, sha)
+        assert.deepStrictEqual(
+          shown.files.map((file) => file.filePath),
+          ["login.ts"],
+        )
+
+        const review = (headSha: string, line: number) =>
+          pullRequests.review(session.id, {
+            headSha,
+            body: "",
+            comments: [{ path: "login.ts", side: "new", line, body: "Check the password" }],
+          })
+        const moved = yield* Effect.flip(review("old999", 1))
+        assert.include(moved.message, "new commits since you looked")
+        const nowhere = yield* Effect.flip(review(sha, 9))
+        assert.include(nowhere.message, "login.ts:9")
+        const empty = yield* Effect.flip(
+          pullRequests.review(session.id, { headSha: sha, body: " ", comments: [] }),
+        )
+        assert.include(empty.message, "nothing to post")
+        assert.lengthOf(writes, 0)
+
+        yield* review(sha, 1)
+        assert.deepStrictEqual(writes, [
+          {
+            method: "POST",
+            url: "https://api.github.com/repos/acme/app/pulls/7/reviews",
+            body: {
+              commit_id: sha,
+              event: "COMMENT",
+              comments: [{ path: "login.ts", line: 1, side: "RIGHT", body: "Check the password" }],
+            },
+          },
+        ])
+      }).pipe(Effect.provide(services(home, () => [{ text: "hi" }], undefined, undefined, layer)))
+    }),
+  )
+
   it.live("reads where the branch stands from git alone, and the pull request from the feed", () =>
     Effect.gen(function* () {
       const { home, repo } = yield* setup()

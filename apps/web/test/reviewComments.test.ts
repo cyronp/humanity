@@ -72,6 +72,16 @@ describe("review comments", () => {
     expect([...staleComments([file], [kept, moved, changed])]).toEqual(["moved", "changed"])
   })
 
+  it("takes another heading, and copies comments to another store with ids of their own", () => {
+    const pending = [comment("1", "src/a.ts", 42, "Not here.")]
+    expect(formatReviewComments(pending, "My comments on this change:").split("\n")[0]).toBe(
+      "My comments on this change:",
+    )
+    const store = reviewComments("moved-comments")
+    store.addAll(pending)
+    store.clear()
+  })
+
   it("keeps working without browser storage", () => {
     const store = reviewComments("no-storage")
     store.add({ path: "a.ts", side: "new", line: 1, lineText: "x" }, "hi")
