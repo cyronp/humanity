@@ -74,6 +74,11 @@ export type Autonomy = typeof Autonomy.Type
 
 export const DEFAULT_AUTONOMY: Autonomy = "auto"
 
+const STRICTNESS: Readonly<Record<Autonomy, number>> = { auto: 0, accept_edits: 1, ask: 2 }
+
+export const stricterAutonomy = (a: Autonomy, b: Autonomy): Autonomy =>
+  STRICTNESS[a] >= STRICTNESS[b] ? a : b
+
 export const applyAutonomy = (autonomy: Autonomy, mode: ToolMode): ToolMode => {
   switch (autonomy) {
     case "ask":

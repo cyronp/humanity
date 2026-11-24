@@ -28,6 +28,7 @@ import {
   ProjectModel,
   ProjectName,
   ProjectPullRequests,
+  ProjectTrust,
   ProjectWorktrees,
 } from "./ProjectOptions.tsx"
 import { closeSettings, selectSettingsItem, useSettings } from "./settings.ts"
@@ -134,6 +135,7 @@ function ProjectDetail({ project }: { readonly project: Project }) {
       <div className="flex flex-col gap-5 border-b py-5">
         <ProjectPermissions project={project} />
         <ProjectModel project={project} />
+        <ProjectTrust project={project} />
       </div>
 
       <div className="flex flex-col border-b py-5">

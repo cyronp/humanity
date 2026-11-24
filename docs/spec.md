@@ -322,6 +322,17 @@ The human sees how many threads need them without looking at Humanity, and goes 
 - **The desktop app's taskbar.** The shell watches the daemon's thread list itself (`Sessions.watchAll`, with the token, like its updates), so the count is right whether or not the page is loaded. On Windows the taskbar button carries an overlay badge with that count (9+ past nine), amber, or red while one of them stopped on an error, described in words for screen readers; on macOS and Linux the app's badge count. When the count grows and the window is not focused, the taskbar button flashes until it is. The shell draws the badge itself and writes nothing.
 - **Ctrl+J (Cmd+J on a Mac)** goes to the next thread that needs the human, anywhere in the app except a terminal, which keeps its keys: the waiting threads first, the one waiting longest first, then those stopped on an error, round from the thread that is open. The command palette lists it as an action while one needs the human.
 
+## Amendment: closing permission gaps (2026-11-23)
+
+A security review found ways around a thread's mode. This section closes them; where it and the sections above disagree, it wins. It adds no library to the stack of section 3.
+
+- **A thread an agent opens is never less strict than its opener.** `open_thread` still runs without asking, but the new thread takes the stricter of its project's default mode and the mode of the thread that opened it, as that thread is set when it calls. This supersedes "never inherits the mode of another thread" of "Autonomy first" and "in its project's default autonomy" of "Humanity's tools on every provider" for threads an agent opens; a thread the human opens, or forks, still takes the project's default.
+- **"Accept edits" still asks about files that make things run.** A file change under `.git`, `.claude`, `.codex`, `.kiro`, `.gemini`, `.vscode`, `.idea` or `.husky`, or to `.mcp.json`, `.gitmodules`, `.gitconfig` or a shell's startup file, is reviewed as in "Ask me", even when "Always allow" covers its tool. Auto mode is unchanged.
+- **A file change is placed by its real path.** Before any mode decides, each path a file change names is resolved through links; one that leads outside the session's folder, or to a link that leads nowhere, is denied in every mode.
+- **A repository's Claude Code settings run only once the human trusts them.** A Claude Code thread loads the project's `.claude/settings.json`, which can run programs before Humanity's permission check (hooks, a status line, helpers, `env`, the repository's MCP servers and plugins). Until the human turns on "Use this repository's Claude Code settings" in Settings, under Projects (`ProjectSettings.trustRepositorySettings`, off by default), a Claude Code thread does not start in a folder whose settings use any of them, or that Humanity cannot read as JSON, and the thread's error names them.
+- **The agent types only what the human sees.** `terminal_send`'s `text` and `terminal_open`'s `command` refuse control characters other than a newline, and invisible or bidirectional ones, before anything is asked: keys go in `keys`, which the confirmation shows by name.
+- **The human's saves never follow a link out.** Saving a file that does not exist yet refuses a link at that path and never writes over anything already there.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

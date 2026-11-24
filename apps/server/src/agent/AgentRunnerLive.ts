@@ -24,6 +24,7 @@ import { startAcpRun } from "./AcpRunner.ts"
 import { systemPromptAppend } from "./instructions.ts"
 import { Kiro } from "../kiro/Kiro.ts"
 import { Antigravity } from "../antigravity/Antigravity.ts"
+import { readClaudeProjectSettingsProblem } from "../claude/projectSettings.ts"
 
 class Inbox<T> implements AsyncIterable<T> {
   private readonly items: Array<T> = []
@@ -162,6 +163,10 @@ export const AgentRunnerLive = Layer.effect(
       Effect.gen(function* () {
         const launch = claude.launch()
         if (launch === undefined) return notStarted(notInstalled().reason)
+        if (options.trustProjectSettings !== true) {
+          const problem = yield* Effect.promise(() => readClaudeProjectSettingsProblem(options.cwd))
+          if (problem !== undefined) return notStarted(problem)
+        }
         const context = yield* Effect.context<never>()
         const runPromise = Effect.runPromiseWith(context)
         const inbox = new Inbox<SDKUserMessage>()

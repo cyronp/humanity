@@ -255,6 +255,30 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
   )
 }
 
+export function ProjectTrust({ project }: { readonly project: Project }) {
+  const { change, error } = useProjectSettings(project)
+  const trustId = useId()
+
+  return (
+    <SettingsGroup title="Repository settings">
+      <SettingsRows>
+        <SettingsRow
+          label="Use this repository's Claude Code settings"
+          labelId={trustId}
+          detail="Its .claude/settings.json can run programs of its own, such as hooks, MCP servers and plugins, before a thread's permissions decide anything. Until you turn this on, a Claude Code thread does not start in a repository whose settings would."
+        >
+          <Switch
+            aria-labelledby={trustId}
+            checked={project.settings.trustRepositorySettings}
+            onCheckedChange={(trustRepositorySettings) => void change({ trustRepositorySettings })}
+          />
+        </SettingsRow>
+      </SettingsRows>
+      {error !== undefined && <ErrorNote title="The setting was not saved" message={error} />}
+    </SettingsGroup>
+  )
+}
+
 export function ProjectPullRequests({ project }: { readonly project: Project }) {
   const { change, error } = useProjectSettings(project)
   const { settings } = project

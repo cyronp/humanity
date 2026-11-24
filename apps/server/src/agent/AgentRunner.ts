@@ -44,6 +44,7 @@ export interface AgentRunOptions {
   readonly extensions: AgentExtensions
   readonly allowedTools: ReadonlyArray<string>
   readonly offersOpenThread: boolean
+  readonly trustProjectSettings?: boolean | undefined
   readonly canUseTool: (request: ToolPermissionRequest) => Effect.Effect<PermissionDecision>
 }
 
