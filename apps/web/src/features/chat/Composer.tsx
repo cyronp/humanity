@@ -16,6 +16,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -24,7 +25,6 @@ import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import type { ModelChoice } from "@/features/providers/models"
-import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import {
   interruptAtom,
   searchSessionFilesAtom,
@@ -101,6 +101,10 @@ export const Composer = memo(function Composer({
   const files = useAttachmentDraft()
   const { textarea, insert } = usePromptInsert(text, setText)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerQueue = useRef<Promise<void>>(Promise.resolve())
+  const inOrder = (task: () => Promise<void>) => {
+    pickerQueue.current = pickerQueue.current.then(task)
+  }
   useImperativeHandle(ref, () => ({
     insert,
     attach: (added) => void files.add(added),
@@ -251,11 +255,12 @@ export const Composer = memo(function Composer({
           />
           <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
           <div className="ml-auto flex items-center gap-1">
-            <ReasoningPicker value={effort} onChange={changeEffort} disabled={disabled} />
             <ModelPicker
               provider={provider}
               value={model}
-              onChange={(choice) => void changeModel(choice)}
+              onChange={(choice) => inOrder(() => changeModel(choice))}
+              effort={effort}
+              onEffortChange={(next) => inOrder(() => changeEffort(next))}
               locked={busy}
               movesThread
               accountId={accountId ?? DEFAULT_ACCOUNT}

@@ -1,4 +1,4 @@
-import type { AgentProvider } from "@humanity/contracts"
+import type { AgentProvider, ReasoningEffort } from "@humanity/contracts"
 
 export const DEFAULT_MODEL = "default"
 
@@ -6,6 +6,7 @@ export interface ReportedModel {
   readonly value: string
   readonly displayName: string
   readonly description: string
+  readonly efforts?: ReadonlyArray<ReasoningEffort> | undefined
 }
 
 export interface PickerModel extends ReportedModel {
@@ -49,11 +50,12 @@ export const pickerModels = (
   const rows = reported.some((model) => model.value === DEFAULT_MODEL)
     ? reported
     : [DEFAULT_ROW[provider], ...reported]
-  return rows.map(({ value, displayName, description }) => ({
+  return rows.map(({ value, displayName, description, efforts }) => ({
     provider,
     value,
     displayName,
     description,
+    ...(efforts === undefined ? {} : { efforts }),
     legacy: provider === "claude-code" && value.startsWith("claude-"),
   }))
 }

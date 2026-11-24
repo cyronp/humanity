@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react"
 import { cn } from "cn"
-import { DEFAULT_ACCOUNT } from "@humanity/contracts"
+import { DEFAULT_ACCOUNT, type ReasoningEffort } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronLeft, ChevronRight, Star, TriangleAlert } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useRef, useState } from "react"
@@ -11,11 +11,15 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { InlineError } from "@/components/InlineError"
+import { PinDefaultButton } from "@/components/PinDefaultButton"
 import { RowToggle } from "@/components/RowToggle"
 import { InputGroupButton } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
+import { DEFAULT_EFFORT, effortLabel, effortOptionsFor, effortTone } from "./effort.ts"
 import {
   DEFAULT_MODEL,
   type ModelChoice,
@@ -72,6 +76,8 @@ interface ModelPickerProps {
   readonly provider: ProviderId
   readonly value: string | null
   readonly onChange: (choice: ModelChoice) => void
+  readonly effort: ReasoningEffort | null
+  readonly onEffortChange: (effort: ReasoningEffort | null) => void
   readonly locked?: boolean
   readonly movesThread?: boolean
   readonly accountId?: string | undefined
@@ -98,6 +104,8 @@ function PickerBody({
   provider,
   value,
   onChange,
+  effort,
+  onEffortChange,
   locked = false,
   movesThread = false,
   accountId = DEFAULT_ACCOUNT,
@@ -145,6 +153,7 @@ function PickerBody({
   const [section, setSection] = useState<Section>(provider)
   const [legacyOpen, setLegacyOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const [highlighted, setHighlighted] = useState("")
   const [favorites, toggleFavorite] = useFavoriteModels()
 
   const searching = search.trim() !== ""
@@ -157,6 +166,8 @@ function PickerBody({
       : legacyOpen
         ? legacy
         : inSection.filter((model) => !model.legacy)
+
+  const focused = rows.find((model) => modelKey(model) === highlighted) ?? current
 
   const others = compare?.others ?? []
   const isOther = (model: PickerModel) => others.some((choice) => sameModel(choice, model))
@@ -194,18 +205,30 @@ function PickerBody({
     setOpen(false)
   }
 
+  const pickEffort = (model: PickerModel | undefined, next: ReasoningEffort | null) => {
+    if (model !== undefined && !isSelected(model) && !isOther(model)) choose(model)
+    onEffortChange(next)
+    setOpen(false)
+  }
+
   const nameOf = (choice: ModelChoice) => {
     const found = modelsOf(choice.provider).find((model) => sameModel(choice, model))
     return found === undefined ? (choice.model ?? DEFAULT_MODEL) : shortModelName(found)
   }
   const currentName = current === undefined ? selected : shortModelName(current)
-  const allNames = [currentName, ...others.map(nameOf)].join(", ")
+  const runs: ReadonlyArray<StackedModel> = [
+    { provider, name: currentName },
+    ...others.map((choice) => ({ provider: choice.provider, name: nameOf(choice) })),
+  ]
+  const allNames = runs.map((run) => run.name).join(", ")
+  const [tipOpen, setTipOpen] = useState(false)
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
     if (next) {
       setSection(provider)
       setChosenAccounts({})
+      setHighlighted(current === undefined ? "" : modelKey(current))
     } else {
       setSearch("")
       setLegacyOpen(false)
@@ -230,30 +253,48 @@ function PickerBody({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <InputGroupButton
-          variant="muted"
-          size="sm"
-          className="max-w-48"
-          aria-label={
-            others.length === 0
-              ? `Model: ${current === undefined ? selected : current.displayName}`
-              : `Models: ${allNames}`
-          }
-          title={others.length === 0 ? undefined : allNames}
-        >
-          <ProviderIcon provider={provider} className="size-4" />
-          <span className="truncate">{currentName}</span>
-          {others.length > 0 && (
-            <span className="shrink-0 text-muted-foreground">+{others.length}</span>
-          )}
-        </InputGroupButton>
-      </PopoverTrigger>
+      <Tooltip open={tipOpen && others.length > 0 && !open} onOpenChange={setTipOpen}>
+        <PopoverTrigger asChild disabled={disabled}>
+          <TooltipTrigger asChild>
+            <InputGroupButton
+              variant="muted"
+              size="sm"
+              className="max-w-64"
+              aria-label={`${
+                others.length === 0
+                  ? `Model: ${current === undefined ? selected : current.displayName}`
+                  : `Models: ${allNames}`
+              }, reasoning: ${effortLabel(effort)}`}
+            >
+              {others.length === 0 ? (
+                <ProviderIcon provider={provider} className="size-4" />
+              ) : (
+                <ModelStack runs={runs} />
+              )}
+              <span className="truncate">{others.length === 0 ? currentName : "Multiple"}</span>
+              {effort !== null && (
+                <span className={cn("shrink-0 text-xs text-muted-foreground", effortTone(effort))}>
+                  {effortLabel(effort)}
+                </span>
+              )}
+            </InputGroupButton>
+          </TooltipTrigger>
+        </PopoverTrigger>
+        <TooltipContent side="top" align="end" className="flex flex-col items-start gap-1.5 py-2">
+          <span className="text-muted-foreground">Runs on {runs.length} models</span>
+          {runs.map((run, index) => (
+            <span key={index} className="flex items-center gap-1.5">
+              <ProviderIcon provider={run.provider} className="size-3.5" />
+              {run.name}
+            </span>
+          ))}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent
         side="top"
         align="end"
         avoidCollisions={false}
-        className="w-[26rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0"
+        className="w-[38rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0"
       >
         <nav
           aria-label="Model providers"
@@ -278,6 +319,8 @@ function PickerBody({
           ))}
         </nav>
         <Command
+          value={highlighted}
+          onValueChange={setHighlighted}
           shouldFilter={searching}
           onKeyDown={onKeyDown}
           onPointerDownCapture={(event) => {
@@ -288,7 +331,7 @@ function PickerBody({
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
           <CommandList
             className={cn(
-              "max-h-none",
+              "max-h-none pt-2",
               compare === undefined
                 ? "h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))]"
                 : "h-[min(20rem,calc(var(--radix-popover-content-available-height)-6rem))]",
@@ -375,8 +418,111 @@ function PickerBody({
             </p>
           )}
         </Command>
+        <EffortPane model={focused} effort={effort} onPick={(next) => pickEffort(focused, next)} />
       </PopoverContent>
     </Popover>
+  )
+}
+
+interface StackedModel {
+  readonly provider: ProviderId
+  readonly name: string
+}
+
+const STACK_CUTOUT = "radial-gradient(circle 10px at 20px 50%, transparent 99%, #000 100%)"
+
+function ModelStack({ runs }: { readonly runs: ReadonlyArray<StackedModel> }) {
+  const shown = runs.length > 2 ? runs.slice(0, 1) : runs
+  const items = shown.length + (runs.length > 2 ? 1 : 0)
+  const cutout = (index: number) =>
+    index < items - 1 ? { maskImage: STACK_CUTOUT, WebkitMaskImage: STACK_CUTOUT } : undefined
+  return (
+    <span aria-hidden className="flex shrink-0 items-center -space-x-1">
+      {shown.map((run, index) => (
+        <span key={index} className="flex size-4 shrink-0" style={cutout(index)}>
+          <ProviderIcon provider={run.provider} className="size-4" />
+        </span>
+      ))}
+      {runs.length > 2 && (
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[0.6rem] leading-none font-medium text-muted-foreground tabular-nums">
+          +{runs.length - 1}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function EffortPane({
+  model,
+  effort,
+  onPick,
+}: {
+  readonly model: PickerModel | undefined
+  readonly effort: ReasoningEffort | null
+  readonly onPick: (effort: ReasoningEffort | null) => void
+}) {
+  const pins = usePinnedDefaults()
+  const options = effortOptionsFor(model?.efforts)
+  const selected = effort ?? DEFAULT_EFFORT
+  const offered = options.some((option) => option.value === selected)
+  return (
+    <section
+      aria-label="Reasoning effort"
+      className="flex w-48 shrink-0 flex-col overflow-y-auto border-l px-2 pb-2 text-xs"
+    >
+      <h3 className="flex h-9 shrink-0 items-center px-1.5 pt-1 text-sm font-medium">Reasoning</h3>
+      <div role="radiogroup" aria-label="Reasoning effort" className="flex flex-col gap-0.5 pt-2">
+        {options.map((option) => (
+          <div
+            key={option.value}
+            className="group/effort flex items-start gap-1 rounded-md hover:bg-muted"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={option.value === selected}
+              onClick={() => onPick(option.value === DEFAULT_EFFORT ? null : option.value)}
+              className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-1.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <Check
+                className={cn("mt-0.5 size-3.5 shrink-0", option.value !== selected && "invisible")}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span
+                  className={cn(
+                    "text-sm",
+                    effortTone(option.value === DEFAULT_EFFORT ? null : option.value),
+                  )}
+                >
+                  {option.label}
+                </span>
+                {option.description !== undefined && option.value !== "max" && (
+                  <span className="text-muted-foreground">{option.description}</span>
+                )}
+              </span>
+            </button>
+            <PinDefaultButton
+              label={option.label}
+              pinned={pins.pinned.effort === option.value}
+              disabled={!pins.ready}
+              onToggle={() => void pins.toggle("effort", option.value)}
+              className="mt-1 opacity-0 group-hover/effort:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100"
+            />
+          </div>
+        ))}
+      </div>
+      {model?.efforts?.length === 0 && (
+        <p className="px-1.5 py-1 text-muted-foreground">This model takes no reasoning effort.</p>
+      )}
+      {!offered && (
+        <p className="px-1.5 py-1 text-muted-foreground">
+          {effortLabel(effort)} is not one of this model&apos;s levels.
+        </p>
+      )}
+      {pins.error !== undefined && (
+        <InlineError className="px-1.5 py-1">The default was not changed: {pins.error}</InlineError>
+      )}
+    </section>
   )
 }
 

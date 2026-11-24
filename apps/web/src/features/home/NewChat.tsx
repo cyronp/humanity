@@ -43,7 +43,6 @@ import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import type { ModelChoice } from "@/features/providers/models"
-import { ReasoningPicker } from "@/features/providers/ReasoningPicker"
 import { allSessionsAtom, createGroupAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
@@ -308,11 +307,12 @@ function NewChatForm({
           />
           <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
           <div className="ml-auto flex items-center gap-1">
-            <ReasoningPicker value={effort} onChange={setEffort} disabled={pending} />
             <ModelPicker
               provider={provider}
               value={model}
               onChange={setModel}
+              effort={effort}
+              onEffortChange={setEffort}
               disabled={pending}
               compare={{ others: extra, max: COMPARE_RUNS.max, onOthersChange: setExtra }}
             />
