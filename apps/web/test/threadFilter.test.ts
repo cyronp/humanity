@@ -1,4 +1,5 @@
 import {
+  type AgentProvider,
   DEFAULT_PROJECT_SETTINGS,
   type MessageHit,
   type Project,
@@ -38,11 +39,12 @@ const thread = (
   title: string,
   status: SessionStatus,
   updatedAt: string,
+  provider: AgentProvider = "claude-code",
 ): Thread => {
   const session: Session = {
     id: SessionId.make(id),
     projectId: owner.id,
-    provider: "claude-code",
+    provider,
     sdkSessionId: null,
     title,
     branch: `humanity/${id}-${title.toLowerCase().replaceAll(" ", "-")}`,
@@ -61,7 +63,7 @@ const thread = (
 
 const threads = [
   thread("a", web, "Fix login bug", "idle", "2026-11-10T10:00:00.000Z"),
-  thread("b", api, "Add invoices", "waiting_for_human", "2026-11-10T12:00:00.000Z"),
+  thread("b", api, "Add invoices", "waiting_for_human", "2026-11-10T12:00:00.000Z", "codex"),
   thread("c", web, "Dark mode", "ended", "2026-11-10T14:00:00.000Z"),
   thread("d", api, "Retry webhooks", "running", "2026-11-10T08:00:00.000Z"),
 ]
@@ -91,11 +93,21 @@ describe("selectThreads", () => {
       ids(
         selectThreads(threads, "", {
           projectIds: [],
+          providers: [],
           statuses: ["ended", "idle"],
           order: "oldest",
         }),
       ),
     ).toEqual(["a", "c"])
+  })
+
+  it("filters by provider, any of those chosen", () => {
+    const only = (providers: ReadonlyArray<AgentProvider>) =>
+      ids(selectThreads(threads, "", { ...DEFAULT_THREAD_FILTER, providers }))
+    expect(only(["codex"])).toEqual(["b"])
+    expect(only(["claude-code"])).toEqual(["a", "d"])
+    expect(only(["codex", "claude-code"])).toEqual(["b", "a", "d"])
+    expect(only(["kiro"])).toEqual([])
   })
 
   it("ignores a chosen project that no longer exists", () => {
@@ -145,6 +157,16 @@ describe("selectHistory", () => {
       ids(selectHistory(history, "", { ...DEFAULT_THREAD_FILTER, projectIds: [api.id] })),
     ).toEqual(["e"])
   })
+
+  it("follows the sidebar's provider filter", () => {
+    const withCodex = [
+      ...history,
+      thread("g", web, "Codex spike", "ended", "2026-11-10T18:00:00.000Z", "codex"),
+    ]
+    expect(
+      ids(selectHistory(withCodex, "", { ...DEFAULT_THREAD_FILTER, providers: ["codex"] })),
+    ).toEqual(["g"])
+  })
 })
 
 describe("isDefaultFilter", () => {
@@ -157,5 +179,6 @@ describe("isDefaultFilter", () => {
       }),
     ).toBe(true)
     expect(isDefaultFilter({ ...DEFAULT_THREAD_FILTER, order: "oldest" })).toBe(false)
+    expect(isDefaultFilter({ ...DEFAULT_THREAD_FILTER, providers: ["kiro"] })).toBe(false)
   })
 })
