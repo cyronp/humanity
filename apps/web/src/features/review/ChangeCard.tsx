@@ -1,16 +1,13 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { ProposedChange } from "@humanity/contracts"
-import { countChanges } from "@humanity/diff"
+import { countChanges, hunkHeader } from "@humanity/diff"
 import { cn } from "cn"
 import { Exit } from "effect"
-import { FilePlus, FileDiff as FileDiffIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Badge } from "@/components/ui/badge"
-import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { ChangeCount } from "@/features/diff/FileDiffView"
-import { fileNameClass, FileStatusLetter } from "@/features/diff/FileStatus"
-import { HunkView, type LineComments } from "@/features/diff/HunkView"
+import { FileTypeIcon } from "@/features/chat/FileTypeIcon"
+import { HunkLines, type LineComments } from "@/features/diff/HunkView"
 import {
   formatReviewComments,
   pendingChangeKey,
@@ -20,6 +17,7 @@ import {
 import { decideChangeAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { DecisionActions, type Verdict } from "./DecisionActions.tsx"
+import { DecisionCard } from "./DecisionCard.tsx"
 
 export function ChangeCard({ change }: { readonly change: ProposedChange }) {
   const decide = useAtomSet(decideChangeAtom, { mode: "promiseExit" })
@@ -72,55 +70,61 @@ export function ChangeCard({ change }: { readonly change: ProposedChange }) {
     store.clear()
   }
 
+  const slash = change.filePath.lastIndexOf("/") + 1
+  const created = change.kind === "create"
+
   return (
-    <Item
-      variant="attention"
-      className="scroll-mt-4 items-start"
-      role="alertdialog"
-      aria-label={`The agent wants to change ${change.filePath}`}
+    <DecisionCard
+      className="scroll-mt-4"
+      label={`The agent wants to ${created ? "create" : "change"} ${change.filePath}`}
       data-change-id={change.id}
+      kind={<span className="font-mono">{change.toolName}</span>}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          <FileTypeIcon path={change.filePath} />
+          <span className="min-w-0 truncate font-mono text-sm" title={change.filePath}>
+            <span className="text-muted-foreground">{change.filePath.slice(0, slash)}</span>
+            <span className="font-medium">{change.filePath.slice(slash)}</span>
+          </span>
+          {created && (
+            <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+              New file
+            </span>
+          )}
+        </span>
+      }
+      aside={<ChangeCount {...countChanges(change.hunks)} />}
+      footer={
+        <>
+          <DecisionActions
+            toolName={change.toolName}
+            pending={pending}
+            onDecide={(verdict) => void submit(verdict)}
+            lineComments={comments.length}
+            shortcuts
+          />
+          {comments.length > 0 && (
+            <p className="px-0.5 text-xs text-muted-foreground">
+              Line comments go to the agent if you deny. If you allow, they wait in Source control,
+              under Changes.
+            </p>
+          )}
+          {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
+        </>
+      }
     >
-      <ItemMedia variant="icon">
-        {change.kind === "create" ? (
-          <FilePlus className="text-warning" />
-        ) : (
-          <FileDiffIcon className="text-warning" />
-        )}
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-3">
-        <ItemTitle className="line-clamp-none flex-wrap">
-          The agent wants to {change.kind === "create" ? "create" : "change"}
-          <code className={cn("font-mono text-sm break-all", fileNameClass(change.kind))}>
-            {change.filePath}
-          </code>
-          <FileStatusLetter kind={change.kind} />
-          <Badge variant="outline">{change.toolName}</Badge>
-          <ChangeCount {...countChanges(change.hunks)} />
-        </ItemTitle>
-        <DecisionActions
-          toolName={change.toolName}
-          pending={pending}
-          onDecide={(verdict) => void submit(verdict)}
-          lineComments={comments.length}
-        />
-        {comments.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Your line comments go to the agent if you deny. If you allow, they wait in Source
-            control, under Changes, to add to a message.
-          </p>
-        )}
-        {error !== undefined && <ErrorNote title="The decision was not sent" message={error} />}
-        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto scrollbar-thin">
-          {change.hunks.map((hunk) => (
-            <HunkView
-              key={hunk.index}
-              hunk={hunk}
-              filePath={change.filePath}
-              comments={lineComments}
-            />
-          ))}
-        </div>
-      </ItemContent>
-    </Item>
+      <div className="max-h-80 overflow-y-auto border-t bg-background scrollbar-thin">
+        {change.hunks.map((hunk, position) => (
+          <div key={hunk.index} className={cn(position > 0 && "border-t border-dashed")}>
+            {change.hunks.length > 1 && (
+              <p className="bg-muted/40 px-3 py-1 font-mono text-[11px] text-muted-foreground">
+                {hunkHeader(hunk)}
+              </p>
+            )}
+            <HunkLines hunk={hunk} filePath={change.filePath} comments={lineComments} />
+          </div>
+        ))}
+      </div>
+    </DecisionCard>
   )
 }
