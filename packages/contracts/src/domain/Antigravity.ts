@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { ModelEfforts } from "./Session.ts"
 
 export const AntigravityConnection = Schema.TaggedUnion({
   Connected: {
@@ -13,6 +14,7 @@ export const AntigravityModel = Schema.Struct({
   value: Schema.String,
   displayName: Schema.String,
   description: Schema.String,
+  efforts: ModelEfforts,
 })
 export type AntigravityModel = typeof AntigravityModel.Type
 

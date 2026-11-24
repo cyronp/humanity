@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { ModelEfforts } from "./Session.ts"
 
 export const CodexAuthMethod = Schema.Literals(["chatgpt", "apiKey", "cloudProvider"])
 export type CodexAuthMethod = typeof CodexAuthMethod.Type
@@ -18,6 +19,7 @@ export const CodexModel = Schema.Struct({
   value: Schema.String,
   displayName: Schema.String,
   description: Schema.String,
+  efforts: ModelEfforts,
   isDefault: Schema.Boolean,
 })
 export type CodexModel = typeof CodexModel.Type
