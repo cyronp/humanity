@@ -1,4 +1,4 @@
-import type { Project, SessionStatus } from "@humanity/contracts"
+import type { AgentProvider, Project, SessionStatus } from "@humanity/contracts"
 import { ListFilter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
+import { PROVIDER_IDS, PROVIDERS, ProviderIcon } from "@/features/providers/ProviderIcon"
 import {
   DEFAULT_THREAD_FILTER,
   isDefaultFilter,
@@ -41,6 +42,8 @@ export function ThreadFilterMenu({
   const keepOpen = (event: Event) => event.preventDefault()
   const projectSummary =
     filter.projectIds.length === 0 ? "All" : `${filter.projectIds.length} selected`
+  const providerSummary =
+    filter.providers.length === 0 ? "All" : `${filter.providers.length} selected`
   const statusSummary = `${filter.statuses.length} of ${STATUS_OPTIONS.length}`
 
   return (
@@ -90,6 +93,38 @@ export function ThreadFilterMenu({
                 >
                   <ProjectIcon project={project} className="size-4" />
                   <span className="truncate">{project.name}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              Providers
+              <span className="ml-auto text-xs text-muted-foreground">{providerSummary}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-56">
+              <DropdownMenuCheckboxItem
+                checked={filter.providers.length === 0}
+                onSelect={keepOpen}
+                onCheckedChange={() => onChange({ ...filter, providers: [] })}
+              >
+                All providers
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {PROVIDER_IDS.map((provider) => (
+                <DropdownMenuCheckboxItem
+                  key={provider}
+                  checked={filter.providers.includes(provider)}
+                  onSelect={keepOpen}
+                  onCheckedChange={(on) =>
+                    onChange({
+                      ...filter,
+                      providers: toggle<AgentProvider>(filter.providers, provider, on),
+                    })
+                  }
+                >
+                  <ProviderIcon provider={provider} className="size-4" />
+                  <span className="truncate">{PROVIDERS[provider].name}</span>
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuSubContent>

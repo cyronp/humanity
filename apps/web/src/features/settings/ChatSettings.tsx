@@ -11,7 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 import { AUTONOMY_OPTIONS } from "@/features/policy/AutonomyPicker"
-import { EFFORT_OPTIONS } from "@/features/providers/ReasoningPicker"
+import { EFFORT_OPTIONS } from "@/features/providers/effort"
 import { isMac } from "@/features/terminal/keys"
 import { type SendKey, useUiPreferences } from "@/lib/uiPreferences"
 import { ModelDefaultSelect } from "./ModelDefaultSelect.tsx"

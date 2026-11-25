@@ -104,11 +104,18 @@ const probe = (cwd: string, env: Record<string, string>, launch: CliLaunch | und
     Promise.resolve({
       cliVersion: init.claude_code_version,
       account: init.account,
-      models: (init.models ?? []).map(({ value, displayName, description }) => ({
-        value,
-        displayName,
-        description,
-      })),
+      models: (init.models ?? []).map(
+        ({ value, displayName, description, supportsEffort, supportedEffortLevels }) => ({
+          value,
+          displayName,
+          description,
+          ...(supportsEffort === false
+            ? { efforts: [] }
+            : supportedEffortLevels === undefined
+              ? {}
+              : { efforts: supportedEffortLevels }),
+        }),
+      ),
     }),
   )
 

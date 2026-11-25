@@ -8,7 +8,15 @@ import {
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { PanelBottom, PanelRight } from "lucide-react"
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
@@ -59,6 +67,9 @@ const SHELF_KEYWORDS: Readonly<Record<ShelfTool, ReadonlyArray<string>>> = {
 
 const PANEL_MIN_WIDTH = 320
 const CHAT_MIN_WIDTH = 360
+const SHELF_SLIDE_MS = 120
+
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
 export interface PanelProps {
   readonly tool: ShelfTool
@@ -88,7 +99,16 @@ export function WorkspaceFrame({
     storeShelf(next)
   }
   const [railShown, setRailShown] = useStoredFlag(RAIL_SHOWN_KEY, true)
-  const panelOpen = shelf.open && railShown && panel !== undefined
+  const [chat, setChat] = useState<HTMLDivElement | null>(null)
+  const [chatWidth, setChatWidth] = useState<number | null>(null)
+  const [shelfWasShown, setShelfWasShown] = useState(railShown)
+  const [shelfClosing, setShelfClosing] = useState(false)
+  if (shelfWasShown !== railShown) {
+    setShelfWasShown(railShown)
+    setShelfClosing(!railShown && chatWidth !== 0 && !prefersReducedMotion())
+  }
+  const shelfMounted = railShown || shelfClosing
+  const panelOpen = shelf.open && shelfMounted && panel !== undefined
   const [terminalsOpen, setTerminalsOpen] = useStoredFlag(DOCK_OPEN_KEY, false)
   const [terminalHeight, setTerminalHeight] = useStoredWidth(DOCK_HEIGHT_KEY)
   const terminalArea = useRef<HTMLDivElement>(null)
@@ -231,8 +251,6 @@ export function WorkspaceFrame({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [terminalsOpen, setTerminalsOpen])
 
-  const [chat, setChat] = useState<HTMLDivElement | null>(null)
-  const [chatWidth, setChatWidth] = useState<number | null>(null)
   const [rowWidth, setRowWidth] = useState(0)
   useEffect(() => {
     const row = chat?.parentElement
@@ -248,6 +266,41 @@ export function WorkspaceFrame({
   const chatShown = chatWidth === null || chatWidth > 0
   const [panelWidth, setPanelWidth] = useStoredWidth("humanity.panelWidth")
   const panelElement = useRef<HTMLElement>(null)
+  const shelfRow = useRef<HTMLDivElement>(null)
+  const shelfEnd = useRef<HTMLDivElement>(null)
+  const animatedRailShown = useRef(railShown)
+  useLayoutEffect(() => {
+    if (animatedRailShown.current === railShown) return
+    animatedRailShown.current = railShown
+    const row = shelfRow.current
+    const end = shelfEnd.current
+    if (row === null || end === null) return
+    const running = end.getAnimations()
+    const start = (panelElement.current ?? end).getBoundingClientRect().left
+    const width = end.getBoundingClientRect().right - start
+    const from = running.length > 0 ? parseFloat(getComputedStyle(end).marginRight) : null
+    running.forEach((animation) => animation.cancel())
+    const instant =
+      width <= 0 || prefersReducedMotion() || (chat !== null && chat.offsetWidth === 0)
+    if (railShown && instant) return
+    const hidden = -width
+    const origin = from ?? (railShown ? hidden : 0)
+    const target = railShown ? 0 : hidden
+    row.style.overflow = "hidden"
+    const animation = end.animate(
+      [{ marginRight: `${origin}px` }, { marginRight: `${target}px` }],
+      {
+        duration: instant ? 0 : (SHELF_SLIDE_MS * Math.abs(target - origin)) / width,
+        easing: "linear",
+        fill: "forwards",
+      },
+    )
+    animation.onfinish = () => {
+      row.style.overflow = ""
+      if (railShown) animation.cancel()
+      else setShelfClosing(false)
+    }
+  }, [railShown, chat])
   useAppHeaderInsetEnd(
     chatShown && chatWidth !== null ? rowWidth - chatWidth : railShown ? RAIL_WIDTH : 0,
   )
@@ -264,7 +317,7 @@ export function WorkspaceFrame({
           onToggleRail={() => setRailShown(!railShown)}
         />,
       )}
-      <div className="flex min-h-0 flex-1">
+      <div ref={shelfRow} className="flex min-h-0 flex-1">
         <div
           ref={setChat}
           className={cn("flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}
@@ -301,6 +354,7 @@ export function WorkspaceFrame({
         {panelOpen && (
           <aside
             ref={panelElement}
+            inert={!railShown}
             className={cn(
               "relative flex min-h-0 min-w-0 flex-1 flex-col border-l lg:min-w-80 lg:flex-none",
               panelWidth === null
@@ -332,12 +386,15 @@ export function WorkspaceFrame({
             })}
           </aside>
         )}
-        {railShown &&
-          (rail === undefined ? (
-            <IdleToolRail />
-          ) : (
-            rail(shelf, (tool) => setShelf(toggleTool(shelf, tool)))
-          ))}
+        {shelfMounted && (
+          <div ref={shelfEnd} className="flex min-h-0 shrink-0" inert={!railShown}>
+            {rail === undefined ? (
+              <IdleToolRail />
+            ) : (
+              rail(shelf, (tool) => setShelf(toggleTool(shelf, tool)))
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

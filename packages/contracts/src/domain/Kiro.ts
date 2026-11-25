@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { ModelEfforts } from "./Session.ts"
 
 export const KiroConnection = Schema.TaggedUnion({
   Connected: {
@@ -13,6 +14,7 @@ export const KiroModel = Schema.Struct({
   value: Schema.String,
   displayName: Schema.String,
   description: Schema.String,
+  efforts: ModelEfforts,
 })
 export type KiroModel = typeof KiroModel.Type
 

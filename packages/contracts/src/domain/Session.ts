@@ -28,6 +28,10 @@ export type SessionRelation = typeof SessionRelation.Type
 export const ReasoningEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"])
 export type ReasoningEffort = typeof ReasoningEffort.Type
 
+export const isReasoningEffort = Schema.is(ReasoningEffort)
+
+export const ModelEfforts = Schema.optional(Schema.Array(ReasoningEffort))
+
 export const Session = Schema.Struct({
   id: SessionId,
   projectId: ProjectId,

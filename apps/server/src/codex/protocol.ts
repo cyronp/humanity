@@ -26,6 +26,9 @@ export const ModelListResponse = Schema.Struct({
       description: Schema.optional(Schema.String),
       hidden: Schema.optional(Schema.Boolean),
       isDefault: Schema.optional(Schema.Boolean),
+      supportedReasoningEfforts: nullable(
+        Schema.Array(Schema.Struct({ reasoningEffort: Schema.String })),
+      ),
     }),
   ),
   nextCursor: nullable(Schema.String),

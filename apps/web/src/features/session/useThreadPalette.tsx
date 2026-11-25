@@ -22,7 +22,7 @@ import {
   shortModelName,
 } from "@/features/providers/models"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "@/features/providers/ProviderIcon"
-import { EFFORT_OPTIONS } from "@/features/providers/ReasoningPicker"
+import { EFFORT_OPTIONS } from "@/features/providers/effort"
 import { useProviderAccounts, useProviderModels } from "@/features/providers/useProviderModels"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"

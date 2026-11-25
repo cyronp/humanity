@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { DEFAULT_ACCOUNT } from "./Provider.ts"
+import { ModelEfforts } from "./Session.ts"
 
 export const ClaudeAuthMethod = Schema.Literals(["subscription", "apiKey", "cloudProvider"])
 export type ClaudeAuthMethod = typeof ClaudeAuthMethod.Type
@@ -21,6 +22,7 @@ export const ClaudeModel = Schema.Struct({
   value: Schema.String,
   displayName: Schema.String,
   description: Schema.String,
+  efforts: ModelEfforts,
 })
 export type ClaudeModel = typeof ClaudeModel.Type
 

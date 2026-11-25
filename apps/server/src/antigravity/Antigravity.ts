@@ -3,6 +3,7 @@ import {
   CLI_COMMANDS,
   CLI_INSTALL_URLS,
   CliNotInstalled,
+  isReasoningEffort,
   PATCH_TOOL,
 } from "@humanity/contracts"
 import { Context, Effect, FileSystem, Layer, Stream } from "effect"
@@ -106,6 +107,7 @@ export const antigravityModelsFromList = (stdout: string): ReadonlyArray<Antigra
           value: family,
           displayName: label.replace(LEVEL_LABEL, ""),
           description: `Thinking: ${efforts.join(", ")}`,
+          efforts: efforts.filter(isReasoningEffort),
         })
       }
     } else if (!models.has(slug)) {

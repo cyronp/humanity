@@ -36,6 +36,7 @@ describe("antigravityModelsFromList", () => {
         value: "gemini-4-neon",
         displayName: "Gemini 4 Neon",
         description: "Thinking: low, high, xhigh",
+        efforts: ["low", "high", "xhigh"],
       },
       {
         value: "gemini-3.8-flash-medium",

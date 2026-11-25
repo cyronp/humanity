@@ -1,4 +1,4 @@
-import type { CodexModel, PlanUsage } from "@humanity/contracts"
+import { type CodexModel, isReasoningEffort, type PlanUsage } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, type Scope } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
@@ -35,6 +35,13 @@ const MAX_MODEL_PAGES = 10
 const decodeAccount = decode(AccountResponse)
 const decodeModels = decode(ModelListResponse)
 const decodeRateLimits = decode(RateLimitsResponse)
+
+const codexEfforts = (
+  supported: ReadonlyArray<{ readonly reasoningEffort: string }> | null | undefined,
+): Pick<CodexModel, "efforts"> =>
+  supported === undefined || supported === null
+    ? {}
+    : { efforts: supported.map((option) => option.reasoningEffort).filter(isReasoningEffort) }
 
 const FIVE_HOURS = 5 * 60
 const SEVEN_DAYS = 7 * 24 * 60
@@ -180,6 +187,7 @@ export class Codex extends Context.Service<
                 displayName: model.displayName,
                 description: model.description ?? "",
                 isDefault: model.isDefault === true,
+                ...codexEfforts(model.supportedReasoningEfforts),
               })
             }
             cursor = response.value.nextCursor ?? null
