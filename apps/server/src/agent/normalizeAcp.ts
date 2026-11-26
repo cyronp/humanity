@@ -127,6 +127,8 @@ export const acpToolCall = (call: ToolCallFields): NamedTool => {
       if (url !== undefined) return { toolName: "WebFetch", input: { url } }
       break
     }
+    default:
+      break
   }
   return {
     toolName: call.name ?? (title === "" ? "Tool" : title),
