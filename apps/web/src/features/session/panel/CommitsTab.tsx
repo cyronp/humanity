@@ -5,6 +5,7 @@ import {
   type Forge,
   type Session,
   plural,
+  forgeTerms,
 } from "@humanity/contracts"
 import { GitCommitHorizontal } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
@@ -14,7 +15,6 @@ import { ChangeCount } from "@/features/diff/FileDiffView"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
 import { sessionCommitsAtom } from "../atoms.ts"
 import { ForgeLink } from "./ForgeLink.tsx"
-import { forgeTerms } from "./publication.ts"
 
 export function CommitsTab({
   session,

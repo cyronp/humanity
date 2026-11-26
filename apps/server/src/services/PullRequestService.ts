@@ -3,7 +3,7 @@ import {
   type BranchComparison,
   type BranchPublication,
   type CommitSummary,
-  type Forge,
+  forgeTerms,
   type GitRefNotFound,
   GITLAB_DEFAULT_HOST,
   type MergeMethod,
@@ -25,6 +25,7 @@ import {
   plural,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Semaphore, Stream } from "effect"
+import { makeForgeClients } from "./forgeClient.ts"
 import { EMPTY_FEED, ForgeSync, type ForgeTarget } from "./ForgeSync.ts"
 import { credentialEnv } from "./gitCredentials.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
@@ -162,6 +163,7 @@ export class PullRequestService extends Context.Service<
       const github = yield* GitHubService
       const gitlab = yield* GitLabService
       const sync = yield* ForgeSync
+      const forgeOf = yield* makeForgeClients
       const lastSeen = new Map<
         string,
         { branch: string | null; upstream: string | null; ahead: number }
@@ -214,13 +216,7 @@ export class PullRequestService extends Context.Service<
           return { session, project, status, remote, branch, tracking }
         })
 
-      const find = (
-        remote: Remote,
-        branch: string,
-      ): Effect.Effect<Option.Option<PullRequest>, GitHubError | GitLabError> =>
-        remote.forge === "github"
-          ? github.findPullRequest(remote.fullName, branch)
-          : gitlab.findMergeRequest(remote.fullPath, branch)
+      const find = (remote: Remote, branch: string) => forgeOf(remote).find(branch)
 
       const describe = ({
         project,
@@ -318,8 +314,6 @@ export class PullRequestService extends Context.Service<
         return describe(after)
       })
 
-      const forgeName = (forge: Forge) => (forge === "github" ? "pull request" : "merge request")
-
       const create = Effect.fn("PullRequestService.create")(function* (
         sessionId: string,
         input: NewPullRequest,
@@ -338,34 +332,25 @@ export class PullRequestService extends Context.Service<
         const branch = yield* requireBranch(own)
         if (branch === input.base) {
           return yield* new PullRequestUnavailable({
-            reason: `The ${forgeName(remote.forge)} would merge ${branch} into itself. Pick another base branch, or work on another branch.`,
+            reason: `The ${forgeTerms(remote.forge).noun} would merge ${branch} into itself. Pick another base branch, or work on another branch.`,
           })
         }
         const existing = Option.getOrNull(yield* find(remote, branch))
         if (existing !== null && (existing.state === "open" || existing.state === "draft")) {
           return yield* new PullRequestUnavailable({
-            reason: `${branch} already has an open ${forgeName(remote.forge)}: ${existing.url}`,
+            reason: `${branch} already has an open ${forgeTerms(remote.forge).noun}: ${existing.url}`,
           })
         }
         if (tracking.upstream === null || tracking.ahead > 0) {
           yield* git.push(session.worktreePath, branch, yield* pushEnv(remote))
         }
-        const created =
-          remote.forge === "github"
-            ? yield* github.createPullRequest(remote.fullName, {
-                head: branch,
-                base: input.base,
-                title: input.title.trim(),
-                body: input.body,
-                draft: input.draft,
-              })
-            : yield* gitlab.createMergeRequest(remote.fullPath, {
-                sourceBranch: branch,
-                targetBranch: input.base,
-                title: input.title.trim(),
-                description: input.body,
-                draft: input.draft,
-              })
+        const created = yield* forgeOf(remote).create({
+          head: branch,
+          base: input.base,
+          title: input.title.trim(),
+          body: input.body,
+          draft: input.draft,
+        })
         const target = targetOf(remote, branch)
         if (target !== null) yield* sync.opened(target, created)
         return created
@@ -394,14 +379,14 @@ export class PullRequestService extends Context.Service<
           const pullRequest = Option.getOrNull(yield* find(remote, branch))
           if (pullRequest === null) {
             return yield* new PullRequestUnavailable({
-              reason: `${branch} has no ${forgeName(remote.forge)}.`,
+              reason: `${branch} has no ${forgeTerms(remote.forge).noun}.`,
             })
           }
           return { session, remote, pullRequest, target: targetOf(remote, branch) }
         })
 
       const notOpen = (pullRequest: PullRequest) => {
-        const noun = forgeName(pullRequest.forge)
+        const { noun } = forgeTerms(pullRequest.forge)
         return new PullRequestUnavailable({
           reason:
             pullRequest.state === "merged"
@@ -421,7 +406,7 @@ export class PullRequestService extends Context.Service<
         input: MergePullRequest,
       ) {
         const { session, remote, pullRequest, target } = yield* current(sessionId)
-        const noun = forgeName(remote.forge)
+        const { noun } = forgeTerms(remote.forge)
         if (pullRequest.state === "draft") {
           return yield* new PullRequestUnavailable({
             reason: `This ${noun} is a draft. Mark it ready for review before merging it.`,
@@ -440,32 +425,19 @@ export class PullRequestService extends Context.Service<
           })
         }
         const comment = input.comment.trim()
-        if (comment !== "") {
-          yield* remote.forge === "github"
-            ? github.commentOnPullRequest(remote.fullName, pullRequest.number, comment)
-            : gitlab.commentOnMergeRequest(remote.fullPath, pullRequest.number, comment)
-        }
-        const merged =
-          remote.forge === "github"
-            ? yield* github.mergePullRequest(remote.fullName, pullRequest.number, {
-                method: input.method,
-                sha: pullRequest.headSha,
-              })
-            : yield* gitlab.mergeMergeRequest(remote.fullPath, pullRequest.number, {
-                squash: input.method === "squash",
-                sha: pullRequest.headSha,
-              })
+        const forge = forgeOf(remote)
+        if (comment !== "") yield* forge.comment(pullRequest, comment)
+        const merged = yield* forge.merge(pullRequest, input.method)
         if (target !== null) yield* sync.updated(target, merged)
-        const symbol = remote.forge === "github" ? "#" : "!"
         yield* sessions.tell(session.id, {
-          notice: `Merged ${symbol}${merged.number} into ${merged.base}, ${MERGED_HOW[input.method]}.`,
+          notice: `Merged ${forge.symbol}${merged.number} into ${merged.base}, ${MERGED_HOW[input.method]}.`,
         })
         return merged
       })
 
       const filesOf = (cwd: string, pullRequest: PullRequest) =>
         Effect.gen(function* () {
-          const noun = forgeName(pullRequest.forge)
+          const { noun } = forgeTerms(pullRequest.forge)
           let against: string | undefined
           for (const candidate of [`origin/${pullRequest.base}`, pullRequest.base]) {
             if (yield* git.hasCommit(cwd, candidate)) {
@@ -501,7 +473,7 @@ export class PullRequestService extends Context.Service<
         input: PullRequestReview,
       ) {
         const { session, remote, pullRequest } = yield* current(sessionId)
-        const noun = forgeName(remote.forge)
+        const { noun } = forgeTerms(remote.forge)
         if (pullRequest.state === "merged" || pullRequest.state === "closed") {
           return yield* notOpen(pullRequest)
         }
@@ -523,21 +495,10 @@ export class PullRequestService extends Context.Service<
             reason: `Nothing was posted: ${missing.length === 1 ? "a comment is" : `${missing.length} comments are`} on a line the ${noun} no longer changes (${where}). Move or delete ${missing.length === 1 ? "it" : "them"}, then post.`,
           })
         }
-        if (remote.forge === "github") {
-          yield* github.reviewPullRequest(remote.fullName, pullRequest.number, {
-            commitId: pullRequest.headSha,
-            body: input.body,
-            comments: placed,
-          })
-        } else {
-          yield* gitlab.reviewMergeRequest(remote.fullPath, pullRequest.number, {
-            body: input.body,
-            comments: placed,
-          })
-        }
-        const symbol = remote.forge === "github" ? "#" : "!"
+        const forge = forgeOf(remote)
+        yield* forge.review(pullRequest, { body: input.body, comments: placed })
         yield* sessions.tell(session.id, {
-          notice: `Posted a review on ${symbol}${pullRequest.number} with ${plural(placed.length, "comment")}.`,
+          notice: `Posted a review on ${forge.symbol}${pullRequest.number} with ${plural(placed.length, "comment")}.`,
         })
         return pullRequest
       })
@@ -547,7 +508,7 @@ export class PullRequestService extends Context.Service<
         open: boolean,
       ) {
         const { remote, pullRequest, target } = yield* current(sessionId)
-        const noun = forgeName(remote.forge)
+        const { noun } = forgeTerms(remote.forge)
         if (pullRequest.state === "merged") return yield* notOpen(pullRequest)
         if (open && pullRequest.state !== "closed") {
           return yield* new PullRequestUnavailable({ reason: `This ${noun} is already open.` })
@@ -555,10 +516,7 @@ export class PullRequestService extends Context.Service<
         if (!open && pullRequest.state === "closed") {
           return yield* new PullRequestUnavailable({ reason: `This ${noun} is already closed.` })
         }
-        const updated =
-          remote.forge === "github"
-            ? yield* github.setPullRequestOpen(remote.fullName, pullRequest.number, open)
-            : yield* gitlab.setMergeRequestOpen(remote.fullPath, pullRequest.number, open)
+        const updated = yield* forgeOf(remote).setOpen(pullRequest, open)
         if (target !== null) yield* sync.updated(target, updated)
         return updated
       })
@@ -572,10 +530,7 @@ export class PullRequestService extends Context.Service<
           return yield* notOpen(pullRequest)
         }
         if ((pullRequest.state === "draft") === draft) return pullRequest
-        const updated =
-          remote.forge === "github"
-            ? yield* github.setPullRequestDraft(remote.fullName, pullRequest.number, draft)
-            : yield* gitlab.setMergeRequestDraft(remote.fullPath, pullRequest, draft)
+        const updated = yield* forgeOf(remote).setDraft(pullRequest, draft)
         if (target !== null) yield* sync.updated(target, updated)
         return updated
       })
@@ -875,11 +830,7 @@ export class PullRequestService extends Context.Service<
         })
 
       const commitPage = (remote: Remote | null, hash: string) =>
-        remote === null
-          ? null
-          : remote.forge === "github"
-            ? `https://github.com/${remote.fullName}/commit/${hash}`
-            : `https://${remote.host}/${remote.fullPath}/-/commit/${hash}`
+        remote === null ? null : forgeOf(remote).commitPage(hash)
 
       const detail = (
         cwd: string,

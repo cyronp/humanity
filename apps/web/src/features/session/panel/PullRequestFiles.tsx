@@ -4,6 +4,7 @@ import {
   type PullRequestFiles as Files,
   type Session,
   plural,
+  forgeTerms,
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import { ChevronDown, MessageSquareText, RefreshCw } from "lucide-react"
@@ -16,7 +17,6 @@ import type { LineComments } from "@/features/diff/HunkView"
 import { reviewComments, staleComments, useReviewComments } from "@/features/diff/reviewComments"
 import { describeCause } from "@/lib/errors"
 import { pullRequestFilesAtom, reviewPullRequestAtom } from "../atoms.ts"
-import { forgeTerms } from "./publication.ts"
 import { reviewCommentsKey, toReviewPayload } from "./pullRequestReview.ts"
 
 export function PullRequestFiles({

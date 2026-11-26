@@ -3,16 +3,12 @@ import {
   type BranchPublication,
   type FileDiff,
   type Forge,
+  forgeTerms,
   type MergeMethod,
   type PullRequestCheck,
   type PullRequestFeed,
   plural,
 } from "@humanity/contracts"
-
-export const forgeTerms = (forge: Forge) =>
-  forge === "github"
-    ? { noun: "pull request", site: "GitHub", symbol: "#" }
-    : { noun: "merge request", site: "GitLab", symbol: "!" }
 
 export const commitPaths = (files: ReadonlyArray<FileDiff>): Array<string> => [
   ...new Set(

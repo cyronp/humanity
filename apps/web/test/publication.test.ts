@@ -1,10 +1,11 @@
-import type {
-  Branch,
-  BranchPublication,
-  FileDiff,
-  PullRequest,
-  PullRequestCheck,
-  PullRequestFeed,
+import {
+  type Branch,
+  type BranchPublication,
+  type FileDiff,
+  type PullRequest,
+  type PullRequestCheck,
+  type PullRequestFeed,
+  forgeTerms,
 } from "@humanity/contracts"
 import { describe, expect, it } from "vitest"
 import {
@@ -13,7 +14,6 @@ import {
   checksPhrase,
   feedNotice,
   footerNote,
-  forgeTerms,
   checkoutMoved,
   mergeOptions,
   needsPush,

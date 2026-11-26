@@ -1,6 +1,12 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { countChanges } from "@humanity/diff"
-import type { BranchComparison, BranchPublication, Forge, Session } from "@humanity/contracts"
+import {
+  type BranchComparison,
+  type BranchPublication,
+  type Forge,
+  type Session,
+  forgeTerms,
+} from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { ChevronLeft, GitPullRequest, PanelRightClose } from "lucide-react"
@@ -31,7 +37,7 @@ import { isBusy } from "../state.ts"
 import { CommitRow } from "./CommitsTab.tsx"
 import { fileKey } from "./DiffTab.tsx"
 import { Hinted, WAIT_FOR_AGENT } from "./PrimaryAction.tsx"
-import { baseBranches, forgeTerms } from "./publication.ts"
+import { baseBranches } from "./publication.ts"
 
 export function OpenPullRequestPage({
   session,
@@ -70,7 +76,7 @@ export function OpenPullRequestPage({
     (AsyncResult.isSuccess(comparison) ? comparison.value.commits[0]?.subject : undefined) ??
     ""
   const shownTitle = title ?? suggested
-  const noun = forge === "github" ? "pull request" : "merge request"
+  const { noun } = forgeTerms(forge)
 
   const run = async () => {
     if (shownTitle.trim() === "" || pending || busy) return

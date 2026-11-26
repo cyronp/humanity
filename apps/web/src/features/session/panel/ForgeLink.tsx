@@ -1,10 +1,9 @@
-import type { Forge } from "@humanity/contracts"
+import { type Forge, forgeTerms } from "@humanity/contracts"
 import { cn } from "cn"
 import { ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GitHubIcon } from "@/features/github/GitHubIcon"
 import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
-import { forgeTerms } from "./publication.ts"
 
 export function ForgeLink({
   url,

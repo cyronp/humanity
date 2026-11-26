@@ -1,17 +1,9 @@
 import type { PullRequest, PullRequestFeed } from "@humanity/contracts"
 import { Clock, Context, Effect, Fiber, Layer, Option, PubSub, Queue, Result, Stream } from "effect"
 import { ForgeBackground } from "./ForgeGate.ts"
-import { GitHubService } from "./GitHubService.ts"
-import { GitLabService } from "./GitLabService.ts"
+import { type ForgeRepo, makeForgeClients } from "./forgeClient.ts"
 
-export type ForgeTarget =
-  | { readonly forge: "github"; readonly fullName: string; readonly branch: string }
-  | {
-      readonly forge: "gitlab"
-      readonly host: string
-      readonly fullPath: string
-      readonly branch: string
-    }
+export type ForgeTarget = ForgeRepo & { readonly branch: string }
 
 const OPEN_POLL_MS = 60_000
 const SLOW_POLL_MS = 15 * 60_000
@@ -73,8 +65,7 @@ export class ForgeSync extends Context.Service<
   static readonly layer = Layer.effect(
     ForgeSync,
     Effect.gen(function* () {
-      const github = yield* GitHubService
-      const gitlab = yield* GitLabService
+      const forgeOf = yield* makeForgeClients
       const scope = yield* Effect.scope
       const entries = new Map<string, Entry>()
 
@@ -110,34 +101,16 @@ export class ForgeSync extends Context.Service<
           return PubSub.publish(entry.hub, feed)
         }).pipe(Effect.asVoid)
 
-      const hasToken = (target: ForgeTarget) =>
-        target.forge === "github"
-          ? Effect.map(github.token, Option.isSome)
-          : Effect.map(gitlab.credentials, ({ token }) => Option.isSome(token))
+      const hasToken = (target: ForgeTarget) => forgeOf(target).hasToken
 
       const ask = (target: ForgeTarget) =>
         Effect.gen(function* () {
-          if (target.forge === "github") {
-            const found = yield* github.findPullRequest(target.fullName, target.branch)
-            if (Option.isNone(found)) return { pullRequest: null, checks: [], comments: [] }
-            const pullRequest = found.value
-            const [checks, comments] = yield* Effect.all(
-              [
-                github.checks(target.fullName, pullRequest.headSha),
-                github.comments(target.fullName, pullRequest.number),
-              ],
-              { concurrency: 2 },
-            )
-            return { pullRequest, checks, comments }
-          }
-          const found = yield* gitlab.findMergeRequest(target.fullPath, target.branch)
+          const forge = forgeOf(target)
+          const found = yield* forge.find(target.branch)
           if (Option.isNone(found)) return { pullRequest: null, checks: [], comments: [] }
           const pullRequest = found.value
           const [checks, comments] = yield* Effect.all(
-            [
-              gitlab.checks(target.fullPath, pullRequest.number),
-              gitlab.comments(target.fullPath, pullRequest),
-            ],
+            [forge.checks(pullRequest), forge.comments(pullRequest)],
             { concurrency: 2 },
           )
           return { pullRequest, checks, comments }

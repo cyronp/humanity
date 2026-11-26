@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { PullRequest, Session } from "@humanity/contracts"
+import { type PullRequest, type Session, forgeTerms } from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import {
@@ -26,7 +26,6 @@ import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { describeCause } from "@/lib/errors"
 import { setPullRequestDraftAtom, setPullRequestOpenAtom } from "../atoms.ts"
 import type { PanelError } from "./PrimaryAction.tsx"
-import { forgeTerms } from "./publication.ts"
 import { useSetupWorktree } from "./useSetupWorktree.ts"
 
 export const pullRequestPrompt = (pullRequest: PullRequest): string => {

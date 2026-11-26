@@ -4,6 +4,17 @@ import { FileDiff } from "./Diff.ts"
 export const Forge = Schema.Literals(["github", "gitlab"])
 export type Forge = typeof Forge.Type
 
+export interface ForgeTerms {
+  readonly noun: "pull request" | "merge request"
+  readonly site: "GitHub" | "GitLab"
+  readonly symbol: "#" | "!"
+}
+
+export const forgeTerms = (forge: Forge): ForgeTerms =>
+  forge === "github"
+    ? { noun: "pull request", site: "GitHub", symbol: "#" }
+    : { noun: "merge request", site: "GitLab", symbol: "!" }
+
 export const PullRequestState = Schema.Literals(["open", "draft", "merged", "closed"])
 export type PullRequestState = typeof PullRequestState.Type
 

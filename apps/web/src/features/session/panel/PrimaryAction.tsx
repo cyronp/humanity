@@ -7,6 +7,7 @@ import {
   type PullRequestFeed,
   type Session,
   plural,
+  forgeTerms,
 } from "@humanity/contracts"
 import { countChanges } from "@humanity/diff"
 import { cn } from "cn"
@@ -36,7 +37,6 @@ import { commitAtom, mergePullRequestAtom, pushAtom, setPullRequestDraftAtom } f
 import { isBusy } from "../state.ts"
 import {
   commitPaths,
-  forgeTerms,
   mergeOptions,
   preferMergeMethod,
   type PrimaryAction as Action,
