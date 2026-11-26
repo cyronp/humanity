@@ -25,6 +25,7 @@ import {
   TERMINAL_TOOL_DEFINITIONS,
   type ToolText,
 } from "../terminal/agentTools.ts"
+import { isRecord } from "../unknown.ts"
 
 export const MCP_PATH = "/mcp"
 
@@ -126,9 +127,6 @@ export interface McpReply {
 }
 
 type JsonRpcId = string | number | null
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const result = (id: JsonRpcId, value: unknown) => ({ jsonrpc: "2.0", id, result: value })
 const error = (id: JsonRpcId, code: number, message: string) => ({

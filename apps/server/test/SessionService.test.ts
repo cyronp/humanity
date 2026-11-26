@@ -15,18 +15,17 @@ import { FakeAgentLog, type FakeScript } from "../src/agent/AgentRunnerFake.ts"
 import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { ClaudeProbeFailed } from "../src/claude/ClaudeCode.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
-import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { ExtensionsService } from "../src/services/ExtensionsService.ts"
 import { ProjectService } from "../src/services/ProjectService.ts"
 import { PreferencesService } from "../src/services/PreferencesService.ts"
 import { PullRequestService } from "../src/services/PullRequestService.ts"
 import {
   matchModel,
-  SessionService,
   sessionBranchName,
   setupCommand,
   slugify,
-} from "../src/services/SessionService.ts"
+} from "../src/services/sessionHelpers.ts"
+import { SessionService } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
 import {
   addProject,
@@ -37,6 +36,7 @@ import {
   tags,
   waitForStatus,
 } from "./sessionHelpers.ts"
+import { ProviderAccounts } from "../src/services/ProviderAccounts.ts"
 
 describe("session naming", () => {
   it("slugifies titles into branch-safe names", () => {
@@ -378,7 +378,7 @@ describe("SessionService", () => {
       const { home, repo } = yield* setup()
       const first = yield* Effect.gen(function* () {
         const sessions = yield* SessionService
-        const accounts = yield* ClaudeAccountService
+        const accounts = (yield* ProviderAccounts)["claude-code"]
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
 

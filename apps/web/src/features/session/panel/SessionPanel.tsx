@@ -1,10 +1,11 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type {
-  BranchPublication,
-  PullRequest,
-  PullRequestCheck,
-  PullRequestFeed,
-  Session,
+import {
+  type BranchPublication,
+  type PullRequest,
+  type PullRequestCheck,
+  type PullRequestFeed,
+  type Session,
+  forgeTerms,
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
@@ -44,7 +45,7 @@ import { MoreMenu } from "./MoreMenu.tsx"
 import { OpenPullRequestPage } from "./OpenPullRequestPage.tsx"
 import { OverviewTab } from "./OverviewTab.tsx"
 import { CommitBar, type PanelError, PrimaryAction } from "./PrimaryAction.tsx"
-import { footerNote, forgeTerms, primaryAction, summarizeChecks } from "./publication.ts"
+import { footerNote, primaryAction, summarizeChecks } from "./publication.ts"
 import { PULL_REQUEST_STATE } from "./PullRequestHeading.tsx"
 import {
   GIT_VIEW_LABELS,

@@ -1,6 +1,7 @@
 import { type Cause, Data, Deferred, Effect, Option, Queue, type Scope, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { decode, InitializeResponse } from "./protocol.ts"
+import { InitializeResponse } from "./protocol.ts"
+import { decode, isRecord } from "../unknown.ts"
 
 export class CodexFailed extends Data.TaggedError("CodexFailed")<{
   readonly reason: string
@@ -43,9 +44,6 @@ const UNUSED_NOTIFICATIONS: ReadonlyArray<string> = [
   "item/plan/delta",
   "turn/diff/updated",
 ]
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const parseLine = (line: string): Record<string, unknown> | undefined => {
   try {

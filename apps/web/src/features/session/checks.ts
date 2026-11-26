@@ -1,36 +1,25 @@
 import type { ChecksResult } from "@humanity/contracts"
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
 
 export type ChecksState =
   | { readonly _tag: "running" }
   | { readonly _tag: "done"; readonly result: ChecksResult }
   | { readonly _tag: "error"; readonly message: string }
 
-const states = new Map<string, ChecksState>()
-const listeners = new Set<() => void>()
+const checksAtom = Atom.family((_sessionId: string) =>
+  Atom.make<ChecksState | undefined>(undefined).pipe(Atom.keepAlive),
+)
 
-const publish = () => {
-  for (const listener of listeners) listener()
-}
-
-const subscribe = (listener: () => void) => {
-  listeners.add(listener)
-  return () => void listeners.delete(listener)
-}
-
-export const checksState = (sessionId: string): ChecksState | undefined => states.get(sessionId)
-
-export const setChecksState = (sessionId: string, state: ChecksState | undefined) => {
-  if (state === undefined) states.delete(sessionId)
-  else states.set(sessionId, state)
-  publish()
-}
+export const setChecksState = (sessionId: string, state: ChecksState | undefined) =>
+  registry.set(checksAtom(sessionId), state)
 
 export const useChecksState = (sessionId: string): ChecksState | undefined =>
-  useSyncExternalStore(subscribe, () => states.get(sessionId))
+  useAtomValue(checksAtom(sessionId))
 
 export const checksRunning = (sessionId: string): boolean =>
-  states.get(sessionId)?._tag === "running"
+  registry.get(checksAtom(sessionId))?._tag === "running"
 
 export const checksSummary = (state: ChecksState): string => {
   if (state._tag === "running") return "Running the checks…"

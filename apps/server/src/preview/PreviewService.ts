@@ -23,6 +23,7 @@ import {
   type ProcessRow,
   reachableLocally,
 } from "./listeners.ts"
+import { runProcess } from "../process.ts"
 
 const SCAN_FAST = "2 seconds"
 const SCAN_SLOW = "10 seconds"
@@ -97,17 +98,8 @@ export class PreviewService extends Context.Service<
         const run: RunCommand =
           options.run ??
           ((command, args) =>
-            Effect.gen(function* () {
-              const handle = yield* spawner.spawn(
-                ChildProcess.make(command, args, { extendEnv: true }),
-              )
-              const [stdout, exitCode] = yield* Effect.all(
-                [handle.stdout.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
-                { concurrency: "unbounded" },
-              )
-              return { stdout, exitCode: Number(exitCode) }
-            }).pipe(
-              Effect.scoped,
+            runProcess(spawner, ChildProcess.make(command, args, { extendEnv: true })).pipe(
+              Effect.map(({ stdout, exitCode }) => ({ stdout, exitCode })),
               Effect.orElseSucceed(() => ({ stdout: "", exitCode: -1 })),
             ))
         const answersHttp = options.answersHttp ?? fetchAnswers

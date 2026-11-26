@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { SessionId } from "@humanity/contracts"
+import { type SessionId, plural } from "@humanity/contracts"
 import { Exit } from "effect"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -189,7 +189,7 @@ const deleteNote = (
 ): string => {
   const count = action.folder ? filesUnder(files, action.path) : 1
   const what = action.folder
-    ? `The folder and the ${count} file${count === 1 ? "" : "s"} in it are deleted for good.`
+    ? `The folder and the ${plural(count, "file")} in it are deleted for good.`
     : "The file is deleted for good."
   return tracked(action.path)
     ? `${what} What git tracks can be brought back from git.`

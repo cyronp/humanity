@@ -7,7 +7,7 @@ import { join } from "node:path"
 import { enabledClaudePlugins, type ServedSkill } from "../src/extensions/skillCatalog.ts"
 import { makeSkillTool, skillToolDefinition } from "../src/extensions/skillTool.ts"
 import { answerMcp } from "../src/mcp/HumanityMcp.ts"
-import { loadedSkill } from "../src/services/SessionService.ts"
+import { loadedSkill } from "../src/services/sessionHelpers.ts"
 import { tempDir } from "./helpers.ts"
 
 const frontendSkill = (root: string): ServedSkill => {

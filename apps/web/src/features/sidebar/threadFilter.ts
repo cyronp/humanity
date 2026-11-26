@@ -5,6 +5,7 @@ import {
   type Session,
   type SessionStatus,
 } from "@humanity/contracts"
+import { readStoredJson, writeStoredJson } from "@/lib/storage"
 
 export type ThreadOrder = "newest" | "oldest"
 
@@ -115,29 +116,19 @@ const isStatus = (value: unknown): value is SessionStatus =>
   STATUS_OPTIONS.some((option) => option.value === value)
 
 export const readStoredFilter = (): ThreadFilter => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")
-    if (typeof parsed !== "object" || parsed === null) return DEFAULT_THREAD_FILTER
-    const { projectIds, providers, statuses, order } = parsed as Record<string, unknown>
-    return {
-      projectIds: Array.isArray(projectIds)
-        ? projectIds.filter((id): id is string => typeof id === "string")
-        : DEFAULT_THREAD_FILTER.projectIds,
-      providers: Array.isArray(providers)
-        ? providers.filter(isProvider)
-        : DEFAULT_THREAD_FILTER.providers,
-      statuses: Array.isArray(statuses)
-        ? statuses.filter(isStatus)
-        : DEFAULT_THREAD_FILTER.statuses,
-      order: order === "oldest" ? "oldest" : "newest",
-    }
-  } catch {
-    return DEFAULT_THREAD_FILTER
+  const parsed = readStoredJson(STORAGE_KEY)
+  if (typeof parsed !== "object" || parsed === null) return DEFAULT_THREAD_FILTER
+  const { projectIds, providers, statuses, order } = parsed as Record<string, unknown>
+  return {
+    projectIds: Array.isArray(projectIds)
+      ? projectIds.filter((id): id is string => typeof id === "string")
+      : DEFAULT_THREAD_FILTER.projectIds,
+    providers: Array.isArray(providers)
+      ? providers.filter(isProvider)
+      : DEFAULT_THREAD_FILTER.providers,
+    statuses: Array.isArray(statuses) ? statuses.filter(isStatus) : DEFAULT_THREAD_FILTER.statuses,
+    order: order === "oldest" ? "oldest" : "newest",
   }
 }
 
-export const storeFilter = (filter: ThreadFilter) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filter))
-  } catch {}
-}
+export const storeFilter = (filter: ThreadFilter) => writeStoredJson(STORAGE_KEY, filter)

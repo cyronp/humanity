@@ -47,13 +47,6 @@ export const GitLabRepo = Schema.Struct({
 })
 export type GitLabRepo = typeof GitLabRepo.Type
 
-export const GitLabBranch = Schema.Struct({
-  name: Schema.String,
-  commitSha: Schema.String,
-  protected: Schema.Boolean,
-})
-export type GitLabBranch = typeof GitLabBranch.Type
-
 export const GITLAB_FULL_PATH_PATTERN =
   /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}(?:\/[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}){1,20}$/
 

@@ -1,7 +1,9 @@
 import type { CompareRun, CompareRunRequest, ReasoningEffort } from "@humanity/contracts"
 import { countChanges } from "@humanity/diff"
-import { useSyncExternalStore } from "react"
 import type { ModelChoice } from "@/features/providers/models"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
 
 export const compareRuns = (
   main: ModelChoice,
@@ -43,26 +45,10 @@ export const sharedFiles = (runs: ReadonlyArray<CompareRun>): ReadonlySet<string
   return new Set([...seen].filter(([, count]) => count > 1).map(([path]) => path))
 }
 
-let groupOpen: string | undefined
-const listeners = new Set<() => void>()
+const groupOpenAtom = Atom.make<string | undefined>(undefined).pipe(Atom.keepAlive)
 
-export const openCompare = (groupId: string): void => {
-  groupOpen = groupId
-  for (const listener of listeners) listener()
-}
+export const openCompare = (groupId: string): void => registry.set(groupOpenAtom, groupId)
 
-export const closeCompare = (): void => {
-  groupOpen = undefined
-  for (const listener of listeners) listener()
-}
+export const closeCompare = (): void => registry.set(groupOpenAtom, undefined)
 
-export const useCompareOpen = (): string | undefined =>
-  useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
-    },
-    () => groupOpen,
-  )
+export const useCompareOpen = (): string | undefined => useAtomValue(groupOpenAtom)

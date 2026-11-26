@@ -1,20 +1,11 @@
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
 
-let open = false
-const listeners = new Set<() => void>()
+const openAtom = Atom.make(false).pipe(Atom.keepAlive)
 
-const setOpen = (next: boolean): void => {
-  open = next
-  for (const listener of listeners) listener()
-}
+export const openAddRepository = (): void => registry.set(openAtom, true)
 
-const subscribe = (listener: () => void): (() => void) => {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
+export const closeAddRepository = (): void => registry.set(openAtom, false)
 
-export const openAddRepository = (): void => setOpen(true)
-
-export const closeAddRepository = (): void => setOpen(false)
-
-export const useAddRepositoryOpen = (): boolean => useSyncExternalStore(subscribe, () => open)
+export const useAddRepositoryOpen = (): boolean => useAtomValue(openAtom)

@@ -1,4 +1,4 @@
-import { RegistryProvider } from "@effect/atom-react"
+import { RegistryContext } from "@effect/atom-react"
 import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
@@ -9,6 +9,7 @@ import { applyInterfaceScale } from "@/lib/uiPreferences"
 import { captureTokenFromUrl } from "@/lib/token"
 import "./index.css"
 import { routeTree } from "./routeTree.gen"
+import { registry } from "./lib/registry.ts"
 
 captureTokenFromUrl()
 applyTheme()
@@ -27,12 +28,12 @@ if (!root) throw new Error("Missing #root element")
 
 createRoot(root).render(
   <StrictMode>
-    <RegistryProvider>
+    <RegistryContext.Provider value={registry}>
       <TooltipProvider>
         <AuthGate>
           <RouterProvider router={router} />
         </AuthGate>
       </TooltipProvider>
-    </RegistryProvider>
+    </RegistryContext.Provider>
   </StrictMode>,
 )

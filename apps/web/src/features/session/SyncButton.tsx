@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { Session, SyncStatus } from "@humanity/contracts"
+import { type Session, type SyncStatus, plural } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -15,7 +15,7 @@ import { useUiPreferences } from "@/lib/uiPreferences"
 import { fetchOriginAtom, syncAtom, syncStatusAtom } from "./atoms.ts"
 import { isBusy } from "./state.ts"
 
-const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+const commits = (count: number) => plural(count, "commit")
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })

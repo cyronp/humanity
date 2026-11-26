@@ -1,12 +1,12 @@
 import {
-  type AntigravityModel,
+  type ProviderModel,
   CLI_COMMANDS,
   CLI_INSTALL_URLS,
   CliNotInstalled,
   isReasoningEffort,
   PATCH_TOOL,
 } from "@humanity/contracts"
-import { Context, Effect, FileSystem, Layer, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
@@ -18,6 +18,8 @@ import { locateCli, parseCliVersion } from "../agent/installedCli.ts"
 import { acpPatchFile, acpPath, type NamedTool } from "../agent/normalizeAcp.ts"
 import type { PatchFile } from "../agent/normalizeCodex.ts"
 import { isInsideDir } from "../paths.ts"
+import { isRecord } from "../unknown.ts"
+import { runProcess } from "../process.ts"
 
 export const ANTIGRAVITY_PRODUCT = "Antigravity"
 export const ANTIGRAVITY_ARGS: ReadonlyArray<string> = ["acp"]
@@ -30,11 +32,8 @@ export interface AntigravityProbe {
   readonly cliVersion: string | null
   readonly geminiHome: string
   readonly signedIn: boolean
-  readonly models: ReadonlyArray<AntigravityModel>
+  readonly models: ReadonlyArray<ProviderModel>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const stringOf = (record: Record<string, unknown>, keys: ReadonlyArray<string>) => {
   for (const key of keys) {
@@ -83,7 +82,7 @@ const EFFORT_SUFFIX = /^(.+)-(low|medium|high|xhigh|max)$/
 const LEVEL_LABEL = /\s*\([^()]+\)$/
 const MODEL_LINE = /^([A-Za-z0-9][\w.:/-]*)(?:\t+|\s{2,})(\S.*)$/
 
-export const antigravityModelsFromList = (stdout: string): ReadonlyArray<AntigravityModel> => {
+export const antigravityModelsFromList = (stdout: string): ReadonlyArray<ProviderModel> => {
   const listed: Array<{ readonly slug: string; readonly label: string }> = []
   for (const line of stdout.split(/\r?\n/)) {
     const match = MODEL_LINE.exec(line.trim())
@@ -97,7 +96,7 @@ export const antigravityModelsFromList = (stdout: string): ReadonlyArray<Antigra
     if (family === undefined || slugs.has(family)) continue
     levels.set(family, [...(levels.get(family) ?? []), match?.[2] ?? ""])
   }
-  const models = new Map<string, AntigravityModel>()
+  const models = new Map<string, ProviderModel>()
   for (const { slug, label } of listed) {
     const family = EFFORT_SUFFIX.exec(slug)?.[1]
     const efforts = family === undefined ? undefined : levels.get(family)
@@ -347,26 +346,18 @@ export class Antigravity extends Context.Service<
           })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
-      const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
-        stream.pipe(Stream.decodeText(), Stream.mkString)
-
       const cli = (geminiHome: string | undefined, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
           const found = launch()
           if (found === undefined) return yield* notInstalled()
-          const handle = yield* spawner.spawn(
+          return yield* runProcess(
+            spawner,
             ChildProcess.make(found.command, [...found.args, ...args], {
               env: envFor(geminiHome),
               stdin: "ignore",
             }),
           )
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return { stdout, stderr, exitCode: Number(exitCode) }
         }).pipe(
-          Effect.scoped,
           Effect.mapError((cause) =>
             cause instanceof AcpFailed
               ? cause

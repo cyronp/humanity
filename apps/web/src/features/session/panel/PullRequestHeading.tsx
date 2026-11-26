@@ -1,4 +1,4 @@
-import type { PullRequest, PullRequestState } from "@humanity/contracts"
+import { type PullRequest, type PullRequestState, forgeTerms } from "@humanity/contracts"
 import { cn } from "cn"
 import {
   ExternalLink,
@@ -8,7 +8,6 @@ import {
   GitPullRequestDraft,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { forgeTerms } from "./publication.ts"
 
 export const PULL_REQUEST_STATE: Record<
   PullRequestState,

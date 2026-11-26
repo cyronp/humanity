@@ -1,5 +1,11 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { PullRequest, PullRequestFiles as Files, Session } from "@humanity/contracts"
+import {
+  type PullRequest,
+  type PullRequestFiles as Files,
+  type Session,
+  plural,
+  forgeTerms,
+} from "@humanity/contracts"
 import { Exit } from "effect"
 import { ChevronDown, MessageSquareText, RefreshCw } from "lucide-react"
 import { useMemo, useState } from "react"
@@ -11,7 +17,6 @@ import type { LineComments } from "@/features/diff/HunkView"
 import { reviewComments, staleComments, useReviewComments } from "@/features/diff/reviewComments"
 import { describeCause } from "@/lib/errors"
 import { pullRequestFilesAtom, reviewPullRequestAtom } from "../atoms.ts"
-import { forgeTerms } from "./publication.ts"
 import { reviewCommentsKey, toReviewPayload } from "./pullRequestReview.ts"
 
 export function PullRequestFiles({
@@ -80,7 +85,7 @@ export function PullRequestFiles({
       return
     }
     setPosted(
-      `Posted ${comments.length} comment${comments.length === 1 ? "" : "s"} on ${terms.symbol}${pullRequest.number}.`,
+      `Posted ${plural(comments.length, "comment")} on ${terms.symbol}${pullRequest.number}.`,
     )
     setSummary("")
     store.clear()
@@ -128,7 +133,7 @@ export function PullRequestFiles({
           <p className="flex items-center gap-2">
             <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1">
-              {comments.length} comment{comments.length === 1 ? "" : "s"} for a review
+              {plural(comments.length, "comment")} for a review
               {stale.size > 0 && loaded !== undefined && (
                 <span className="text-muted-foreground">
                   {" "}

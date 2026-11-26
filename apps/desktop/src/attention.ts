@@ -1,3 +1,4 @@
+import { plural } from "@humanity/contracts"
 export interface Attention {
   readonly waiting: number
   readonly errors: number
@@ -14,8 +15,6 @@ export const attentionTotal = (attention: Attention): number => attention.waitin
 
 export const sameAttention = (a: Attention, b: Attention): boolean =>
   a.waiting === b.waiting && a.errors === b.errors
-
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
 export const attentionLabel = (attention: Attention): string => {
   const parts = [

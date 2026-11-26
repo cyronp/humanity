@@ -1,17 +1,9 @@
-import { type ProjectId, SessionId } from "@humanity/contracts"
+import { SessionId } from "@humanity/contracts"
 import { Effect, Schedule, Stream } from "effect"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
 import { pageVisible, whileVisible } from "@/lib/visibility"
 import { reduceSessionEvents, type SessionView } from "./state.ts"
-
-export const sessionsAtom = Atom.family((projectId: ProjectId) =>
-  HumanityClient.query(
-    "Sessions.list",
-    { projectId },
-    { reactivityKeys: [keys.sessions(projectId)] },
-  ),
-)
 
 export const allSessionsAtom = HumanityClient.runtime
   .atom(() =>
@@ -152,11 +144,3 @@ export const pullRequestFilesAtom = HumanityClient.mutation("PullRequests.files"
 export const reviewPullRequestAtom = HumanityClient.mutation("PullRequests.review")
 export const setPullRequestOpenAtom = HumanityClient.mutation("PullRequests.setOpen")
 export const setPullRequestDraftAtom = HumanityClient.mutation("PullRequests.setDraft")
-
-export const historyAtom = Atom.family((projectId: ProjectId) =>
-  HumanityClient.query(
-    "Approvals.history",
-    { projectId },
-    { reactivityKeys: [keys.history(projectId)] },
-  ),
-)

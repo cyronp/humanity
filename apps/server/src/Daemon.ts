@@ -1,5 +1,5 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
-import { type ClaudeStatus, TOKEN_PARAM } from "@humanity/contracts"
+import { type ProviderStatus, TOKEN_PARAM } from "@humanity/contracts"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { createServer } from "node:http"
@@ -21,10 +21,6 @@ import { PreviewFiles } from "./preview/PreviewFiles.ts"
 import { PreviewService } from "./preview/PreviewService.ts"
 import { AgentClisHandlers } from "./rpc/AgentClisHandlers.ts"
 import { ApprovalsHandlers } from "./rpc/ApprovalsHandlers.ts"
-import { ClaudeHandlers } from "./rpc/ClaudeHandlers.ts"
-import { CodexHandlers } from "./rpc/CodexHandlers.ts"
-import { KiroHandlers } from "./rpc/KiroHandlers.ts"
-import { AntigravityHandlers } from "./rpc/AntigravityHandlers.ts"
 import { ExtensionsHandlers } from "./rpc/ExtensionsHandlers.ts"
 import { FilesHandlers } from "./rpc/FilesHandlers.ts"
 import { GitHandlers } from "./rpc/GitHandlers.ts"
@@ -41,10 +37,6 @@ import { UpdatesHandlers } from "./rpc/UpdatesHandlers.ts"
 import { ServerConfig } from "./ServerConfig.ts"
 import { AgentCliService } from "./services/AgentCliService.ts"
 import { ApprovalService } from "./services/ApprovalService.ts"
-import { ClaudeAccountService } from "./services/ClaudeAccountService.ts"
-import { CodexAccountService } from "./services/CodexAccountService.ts"
-import { KiroAccountService } from "./services/KiroAccountService.ts"
-import { AntigravityAccountService } from "./services/AntigravityAccountService.ts"
 import { ExtensionsService } from "./services/ExtensionsService.ts"
 import { ForgeSync } from "./services/ForgeSync.ts"
 import { GitHubService } from "./services/GitHubService.ts"
@@ -64,6 +56,8 @@ import { SystemService } from "./services/SystemService.ts"
 import { UpdateService } from "./services/UpdateService.ts"
 import { PtyHost } from "./terminal/PtyHost.ts"
 import { TerminalService } from "./terminal/TerminalService.ts"
+import { ProviderAccounts } from "./services/ProviderAccounts.ts"
+import { ProvidersHandlers } from "./rpc/ProvidersHandlers.ts"
 
 export const Services = Layer.mergeAll(
   Layer.mergeAll(
@@ -88,10 +82,7 @@ export const Services = Layer.mergeAll(
     Layer.provideMerge(CheckpointRepo.layer),
     Layer.provideMerge(UsageRepo.layer),
     Layer.provideMerge(SessionEvents.layer),
-    Layer.provideMerge(ClaudeAccountService.layer),
-    Layer.provideMerge(CodexAccountService.layer),
-    Layer.provideMerge(KiroAccountService.layer),
-    Layer.provideMerge(AntigravityAccountService.layer),
+    Layer.provideMerge(ProviderAccounts.layer),
     Layer.provideMerge(ExtensionsService.layer),
     Layer.provideMerge(AgentCliService.layer),
   ),
@@ -105,10 +96,7 @@ export const RpcHandlers = Layer.mergeAll(
   SessionsHandlers,
   FilesHandlers,
   ApprovalsHandlers,
-  ClaudeHandlers,
-  CodexHandlers,
-  KiroHandlers,
-  AntigravityHandlers,
+  ProvidersHandlers,
   PreferencesHandlers,
   ExtensionsHandlers,
   PullRequestsHandlers,
@@ -134,7 +122,7 @@ const Banner = Layer.effectDiscard(
   }),
 )
 
-export const describeClaudeForBanner = (status: ClaudeStatus): string => {
+export const describeClaudeForBanner = (status: ProviderStatus): string => {
   const connection = status.connection
   switch (connection._tag) {
     case "Connected": {
@@ -153,8 +141,8 @@ export const describeClaudeForBanner = (status: ClaudeStatus): string => {
 
 const ClaudeBanner = Layer.effectDiscard(
   Effect.gen(function* () {
-    const account = yield* ClaudeAccountService
-    const status = yield* account.status({ refresh: false })
+    const accounts = yield* ProviderAccounts
+    const status = yield* accounts["claude-code"].status({ refresh: false })
     yield* Effect.sync(() => console.log(`  Claude account: ${describeClaudeForBanner(status)}\n`))
   }).pipe(Effect.forkScoped),
 )

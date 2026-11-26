@@ -92,5 +92,3 @@ export const DatabaseLive = Layer.unwrap(
     return layerFor(config.databasePath)
   }),
 )
-
-export const DatabaseTest = layerFor(":memory:")

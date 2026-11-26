@@ -1,7 +1,6 @@
 import type { PlacedComment } from "./reviewPlacement.ts"
 import {
   type CheckStatus,
-  type GitHubBranch,
   type GitHubConnection,
   GitHubNotAuthenticated,
   GitHubRateLimited,
@@ -49,12 +48,6 @@ const RepoJson = Schema.Struct({
   clone_url: Schema.String,
   html_url: Schema.String,
   updated_at: Schema.String,
-})
-
-const BranchJson = Schema.Struct({
-  name: Schema.String,
-  commit: Schema.Struct({ sha: Schema.String }),
-  protected: Schema.optional(Schema.Boolean),
 })
 
 const ErrorJson = Schema.Struct({ message: Schema.optional(Schema.String) })
@@ -259,9 +252,6 @@ export class GitHubService extends Context.Service<
     readonly repos: Stream.Stream<GitHubRepo, GitHubError>
     readonly listRepos: Effect.Effect<ReadonlyArray<GitHubRepo>, GitHubError>
     readonly getRepo: (fullName: string) => Effect.Effect<GitHubRepo, GitHubError>
-    readonly listBranches: (
-      fullName: string,
-    ) => Effect.Effect<ReadonlyArray<GitHubBranch>, GitHubError>
     readonly token: Effect.Effect<Option.Option<Redacted.Redacted<string>>>
     readonly findPullRequest: (
       fullName: string,
@@ -552,26 +542,6 @@ ${absolute(url)}`
           return toRepo(repo)
         })
 
-      const listBranches = (fullName: string) =>
-        Effect.gen(function* () {
-          const token = yield* tokens.get
-          return yield* Stream.paginate(`/repos/${fullName}/branches?per_page=100`, (url: string) =>
-            Effect.gen(function* () {
-              const response = yield* get(url, token)
-              const page = yield* decode(Schema.Array(BranchJson))(response)
-              const next = nextPageUrl(response.headers["link"])
-              return [
-                page.map((branch): GitHubBranch => ({
-                  name: branch.name,
-                  commitSha: branch.commit.sha,
-                  protected: branch.protected === true,
-                })),
-                Option.fromNullishOr(next),
-              ] as const
-            }),
-          ).pipe(Stream.take(MAX_REPOS), Stream.runCollect)
-        })
-
       const all = <S extends Schema.Constraint>(
         first: string,
         schema: S,
@@ -812,7 +782,6 @@ ${absolute(url)}`
         repos,
         listRepos,
         getRepo,
-        listBranches,
         token: tokens.get,
         findPullRequest,
         createPullRequest,

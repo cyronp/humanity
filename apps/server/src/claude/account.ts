@@ -1,4 +1,4 @@
-import type { ClaudeConnection } from "@humanity/contracts"
+import type { ProviderConnection } from "@humanity/contracts"
 
 export interface ReportedAccount {
   readonly email?: string | undefined
@@ -61,7 +61,7 @@ export const apiKeyLabel = (apiKeySource: string): string => {
   }
 }
 
-export const classifyAccount = (account: ReportedAccount | undefined): ClaudeConnection => {
+export const classifyAccount = (account: ReportedAccount | undefined): ProviderConnection => {
   const email = present(account?.email) ? account.email : null
   const organization = present(account?.organization) ? account.organization : null
 
@@ -108,7 +108,7 @@ export const classifyAccount = (account: ReportedAccount | undefined): ClaudeCon
   if (email !== null || present(account.subscriptionType) || present(account.tokenSource)) {
     return {
       _tag: "Connected",
-      method: "subscription",
+      method: "plan",
       label: planLabel(account.subscriptionType),
       email,
       organization,

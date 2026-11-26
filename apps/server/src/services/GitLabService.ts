@@ -1,7 +1,6 @@
 import type { PlacedComment } from "./reviewPlacement.ts"
 import {
   type CheckStatus,
-  type GitLabBranch,
   type GitLabConnection,
   GitLabNotAuthenticated,
   GitLabRateLimited,
@@ -54,12 +53,6 @@ const RepoJson = Schema.Struct({
   http_url_to_repo: Schema.String,
   web_url: Schema.String,
   last_activity_at: Schema.String,
-})
-
-const BranchJson = Schema.Struct({
-  name: Schema.String,
-  commit: Schema.Struct({ id: Schema.String }),
-  protected: Schema.optional(Schema.Boolean),
 })
 
 const ErrorJson = Schema.Struct({
@@ -218,9 +211,6 @@ export class GitLabService extends Context.Service<
     readonly repos: Stream.Stream<GitLabRepo, GitLabError>
     readonly listRepos: Effect.Effect<ReadonlyArray<GitLabRepo>, GitLabError>
     readonly getRepo: (fullPath: string) => Effect.Effect<GitLabRepo, GitLabError>
-    readonly listBranches: (
-      fullPath: string,
-    ) => Effect.Effect<ReadonlyArray<GitLabBranch>, GitLabError>
     readonly credentials: Effect.Effect<GitLabCredentials>
     readonly findMergeRequest: (
       fullPath: string,
@@ -496,24 +486,6 @@ ${path}`
           return toRepo(repo)
         })
 
-      const listBranches = (fullPath: string) =>
-        Effect.gen(function* () {
-          const using = yield* credentials
-          return yield* pages(
-            `/projects/${encodeURIComponent(fullPath)}/repository/branches?per_page=100`,
-            BranchJson,
-            using,
-          ).pipe(
-            Stream.map((branch): GitLabBranch => ({
-              name: branch.name,
-              commitSha: branch.commit.id,
-              protected: branch.protected === true,
-            })),
-            Stream.take(MAX_ITEMS),
-            Stream.runCollect,
-          )
-        })
-
       const project = (fullPath: string) => `/projects/${encodeURIComponent(fullPath)}`
 
       const findMergeRequest = (fullPath: string, branch: string) =>
@@ -697,7 +669,6 @@ ${path}`
         repos,
         listRepos,
         getRepo,
-        listBranches,
         credentials,
         findMergeRequest,
         createMergeRequest,

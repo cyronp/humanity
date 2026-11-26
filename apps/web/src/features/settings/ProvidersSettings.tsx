@@ -1,8 +1,6 @@
-import { AntigravitySection } from "@/features/antigravity/AntigravitySection"
-import { ClaudeSection } from "@/features/claude/ClaudeSection"
-import { CodexSection } from "@/features/codex/CodexSection"
-import { KiroSection } from "@/features/kiro/KiroSection"
+import { ProviderSection } from "@/features/providers/accounts/ProviderSection"
 import { PROVIDER_IDS, PROVIDERS } from "@/features/providers/ProviderIcon"
+import { HistoryImportSetting } from "./HistoryImportSetting.tsx"
 import { selectSettingsItem, useSettings } from "./settings.ts"
 import { SettingsFrame, type SettingsListItem, SettingsSplit } from "./SettingsLayout.tsx"
 
@@ -23,15 +21,11 @@ export function ProvidersSettings() {
         selected={selected}
         onSelect={(id) => selectSettingsItem("providers", id)}
       >
-        {selected === "codex" ? (
-          <CodexSection />
-        ) : selected === "kiro" ? (
-          <KiroSection />
-        ) : selected === "antigravity" ? (
-          <AntigravitySection />
-        ) : (
-          <ClaudeSection />
-        )}
+        <ProviderSection
+          key={selected}
+          provider={selected}
+          options={selected === "claude-code" ? <HistoryImportSetting /> : undefined}
+        />
       </SettingsSplit>
     </SettingsFrame>
   )

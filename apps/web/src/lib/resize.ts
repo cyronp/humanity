@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react"
+import { readStored, writeStored } from "./storage.ts"
 
 export type ResizeEdge = "start" | "end" | "top"
 
@@ -19,20 +20,11 @@ export const parseStoredWidth = (raw: string | null): number | null => {
 }
 
 export const useStoredWidth = (key: string) => {
-  const [width, setWidthState] = useState<number | null>(() => {
-    try {
-      return parseStoredWidth(localStorage.getItem(key))
-    } catch {
-      return null
-    }
-  })
+  const [width, setWidthState] = useState<number | null>(() => parseStoredWidth(readStored(key)))
   const setWidth = useCallback(
     (next: number | null) => {
       setWidthState(next)
-      try {
-        if (next === null) localStorage.removeItem(key)
-        else localStorage.setItem(key, String(next))
-      } catch {}
+      writeStored(key, next === null ? null : String(next))
     },
     [key],
   )

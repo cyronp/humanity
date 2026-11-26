@@ -5,6 +5,7 @@ import { isInsideDir } from "../paths.ts"
 import type { ToolText } from "../terminal/agentTools.ts"
 import { parseSkillFile } from "./skillFile.ts"
 import { oneLine, type ServedSkill } from "./skillCatalog.ts"
+import { isRecord } from "../unknown.ts"
 
 const DESCRIPTION_IN_LIST = 300
 const MAX_FILE_BYTES = 256 * 1024
@@ -41,9 +42,6 @@ ${skills.map((skill) => `- ${skill.name}: ${oneLine(skill.description, DESCRIPTI
 })
 
 const said = (text: string, isError = false): ToolText => ({ text, isError })
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const listFiles = (fs: FileSystem.FileSystem, dir: string) =>
   fs.readDirectory(dir, { recursive: true }).pipe(

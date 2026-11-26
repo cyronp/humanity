@@ -5,6 +5,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/i
 import { Kbd } from "@/components/ui/kbd"
 import { isMac } from "@/features/terminal/keys"
 import { type SendKey, uiPreferences, useUiPreferences } from "@/lib/uiPreferences"
+import { readStored, writeStored } from "@/lib/storage"
 
 export function ChatBox({
   className,
@@ -92,19 +93,9 @@ const KEY_HINT_KEY = "humanity.key-hint-sends"
 
 const KEY_HINT_SENDS = 3
 
-const readSends = (): number => {
-  try {
-    return Number(localStorage.getItem(KEY_HINT_KEY)) || 0
-  } catch {
-    return 0
-  }
-}
+const readSends = (): number => Number(readStored(KEY_HINT_KEY)) || 0
 
-export const noteMessageSent = () => {
-  try {
-    localStorage.setItem(KEY_HINT_KEY, String(readSends() + 1))
-  } catch {}
-}
+export const noteMessageSent = () => writeStored(KEY_HINT_KEY, String(readSends() + 1))
 
 const KEY = "h-4 min-w-4 px-1 text-[0.625rem] leading-none"
 

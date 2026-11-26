@@ -195,12 +195,6 @@ describe("GitLabService", () => {
       const own = gitlabApi("git.acme.dev:8443")
       const { client, requests } = yield* fakeGitLab({
         [`${own}/user`]: { body: { username: "ana" } },
-        [`${own}/projects/acme%2Fwidgets/repository/branches?per_page=100`]: {
-          body: [
-            { name: "main", commit: { id: "abc" }, protected: true },
-            { name: "dev", commit: { id: "def" } },
-          ],
-        },
       })
 
       yield* Effect.gen(function* () {
@@ -218,10 +212,7 @@ describe("GitLabService", () => {
           problem: null,
         })
 
-        assert.deepStrictEqual(yield* service.listBranches("acme/widgets"), [
-          { name: "main", commitSha: "abc", protected: true },
-          { name: "dev", commitSha: "def", protected: false },
-        ])
+        yield* service.connection({ refresh: true })
         const last = (yield* Ref.get(requests)).at(-1)
         assert.isTrue(last?.url.startsWith(`${own}/`))
         assert.strictEqual(last?.auth, "Bearer own-token")

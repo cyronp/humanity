@@ -34,13 +34,6 @@ export const GitHubRepo = Schema.Struct({
 })
 export type GitHubRepo = typeof GitHubRepo.Type
 
-export const GitHubBranch = Schema.Struct({
-  name: Schema.String,
-  commitSha: Schema.String,
-  protected: Schema.Boolean,
-})
-export type GitHubBranch = typeof GitHubBranch.Type
-
 export const GitHubFullName = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/),
 )

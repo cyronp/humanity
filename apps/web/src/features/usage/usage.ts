@@ -5,7 +5,10 @@ import {
   type UsageAmount,
   type UsageReport,
 } from "@humanity/contracts"
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
+import { readStored, writeStored } from "@/lib/storage"
 
 export const USAGE_RANGES = [
   { id: "today", label: "Today", days: 1 },
@@ -47,19 +50,11 @@ export const rangeOf = (id: UsageRangeId, now: Date): UsageRange => {
 const RANGE_KEY = "humanity.usage.range"
 
 export const storedRange = (): UsageRangeId => {
-  try {
-    const value = window.localStorage.getItem(RANGE_KEY)
-    return USAGE_RANGES.find((each) => each.id === value)?.id ?? "week"
-  } catch {
-    return "week"
-  }
+  const value = readStored(RANGE_KEY)
+  return USAGE_RANGES.find((each) => each.id === value)?.id ?? "week"
 }
 
-export const storeRange = (id: UsageRangeId): void => {
-  try {
-    window.localStorage.setItem(RANGE_KEY, id)
-  } catch {}
-}
+export const storeRange = (id: UsageRangeId): void => writeStored(RANGE_KEY, id)
 
 export type BucketRow = { readonly bucket: string } & Partial<Record<AgentProvider, number>>
 
@@ -198,26 +193,10 @@ export const formatSpan = (ms: number): string => {
 export const formatAgo = (at: number, now: number): string =>
   now - at < 60_000 ? "just now" : `${formatSpan(now - at)} ago`
 
-let open = false
-const listeners = new Set<() => void>()
+const openAtom = Atom.make(false).pipe(Atom.keepAlive)
 
-export const openUsage = (): void => {
-  open = true
-  for (const listener of listeners) listener()
-}
+export const openUsage = (): void => registry.set(openAtom, true)
 
-export const closeUsage = (): void => {
-  open = false
-  for (const listener of listeners) listener()
-}
+export const closeUsage = (): void => registry.set(openAtom, false)
 
-export const useUsageOpen = (): boolean =>
-  useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
-    },
-    () => open,
-  )
+export const useUsageOpen = (): boolean => useAtomValue(openAtom)

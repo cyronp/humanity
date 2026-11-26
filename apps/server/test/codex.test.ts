@@ -9,7 +9,7 @@ import {
   codexNativeExecutable,
   codexTargetTriple,
 } from "../src/codex/environment.ts"
-import { classifyCodexAccount } from "../src/services/CodexAccountService.ts"
+import { classifyCodexAccount } from "../src/services/ProviderAccounts.ts"
 
 describe("codexEnvironment", () => {
   it("drops a parent Codex session's variables and keeps everything else", () => {
@@ -78,9 +78,11 @@ describe("classifyCodexAccount", () => {
       classifyCodexAccount({ type: "chatgpt", email: "dev@example.com", planType: "plus" }),
     ).toEqual({
       _tag: "Connected",
-      method: "chatgpt",
+      method: "plan",
       label: "ChatGPT Plus",
       email: "dev@example.com",
+      organization: null,
+      subscriptionShadowed: false,
     })
   })
 
@@ -90,6 +92,8 @@ describe("classifyCodexAccount", () => {
       method: "apiKey",
       label: "OpenAI API key",
       email: null,
+      organization: null,
+      subscriptionShadowed: false,
     })
   })
 })

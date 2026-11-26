@@ -2,9 +2,10 @@ import { PATCH_TOOL, SHELL_TOOL } from "@humanity/contracts"
 import { computeHunks, hunkHeader } from "@humanity/diff"
 import { Option, Schema } from "effect"
 import { fileURLToPath } from "node:url"
-import { decode, type ToolCallFields } from "../acp/protocol.ts"
+import { type ToolCallFields } from "../acp/protocol.ts"
 import type { Normalized } from "./normalize.ts"
 import type { PatchFile } from "./normalizeCodex.ts"
+import { decode, isRecord } from "../unknown.ts"
 
 export const ACP_READY = "humanity/ready"
 export const ACP_TEXT_DELTA = "message/delta"
@@ -30,9 +31,6 @@ export interface NamedTool {
   readonly toolName: string
   readonly input: Record<string, unknown>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const stringOf = (record: Record<string, unknown>, keys: ReadonlyArray<string>) => {
   for (const key of keys) {
@@ -129,6 +127,8 @@ export const acpToolCall = (call: ToolCallFields): NamedTool => {
       if (url !== undefined) return { toolName: "WebFetch", input: { url } }
       break
     }
+    default:
+      break
   }
   return {
     toolName: call.name ?? (title === "" ? "Tool" : title),

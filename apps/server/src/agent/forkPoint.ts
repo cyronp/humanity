@@ -1,13 +1,11 @@
 import type { AgentProvider } from "@humanity/contracts"
 import type { RawMessage } from "../db/SessionRepo.ts"
+import { isRecord } from "../unknown.ts"
 
 export type ForkPoint =
   { readonly _tag: "Native"; readonly at: string } | { readonly _tag: "Handoff" }
 
 export const FORK_SEARCH_LIMIT = 500
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
 
 export const claudeAnchor = (raw: unknown): string | undefined => {
   if (!isRecord(raw)) return undefined

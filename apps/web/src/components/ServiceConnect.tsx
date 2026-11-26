@@ -7,7 +7,7 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { NumberedStep } from "@/components/NumberedStep"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { ToneDot } from "@/features/claude/ToneDot"
+import { ToneDot } from "@/components/ToneDot"
 import { describeCause } from "@/lib/errors"
 import { usePollWhile } from "@/lib/usePollWhile"
 

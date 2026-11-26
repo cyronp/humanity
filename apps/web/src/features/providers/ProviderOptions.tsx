@@ -22,13 +22,6 @@ const cliPathsAtom = HumanityClient.query("Preferences.getCliPaths", undefined, 
 
 const setCliPathsAtom = HumanityClient.mutation("Preferences.setCliPaths")
 
-const STATUS_KEYS: Readonly<Record<AgentProvider, string>> = {
-  "claude-code": keys.claude,
-  codex: keys.codex,
-  kiro: keys.kiro,
-  antigravity: keys.antigravity,
-}
-
 export function ProviderOptions({
   provider,
   children,
@@ -61,7 +54,7 @@ function CliPathSetting({ provider }: { readonly provider: AgentProvider }) {
     setError(undefined)
     const exit = await save({
       payload: { paths: { ...paths, [provider]: next } },
-      reactivityKeys: [keys.preferences, keys.agentCli(provider), STATUS_KEYS[provider]],
+      reactivityKeys: [keys.preferences, keys.agentCli(provider), keys.provider(provider)],
     })
     if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }

@@ -1,7 +1,8 @@
 import type { GitHubTokenSource } from "@humanity/contracts"
-import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { ServerConfig } from "../ServerConfig.ts"
+import { runProcess } from "../process.ts"
 
 export interface ResolvedGitHubToken {
   readonly token: Option.Option<Redacted.Redacted<string>>
@@ -35,21 +36,16 @@ export class GitHubToken extends Context.Service<
       )
 
       const fromGh = Effect.gen(function* () {
-        const handle = yield* spawner.spawn(
+        const { stdout, exitCode } = yield* runProcess(
+          spawner,
           ChildProcess.make("gh", ["auth", "token"], { extendEnv: true }),
-        )
-        const [stdout, exitCode] = yield* Effect.all(
-          [handle.stdout.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
-          { concurrency: "unbounded" },
         )
         const token = stdout.trim()
         return {
           installed: true,
-          token:
-            Number(exitCode) === 0 && token !== "" ? Option.some(token) : Option.none<string>(),
+          token: exitCode === 0 && token !== "" ? Option.some(token) : Option.none<string>(),
         }
       }).pipe(
-        Effect.scoped,
         Effect.catch(() => Effect.succeed({ installed: false, token: Option.none<string>() })),
       )
 

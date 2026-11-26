@@ -6,6 +6,7 @@ import {
   DEFAULT_COLOR_THEME,
   parseColorTheme,
 } from "./colorThemes.ts"
+import { readStored, writeStored } from "./storage.ts"
 
 export type Theme = "light" | "dark"
 
@@ -15,21 +16,6 @@ const listeners = new Set<() => void>()
 
 const systemTheme = (): Theme =>
   window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-
-const readStored = (key: string): string | null => {
-  try {
-    return window.localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const writeStored = (key: string, value: string | null): void => {
-  try {
-    if (value === null) window.localStorage.removeItem(key)
-    else window.localStorage.setItem(key, value)
-  } catch {}
-}
 
 const storedTheme = (): Theme | undefined => {
   const value = readStored(STORAGE_KEY)

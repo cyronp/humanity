@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react"
+import { readStored, writeStored } from "./storage.ts"
 
 export const SEND_KEYS = ["enter", "mod-enter"] as const
 export type SendKey = (typeof SEND_KEYS)[number]
@@ -86,13 +87,7 @@ let cachedRaw: string | null | undefined
 let cached: UiPreferences = DEFAULT_UI_PREFERENCES
 let memoryRaw: string | null = null
 
-const readRaw = (): string | null => {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) ?? memoryRaw
-  } catch {
-    return memoryRaw
-  }
-}
+const readRaw = (): string | null => readStored(STORAGE_KEY) ?? memoryRaw
 
 export const uiPreferences = (): UiPreferences => {
   const raw = readRaw()
@@ -126,9 +121,7 @@ const subscribe = (listener: () => void) => {
 export const setUiPreferences = (patch: Partial<UiPreferences>): void => {
   const next = { ...uiPreferences(), ...patch }
   memoryRaw = JSON.stringify(next)
-  try {
-    window.localStorage.setItem(STORAGE_KEY, memoryRaw)
-  } catch {}
+  writeStored(STORAGE_KEY, memoryRaw)
   applyInterfaceScale()
   listeners.forEach((listener) => listener())
 }

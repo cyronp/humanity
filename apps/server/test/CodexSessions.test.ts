@@ -2,10 +2,9 @@ import { assert, describe, it } from "@effect/vitest"
 import { Effect, Ref } from "effect"
 import { FakeAgentLog } from "../src/agent/AgentRunnerFake.ts"
 import { join } from "node:path"
-import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
-import { CodexAccountService } from "../src/services/CodexAccountService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import { addProject, eventually, services, setup } from "./sessionHelpers.ts"
+import { ProviderAccounts } from "../src/services/ProviderAccounts.ts"
 
 const PDF = Buffer.from("%PDF-1.7\n%fake\n")
 
@@ -48,8 +47,7 @@ describe("threads on Codex", () => {
       const { home, repo } = yield* setup()
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
-        const claudeAccounts = yield* ClaudeAccountService
-        const codexAccounts = yield* CodexAccountService
+        const { "claude-code": claudeAccounts, codex: codexAccounts } = yield* ProviderAccounts
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
 

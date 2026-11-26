@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageContent } from "@humanity/contracts"
+import { type ChatMessage, type MessageContent, plural } from "@humanity/contracts"
 import { createContext, useContext } from "react"
 
 export interface TranscriptActions {
@@ -57,10 +57,7 @@ export const undoableRewinds = (messages: ReadonlyArray<ChatMessage>): ReadonlyS
 }
 
 export const rewindSummary = (content: Extract<MessageContent, { _tag: "rewind" }>): string => {
-  const files =
-    content.restored === 0
-      ? null
-      : `${content.restored} file${content.restored === 1 ? "" : "s"} restored`
+  const files = content.restored === 0 ? null : `${plural(content.restored, "file")} restored`
   const what = content.conversation ? "Rewound to before" : "Restored the files from before"
   return [`${what} “${content.message}”`, files, content.undo === "done" ? "undone" : null]
     .filter((part) => part !== null)

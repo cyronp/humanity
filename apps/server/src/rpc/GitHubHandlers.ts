@@ -11,7 +11,6 @@ export const GitHubHandlers = GitHubRpcs.toLayer(
       "GitHub.removeToken": () => github.removeToken,
       "GitHub.whoami": () => github.whoami,
       "GitHub.listRepos": () => github.listRepos,
-      "GitHub.listBranches": ({ fullName }) => github.listBranches(fullName),
     })
   }),
 )

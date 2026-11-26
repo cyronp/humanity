@@ -258,23 +258,15 @@ describe("GitHubService", () => {
     }),
   )
 
-  it.effect("reads public repositories and their branches without a token", () =>
+  it.effect("reads a public repository without a token", () =>
     Effect.gen(function* () {
       const { client, requests } = yield* fakeGitHub({
-        "/repos/acme/widgets/branches?per_page=100": {
-          body: [
-            { name: "main", commit: { sha: "abc" }, protected: true },
-            { name: "dev", commit: { sha: "def" } },
-          ],
-        },
+        "/repos/acme/widgets": { body: repo("widgets") },
       })
-      const branches = yield* GitHubService.use((service) =>
-        service.listBranches("acme/widgets"),
-      ).pipe(Effect.provide(github(client, undefined)))
-      assert.deepStrictEqual(branches, [
-        { name: "main", commitSha: "abc", protected: true },
-        { name: "dev", commitSha: "def", protected: false },
-      ])
+      const found = yield* GitHubService.use((service) => service.getRepo("acme/widgets")).pipe(
+        Effect.provide(github(client, undefined)),
+      )
+      assert.strictEqual(found.fullName, "acme/widgets")
       assert.isUndefined((yield* Ref.get(requests))[0]?.auth)
     }),
   )

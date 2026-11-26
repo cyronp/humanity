@@ -1,28 +1,15 @@
 import { useCallback, useState } from "react"
-
-const read = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const write = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value)
-  } catch {}
-}
+import { readStored, writeStored } from "@/lib/storage"
 
 export const parseFlag = (raw: string | null, fallback: boolean): boolean =>
   raw === "1" ? true : raw === "0" ? false : fallback
 
 export const useStoredFlag = (key: string, fallback: boolean) => {
-  const [value, setValue] = useState(() => parseFlag(read(key), fallback))
+  const [value, setValue] = useState(() => parseFlag(readStored(key), fallback))
   const set = useCallback(
     (next: boolean) => {
       setValue(next)
-      write(key, next ? "1" : "0")
+      writeStored(key, next ? "1" : "0")
     },
     [key],
   )
@@ -35,7 +22,6 @@ export const RAIL_SHOWN_KEY = "humanity.rail"
 
 export const DOCK_MIN_HEIGHT = 120
 export const CHAT_MIN_HEIGHT = 200
-export const DOCK_DEFAULT_HEIGHT = 280
 
 const activeTerminals = new Map<string, string>()
 

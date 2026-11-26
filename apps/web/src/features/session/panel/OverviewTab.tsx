@@ -1,11 +1,12 @@
 import { useAtomValue } from "@effect/atom-react"
-import type {
-  BranchPublication,
-  Forge,
-  PullRequest,
-  PullRequestComment,
-  PullRequestFeed,
-  Session,
+import {
+  type BranchPublication,
+  type Forge,
+  type PullRequest,
+  type PullRequestComment,
+  type PullRequestFeed,
+  type Session,
+  forgeTerms,
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { ExternalLink } from "lucide-react"
@@ -17,7 +18,7 @@ import { Markdown } from "@/features/chat/Markdown"
 import { feedKey, publicationAtom, pullRequestFeedAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { FeedNote } from "./FeedNote.tsx"
-import { checkoutMoved, forgeTerms, remoteStatus } from "./publication.ts"
+import { checkoutMoved, remoteStatus } from "./publication.ts"
 import { PullRequestFiles } from "./PullRequestFiles.tsx"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
 

@@ -1,5 +1,11 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { ChatMessage, CheckpointChange, RewindPreview, Session } from "@humanity/contracts"
+import {
+  type ChatMessage,
+  type CheckpointChange,
+  type RewindPreview,
+  type Session,
+  plural,
+} from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { History } from "lucide-react"
@@ -25,8 +31,6 @@ const CHANGE_LABEL: Record<
   deleted: { word: "brought back", tone: "text-success" },
   added: { word: "deleted", tone: "text-destructive" },
 }
-
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
 
 export const rewindWarnings = (preview: RewindPreview): ReadonlyArray<string> => [
   ...(preview.checkpoint && preview.changed > 0 && preview.sharedCheckout

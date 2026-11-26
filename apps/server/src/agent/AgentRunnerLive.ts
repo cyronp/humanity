@@ -289,7 +289,7 @@ export const AgentRunnerLive = Layer.effect(
             return startKiro(options)
           case "antigravity":
             return startAntigravity(options)
-          default:
+          case "claude-code":
             return startClaude(options)
         }
       },

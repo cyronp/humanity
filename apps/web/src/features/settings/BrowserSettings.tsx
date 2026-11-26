@@ -6,6 +6,7 @@ import {
   FILL_DEVICE,
   PREVIEW_DEVICES,
   ZOOM_LEVELS,
+  plural,
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -244,7 +245,7 @@ function BrowserData({ desktop }: { readonly desktop: boolean }) {
               ? "Recordings of pages, kept under ~/.humanity/recordings."
               : usage.files === 0
                 ? "No recordings kept."
-                : `${usage.files} file${usage.files === 1 ? "" : "s"}, ${formatBytes(usage.bytes)}, under ~/.humanity/recordings.`
+                : `${plural(usage.files, "file")}, ${formatBytes(usage.bytes)}, under ~/.humanity/recordings.`
           }
         >
           <div className="flex items-center gap-2">
@@ -260,7 +261,7 @@ function BrowserData({ desktop }: { readonly desktop: boolean }) {
               <ConfirmRemove
                 label="Delete every recording"
                 title="Delete every recording?"
-                description={`The ${usage.files} file${usage.files === 1 ? "" : "s"} under ~/.humanity/recordings are deleted for good.`}
+                description={`The ${plural(usage.files, "file")} under ~/.humanity/recordings are deleted for good.`}
                 onConfirm={async () => {
                   const exit = await clearRecordings({
                     payload: undefined,

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react"
-import type { FileDiff, Session } from "@humanity/contracts"
+import { type FileDiff, type Session, plural } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { MessageSquareText } from "lucide-react"
 import { useMemo } from "react"
@@ -55,7 +55,7 @@ export function DiffTab({
         <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-2 text-sm">
           <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1">
-            {comments.length} comment{comments.length === 1 ? "" : "s"} for the agent
+            {plural(comments.length, "comment")} for the agent
             {stale.size > 0 && (
               <span className="text-muted-foreground">
                 {" "}

@@ -1,6 +1,9 @@
 import type { FileDiff } from "@humanity/contracts"
 import { toDiffLines } from "@humanity/diff"
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
+import { readStoredJson, writeStored } from "@/lib/storage"
 
 export type CommentSide = "new" | "old"
 
@@ -34,37 +37,27 @@ const isComment = (value: unknown): value is ReviewComment => {
 }
 
 const read = (sessionId: string): ReadonlyArray<ReviewComment> => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey(sessionId)) ?? "[]")
-    return Array.isArray(parsed) ? parsed.filter(isComment) : []
-  } catch {
-    return []
-  }
+  const parsed = readStoredJson(storageKey(sessionId))
+  return Array.isArray(parsed) ? parsed.filter(isComment) : []
 }
 
-const write = (sessionId: string, comments: ReadonlyArray<ReviewComment>) => {
-  try {
-    if (comments.length === 0) localStorage.removeItem(storageKey(sessionId))
-    else localStorage.setItem(storageKey(sessionId), JSON.stringify(comments))
-  } catch {}
-}
+const write = (sessionId: string, comments: ReadonlyArray<ReviewComment>) =>
+  writeStored(storageKey(sessionId), comments.length === 0 ? null : JSON.stringify(comments))
 
-const cache = new Map<string, ReadonlyArray<ReviewComment>>()
-const listeners = new Map<string, Set<() => void>>()
+const commentsAtom = Atom.family((sessionId: string) =>
+  Atom.writable(
+    () => read(sessionId),
+    (ctx, next: ReadonlyArray<ReviewComment>) => {
+      write(sessionId, next)
+      ctx.setSelf(next)
+    },
+  ).pipe(Atom.keepAlive),
+)
 
-const current = (sessionId: string): ReadonlyArray<ReviewComment> => {
-  const cached = cache.get(sessionId)
-  if (cached !== undefined) return cached
-  const loaded = read(sessionId)
-  cache.set(sessionId, loaded)
-  return loaded
-}
+const current = (sessionId: string) => registry.get(commentsAtom(sessionId))
 
-const set = (sessionId: string, next: ReadonlyArray<ReviewComment>) => {
-  cache.set(sessionId, next)
-  write(sessionId, next)
-  for (const listener of listeners.get(sessionId) ?? []) listener()
-}
+const set = (sessionId: string, next: ReadonlyArray<ReviewComment>) =>
+  registry.set(commentsAtom(sessionId), next)
 
 export const pendingChangeKey = (changeId: string) => `change-${changeId}`
 
@@ -90,17 +83,7 @@ export const reviewComments = (sessionId: string) => ({
 })
 
 export const useReviewComments = (sessionId: string): ReadonlyArray<ReviewComment> =>
-  useSyncExternalStore(
-    (listener) => {
-      const own = listeners.get(sessionId) ?? new Set()
-      own.add(listener)
-      listeners.set(sessionId, own)
-      return () => {
-        own.delete(listener)
-      }
-    },
-    () => current(sessionId),
-  )
+  useAtomValue(commentsAtom(sessionId))
 
 export const sameAnchor = (comment: CommentAnchor, anchor: CommentAnchor): boolean =>
   comment.path === anchor.path && comment.side === anchor.side && comment.line === anchor.line

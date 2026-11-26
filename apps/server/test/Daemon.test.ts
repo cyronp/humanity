@@ -188,15 +188,6 @@ describe("daemon", () => {
         )
         assert.strictEqual(again._tag, "ApprovalAlreadyDecided")
 
-        const history = yield* client("Approvals.history", { projectId: project.id })
-        assert.lengthOf(history, 1)
-        assert.strictEqual(history[0]?.sessionTitle, "edit")
-        assert.strictEqual(history[0]?.sessionBranch, session.branch)
-        assert.strictEqual(
-          history[0]?.approval._tag === "change" ? history[0].approval.change.status : "",
-          "rejected",
-        )
-
         const saved = yield* client("Projects.setDefaultAutonomy", {
           projectId: project.id,
           autonomy: "ask",
@@ -227,11 +218,14 @@ describe("daemon", () => {
 
       yield* Effect.gen(function* () {
         const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
-        const status = yield* client("Claude.status", { refresh: false })
+        const status = yield* client("Providers.status", {
+          provider: "claude-code",
+          refresh: false,
+        })
         assert.strictEqual(status.cliVersion, "2.1.321")
         assert.deepStrictEqual(status.connection, {
           _tag: "Connected",
-          method: "subscription",
+          method: "plan",
           label: "Claude Max",
           email: "dev@example.com",
           organization: null,

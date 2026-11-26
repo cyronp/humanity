@@ -45,11 +45,6 @@ import {
 } from "../Errors.ts"
 
 export const SessionsRpcs = RpcGroup.make(
-  Rpc.make("Sessions.list", {
-    payload: { projectId: ProjectId },
-    success: Schema.Array(Session),
-    error: ProjectNotFound,
-  }),
   Rpc.make("Sessions.watchAll", {
     success: Schema.Array(Session),
     stream: true,

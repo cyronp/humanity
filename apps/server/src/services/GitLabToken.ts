@@ -3,9 +3,10 @@ import {
   type GitLabTokenSource,
   normalizeGitLabHost,
 } from "@humanity/contracts"
-import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Ref } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { ServerConfig } from "../ServerConfig.ts"
+import { runProcess } from "../process.ts"
 
 export interface ResolvedGitLabToken {
   readonly token: Option.Option<Redacted.Redacted<string>>
@@ -43,17 +44,11 @@ export class GitLabToken extends Context.Service<
       })
 
       const glabConfig = (...args: ReadonlyArray<string>) =>
-        Effect.gen(function* () {
-          const handle = yield* spawner.spawn(
-            ChildProcess.make("glab", ["config", "get", ...args], { extendEnv: true }),
-          )
-          const [stdout, exitCode] = yield* Effect.all(
-            [handle.stdout.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return Number(exitCode) === 0 ? stdout.trim() : ""
-        }).pipe(
-          Effect.scoped,
+        runProcess(
+          spawner,
+          ChildProcess.make("glab", ["config", "get", ...args], { extendEnv: true }),
+        ).pipe(
+          Effect.map(({ stdout, exitCode }) => (exitCode === 0 ? stdout.trim() : "")),
           Effect.catch(() => Effect.succeed(undefined)),
         )
 

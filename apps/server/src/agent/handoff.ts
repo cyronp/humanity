@@ -1,6 +1,7 @@
 import {
   type AgentProvider,
   type ChatMessage,
+  type HandoffPreview,
   PATCH_TOOL,
   PROVIDER_NAMES,
   QUESTION_TOOL,
@@ -8,6 +9,7 @@ import {
   THREAD_HISTORY_TOOL_NAME,
   type ToolCall,
 } from "@humanity/contracts"
+import { isRecord } from "../unknown.ts"
 
 export interface HistoryEntry {
   readonly index: number
@@ -24,9 +26,6 @@ const REPORT_EXCERPT = 1_500
 const SUB_AGENT_TOOLS: ReadonlyArray<string> = ["Task", "Agent"]
 
 const TAG = "humanity-handoff"
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
@@ -475,3 +474,31 @@ export const THREAD_HISTORY_TOOL_DEFINITION = {
   },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
 }
+
+export const handoffPreviewOf = (handoff: Handoff, editable: boolean): HandoffPreview => ({
+  text: handoff.text,
+  tokens: handoff.tokens,
+  included: handoff.included,
+  omitted: handoff.omitted,
+  cut: handoff.cut,
+  editable,
+  entries: editable ? handoff.entries : [],
+})
+
+export const rebuildHandoff = (
+  messages: ReadonlyArray<ChatMessage>,
+  toolCalls: ReadonlyArray<ToolCall>,
+  provider: AgentProvider,
+  source: HandoffSource,
+) =>
+  buildHandoff({
+    entries: historyEntries(messages, toolCalls, provider).filter(
+      (entry) => entry.index <= source.entryCount,
+    ),
+    since: source.since,
+    from: source.from,
+    to: source.to,
+    resumed: source.resumed,
+    plan: source.plan,
+    excluded: source.excluded,
+  })

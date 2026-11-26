@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
-import type { GitHubRepo, GitLabRepo } from "@humanity/contracts"
+import { type GitHubRepo, type GitLabRepo, plural } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronDown, ChevronUp, Download, Lock } from "lucide-react"
@@ -38,8 +38,6 @@ interface Progress {
   readonly current: string | undefined
   readonly failures: ReadonlyArray<{ readonly name: string; readonly message: string }>
 }
-
-const plural = (count: number): string => (count === 1 ? "repository" : "repositories")
 
 export function RepositoryPicker() {
   const githubResult = useAtomValue(githubConnectionAtom)
@@ -220,7 +218,7 @@ export function RepositoryPicker() {
           disabled={chosen.length === 0 || importing}
         >
           <Download />
-          Import {chosen.length} {plural(chosen.length)}
+          Import {plural(chosen.length, "repository", "repositories")}
         </Button>
       )}
       {progress !== undefined && <ProgressLine progress={progress} />}
@@ -267,7 +265,7 @@ function ProgressLine({ progress }: { readonly progress: Progress }) {
         imported > 0 && (
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <Check className="size-3.5 shrink-0 text-success" />
-            Imported {imported} {plural(imported)}
+            Imported {plural(imported, "repository", "repositories")}
           </span>
         )
       )}

@@ -1,4 +1,4 @@
-import { type Option, Schema } from "effect"
+import { Schema } from "effect"
 
 export const PROTOCOL_VERSION = 1
 
@@ -109,8 +109,3 @@ export const PromptResponse = Schema.Struct({
     }),
   ),
 })
-
-export const decode =
-  <S extends Schema.Constraint>(schema: S) =>
-  (input: unknown): Option.Option<S["Type"]> =>
-    Schema.decodeUnknownOption(schema as never)(input) as Option.Option<S["Type"]>

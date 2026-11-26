@@ -1,11 +1,13 @@
 import { useAtomSet } from "@effect/atom-react"
-import type {
-  BranchPublication,
-  FileDiff,
-  MergeMethod,
-  PullRequest,
-  PullRequestFeed,
-  Session,
+import {
+  type BranchPublication,
+  type FileDiff,
+  type MergeMethod,
+  type PullRequest,
+  type PullRequestFeed,
+  type Session,
+  plural,
+  forgeTerms,
 } from "@humanity/contracts"
 import { countChanges } from "@humanity/diff"
 import { cn } from "cn"
@@ -35,7 +37,6 @@ import { commitAtom, mergePullRequestAtom, pushAtom, setPullRequestDraftAtom } f
 import { isBusy } from "../state.ts"
 import {
   commitPaths,
-  forgeTerms,
   mergeOptions,
   preferMergeMethod,
   type PrimaryAction as Action,
@@ -271,7 +272,7 @@ export function CommitBar({
   const options: ReadonlyArray<Method<CommitMethod>> = [
     {
       method: "commit",
-      label: `Commit ${picked.length} file${picked.length === 1 ? "" : "s"}`,
+      label: `Commit ${plural(picked.length, "file")}`,
       description: `To ${branch}`,
     },
     ...(canPush
@@ -342,7 +343,7 @@ export function CommitBar({
                         )
                       }
                     />
-                    {picked.length} of {files.length} file{files.length === 1 ? "" : "s"}
+                    {picked.length} of {plural(files.length, "file")}
                     <span className="ml-auto">
                       <ChangeCount {...counts} />
                     </span>
@@ -522,8 +523,8 @@ function MergeAction({
           )}
         >
           {checks.overall === "failure"
-            ? `${checks.failed} check${checks.failed === 1 ? "" : "s"} failing.`
-            : `${checks.pending} check${checks.pending === 1 ? "" : "s"} still running.`}
+            ? `${plural(checks.failed, "check")} failing.`
+            : `${plural(checks.pending, "check")} still running.`}
         </p>
       )}
       <MethodList

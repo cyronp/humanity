@@ -21,26 +21,23 @@ import {
   DEFAULT_AUTONOMY,
   mentionedPaths,
   DEFAULT_ACCOUNT,
-  DEFAULT_BRANCH_PREFIX,
   DEFAULT_PROVIDER,
   type ChatMessage,
   ConfirmationId,
-  type ContextUsage,
   type GitBranchExists,
   type GitInvalidBranchName,
   type GitRefNotFound,
   HUMANITY_MCP_SERVER,
-  SKILL_TOOL,
   type MessageContent,
   type MessageHit,
   type UsageReport,
   type OpenedThread,
   type PendingConfirmation,
-  type PlanUsage,
   PlanUsageUnavailable,
   type Project,
   ProjectId,
   type ProjectNotFound,
+  type ProviderAccount,
   type ProposedChange,
   PROVIDER_NAMES,
   ProviderSwitchUnavailable,
@@ -59,8 +56,6 @@ import {
   SessionNotFound,
   HandoffUnavailable,
   ChecksUnavailable,
-  CHECKS_OUTPUT_LINES,
-  CHECKS_TIMEOUT_MS,
   type ChecksResult,
   type HandoffPreview,
   type SessionStatus,
@@ -70,8 +65,6 @@ import {
   newThreadAutonomy,
   stricterAutonomy,
   toolMode,
-  trimCharacters,
-  trimTrailing,
   type WorkingTreeDiff,
   type ToolCall,
 } from "@humanity/contracts"
@@ -109,11 +102,12 @@ import {
 } from "../agent/threadResult.ts"
 import {
   buildHandoff,
-  type Handoff,
+  handoffPreviewOf,
   type HandoffSource,
   historyEntries,
   latestPlan,
   readThreadHistory,
+  rebuildHandoff,
 } from "../agent/handoff.ts"
 import { FORK_SEARCH_LIMIT, forkPoint } from "../agent/forkPoint.ts"
 import { CheckpointStore, parseNulList } from "../checkpoints/CheckpointStore.ts"
@@ -122,31 +116,33 @@ import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools, type ToolText } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
-import { normalizeSdkMessage } from "../agent/normalize.ts"
-import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
-import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
-import { ClaudeCode } from "../claude/ClaudeCode.ts"
-import { Codex } from "../codex/Codex.ts"
+import { PROVIDER_TRAITS } from "../agent/providerTraits.ts"
 import { placeEdit, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
-import type { AccountRegistry } from "./accountRegistry.ts"
-import { makeAccountsUsage, type UsageAccount } from "./accountsUsage.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import type { LoggedCommit } from "./gitParsers.ts"
-import { ClaudeAccountService } from "./ClaudeAccountService.ts"
-import { CodexAccountService } from "./CodexAccountService.ts"
-import { KiroAccountService } from "./KiroAccountService.ts"
-import { AntigravityAccountService } from "./AntigravityAccountService.ts"
 import { type HumanFileChange, humanChangesNote, humanEditsNote } from "../files/humanEdits.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
+import { makeSessionUsage } from "./sessionUsage.ts"
+import { ProviderAccounts } from "./ProviderAccounts.ts"
+import {
+  loadedSkill,
+  matchModel,
+  sessionBranchName,
+  setupCommand,
+  threadBranch,
+  unsentSwitch,
+  isBusy,
+} from "./sessionHelpers.ts"
+import { runChecksIn } from "./sessionScripts.ts"
 
 interface ActiveRun {
   readonly run: AgentRun
@@ -161,18 +157,6 @@ interface ActiveRun {
   forking: boolean
 }
 
-export const loadedSkill = (toolName: string, input: unknown): string | undefined => {
-  const fields =
-    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}
-  if (toolName === "Skill") {
-    return typeof fields["skill"] === "string" ? fields["skill"] : "unknown"
-  }
-  if (toolName !== SKILL_TOOL) return undefined
-  const file = fields["file"]
-  if (file !== undefined && file !== null && file !== "") return undefined
-  return typeof fields["name"] === "string" ? fields["name"] : "unknown"
-}
-
 const withHumanity = (
   added: AgentExtensions,
   humanity: AgentMcpServer | undefined,
@@ -183,76 +167,6 @@ const withHumanity = (
         mcpServers: { ...added.mcpServers, [HUMANITY_MCP_SERVER]: humanity },
         plugins: added.plugins,
       }
-
-export const slugify = (title: string): string => {
-  const words = title
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-  return trimTrailing(trimCharacters(words, "-").slice(0, 40), "-") || "session"
-}
-
-export const sessionBranchName = (
-  sessionId: string,
-  title: string,
-  prefix: string = DEFAULT_BRANCH_PREFIX,
-): string => `${prefix}${sessionId.slice(0, 8)}-${slugify(title)}`
-
-const SHELL_READY_MS = 15_000
-
-export const withoutPromptLine = (text: string): string => {
-  const lines = text.replace(/\s+$/, "").split("\n")
-  return lines.length <= 1 ? text : lines.slice(0, -1).join("\n")
-}
-const SHELL_READY_POLL_MS = 100
-
-export const setupCommand = (script: string | null): string | undefined => {
-  const lines = (script ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-  return lines.length === 0 ? undefined : lines.join(" && ")
-}
-
-const modelKey = (name: string): string => {
-  const words = name
-    .toLowerCase()
-    .replace(/\(.*?\)/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-  return trimCharacters(words, "-").replace(/^claude-/, "")
-}
-
-interface OfferedModel {
-  readonly value: string
-  readonly displayName: string
-}
-
-export const matchModel = (
-  models: ReadonlyArray<OfferedModel>,
-  requested: string,
-): string | undefined => {
-  const wanted = requested.trim().toLowerCase()
-  const exact = models.find((model) => model.value.toLowerCase() === wanted)
-  if (exact !== undefined) return exact.value
-  const key = modelKey(requested)
-  if (key === "") return undefined
-  return models.find(
-    (model) => modelKey(model.value) === key || modelKey(model.displayName) === key,
-  )?.value
-}
-
-export const unsentSwitch = (
-  messages: ReadonlyArray<ChatMessage>,
-):
-  | (ChatMessage & { readonly content: Extract<MessageContent, { _tag: "provider_switch" }> })
-  | undefined => {
-  const at = messages.findLastIndex((message) => message.content._tag === "provider_switch")
-  const found = messages[at]
-  if (found?.content._tag !== "provider_switch") return undefined
-  if (messages.slice(at + 1).some((message) => message.content._tag === "user")) return undefined
-  return { ...found, content: found.content }
-}
 
 export const COMMIT_LIST_LIMIT = 50
 
@@ -268,9 +182,6 @@ export interface SessionLineage {
   readonly relation: SessionRelation
   readonly forkedAtMessageId?: string | undefined
 }
-
-export const threadBranch = (session: Session): string | null =>
-  session.branch === "HEAD" ? null : session.branch
 
 export class SessionService extends Context.Service<
   SessionService,
@@ -469,34 +380,19 @@ export class SessionService extends Context.Service<
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
       const preferences = yield* PreferencesService
-      const accounts = yield* ClaudeAccountService
-      const codexAccounts = yield* CodexAccountService
-      const kiroAccounts = yield* KiroAccountService
-      const antigravityAccounts = yield* AntigravityAccountService
+      const accounts = yield* ProviderAccounts
       const extensions = yield* ExtensionsService
       const mcp = yield* HumanityMcp
-      const claude = yield* ClaudeCode
-      const codex = yield* Codex
       const approvals = yield* ApprovalService
       const checkpoints = yield* CheckpointStore
       const checkpointRepo = yield* CheckpointRepo
       const usageRepo = yield* UsageRepo
       const serviceScope = yield* Effect.scope
+      const usage = yield* makeSessionUsage
 
       const active = new Map<string, ActiveRun>()
 
-      const accountsOf = (provider: AgentProvider) => {
-        switch (provider) {
-          case "codex":
-            return codexAccounts
-          case "kiro":
-            return kiroAccounts
-          case "antigravity":
-            return antigravityAccounts
-          default:
-            return accounts
-        }
-      }
+      const accountsOf = (provider: AgentProvider) => accounts[provider]
       const accountDir = (session: Session) =>
         Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
           accountsOf(session.provider).configDirFor(accountId),
@@ -757,112 +653,36 @@ export class SessionService extends Context.Service<
           Effect.gen(function* () {
             const context = yield* state.run.contextUsage
             const plan = withPlan ? yield* state.run.planUsage : undefined
-            return { plan, usage: yield* storeUsage(sessionId, context, plan) }
+            return { plan, usage: yield* usage.store(sessionId, context, plan) }
           }),
         )
-
-      const storeUsage = (
-        sessionId: string,
-        context: ContextUsage | undefined,
-        plan: PlanUsage | undefined,
-      ) =>
-        Effect.gen(function* () {
-          const known = yield* repo.getUsage(sessionId)
-          if (context === undefined && plan === undefined) return known
-          const usage: SessionUsage = {
-            context: context ?? known.context,
-            plan: plan ?? known.plan,
-          }
-          yield* repo.setUsage(sessionId, usage)
-          if (plan !== undefined) {
-            const session = yield* repo.get(sessionId)
-            if (Option.isSome(session)) {
-              yield* usageRepo.recordPlan(
-                session.value.provider,
-                yield* repo.getAccountId(sessionId),
-                plan,
-                yield* now,
-              )
-            }
-          }
-          yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
-          return usage
-        })
 
       const refreshUsageNow = Effect.fn("SessionService.refreshUsage")(function* (
         sessionId: string,
       ) {
         const session = yield* get(sessionId)
-        const unavailable = (reason: string) => new PlanUsageUnavailable({ reason })
         const state = active.get(sessionId)
-        if (state !== undefined) {
-          const { plan, usage } = yield* refreshUsage(sessionId, state, true)
-          if (plan === undefined) {
-            return yield* unavailable("the agent did not report the plan's limits.")
-          }
-          return usage
-        }
-        if (session.provider === "kiro" || session.provider === "antigravity") {
-          return yield* unavailable(
-            `${PROVIDER_NAMES[session.provider]} does not report plan limits here.`,
-          )
-        }
-        const plan =
-          session.provider === "codex"
-            ? yield* codex
-                .planUsage(yield* accountDir(session))
-                .pipe(Effect.mapError((error) => unavailable(error.reason)))
-            : yield* claude
-                .planUsage(yield* accountDir(session))
-                .pipe(Effect.mapError((error) => unavailable(error.reason)))
+        if (state === undefined) return yield* usage.refreshIdle(session)
+        const { plan, usage: stored } = yield* refreshUsage(sessionId, state, true)
         if (plan === undefined) {
-          return yield* unavailable("this login has no plan limits to report.")
+          return yield* new PlanUsageUnavailable({
+            reason: "the agent did not report the plan's limits.",
+          })
         }
-        return yield* storeUsage(sessionId, undefined, plan)
+        return stored
       })
 
-      const signedIn = <Status extends { readonly connection: { readonly _tag: string } }>(
-        registry: AccountRegistry<Status>,
-      ): Effect.Effect<ReadonlyArray<UsageAccount>> =>
-        Effect.map(registry.accounts({ refresh: false }), (listed) =>
-          listed.map((account) => ({
-            id: account.id,
-            name: account.name,
-            connected: account.status.connection._tag === "Connected",
-          })),
-        )
-      const readAccountsUsage = yield* makeAccountsUsage([
-        {
-          provider: "claude-code",
-          accounts: signedIn(accounts),
-          plan: (accountId) =>
-            Effect.flatMap(accounts.configDirFor(accountId), (dir) => claude.planUsage(dir)),
-        },
-        {
-          provider: "codex",
-          accounts: signedIn(codexAccounts),
-          plan: (accountId) =>
-            Effect.flatMap(codexAccounts.configDirFor(accountId), (dir) => codex.planUsage(dir)),
-        },
-        { provider: "kiro", accounts: signedIn(kiroAccounts) },
-        { provider: "antigravity", accounts: signedIn(antigravityAccounts) },
-      ])
       const otherAccountsUsage = Effect.fn("SessionService.otherAccountsUsage")(function* (
         sessionId: string,
         refresh: boolean,
       ) {
         const session = yield* get(sessionId)
-        return yield* readAccountsUsage(session.provider, refresh)
+        return yield* usage.otherAccounts(session.provider, refresh)
       })
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
-          const normalized =
-            session.provider === "codex"
-              ? normalizeCodexEvent(raw)
-              : session.provider === "kiro" || session.provider === "antigravity"
-                ? normalizeAcpEvent(raw)
-                : normalizeSdkMessage(raw)
+          const normalized = PROVIDER_TRAITS[session.provider].normalize(raw)
           if (normalized._tag === "Skip") return
           if (normalized._tag === "TextDelta") {
             yield* events.publish(session.id, { _tag: "TextDelta", text: normalized.text })
@@ -946,7 +766,7 @@ export class SessionService extends Context.Service<
             accountId: yield* repo.getAccountId(sessionId),
             model: current.model,
             usage: content.usage,
-            costUsd: current.provider === "claude-code" ? content.costUsd : null,
+            costUsd: PROVIDER_TRAITS[current.provider].reportsCost ? content.costUsd : null,
             durationMs: content.durationMs,
             endedAt: yield* now,
           })
@@ -1141,12 +961,12 @@ export class SessionService extends Context.Service<
 
       const checkReadable = (provider: AgentProvider, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
-          if (provider !== "codex") return
+          if (!PROVIDER_TRAITS[provider].refusesPdfs) return
           const pdf = files.find((file) => file.kind === "pdf")
           if (pdf !== undefined) {
             return yield* new AttachmentRejected({
               name: pdf.name,
-              reason: "Codex cannot read PDF files. Send it as text or an image instead.",
+              reason: `${PROVIDER_NAMES[provider]} cannot read PDF files. Send it as text or an image instead.`,
             })
           }
         })
@@ -1541,18 +1361,6 @@ export class SessionService extends Context.Service<
           ),
         )
 
-      const shellReady = (terminalId: string) =>
-        Effect.gen(function* () {
-          const deadline = (yield* Clock.currentTimeMillis) + SHELL_READY_MS
-          for (;;) {
-            const info = yield* terminals.info(terminalId)
-            if (info.integration) return true
-            if (info.state === "exited") return false
-            if ((yield* Clock.currentTimeMillis) >= deadline) return false
-            yield* Effect.sleep(SHELL_READY_POLL_MS)
-          }
-        })
-
       const runChecks = Effect.fn("SessionService.runChecks")(function* (sessionId: string) {
         const session = yield* get(sessionId)
         if (session.status === "ended") return yield* new SessionEnded({ sessionId })
@@ -1566,45 +1374,9 @@ export class SessionService extends Context.Service<
             `No checks are set for ${project.name}. Add them in Settings, under Projects.`,
           )
         }
-        return yield* Effect.gen(function* () {
-          const terminal = yield* terminals.open(
-            { _tag: "Session", sessionId: session.id },
-            { opener: "human", title: "Checks" },
-          )
-          const tracked = yield* shellReady(terminal.id)
-          const cursor = yield* terminals.agentCursor(terminal.id)
-          yield* terminals.agentWrite(terminal.id, `${command}\r`)
-          if (!tracked) {
-            return {
-              terminalId: terminal.id,
-              command,
-              outcome: "untracked" as const,
-              exitCode: null,
-              output: "",
-            }
-          }
-          const waited = yield* terminals.agentWait(terminal.id, {
-            for: { _tag: "command" },
-            since: cursor,
-            timeoutMs: CHECKS_TIMEOUT_MS,
-            maxLines: CHECKS_OUTPUT_LINES,
-          })
-          const outcome =
-            waited.outcome === "timeout"
-              ? ("timeout" as const)
-              : waited.outcome === "unsupported"
-                ? ("untracked" as const)
-                : waited.exitCode === 0
-                  ? ("passed" as const)
-                  : ("failed" as const)
-          return {
-            terminalId: terminal.id,
-            command,
-            outcome,
-            exitCode: waited.exitCode,
-            output: waited.outcome === "command" ? withoutPromptLine(waited.text) : waited.text,
-          }
-        }).pipe(Effect.mapError((error) => refused(`The checks did not start: ${error.message}`)))
+        return yield* runChecksIn(terminals, session.id, command).pipe(
+          Effect.mapError((error) => refused(`The checks did not start: ${error.message}`)),
+        )
       })
 
       const setAutonomy = Effect.fn("SessionService.setAutonomy")(function* (
@@ -1716,13 +1488,7 @@ export class SessionService extends Context.Service<
 
       const switchModel = (
         provider: AgentProvider,
-        account: {
-          readonly name: string
-          readonly status: {
-            readonly connection: { readonly _tag: string }
-            readonly models: ReadonlyArray<OfferedModel>
-          }
-        },
+        account: ProviderAccount,
         requested: string | null,
       ) =>
         Effect.gen(function* () {
@@ -1894,37 +1660,6 @@ export class SessionService extends Context.Service<
         return updated
       })
 
-      const isBusy = (session: Session) =>
-        session.status === "running" || session.status === "waiting_for_human"
-
-      const previewOf = (handoff: Handoff, editable: boolean): HandoffPreview => ({
-        text: handoff.text,
-        tokens: handoff.tokens,
-        included: handoff.included,
-        omitted: handoff.omitted,
-        cut: handoff.cut,
-        editable,
-        entries: editable ? handoff.entries : [],
-      })
-
-      const rebuildHandoff = (
-        messages: ReadonlyArray<ChatMessage>,
-        toolCalls: ReadonlyArray<ToolCall>,
-        session: Session,
-        source: HandoffSource,
-      ) =>
-        buildHandoff({
-          entries: historyEntries(messages, toolCalls, session.provider).filter(
-            (entry) => entry.index <= source.entryCount,
-          ),
-          since: source.since,
-          from: source.from,
-          to: source.to,
-          resumed: source.resumed,
-          plan: source.plan,
-          excluded: source.excluded,
-        })
-
       const handoffPreview = Effect.fn("SessionService.handoffPreview")(function* (
         sessionId: string,
       ) {
@@ -1937,7 +1672,12 @@ export class SessionService extends Context.Service<
         const rebuilt =
           source === null || unsent === undefined
             ? undefined
-            : rebuildHandoff(messages, yield* repo.listToolCalls(sessionId), session, source)
+            : rebuildHandoff(
+                messages,
+                yield* repo.listToolCalls(sessionId),
+                session.provider,
+                source,
+              )
         if (rebuilt === undefined || rebuilt.text !== text) {
           return {
             text,
@@ -1949,7 +1689,7 @@ export class SessionService extends Context.Service<
             entries: [],
           }
         }
-        return previewOf(rebuilt, acceptsMessages(session) && !isBusy(session))
+        return handoffPreviewOf(rebuilt, acceptsMessages(session) && !isBusy(session))
       })
 
       const trimHandoff = Effect.fn("SessionService.trimHandoff")(function* (
@@ -1970,14 +1710,14 @@ export class SessionService extends Context.Service<
         }
         const toolCalls = yield* repo.listToolCalls(sessionId)
         const next: HandoffSource = { ...source, excluded: [...new Set(excluded)].toSorted() }
-        const handoff = rebuildHandoff(messages, toolCalls, session, next)
+        const handoff = rebuildHandoff(messages, toolCalls, session.provider, next)
         if (handoff === undefined) {
           return yield* refused("There is nothing of the conversation left to hand off.")
         }
         yield* repo.setPendingHandoff(sessionId, handoff.text, next)
         const fallback = resumeFallback.get(sessionId)
         if (fallback !== undefined && source.resumed) {
-          const whole = rebuildHandoff(messages, toolCalls, session, {
+          const whole = rebuildHandoff(messages, toolCalls, session.provider, {
             ...next,
             since: 1,
             resumed: false,
@@ -1997,7 +1737,7 @@ export class SessionService extends Context.Service<
         }
         yield* repo.updateMessage(message)
         yield* events.publish(sessionId, { _tag: "MessageUpdated", message })
-        return previewOf(handoff, true)
+        return handoffPreviewOf(handoff, true)
       })
 
       const interrupt = Effect.fn("SessionService.interrupt")(function* (sessionId: string) {
@@ -2543,17 +2283,16 @@ export class SessionService extends Context.Service<
           plan: latestPlan(toolCalls),
           reason: "fork",
         })
-        const point =
-          source.provider === "codex"
-            ? forkPoint({
-                provider: source.provider,
-                sdkSessionId: source.sdkSessionId,
-                newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
-                switchedSince: messages
-                  .slice(at)
-                  .some((message) => message.content._tag === "provider_switch"),
-              })
-            : ({ _tag: "Handoff" } as const)
+        const point = PROVIDER_TRAITS[source.provider].forksOwnThread
+          ? forkPoint({
+              provider: source.provider,
+              sdkSessionId: source.sdkSessionId,
+              newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
+              switchedSince: messages
+                .slice(at)
+                .some((message) => message.content._tag === "provider_switch"),
+            })
+          : ({ _tag: "Handoff" } as const)
         if (point._tag === "Native" && source.sdkSessionId !== null) {
           yield* repo.update(created.id, {
             sdkSessionId: source.sdkSessionId,

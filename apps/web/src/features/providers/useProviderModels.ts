@@ -1,11 +1,9 @@
 import { useAtomValue } from "@effect/atom-react"
+import type { ProviderAccount, ProviderStatus } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
-import { antigravityAccountsAtom, antigravityStatusAtom } from "@/features/antigravity/atoms"
-import { claudeAccountsAtom, claudeStatusAtom } from "@/features/claude/atoms"
-import { codexAccountsAtom, codexStatusAtom } from "@/features/codex/atoms"
-import { kiroAccountsAtom, kiroStatusAtom } from "@/features/kiro/atoms"
-import { type PickerModel, pickerModels, type ReportedModel } from "./models.ts"
-import type { ProviderId } from "./ProviderIcon.tsx"
+import { providerAccountsAtom, providerStatusAtom } from "./accounts/atoms.ts"
+import { type PickerModel, pickerModels } from "./models.ts"
+import { PROVIDER_IDS, type ProviderId } from "./ProviderIcon.tsx"
 
 export interface ProviderModels {
   readonly models: Readonly<Record<ProviderId, ReadonlyArray<PickerModel>>>
@@ -13,36 +11,27 @@ export interface ProviderModels {
   readonly answered: Readonly<Record<ProviderId, boolean>>
 }
 
+const perProvider = <A>(value: (provider: ProviderId) => A): Readonly<Record<ProviderId, A>> =>
+  Object.fromEntries(PROVIDER_IDS.map((provider) => [provider, value(provider)])) as Record<
+    ProviderId,
+    A
+  >
+
 export const useProviderModels = (): ProviderModels => {
-  const claude = useAtomValue(claudeStatusAtom)
-  const codex = useAtomValue(codexStatusAtom)
-  const kiro = useAtomValue(kiroStatusAtom)
-  const antigravity = useAtomValue(antigravityStatusAtom)
-  const reported = (
-    result: AsyncResult.AsyncResult<{ readonly models: ReadonlyArray<ReportedModel> }, unknown>,
-  ) => (AsyncResult.isSuccess(result) ? result.value.models : [])
-  const signedIn = (
-    result: AsyncResult.AsyncResult<{ readonly connection: { readonly _tag: string } }, unknown>,
-  ) => AsyncResult.isSuccess(result) && result.value.connection._tag === "Connected"
+  const statuses: Readonly<Record<ProviderId, AsyncResult.AsyncResult<ProviderStatus, unknown>>> = {
+    "claude-code": useAtomValue(providerStatusAtom("claude-code")),
+    codex: useAtomValue(providerStatusAtom("codex")),
+    kiro: useAtomValue(providerStatusAtom("kiro")),
+    antigravity: useAtomValue(providerStatusAtom("antigravity")),
+  }
+  const status = (provider: ProviderId) => {
+    const result = statuses[provider]
+    return AsyncResult.isSuccess(result) ? result.value : undefined
+  }
   return {
-    models: {
-      "claude-code": pickerModels("claude-code", reported(claude)),
-      codex: pickerModels("codex", reported(codex)),
-      kiro: pickerModels("kiro", reported(kiro)),
-      antigravity: pickerModels("antigravity", reported(antigravity)),
-    },
-    connected: {
-      "claude-code": signedIn(claude),
-      codex: signedIn(codex),
-      kiro: signedIn(kiro),
-      antigravity: signedIn(antigravity),
-    },
-    answered: {
-      "claude-code": AsyncResult.isSuccess(claude),
-      codex: AsyncResult.isSuccess(codex),
-      kiro: AsyncResult.isSuccess(kiro),
-      antigravity: AsyncResult.isSuccess(antigravity),
-    },
+    models: perProvider((provider) => pickerModels(provider, status(provider)?.models ?? [])),
+    connected: perProvider((provider) => status(provider)?.connection._tag === "Connected"),
+    answered: perProvider((provider) => AsyncResult.isSuccess(statuses[provider])),
   }
 }
 
@@ -54,28 +43,20 @@ export interface PickerAccount {
   readonly models: ReadonlyArray<PickerModel>
 }
 
-interface ListedAccount {
-  readonly id: string
-  readonly name: string
-  readonly active: boolean
-  readonly status: {
-    readonly connection: { readonly _tag: string }
-    readonly models: ReadonlyArray<ReportedModel>
-  }
-}
-
 export const useProviderAccounts = (): Readonly<
   Record<ProviderId, ReadonlyArray<PickerAccount>>
 > => {
-  const claude = useAtomValue(claudeAccountsAtom)
-  const codex = useAtomValue(codexAccountsAtom)
-  const kiro = useAtomValue(kiroAccountsAtom)
-  const antigravity = useAtomValue(antigravityAccountsAtom)
-  const accounts = (
-    provider: ProviderId,
-    result: AsyncResult.AsyncResult<ReadonlyArray<ListedAccount>, unknown>,
-  ): ReadonlyArray<PickerAccount> =>
-    AsyncResult.isSuccess(result)
+  const listed: Readonly<
+    Record<ProviderId, AsyncResult.AsyncResult<ReadonlyArray<ProviderAccount>, unknown>>
+  > = {
+    "claude-code": useAtomValue(providerAccountsAtom("claude-code")),
+    codex: useAtomValue(providerAccountsAtom("codex")),
+    kiro: useAtomValue(providerAccountsAtom("kiro")),
+    antigravity: useAtomValue(providerAccountsAtom("antigravity")),
+  }
+  return perProvider((provider) => {
+    const result = listed[provider]
+    return AsyncResult.isSuccess(result)
       ? result.value.map((account) => ({
           id: account.id,
           name: account.name,
@@ -84,10 +65,5 @@ export const useProviderAccounts = (): Readonly<
           models: pickerModels(provider, account.status.models),
         }))
       : []
-  return {
-    "claude-code": accounts("claude-code", claude),
-    codex: accounts("codex", codex),
-    kiro: accounts("kiro", kiro),
-    antigravity: accounts("antigravity", antigravity),
-  }
+  })
 }
