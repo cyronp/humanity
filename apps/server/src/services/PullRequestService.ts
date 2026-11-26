@@ -34,7 +34,8 @@ import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } fro
 import { ProjectService } from "./ProjectService.ts"
 import { placeReviewComments } from "./reviewPlacement.ts"
 import type { LoggedCommit } from "./gitParsers.ts"
-import { COMMIT_LIST_LIMIT, SessionService, threadBranch } from "./SessionService.ts"
+import { isBusy, threadBranch } from "./sessionHelpers.ts"
+import { COMMIT_LIST_LIMIT, SessionService } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
@@ -100,9 +101,6 @@ const listPaths = (paths: ReadonlyArray<string>, limit: number) =>
   paths.length <= limit
     ? paths.join(", ")
     : `${paths.slice(0, limit).join(", ")} and ${paths.length - limit} more`
-
-const isBusy = (session: Session) =>
-  session.status === "running" || session.status === "waiting_for_human"
 
 const sameHost = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 

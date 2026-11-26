@@ -21,11 +21,11 @@ import { PreferencesService } from "../src/services/PreferencesService.ts"
 import { PullRequestService } from "../src/services/PullRequestService.ts"
 import {
   matchModel,
-  SessionService,
   sessionBranchName,
   setupCommand,
   slugify,
-} from "../src/services/SessionService.ts"
+} from "../src/services/sessionHelpers.ts"
+import { SessionService } from "../src/services/SessionService.ts"
 import { git } from "./helpers.ts"
 import {
   addProject,
