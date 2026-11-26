@@ -5,16 +5,18 @@ import {
   PATCH_TOOL,
   type KiroModel,
 } from "@humanity/contracts"
-import { Context, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer, Option, Schema } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
 import { AcpFailed, connectAcp } from "../acp/Connection.ts"
-import { decode, type ToolCallFields } from "../acp/protocol.ts"
+import { type ToolCallFields } from "../acp/protocol.ts"
 import type { AcpConnect, AcpProfile, AcpUpdate } from "../agent/AcpRunner.ts"
 import { locateCli } from "../agent/installedCli.ts"
 import { acpPatchFile, acpPath, type NamedTool } from "../agent/normalizeAcp.ts"
 import { isInsideDir } from "../paths.ts"
+import { decode, isRecord } from "../unknown.ts"
+import { runProcess } from "../process.ts"
 
 export const KIRO_PRODUCT = "Kiro"
 export const KIRO_ARGS: ReadonlyArray<string> = ["acp", "--agent-engine=v3", "--auth-method=cli"]
@@ -33,9 +35,6 @@ export interface KiroProbe {
 }
 
 const PROBE_TIMEOUT = "30 seconds"
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const kiroMeta = (holder: unknown): Record<string, unknown> => {
   const meta = isRecord(holder) ? holder["_meta"] : undefined
@@ -280,23 +279,15 @@ export class Kiro extends Context.Service<
           })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
-      const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
-        stream.pipe(Stream.decodeText(), Stream.mkString)
-
       const cli = (kiroHome: string | undefined, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
           const found = launch()
           if (found === undefined) return yield* notInstalled()
-          const handle = yield* spawner.spawn(
+          return yield* runProcess(
+            spawner,
             ChildProcess.make(found.command, [...found.args, ...args], { env: envFor(kiroHome) }),
           )
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return { stdout, stderr, exitCode: Number(exitCode) }
         }).pipe(
-          Effect.scoped,
           Effect.mapError((cause) =>
             cause instanceof AcpFailed
               ? cause

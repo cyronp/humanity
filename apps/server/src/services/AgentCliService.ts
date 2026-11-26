@@ -9,9 +9,10 @@ import {
   CliUpdateFailed,
   PROVIDER_NAMES,
 } from "@humanity/contracts"
-import { Context, Effect, Layer, Semaphore, Stream } from "effect"
+import { Context, Effect, Layer, Semaphore } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { type CliLaunch, isOutdated, locateCli, parseCliVersion } from "../agent/installedCli.ts"
+import { runProcess } from "../process.ts"
 
 const VERSION_TIMEOUT = "15 seconds"
 const UPDATE_TIMEOUT = "10 minutes"
@@ -51,28 +52,24 @@ export class AgentCliService extends Context.Service<
         return created
       }
 
-      const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
-        stream.pipe(Stream.decodeText(), Stream.mkString)
-
       const run = (
         launch: CliLaunch,
         args: ReadonlyArray<string>,
         env?: Readonly<Record<string, string>>,
       ) =>
-        Effect.gen(function* () {
-          const handle = yield* spawner.spawn(
-            ChildProcess.make(launch.command, [...launch.args, ...args], {
-              extendEnv: true,
-              ...(env === undefined ? {} : { env: { ...env } }),
-              stdin: "ignore",
-            }),
-          )
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return { output: `${stdout}${stderr}`, exitCode: Number(exitCode) } satisfies Ran
-        }).pipe(Effect.scoped)
+        runProcess(
+          spawner,
+          ChildProcess.make(launch.command, [...launch.args, ...args], {
+            extendEnv: true,
+            ...(env === undefined ? {} : { env: { ...env } }),
+            stdin: "ignore",
+          }),
+        ).pipe(
+          Effect.map(
+            ({ stdout, stderr, exitCode }) =>
+              ({ output: `${stdout}${stderr}`, exitCode }) satisfies Ran,
+          ),
+        )
 
       const updateCommand = (provider: AgentProvider) => `${CLI_COMMANDS[provider]} update`
 

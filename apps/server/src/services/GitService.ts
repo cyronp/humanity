@@ -26,6 +26,7 @@ import {
   type Worktree,
 } from "./gitParsers.ts"
 import { parseFileList } from "./fileSearch.ts"
+import { runProcess } from "../process.ts"
 
 export type GitError = GitCommandFailed | GitNotARepository | GitNotInstalled
 
@@ -131,31 +132,19 @@ export class GitService extends Context.Service<
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
       const fs = yield* FileSystem.FileSystem
 
-      const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
-        stream.pipe(Stream.decodeText(), Stream.mkString)
-
       const execResult = (
         cwd: string,
         args: ReadonlyArray<string>,
         env: Readonly<Record<string, string>> = {},
       ) =>
-        Effect.gen(function* () {
-          const handle = yield* spawner.spawn(
-            ChildProcess.make("git", args, {
-              cwd,
-              extendEnv: true,
-              env: { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
-            }),
-          )
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return { stdout, stderr, exitCode: Number(exitCode) } satisfies GitResult
-        }).pipe(
-          Effect.scoped,
-          Effect.mapError((cause) => new GitNotInstalled({ detail: String(cause) })),
-        )
+        runProcess(
+          spawner,
+          ChildProcess.make("git", args, {
+            cwd,
+            extendEnv: true,
+            env: { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+          }),
+        ).pipe(Effect.mapError((cause) => new GitNotInstalled({ detail: String(cause) })))
 
       const exec = (
         cwd: string,

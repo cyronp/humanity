@@ -1,5 +1,6 @@
 import type { McpServer, McpTransportInput } from "@humanity/contracts"
 import type { AgentMcpServer } from "../agent/AgentRunner.ts"
+import { isRecord } from "../unknown.ts"
 
 export type McpConfig =
   | {
@@ -15,9 +16,6 @@ export type McpConfig =
     }
 
 export const MCP_SERVER_NAME = /^[A-Za-z0-9_-]{1,64}$/
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const stringMap = (value: unknown): Record<string, string> => {
   if (!isRecord(value)) return {}

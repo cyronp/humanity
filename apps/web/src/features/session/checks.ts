@@ -18,8 +18,6 @@ const subscribe = (listener: () => void) => {
   return () => void listeners.delete(listener)
 }
 
-export const checksState = (sessionId: string): ChecksState | undefined => states.get(sessionId)
-
 export const setChecksState = (sessionId: string, state: ChecksState | undefined) => {
   if (state === undefined) states.delete(sessionId)
   else states.set(sessionId, state)

@@ -3,6 +3,7 @@ import { Context } from "effect"
 import { homedir } from "node:os"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import { claudeConfigDir } from "../claude/environment.ts"
+import { isRecord } from "../unknown.ts"
 
 export interface CliHomesShape {
   readonly userHome: string
@@ -81,9 +82,6 @@ export interface ClaudePlugin {
   readonly id: string
   readonly installPath: string
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 export const enabledClaudePlugins = (
   settings: unknown,

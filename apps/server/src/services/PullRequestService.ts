@@ -22,6 +22,7 @@ import {
   type SyncResult,
   type SyncStatus,
   SyncUnavailable,
+  plural,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Semaphore, Stream } from "effect"
 import { EMPTY_FEED, ForgeSync, type ForgeTarget } from "./ForgeSync.ts"
@@ -61,7 +62,7 @@ interface Fetched {
   readonly error: string | null
 }
 
-const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+const commits = (count: number) => plural(count, "commit")
 
 const AVATAR_LOOKUPS = 10
 
@@ -76,7 +77,7 @@ export const noreplyAvatar = (email: string): string | null => {
     : `https://github.com/${encodeURIComponent(login ?? "")}.png`
 }
 
-const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
+const files = (count: number) => plural(count, "file")
 
 const gitProblem = (error: GitError) =>
   error._tag === "GitCommandFailed"
@@ -536,7 +537,7 @@ export class PullRequestService extends Context.Service<
         }
         const symbol = remote.forge === "github" ? "#" : "!"
         yield* sessions.tell(session.id, {
-          notice: `Posted a review on ${symbol}${pullRequest.number} with ${placed.length} comment${placed.length === 1 ? "" : "s"}.`,
+          notice: `Posted a review on ${symbol}${pullRequest.number} with ${plural(placed.length, "comment")}.`,
         })
         return pullRequest
       })

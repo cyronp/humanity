@@ -1,4 +1,4 @@
-import type { ApprovalDecision } from "@humanity/contracts"
+import { type ApprovalDecision, plural } from "@humanity/contracts"
 import { Check, CheckCheck, ChevronDown, X } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -63,9 +63,7 @@ export function DecisionActions({
           data-decide="deny"
         >
           <X />
-          {lineComments === 0
-            ? "Deny"
-            : `Deny with ${lineComments} comment${lineComments === 1 ? "" : "s"}`}
+          {lineComments === 0 ? "Deny" : `Deny with ${plural(lineComments, "comment")}`}
           {shortcuts && <Kbd className="ml-0.5 h-4 min-w-4 bg-muted/60 text-[10px]">D</Kbd>}
         </Button>
         <div className="flex items-center">

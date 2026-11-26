@@ -1,3 +1,4 @@
+import { plural } from "@humanity/contracts"
 import { resultLines, shortPath, stringField } from "../inputs.ts"
 import type { ToolCallProps, ToolRenderer } from "../registry.ts"
 import { OutputText } from "./common.tsx"
@@ -53,9 +54,7 @@ export const searchRenderer: ToolRenderer = {
           </span>
         )}
         {found !== undefined && (
-          <span className="shrink-0 text-muted-foreground">
-            · {found} result{found === 1 ? "" : "s"}
-          </span>
+          <span className="shrink-0 text-muted-foreground">· {plural(found, "result")}</span>
         )}
       </span>
     )

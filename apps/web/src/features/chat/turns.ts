@@ -6,6 +6,7 @@ import {
   SHELL_TOOL,
   TERMINAL_TOOLS,
   THREAD_HISTORY_TOOL,
+  plural,
 } from "@humanity/contracts"
 import { describeInput, shortPath, stringField } from "@/features/tools/inputs"
 import { patchFiles } from "@/features/tools/patch"
@@ -182,8 +183,6 @@ export const phasesOf = (steps: ReadonlyArray<Step>): ReadonlyArray<Phase> => {
   }
   return phases
 }
-
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
 const SEARCH_TOOLS = new Set(["Glob", "Grep", "LS"])
 const WEB_TOOLS = new Set(["WebSearch", "WebFetch"])

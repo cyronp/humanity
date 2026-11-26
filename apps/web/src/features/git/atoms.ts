@@ -6,14 +6,4 @@ export const branchesAtom = Atom.family((projectId: ProjectId) =>
   HumanityClient.query("Git.branches", { projectId }, { reactivityKeys: [keys.git(projectId)] }),
 )
 
-export const statusAtom = Atom.family((projectId: ProjectId) =>
-  HumanityClient.query("Git.status", { projectId }, { reactivityKeys: [keys.git(projectId)] }),
-)
-
-export const workingTreeDiffAtom = Atom.family((projectId: ProjectId) =>
-  HumanityClient.query("Git.diff", { projectId }, { reactivityKeys: [keys.git(projectId)] }),
-)
-
-export const createBranchAtom = HumanityClient.mutation("Git.createBranch")
-
 export const searchProjectFilesAtom = HumanityClient.mutation("Git.searchFiles")

@@ -1,5 +1,11 @@
 import { useAtomValue } from "@effect/atom-react"
-import type { BranchCommits, CommitSummary, Forge, Session } from "@humanity/contracts"
+import {
+  type BranchCommits,
+  type CommitSummary,
+  type Forge,
+  type Session,
+  plural,
+} from "@humanity/contracts"
 import { GitCommitHorizontal } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -103,9 +109,7 @@ export function CommitRow({
           {commit.files > 0 && (
             <>
               <Dot />
-              <span>
-                {commit.files} file{commit.files === 1 ? "" : "s"} changed
-              </span>
+              <span>{plural(commit.files, "file")} changed</span>
               <Dot />
               <ChangeCount added={commit.insertions} removed={commit.deletions} />
             </>

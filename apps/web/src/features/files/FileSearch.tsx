@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react"
-import type { FileSearchResult, SessionId } from "@humanity/contracts"
+import { type FileSearchResult, type SessionId, plural } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
 import { CaseSensitive, ChevronRight, Regex, WholeWord } from "lucide-react"
@@ -144,7 +144,7 @@ export function FileSearch({
         ) : (
           <>
             <p className="px-3 pb-1 text-xs text-muted-foreground">
-              {result.matches} result{result.matches === 1 ? "" : "s"} in {result.files.length} file
+              {plural(result.matches, "result")} in {result.files.length} file
               {result.files.length === 1 ? "" : "s"}
               {result.truncated && ", more left out: narrow the search"}
             </p>

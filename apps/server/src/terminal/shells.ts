@@ -1,6 +1,6 @@
 import type { ShellInfo } from "@humanity/contracts"
 import { existsSync, lstatSync } from "node:fs"
-import { posix, win32 } from "node:path"
+import { win32 } from "node:path"
 import { findCommand, type LocateOptions, systemLocateOptions } from "../agent/installedCli.ts"
 
 export type ShellKind = "pwsh" | "powershell" | "cmd" | "bash" | "zsh" | "fish" | "sh" | "wsl"
@@ -122,5 +122,3 @@ export const pickShell = (
 
 export const isWindowsPath = (path: string) =>
   /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\")
-
-export const pathModule = (platform: NodeJS.Platform) => (platform === "win32" ? win32 : posix)

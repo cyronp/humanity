@@ -24,11 +24,6 @@ const STATUS_ICON = {
   denied: <Ban className="size-3.5 shrink-0 text-warning" />,
 } as const
 
-export function ToolSummary(props: ToolCallProps) {
-  const { Summary } = findRenderer(toolRenderers, props.toolName, props.input)
-  return <Summary {...props} />
-}
-
 export function ToolCallCard({
   toolName,
   input,

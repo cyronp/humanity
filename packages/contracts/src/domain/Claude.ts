@@ -1,5 +1,4 @@
 import { Schema } from "effect"
-import { DEFAULT_ACCOUNT } from "./Provider.ts"
 import { ModelEfforts } from "./Session.ts"
 
 export const ClaudeAuthMethod = Schema.Literals(["subscription", "apiKey", "cloudProvider"])
@@ -34,8 +33,6 @@ export const ClaudeStatus = Schema.Struct({
   checkedAt: Schema.String,
 })
 export type ClaudeStatus = typeof ClaudeStatus.Type
-
-export const DEFAULT_CLAUDE_ACCOUNT = DEFAULT_ACCOUNT
 
 export const ClaudeAccount = Schema.Struct({
   id: Schema.String,

@@ -9,3 +9,6 @@ export const trimCharacters = (text: string, characters: string): string => {
   while (start < text.length && characters.includes(text[start]!)) start++
   return trimTrailing(text.slice(start), characters)
 }
+
+export const plural = (count: number, one: string, many = `${one}s`): string =>
+  `${count} ${count === 1 ? one : many}`

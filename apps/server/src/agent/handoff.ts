@@ -8,6 +8,7 @@ import {
   THREAD_HISTORY_TOOL_NAME,
   type ToolCall,
 } from "@humanity/contracts"
+import { isRecord } from "../unknown.ts"
 
 export interface HistoryEntry {
   readonly index: number
@@ -24,9 +25,6 @@ const REPORT_EXCERPT = 1_500
 const SUB_AGENT_TOOLS: ReadonlyArray<string> = ["Task", "Agent"]
 
 const TAG = "humanity-handoff"
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 

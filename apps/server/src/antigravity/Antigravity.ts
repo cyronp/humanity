@@ -6,7 +6,7 @@ import {
   isReasoningEffort,
   PATCH_TOOL,
 } from "@humanity/contracts"
-import { Context, Effect, FileSystem, Layer, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
 import { isAbsolute, join, resolve } from "node:path"
@@ -18,6 +18,8 @@ import { locateCli, parseCliVersion } from "../agent/installedCli.ts"
 import { acpPatchFile, acpPath, type NamedTool } from "../agent/normalizeAcp.ts"
 import type { PatchFile } from "../agent/normalizeCodex.ts"
 import { isInsideDir } from "../paths.ts"
+import { isRecord } from "../unknown.ts"
+import { runProcess } from "../process.ts"
 
 export const ANTIGRAVITY_PRODUCT = "Antigravity"
 export const ANTIGRAVITY_ARGS: ReadonlyArray<string> = ["acp"]
@@ -32,9 +34,6 @@ export interface AntigravityProbe {
   readonly signedIn: boolean
   readonly models: ReadonlyArray<AntigravityModel>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const stringOf = (record: Record<string, unknown>, keys: ReadonlyArray<string>) => {
   for (const key of keys) {
@@ -347,26 +346,18 @@ export class Antigravity extends Context.Service<
           })
         }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
 
-      const collect = (stream: Stream.Stream<Uint8Array, unknown>) =>
-        stream.pipe(Stream.decodeText(), Stream.mkString)
-
       const cli = (geminiHome: string | undefined, args: ReadonlyArray<string>) =>
         Effect.gen(function* () {
           const found = launch()
           if (found === undefined) return yield* notInstalled()
-          const handle = yield* spawner.spawn(
+          return yield* runProcess(
+            spawner,
             ChildProcess.make(found.command, [...found.args, ...args], {
               env: envFor(geminiHome),
               stdin: "ignore",
             }),
           )
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [collect(handle.stdout), collect(handle.stderr), handle.exitCode],
-            { concurrency: "unbounded" },
-          )
-          return { stdout, stderr, exitCode: Number(exitCode) }
         }).pipe(
-          Effect.scoped,
           Effect.mapError((cause) =>
             cause instanceof AcpFailed
               ? cause

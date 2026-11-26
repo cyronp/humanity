@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { offeredProviders } from "./models.ts"
+import { offeredProviders } from "@/features/providers/models"
 
 const ALL = ["claude-code", "codex", "kiro", "antigravity"] as const
 

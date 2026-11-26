@@ -1,3 +1,4 @@
+import { plural } from "@humanity/contracts"
 import { useAtomSet } from "@effect/atom-react"
 import { type CompareRun, type GroupComparison, totalTokens } from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
@@ -146,9 +147,7 @@ function RunColumn({
           <ThreadStatus status={session.status} />
           <span>{formatCount(totalTokens(run.amount))} tokens</span>
           {cost !== undefined && <span>{cost}</span>}
-          <span>
-            {run.amount.turns} turn{run.amount.turns === 1 ? "" : "s"}
-          </span>
+          <span>{plural(run.amount.turns, "turn")}</span>
         </div>
       </header>
       <div className="flex flex-col gap-1">
@@ -156,9 +155,7 @@ function RunColumn({
           Changes
           {changes !== undefined && changes.files > 0 && (
             <>
-              <span>
-                {changes.files} file{changes.files === 1 ? "" : "s"}
-              </span>
+              <span>{plural(changes.files, "file")}</span>
               <ChangeCount added={changes.added} removed={changes.removed} />
             </>
           )}

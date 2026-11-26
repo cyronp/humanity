@@ -18,10 +18,6 @@ export const reposAtom = HumanityClient.query("GitHub.listRepos", undefined, {
   reactivityKeys: [keys.github],
 })
 
-export const githubBranchesAtom = Atom.family((fullName: string) =>
-  HumanityClient.query("GitHub.listBranches", { fullName }),
-)
-
 export type CloneTarget =
   | { readonly provider: "github"; readonly fullName: string }
   | { readonly provider: "gitlab"; readonly fullPath: string }

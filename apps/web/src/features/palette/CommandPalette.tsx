@@ -80,12 +80,6 @@ import { ThreadPreview } from "./ThreadPreview.tsx"
 const THREAD_LIMIT = 40
 const ATTENTION: ReadonlyArray<SessionStatus> = ["waiting_for_human", "error"]
 
-const onPaletteOpen = new Set<(open: boolean) => void>()
-
-export const openCommandPalette = () => {
-  for (const listener of onPaletteOpen) listener(true)
-}
-
 export interface MessageSearch {
   readonly Results: (props: {
     readonly query: string
@@ -157,14 +151,6 @@ export function CommandPalette({ messages }: { readonly messages?: MessageSearch
     setPending(undefined)
     setError(undefined)
   }, [])
-
-  useEffect(() => {
-    const listener = (next: boolean) => (next ? show() : close())
-    onPaletteOpen.add(listener)
-    return () => {
-      onPaletteOpen.delete(listener)
-    }
-  }, [close, show])
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {

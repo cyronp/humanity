@@ -16,11 +16,11 @@ import { locateCli } from "../agent/installedCli.ts"
 import { codexEnvironment, codexNativeExecutable } from "./environment.ts"
 import {
   AccountResponse,
-  decode,
   ModelListResponse,
   RateLimitsResponse,
   type RateLimitWindow,
 } from "./protocol.ts"
+import { decode } from "../unknown.ts"
 
 export interface CodexProbe {
   readonly cliVersion: string | undefined

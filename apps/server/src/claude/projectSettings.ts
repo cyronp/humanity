@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
+import { isRecord } from "../unknown.ts"
 
 const RUNNING_SETTINGS: ReadonlyArray<string> = [
   "hooks",
@@ -18,9 +19,6 @@ const RUNNING_SETTINGS: ReadonlyArray<string> = [
 
 export const claudeProjectSettingsPath = (cwd: string): string =>
   join(cwd, ".claude", "settings.json")
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const isEmpty = (value: unknown) =>
   value === null ||

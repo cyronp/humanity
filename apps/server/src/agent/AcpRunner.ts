@@ -19,7 +19,6 @@ import {
   ChunkUpdate,
   type ConfigOption,
   ConfigOptionUpdate,
-  decode,
   type InitializeResponse,
   ModeUpdate,
   type PermissionOption,
@@ -53,6 +52,7 @@ import {
   type AcpTurnCompleted,
   type NamedTool,
 } from "./normalizeAcp.ts"
+import { decode, isRecord } from "../unknown.ts"
 
 export type AcpConnect = (options: {
   readonly configDir?: string | undefined
@@ -116,9 +116,6 @@ const decodeModeUpdate = decode(ModeUpdate)
 
 const CANCELLED = { outcome: { outcome: "cancelled" } }
 const selected = (optionId: string) => ({ outcome: { outcome: "selected", optionId } })
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const nameValues = (record: Readonly<Record<string, string>>) =>
   Object.entries(record).map(([name, value]) => ({ name, value }))

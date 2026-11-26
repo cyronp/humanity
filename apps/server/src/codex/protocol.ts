@@ -1,4 +1,4 @@
-import { type Option, Schema } from "effect"
+import { Schema } from "effect"
 
 const nullable = <S extends Schema.Top>(schema: S) => Schema.optional(Schema.NullOr(schema))
 
@@ -146,8 +146,3 @@ export const ElicitationRequest = Schema.Struct({
   message: Schema.optional(Schema.String),
   requestedSchema: Schema.optional(Schema.Unknown),
 })
-
-export const decode =
-  <S extends Schema.Constraint>(schema: S) =>
-  (input: unknown): Option.Option<S["Type"]> =>
-    Schema.decodeUnknownOption(schema as never)(input) as Option.Option<S["Type"]>

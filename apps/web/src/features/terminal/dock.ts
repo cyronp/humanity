@@ -35,7 +35,6 @@ export const RAIL_SHOWN_KEY = "humanity.rail"
 
 export const DOCK_MIN_HEIGHT = 120
 export const CHAT_MIN_HEIGHT = 200
-export const DOCK_DEFAULT_HEIGHT = 280
 
 const activeTerminals = new Map<string, string>()
 

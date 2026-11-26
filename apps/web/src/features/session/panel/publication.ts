@@ -1,11 +1,12 @@
-import type {
-  Branch,
-  BranchPublication,
-  FileDiff,
-  Forge,
-  MergeMethod,
-  PullRequestCheck,
-  PullRequestFeed,
+import {
+  type Branch,
+  type BranchPublication,
+  type FileDiff,
+  type Forge,
+  type MergeMethod,
+  type PullRequestCheck,
+  type PullRequestFeed,
+  plural,
 } from "@humanity/contracts"
 
 export const forgeTerms = (forge: Forge) =>
@@ -43,7 +44,7 @@ export const baseBranches = (
   )
 }
 
-const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`
+const commits = (count: number) => plural(count, "commit")
 
 export const checkoutMoved = (publication: BranchPublication): boolean =>
   publication.branch !== null && publication.checkedOut !== publication.branch
@@ -196,7 +197,7 @@ export const footerNote = ({
         publication.upstream !== null && publication.ahead > 0
           ? ` · ${commits(publication.ahead)} to push`
           : ""
-      return muted(`${changed} file${changed === 1 ? "" : "s"} changed${toPush}`)
+      return muted(`${plural(changed, "file")} changed${toPush}`)
     }
     case "push":
       return muted(remoteStatus(publication))
@@ -210,7 +211,7 @@ export const footerNote = ({
       const failing = checks.filter((check) => check.status === "failure")
       if (failing.length > 0) {
         return {
-          text: `${failing.length} check${failing.length === 1 ? "" : "s"} failing: ${failing.map((check) => check.name).join(", ")}`,
+          text: `${plural(failing.length, "check")} failing: ${failing.map((check) => check.name).join(", ")}`,
           tone: "destructive",
         }
       }

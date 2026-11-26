@@ -21,7 +21,6 @@ import { readCodexPlanUsage } from "../codex/Codex.ts"
 import {
   ApprovalRequest,
   ConfigResponse,
-  decode,
   ElicitationRequest,
   ItemNotification,
   ThreadResponse,
@@ -31,6 +30,7 @@ import {
   TurnResponse,
   UserInputRequest,
 } from "../codex/protocol.ts"
+import { decode } from "../unknown.ts"
 import {
   type AgentExtensions,
   type AgentRun,

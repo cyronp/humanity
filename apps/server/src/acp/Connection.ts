@@ -1,6 +1,7 @@
 import { Data, Deferred, Effect, Option, Queue, type Scope, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { decode, InitializeResponse, PROTOCOL_VERSION } from "./protocol.ts"
+import { InitializeResponse, PROTOCOL_VERSION } from "./protocol.ts"
+import { decode, isRecord } from "../unknown.ts"
 
 export class AcpFailed extends Data.TaggedError("AcpFailed")<{
   readonly reason: string
@@ -34,9 +35,6 @@ const HANDSHAKE_TIMEOUT = "30 seconds"
 
 const METHOD_NOT_FOUND = -32601
 const INTERNAL_ERROR = -32603
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const parseLine = (line: string): Record<string, unknown> | undefined => {
   try {

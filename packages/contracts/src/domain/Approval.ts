@@ -68,12 +68,6 @@ export type ApprovalRecord = typeof ApprovalRecord.Type
 export const ApprovalDecision = Schema.Literals(["allow", "deny"])
 export type ApprovalDecision = typeof ApprovalDecision.Type
 
-export const approvalToolName = (approval: Approval): string =>
-  approval._tag === "change" ? approval.change.toolName : approval.confirmation.toolName
-
-export const approvalToolUseId = (approval: Approval): string =>
-  approval._tag === "change" ? approval.change.toolUseId : approval.confirmation.toolUseId
-
 export const isPendingApproval = (approval: Approval): boolean =>
   approval._tag === "change"
     ? approval.change.status === "pending"

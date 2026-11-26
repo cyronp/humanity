@@ -2,11 +2,11 @@ import { PATCH_TOOL, SHELL_TOOL } from "@humanity/contracts"
 import { Option, Schema } from "effect"
 import {
   AgentMessageDelta,
-  decode,
   ItemNotification,
   type ThreadItem,
   TurnCompleted,
 } from "../codex/protocol.ts"
+import { decode } from "../unknown.ts"
 import { type Normalized, toolResultText } from "./normalize.ts"
 
 export const CODEX_READY = "humanity/ready"

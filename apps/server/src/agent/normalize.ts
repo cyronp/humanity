@@ -1,5 +1,6 @@
 import type { AssistantBlock, MessageContent, ToolResult } from "@humanity/contracts"
 import { Option, Schema } from "effect"
+import { decode } from "../unknown.ts"
 
 const InitMessage = Schema.Struct({
   type: Schema.Literal("system"),
@@ -79,11 +80,6 @@ const ToolResultContent = Schema.Struct({
   is_error: Schema.optional(Schema.Boolean),
 })
 const TypedBlock = Schema.Struct({ type: Schema.String })
-
-const decode =
-  <S extends Schema.Constraint>(schema: S) =>
-  (input: unknown): Option.Option<S["Type"]> =>
-    Schema.decodeUnknownOption(schema as never)(input) as Option.Option<S["Type"]>
 
 const decodeInit = decode(InitMessage)
 const decodeAssistant = decode(AssistantMessage)
