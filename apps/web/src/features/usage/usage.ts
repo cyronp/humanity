@@ -5,7 +5,9 @@ import {
   type UsageAmount,
   type UsageReport,
 } from "@humanity/contracts"
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
 
 export const USAGE_RANGES = [
   { id: "today", label: "Today", days: 1 },
@@ -198,26 +200,10 @@ export const formatSpan = (ms: number): string => {
 export const formatAgo = (at: number, now: number): string =>
   now - at < 60_000 ? "just now" : `${formatSpan(now - at)} ago`
 
-let open = false
-const listeners = new Set<() => void>()
+const openAtom = Atom.make(false).pipe(Atom.keepAlive)
 
-export const openUsage = (): void => {
-  open = true
-  for (const listener of listeners) listener()
-}
+export const openUsage = (): void => registry.set(openAtom, true)
 
-export const closeUsage = (): void => {
-  open = false
-  for (const listener of listeners) listener()
-}
+export const closeUsage = (): void => registry.set(openAtom, false)
 
-export const useUsageOpen = (): boolean =>
-  useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
-    },
-    () => open,
-  )
+export const useUsageOpen = (): boolean => useAtomValue(openAtom)

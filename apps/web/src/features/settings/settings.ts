@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from "react"
+import { useAtomValue } from "@effect/atom-react"
+import { Atom } from "effect/reactivity"
+import { registry } from "@/lib/registry"
 
 export const SETTINGS_SECTIONS = [
   "general",
@@ -231,34 +233,32 @@ interface SettingsState {
   readonly focus?: { readonly label: string; readonly nonce: number } | undefined
 }
 
-let state: SettingsState = { open: false, section: "general", items: {} }
-const listeners = new Set<() => void>()
+const stateAtom = Atom.make<SettingsState>({ open: false, section: "general", items: {} }).pipe(
+  Atom.keepAlive,
+)
 
-const setState = (next: SettingsState): void => {
-  state = next
-  for (const listener of listeners) listener()
-}
+const update = (change: (state: SettingsState) => SettingsState): void =>
+  registry.update(stateAtom, change)
 
-const subscribe = (listener: () => void): (() => void) => {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-export const openSettings = (section: SettingsSection = state.section, item?: string): void =>
-  setState({
-    open: true,
-    section,
-    items: item === undefined ? state.items : { ...state.items, [section]: item },
+export const openSettings = (section?: SettingsSection, item?: string): void =>
+  update((state) => {
+    const shown = section ?? state.section
+    return {
+      open: true,
+      section: shown,
+      items: item === undefined ? state.items : { ...state.items, [shown]: item },
+    }
   })
 
 let focusNonce = 0
 
 export const openSetting = (section: SettingsSection, label: string): void =>
-  setState({ ...state, open: true, section, focus: { label, nonce: ++focusNonce } })
+  update((state) => ({ ...state, open: true, section, focus: { label, nonce: ++focusNonce } }))
 
-export const closeSettings = (): void => setState({ ...state, open: false, focus: undefined })
+export const closeSettings = (): void =>
+  update((state) => ({ ...state, open: false, focus: undefined }))
 
 export const selectSettingsItem = (section: SettingsSection, item: string): void =>
-  setState({ ...state, items: { ...state.items, [section]: item } })
+  update((state) => ({ ...state, items: { ...state.items, [section]: item } }))
 
-export const useSettings = (): SettingsState => useSyncExternalStore(subscribe, () => state)
+export const useSettings = (): SettingsState => useAtomValue(stateAtom)
