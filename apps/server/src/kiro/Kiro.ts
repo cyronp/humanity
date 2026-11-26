@@ -3,7 +3,7 @@ import {
   CLI_INSTALL_URLS,
   CliNotInstalled,
   PATCH_TOOL,
-  type KiroModel,
+  type ProviderModel,
 } from "@humanity/contracts"
 import { Context, Effect, FileSystem, Layer, Option, Schema } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
@@ -31,7 +31,7 @@ export interface KiroProbe {
   readonly cliVersion: string | null
   readonly kiroHome: string
   readonly signedIn: boolean
-  readonly models: ReadonlyArray<KiroModel>
+  readonly models: ReadonlyArray<ProviderModel>
 }
 
 const PROBE_TIMEOUT = "30 seconds"
@@ -71,7 +71,7 @@ const ModelList = Schema.fromJsonString(
 )
 const decodeModelList = decode(ModelList)
 
-export const kiroModelsFromList = (stdout: string): ReadonlyArray<KiroModel> =>
+export const kiroModelsFromList = (stdout: string): ReadonlyArray<ProviderModel> =>
   Option.match(decodeModelList(stdout.trim()), {
     onNone: () => [],
     onSome: (list) =>
@@ -318,7 +318,7 @@ export class Kiro extends Context.Service<
                 Effect.map((listed) =>
                   listed.exitCode === 0 ? kiroModelsFromList(listed.stdout) : [],
                 ),
-                Effect.orElseSucceed((): ReadonlyArray<KiroModel> => []),
+                Effect.orElseSucceed((): ReadonlyArray<ProviderModel> => []),
               )
             : []
           return {

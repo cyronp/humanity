@@ -1,3 +1,4 @@
+import { planConnection } from "@humanity/contracts"
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer, Ref } from "effect"
 import { join } from "node:path"
@@ -13,8 +14,8 @@ import {
   kiroProfile,
   kiroSignedIn,
 } from "../src/kiro/Kiro.ts"
-import { KiroAccountService, classifyKiroAccount } from "../src/services/KiroAccountService.ts"
-import { baseLayer, tempDir } from "./helpers.ts"
+import { kiroAccounts, classifyCliAccount } from "../src/services/ProviderAccounts.ts"
+import { baseLayer, TestAccounts, tempDir } from "./helpers.ts"
 
 const MODELS = [{ value: "claude-sonnet", displayName: "Claude Sonnet", description: "For tests" }]
 
@@ -33,7 +34,10 @@ const scripted = (probed: Ref.Ref<ReadonlyArray<string | undefined>>) =>
   })
 
 const layerOver = (home: string, probed: Ref.Ref<ReadonlyArray<string | undefined>>) =>
-  KiroAccountService.layer.pipe(Layer.provide(scripted(probed)), Layer.provide(baseLayer(home)))
+  Layer.effect(TestAccounts, kiroAccounts).pipe(
+    Layer.provide(scripted(probed)),
+    Layer.provide(baseLayer(home)),
+  )
 
 describe("Kiro (Beta)", () => {
   it("starts the CLI's ACP server on the V3 engine with CLI login, and no flag that trusts it", () => {
@@ -43,17 +47,16 @@ describe("Kiro (Beta)", () => {
 
   it("classifies a signed-in probe by its CLI version and a signed-out one as SignedOut", () => {
     assert.deepStrictEqual(
-      classifyKiroAccount({ cliVersion: "2.32.0", kiroHome: "/k", signedIn: true, models: [] }),
-      { _tag: "Connected", label: "Kiro CLI 2.32.0" },
+      classifyCliAccount("Kiro", { cliVersion: "2.32.0", signedIn: true }),
+      planConnection("Kiro CLI 2.32.0"),
     )
     assert.deepStrictEqual(
-      classifyKiroAccount({ cliVersion: null, kiroHome: "/k", signedIn: true, models: [] }),
-      { _tag: "Connected", label: "Kiro CLI" },
+      classifyCliAccount("Kiro", { cliVersion: null, signedIn: true }),
+      planConnection("Kiro CLI"),
     )
-    assert.deepStrictEqual(
-      classifyKiroAccount({ cliVersion: null, kiroHome: "/k", signedIn: false, models: [] }),
-      { _tag: "SignedOut" },
-    )
+    assert.deepStrictEqual(classifyCliAccount("Kiro", { cliVersion: null, signedIn: false }), {
+      _tag: "SignedOut",
+    })
   })
 
   it("reads the CLI's model list and nothing from an answer it cannot read", () => {
@@ -274,16 +277,16 @@ describe("Kiro's own way with the protocol", () => {
   })
 })
 
-describe("KiroAccountService", () => {
+describe("kiroAccounts", () => {
   it.effect("reports the default login with where it lives and what it offers", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()
       const probed = yield* Ref.make<ReadonlyArray<string | undefined>>([])
       yield* Effect.gen(function* () {
-        const service = yield* KiroAccountService
+        const service = yield* TestAccounts
         const status = yield* service.status({ refresh: false })
-        assert.deepStrictEqual(status.connection, { _tag: "Connected", label: "Kiro CLI 2.32.0" })
-        assert.strictEqual(status.kiroHome, "/home/me/.kiro")
+        assert.deepStrictEqual(status.connection, planConnection("Kiro CLI 2.32.0"))
+        assert.strictEqual(status.home, "/home/me/.kiro")
         assert.strictEqual(status.executable, "kiro-cli")
         assert.deepStrictEqual(status.models, MODELS)
         yield* service.status({ refresh: false })
@@ -295,7 +298,7 @@ describe("KiroAccountService", () => {
   it.effect("turns a Kiro that cannot start into an Unavailable status, not a failure", () =>
     Effect.gen(function* () {
       const home = yield* tempDir()
-      const layer = KiroAccountService.layer.pipe(
+      const layer = Layer.effect(TestAccounts, kiroAccounts).pipe(
         Layer.provide(
           Kiro.layerTest({
             probe: () => Effect.fail(new AcpFailed({ reason: "kiro-cli was not found" })),
@@ -304,7 +307,7 @@ describe("KiroAccountService", () => {
         Layer.provide(baseLayer(home)),
       )
       yield* Effect.gen(function* () {
-        const status = yield* (yield* KiroAccountService).status({ refresh: false })
+        const status = yield* (yield* TestAccounts).status({ refresh: false })
         assert.deepStrictEqual(status.connection, {
           _tag: "Unavailable",
           reason: "kiro-cli was not found",

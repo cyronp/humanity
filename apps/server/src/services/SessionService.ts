@@ -137,16 +137,13 @@ import { ServerConfig } from "../ServerConfig.ts"
 import { ApprovalService } from "./ApprovalService.ts"
 import { type GitError, GitService } from "./GitService.ts"
 import type { LoggedCommit } from "./gitParsers.ts"
-import { ClaudeAccountService } from "./ClaudeAccountService.ts"
-import { CodexAccountService } from "./CodexAccountService.ts"
-import { KiroAccountService } from "./KiroAccountService.ts"
-import { AntigravityAccountService } from "./AntigravityAccountService.ts"
 import { type HumanFileChange, humanChangesNote, humanEditsNote } from "../files/humanEdits.ts"
 import { ExtensionsService } from "./ExtensionsService.ts"
 import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
+import { ProviderAccounts } from "./ProviderAccounts.ts"
 
 interface ActiveRun {
   readonly run: AgentRun
@@ -469,10 +466,7 @@ export class SessionService extends Context.Service<
       const config = yield* ServerConfig
       const fs = yield* FileSystem.FileSystem
       const preferences = yield* PreferencesService
-      const accounts = yield* ClaudeAccountService
-      const codexAccounts = yield* CodexAccountService
-      const kiroAccounts = yield* KiroAccountService
-      const antigravityAccounts = yield* AntigravityAccountService
+      const accounts = yield* ProviderAccounts
       const extensions = yield* ExtensionsService
       const mcp = yield* HumanityMcp
       const claude = yield* ClaudeCode
@@ -485,18 +479,7 @@ export class SessionService extends Context.Service<
 
       const active = new Map<string, ActiveRun>()
 
-      const accountsOf = (provider: AgentProvider) => {
-        switch (provider) {
-          case "codex":
-            return codexAccounts
-          case "kiro":
-            return kiroAccounts
-          case "antigravity":
-            return antigravityAccounts
-          default:
-            return accounts
-        }
-      }
+      const accountsOf = (provider: AgentProvider) => accounts[provider]
       const accountDir = (session: Session) =>
         Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
           accountsOf(session.provider).configDirFor(accountId),
@@ -834,18 +817,20 @@ export class SessionService extends Context.Service<
       const readAccountsUsage = yield* makeAccountsUsage([
         {
           provider: "claude-code",
-          accounts: signedIn(accounts),
+          accounts: signedIn(accounts["claude-code"]),
           plan: (accountId) =>
-            Effect.flatMap(accounts.configDirFor(accountId), (dir) => claude.planUsage(dir)),
+            Effect.flatMap(accounts["claude-code"].configDirFor(accountId), (dir) =>
+              claude.planUsage(dir),
+            ),
         },
         {
           provider: "codex",
-          accounts: signedIn(codexAccounts),
+          accounts: signedIn(accounts.codex),
           plan: (accountId) =>
-            Effect.flatMap(codexAccounts.configDirFor(accountId), (dir) => codex.planUsage(dir)),
+            Effect.flatMap(accounts.codex.configDirFor(accountId), (dir) => codex.planUsage(dir)),
         },
-        { provider: "kiro", accounts: signedIn(kiroAccounts) },
-        { provider: "antigravity", accounts: signedIn(antigravityAccounts) },
+        { provider: "kiro", accounts: signedIn(accounts.kiro) },
+        { provider: "antigravity", accounts: signedIn(accounts.antigravity) },
       ])
       const otherAccountsUsage = Effect.fn("SessionService.otherAccountsUsage")(function* (
         sessionId: string,

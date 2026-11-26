@@ -12,7 +12,7 @@ describe("classifyAccount", () => {
       }),
     ).toEqual({
       _tag: "Connected",
-      method: "subscription",
+      method: "plan",
       label: "Claude Pro",
       email: "dev@example.com",
       organization: "Example",
@@ -67,7 +67,7 @@ describe("classifyAccount", () => {
   it("treats any other token source as a subscription login", () => {
     expect(classifyAccount({ tokenSource: "CLAUDE_CODE_OAUTH_TOKEN" })).toMatchObject({
       _tag: "Connected",
-      method: "subscription",
+      method: "plan",
       label: "Claude subscription",
     })
   })

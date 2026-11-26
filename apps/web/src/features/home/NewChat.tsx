@@ -29,9 +29,8 @@ import {
 import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
 import { MentionTextarea } from "@/features/chat/MentionTextarea"
 import { useFileMention } from "@/features/chat/useFileMention"
-import { claudeStatusAtom } from "@/features/claude/atoms"
 import { compareRuns, openCompare } from "@/features/compare/compare"
-import { codexStatusAtom } from "@/features/codex/atoms"
+import { providerStatusAtom } from "@/features/providers/accounts/atoms"
 import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
@@ -58,8 +57,8 @@ export function NewChat({
 }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
-  const claude = useAtomValue(claudeStatusAtom)
-  const codex = useAtomValue(codexStatusAtom)
+  const claude = useAtomValue(providerStatusAtom("claude-code"))
+  const codex = useAtomValue(providerStatusAtom("codex"))
   const list = AsyncResult.isSuccess(projects) ? projects.value : []
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)

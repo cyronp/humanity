@@ -1,4 +1,4 @@
-import { type CodexModel, isReasoningEffort, type PlanUsage } from "@humanity/contracts"
+import { isReasoningEffort, type PlanUsage, type ProviderModel } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, type Scope } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { homedir } from "node:os"
@@ -26,7 +26,7 @@ export interface CodexProbe {
   readonly cliVersion: string | undefined
   readonly codexHome: string | undefined
   readonly account: AccountResponse["account"]
-  readonly models: ReadonlyArray<CodexModel>
+  readonly models: ReadonlyArray<ProviderModel>
 }
 
 const PROBE_TIMEOUT = "30 seconds"
@@ -38,7 +38,7 @@ const decodeRateLimits = decode(RateLimitsResponse)
 
 const codexEfforts = (
   supported: ReadonlyArray<{ readonly reasoningEffort: string }> | null | undefined,
-): Pick<CodexModel, "efforts"> =>
+): Pick<ProviderModel, "efforts"> =>
   supported === undefined || supported === null
     ? {}
     : { efforts: supported.map((option) => option.reasoningEffort).filter(isReasoningEffort) }
@@ -173,7 +173,7 @@ export class Codex extends Context.Service<
 
       const models = (server: AppServer) =>
         Effect.gen(function* () {
-          const found: Array<CodexModel> = []
+          const found: Array<ProviderModel> = []
           let cursor: string | null = null
           for (let page = 0; page < MAX_MODEL_PAGES; page++) {
             const response = decodeModels(

@@ -1,5 +1,5 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk"
-import type { ClaudeModel, PlanUsage } from "@humanity/contracts"
+import type { PlanUsage, ProviderModel } from "@humanity/contracts"
 import { Context, Data, Effect, Layer } from "effect"
 import { homedir } from "node:os"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -12,7 +12,7 @@ import { readPlanUsage } from "./planUsage.ts"
 export interface ProbeResult {
   readonly cliVersion: string | undefined
   readonly account: ReportedAccount | undefined
-  readonly models: ReadonlyArray<ClaudeModel>
+  readonly models: ReadonlyArray<ProviderModel>
 }
 
 export class ClaudeProbeFailed extends Data.TaggedError("ClaudeProbeFailed")<{

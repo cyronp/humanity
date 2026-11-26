@@ -1,17 +1,14 @@
 import { AgentClisRpcs } from "./rpc/AgentClis.ts"
 import { ApprovalsRpcs } from "./rpc/Approvals.ts"
-import { ClaudeRpcs } from "./rpc/Claude.ts"
-import { CodexRpcs } from "./rpc/Codex.ts"
 import { ExtensionsRpcs } from "./rpc/Extensions.ts"
 import { FilesRpcs } from "./rpc/Files.ts"
 import { GitRpcs } from "./rpc/Git.ts"
 import { GitHubRpcs } from "./rpc/GitHub.ts"
 import { GitLabRpcs } from "./rpc/GitLab.ts"
-import { AntigravityRpcs } from "./rpc/Antigravity.ts"
-import { KiroRpcs } from "./rpc/Kiro.ts"
 import { PreferencesRpcs } from "./rpc/Preferences.ts"
 import { PreviewRpcs } from "./rpc/Preview.ts"
 import { ProjectsRpcs } from "./rpc/Projects.ts"
+import { ProvidersRpcs } from "./rpc/Providers.ts"
 import { PullRequestsRpcs } from "./rpc/PullRequests.ts"
 import { SessionsRpcs } from "./rpc/Sessions.ts"
 import { SystemRpcs } from "./rpc/System.ts"
@@ -25,10 +22,7 @@ export const HumanityRpcs = ProjectsRpcs.merge(
   SessionsRpcs,
   FilesRpcs,
   ApprovalsRpcs,
-  ClaudeRpcs,
-  CodexRpcs,
-  KiroRpcs,
-  AntigravityRpcs,
+  ProvidersRpcs,
   PreferencesRpcs,
   ExtensionsRpcs,
   PullRequestsRpcs,

@@ -5,8 +5,8 @@ import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ReportedAccount } from "../src/claude/account.ts"
 import { ClaudeCode, ClaudeProbeFailed, type ProbeResult } from "../src/claude/ClaudeCode.ts"
-import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
-import { baseLayer, tempDir } from "./helpers.ts"
+import { claudeAccounts, type ProviderRegistry } from "../src/services/ProviderAccounts.ts"
+import { baseLayer, TestAccounts, tempDir } from "./helpers.ts"
 
 const SUBSCRIPTION: ReportedAccount = { email: "dev@example.com", subscriptionType: "pro" }
 const SIGNED_OUT: ReportedAccount = { tokenSource: "none" }
@@ -33,9 +33,9 @@ const setup = (initial: ReportedAccount | "fail") =>
     const account = yield* Ref.make<ReportedAccount | "fail">(initial)
     const probes = yield* Ref.make(0)
     const home = yield* tempDir()
-    const service = yield* ClaudeAccountService.pipe(
+    const service = yield* TestAccounts.pipe(
       Effect.provide(
-        ClaudeAccountService.layer.pipe(
+        Layer.effect(TestAccounts, claudeAccounts).pipe(
           Layer.provide(scripted(account, probes)),
           Layer.provide(baseLayer(home)),
         ),
@@ -44,19 +44,17 @@ const setup = (initial: ReportedAccount | "fail") =>
     return { account, probes, service }
   })
 
-const withService = <A, E, R>(
-  body: (service: ClaudeAccountService["Service"]) => Effect.Effect<A, E, R>,
-) =>
+const withService = <A, E, R>(body: (service: ProviderRegistry) => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const account = yield* Ref.make<ReportedAccount | "fail">(SUBSCRIPTION)
     const probes = yield* Ref.make(0)
     const home = yield* tempDir()
     const run = Effect.gen(function* () {
-      return yield* body(yield* ClaudeAccountService)
+      return yield* body(yield* TestAccounts)
     })
     return yield* run.pipe(
       Effect.provide(
-        ClaudeAccountService.layer.pipe(
+        Layer.effect(TestAccounts, claudeAccounts).pipe(
           Layer.provide(scripted(account, probes)),
           Layer.provide(baseLayer(home)),
         ),
@@ -64,14 +62,14 @@ const withService = <A, E, R>(
     )
   })
 
-describe("ClaudeAccountService", () => {
+describe("claudeAccounts", () => {
   it.effect("reports the subscription with where its login lives", () =>
     Effect.gen(function* () {
       const { service } = yield* setup(SUBSCRIPTION)
       const status = yield* service.status({ refresh: false })
       assert.strictEqual(status.connection._tag, "Connected")
       assert.strictEqual(status.cliVersion, "2.1.321")
-      assert.strictEqual(status.configDir, "/home/me/.claude")
+      assert.strictEqual(status.home, "/home/me/.claude")
       assert.deepStrictEqual(status.models, MODELS)
     }),
   )
@@ -151,19 +149,19 @@ describe("ClaudeAccountService", () => {
             } satisfies ProbeResult,
           ),
         )
-        const layer = ClaudeAccountService.layer.pipe(
+        const layer = Layer.effect(TestAccounts, claudeAccounts).pipe(
           Layer.provide(claude),
           Layer.provide(baseLayer(home)),
         )
 
         const work = yield* Effect.gen(function* () {
-          const service = yield* ClaudeAccountService
+          const service = yield* TestAccounts
           const work = yield* service.add("  Work  ")
           assert.strictEqual(work.name, "Work")
           assert.isFalse(work.active)
           assert.strictEqual(work.status.connection._tag, "SignedOut")
-          assert.strictEqual(work.status.configDir, join(home, "accounts", work.id))
-          assert.deepStrictEqual(yield* Ref.get(probed), [work.status.configDir])
+          assert.strictEqual(work.status.home, join(home, "accounts", work.id))
+          assert.deepStrictEqual(yield* Ref.get(probed), [work.status.home ?? undefined])
 
           assert.strictEqual(
             (yield* service.status({ refresh: false })).connection._tag,
@@ -176,12 +174,12 @@ describe("ClaudeAccountService", () => {
             (yield* service.status({ refresh: false })).connection._tag,
             "SignedOut",
           )
-          assert.strictEqual(yield* service.configDirFor(work.id), work.status.configDir)
+          assert.strictEqual(yield* service.configDirFor(work.id), work.status.home)
           return work
         }).pipe(Effect.provide(layer))
 
         yield* Effect.gen(function* () {
-          const service = yield* ClaudeAccountService
+          const service = yield* TestAccounts
           const accounts = yield* service.accounts({ refresh: false })
           assert.deepStrictEqual(
             accounts.map(({ id, name, isDefault, active }) => ({ id, name, isDefault, active })),
@@ -192,7 +190,7 @@ describe("ClaudeAccountService", () => {
           )
 
           yield* service.remove(work.id)
-          assert.isFalse(existsSync(work.status.configDir))
+          assert.isFalse(existsSync(work.status.home ?? ""))
           assert.strictEqual(yield* service.activeId, "default")
           assert.isUndefined(yield* service.configDirFor(work.id))
         }).pipe(Effect.provide(layer))
@@ -207,7 +205,7 @@ describe("ClaudeAccountService", () => {
 
         const personal = yield* service.add("Personal", `  ${folder}  `)
         assert.isTrue(personal.linkedFolder)
-        assert.strictEqual(personal.status.configDir, folder)
+        assert.strictEqual(personal.status.home, folder)
         assert.strictEqual(yield* service.configDirFor(personal.id), folder)
 
         const listed = (yield* service.accounts({ refresh: false })).find(

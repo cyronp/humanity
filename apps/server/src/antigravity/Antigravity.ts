@@ -1,5 +1,5 @@
 import {
-  type AntigravityModel,
+  type ProviderModel,
   CLI_COMMANDS,
   CLI_INSTALL_URLS,
   CliNotInstalled,
@@ -32,7 +32,7 @@ export interface AntigravityProbe {
   readonly cliVersion: string | null
   readonly geminiHome: string
   readonly signedIn: boolean
-  readonly models: ReadonlyArray<AntigravityModel>
+  readonly models: ReadonlyArray<ProviderModel>
 }
 
 const stringOf = (record: Record<string, unknown>, keys: ReadonlyArray<string>) => {
@@ -82,7 +82,7 @@ const EFFORT_SUFFIX = /^(.+)-(low|medium|high|xhigh|max)$/
 const LEVEL_LABEL = /\s*\([^()]+\)$/
 const MODEL_LINE = /^([A-Za-z0-9][\w.:/-]*)(?:\t+|\s{2,})(\S.*)$/
 
-export const antigravityModelsFromList = (stdout: string): ReadonlyArray<AntigravityModel> => {
+export const antigravityModelsFromList = (stdout: string): ReadonlyArray<ProviderModel> => {
   const listed: Array<{ readonly slug: string; readonly label: string }> = []
   for (const line of stdout.split(/\r?\n/)) {
     const match = MODEL_LINE.exec(line.trim())
@@ -96,7 +96,7 @@ export const antigravityModelsFromList = (stdout: string): ReadonlyArray<Antigra
     if (family === undefined || slugs.has(family)) continue
     levels.set(family, [...(levels.get(family) ?? []), match?.[2] ?? ""])
   }
-  const models = new Map<string, AntigravityModel>()
+  const models = new Map<string, ProviderModel>()
   for (const { slug, label } of listed) {
     const family = EFFORT_SUFFIX.exec(slug)?.[1]
     const efforts = family === undefined ? undefined : levels.get(family)

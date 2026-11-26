@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node"
-import { Effect, Layer } from "effect"
+import { Context, Effect, Layer } from "effect"
 import { HttpClient } from "effect/http"
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
@@ -9,6 +9,7 @@ import { DatabaseLive } from "../src/db/Database.ts"
 import { CliHomes } from "../src/extensions/skillCatalog.ts"
 import { ServerConfig } from "../src/ServerConfig.ts"
 import { GitHubService } from "../src/services/GitHubService.ts"
+import type { ProviderRegistry } from "../src/services/ProviderAccounts.ts"
 import { GitHubToken } from "../src/services/GitHubToken.ts"
 import { GitLabService } from "../src/services/GitLabService.ts"
 import { GitLabToken } from "../src/services/GitLabToken.ts"
@@ -75,3 +76,7 @@ export const baseLayer = (home: string, github: Layer.Layer<GitHubService> = off
     Layer.provideMerge(ServerConfig.layer({ home, port: 0 })),
     Layer.provideMerge(NodeServices.layer),
   )
+
+export class TestAccounts extends Context.Service<TestAccounts, ProviderRegistry>()(
+  "test/TestAccounts",
+) {}

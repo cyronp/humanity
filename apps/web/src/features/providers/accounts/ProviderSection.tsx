@@ -1,12 +1,19 @@
+import type { AgentProvider } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
-import { useCallback, useState } from "react"
+import { type ReactNode, useCallback, useState } from "react"
 import { ProviderAccountList } from "@/features/providers/ProviderAccountList"
 import { usePollWhile } from "@/lib/usePollWhile"
-import { AntigravityAccountRow } from "./AntigravityAccountRow.tsx"
-import { useAntigravityAccounts } from "./useAntigravityAccounts.ts"
+import { AccountRow } from "./AccountRow.tsx"
+import { useAccounts } from "./useAccounts.ts"
 
-export function AntigravitySection() {
-  const { result, refresh, refreshing, add, remove, setActive } = useAntigravityAccounts()
+export function ProviderSection({
+  provider,
+  options,
+}: {
+  readonly provider: AgentProvider
+  readonly options?: ReactNode
+}) {
+  const { result, refresh, refreshing, add, remove, setActive } = useAccounts(provider)
   const [refreshError, setRefreshError] = useState<string>()
   const accounts = AsyncResult.isSuccess(result) ? result.value : undefined
   const signedOut = accounts?.some((account) => account.status.connection._tag === "SignedOut")
@@ -15,15 +22,21 @@ export function AntigravitySection() {
 
   return (
     <ProviderAccountList
-      provider="antigravity"
+      provider={provider}
       result={result}
       refreshing={refreshing}
       refreshError={refreshError}
       onRefresh={() => void refresh(true).then(setRefreshError)}
       onAdd={add}
       renderAccount={(account) => (
-        <AntigravityAccountRow account={account} onSetActive={setActive} onRemove={remove} />
+        <AccountRow
+          provider={provider}
+          account={account}
+          onSetActive={setActive}
+          onRemove={remove}
+        />
       )}
+      options={options}
     />
   )
 }

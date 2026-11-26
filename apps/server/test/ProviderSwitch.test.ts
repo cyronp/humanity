@@ -7,7 +7,6 @@ import { estimateTokens } from "../src/agent/handoff.ts"
 import { Kiro } from "../src/kiro/Kiro.ts"
 import { answerMcp, HumanityMcp } from "../src/mcp/HumanityMcp.ts"
 import { SessionRepo } from "../src/db/SessionRepo.ts"
-import { ClaudeAccountService } from "../src/services/ClaudeAccountService.ts"
 import { SessionService } from "../src/services/SessionService.ts"
 import {
   addProject,
@@ -17,6 +16,7 @@ import {
   setup,
   waitForStatus,
 } from "./sessionHelpers.ts"
+import { ProviderAccounts } from "../src/services/ProviderAccounts.ts"
 
 const signedInKiro = Kiro.layerTest({
   probe: () =>
@@ -276,7 +276,7 @@ describe("moving a thread to another provider", () => {
       const { home, repo } = yield* setup()
       yield* Effect.gen(function* () {
         const sessions = yield* SessionService
-        const accounts = yield* ClaudeAccountService
+        const accounts = (yield* ProviderAccounts)["claude-code"]
         const log = yield* FakeAgentLog
         const project = yield* addProject(repo)
         const work = yield* accounts.add("Work")

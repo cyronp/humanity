@@ -227,11 +227,14 @@ describe("daemon", () => {
 
       yield* Effect.gen(function* () {
         const client = yield* RpcClient.make(HumanityRpcs, { flatten: true })
-        const status = yield* client("Claude.status", { refresh: false })
+        const status = yield* client("Providers.status", {
+          provider: "claude-code",
+          refresh: false,
+        })
         assert.strictEqual(status.cliVersion, "2.1.321")
         assert.deepStrictEqual(status.connection, {
           _tag: "Connected",
-          method: "subscription",
+          method: "plan",
           label: "Claude Max",
           email: "dev@example.com",
           organization: null,

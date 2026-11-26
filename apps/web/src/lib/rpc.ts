@@ -28,10 +28,7 @@ export class HumanityClient extends AtomRpc.Service<HumanityClient>()("HumanityC
 
 export const keys = {
   projects: "projects",
-  claude: "claude",
-  codex: "codex",
-  kiro: "kiro",
-  antigravity: "antigravity",
+  provider: (provider: string) => `provider:${provider}`,
   agentCli: (provider: string) => `agent-cli:${provider}`,
   github: "github",
   gitlab: "gitlab",
