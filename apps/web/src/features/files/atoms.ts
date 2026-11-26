@@ -1,9 +1,14 @@
 import type { SessionId } from "@humanity/contracts"
 import { Atom } from "effect/reactivity"
 import { HumanityClient, keys } from "@/lib/rpc"
+import { THREAD_IDLE_TTL } from "@/features/session/atoms"
 
 export const fileListAtom = Atom.family((sessionId: SessionId) =>
-  HumanityClient.query("Files.list", { sessionId }, { reactivityKeys: [keys.files(sessionId)] }),
+  HumanityClient.query(
+    "Files.list",
+    { sessionId },
+    { reactivityKeys: [keys.files(sessionId)] },
+  ).pipe(Atom.setIdleTTL(THREAD_IDLE_TTL)),
 )
 
 export const readFileAtom = HumanityClient.mutation("Files.read")

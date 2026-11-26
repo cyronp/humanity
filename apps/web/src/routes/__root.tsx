@@ -12,6 +12,7 @@ import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog"
 import { AddRepositoryDialog } from "@/features/projects/AddRepositoryDialog"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
 import { AppSidebar } from "@/features/sidebar/AppSidebar"
+import { ThreadNumberShortcuts } from "@/features/sidebar/ThreadNumberShortcuts"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { useStoredWidth } from "@/lib/resize"
@@ -73,6 +74,7 @@ function RootLayout() {
       <SettingsDialog />
       <NotificationWatcher />
       <NextThreadShortcut />
+      <ThreadNumberShortcuts />
       <AddRepositoryDialog />
       <CommandPalette messages={MESSAGE_SEARCH} />
       <UsageDialog />

@@ -9,7 +9,7 @@ import {
 } from "@humanity/contracts"
 import { ArrowRight, Eye, History, TriangleAlert, Undo2 } from "lucide-react"
 import { cn } from "cn"
-import { memo, type ReactNode, useEffect, useMemo, useState } from "react"
+import { type CSSProperties, memo, type ReactNode, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -52,10 +52,13 @@ import {
   providerSwitchSummary,
 } from "./providerSwitch.ts"
 import { itemOfMessage, transcriptItems } from "./turns.ts"
+import { usePinToEndWhileSettling } from "./usePinToEndWhileSettling.ts"
 
 type Content<Tag extends MessageContent["_tag"]> = Extract<MessageContent, { _tag: Tag }>
 
 const FOCUS_HIGHLIGHT_MS = 2500
+const EAGER_ITEMS = 4
+const EAGER_STYLE: CSSProperties = { contentVisibility: "visible" }
 
 export function MessageList({
   messages,
@@ -106,12 +109,16 @@ export function MessageList({
       ? last.id
       : undefined
   const focusedItem = focus === undefined ? undefined : owners.get(focus)
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null)
+  const [content, setContent] = useState<HTMLDivElement | null>(null)
+  usePinToEndWhileSettling(viewport, content, focus === undefined)
   return (
     <TranscriptActionsContext value={provided}>
       <MessageScrollerProvider autoScroll defaultScrollPosition="end">
         <MessageScroller>
-          <MessageScrollerViewport>
+          <MessageScrollerViewport ref={setViewport}>
             <MessageScrollerContent
+              ref={setContent}
               aria-label="Conversation"
               aria-busy={draft !== "" || working}
               className="mx-auto w-full max-w-3xl gap-4 px-4 pt-16"
@@ -132,10 +139,11 @@ export function MessageList({
                   onFocused={setHighlighted}
                 />
               )}
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <MessageScrollerItem
                   key={item.id}
                   messageId={item.id}
+                  style={index >= items.length - EAGER_ITEMS ? EAGER_STYLE : undefined}
                   scrollAnchor={item._tag === "message" && item.message.content._tag === "user"}
                   className={cn(
                     "rounded-lg ring-offset-4 ring-offset-background transition-shadow duration-700",

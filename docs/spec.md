@@ -333,6 +333,13 @@ A security review found ways around a thread's mode. This section closes them; w
 - **The agent types only what the human sees.** `terminal_send`'s `text` and `terminal_open`'s `command` refuse control characters other than a newline, and invisible or bidirectional ones, before anything is asked: keys go in `keys`, which the confirmation shows by name.
 - **The human's saves never follow a link out.** Saving a file that does not exist yet refuses a link at that path and never writes over anything already there.
 
+## Amendment: switching threads (2026-11-26)
+
+Going from one thread to another is as quick as a browser's tabs. It adds no library to the stack of section 3.
+
+- **No blank page between threads.** The thread on screen stays, inert, until the next one is ready; only a thread opened for the first time since the page loaded shows a placeholder. A thread seen in the last five minutes stays loaded, so going back to it is instant.
+- **Ctrl+1 to Ctrl+8 (Cmd on a Mac)** go to the sidebar's first to eighth thread, in its order and under its filters, a search aside; **Ctrl+9** goes to its last. Anywhere in the app except a terminal, which keeps its keys. In a browser, the browser may keep these keys for its own tabs; the desktop app always has them.
+
 ## 1. Product vision
 
 Humanity is a coding agent app, similar in spirit to Claude Code or Codex, built around one premise: **human in the loop, not AI in the loop**.

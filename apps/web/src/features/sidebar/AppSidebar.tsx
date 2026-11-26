@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react"
+import { useAtom, useAtomValue } from "@effect/atom-react"
 import type { Project } from "@humanity/contracts"
 import { Link, useParams } from "@tanstack/react-router"
 import { cn } from "cn"
@@ -28,6 +28,7 @@ import { allSessionsAtom } from "@/features/session/atoms"
 import { EndSessionButton } from "@/features/session/EndSessionButton"
 import { openSettings } from "@/features/settings/settings"
 import { openUsage } from "@/features/usage/usage"
+import { threadFilterAtom } from "./atoms.ts"
 import { ThreadFilterMenu } from "./ThreadFilterMenu.tsx"
 import { ThreadHistory } from "./ThreadHistory.tsx"
 import { useMessageMatches } from "./messageMatches.ts"
@@ -38,7 +39,6 @@ import {
   isDefaultFilter,
   matchesQuery,
   type MessageMatches,
-  readStoredFilter,
   selectThreads,
   storeFilter,
   type ThreadFilter,
@@ -51,7 +51,7 @@ export function AppSidebar({ resizeHandle }: { readonly resizeHandle?: ReactNode
   const projects = AsyncResult.isSuccess(projectsResult) ? projectsResult.value : []
   const [query, setQuery] = useState("")
   const messages = useMessageMatches(query)
-  const [filter, setFilterState] = useState(readStoredFilter)
+  const [filter, setFilterState] = useAtom(threadFilterAtom)
   const setFilter = (next: ThreadFilter) => {
     setFilterState(next)
     storeFilter(next)

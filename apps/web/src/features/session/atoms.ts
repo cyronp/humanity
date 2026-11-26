@@ -23,17 +23,20 @@ export const allSessionsAtom = HumanityClient.runtime
 
 const BATCH_WINDOW = "50 millis"
 const BATCH_SIZE = 512
+export const THREAD_IDLE_TTL = "5 minutes"
 
 export const sessionViewAtom = Atom.family((sessionId: SessionId) =>
-  HumanityClient.runtime.atom(
-    Stream.unwrap(
-      HumanityClient.use((client) => Effect.succeed(client("Sessions.subscribe", { sessionId }))),
-    ).pipe(
-      Stream.retry(Schedule.spaced("1 second")),
-      Stream.groupedWithin(BATCH_SIZE, BATCH_WINDOW),
-      Stream.scan((): SessionView | undefined => undefined, reduceSessionEvents),
-    ),
-  ),
+  HumanityClient.runtime
+    .atom(
+      Stream.unwrap(
+        HumanityClient.use((client) => Effect.succeed(client("Sessions.subscribe", { sessionId }))),
+      ).pipe(
+        Stream.retry(Schedule.spaced("1 second")),
+        Stream.groupedWithin(BATCH_SIZE, BATCH_WINDOW),
+        Stream.scan((): SessionView | undefined => undefined, reduceSessionEvents),
+      ),
+    )
+    .pipe(Atom.setIdleTTL(THREAD_IDLE_TTL)),
 )
 
 export const earlierMessagesAtom = HumanityClient.mutation("Sessions.earlierMessages")
@@ -80,7 +83,7 @@ export const sessionDiffAtom = Atom.family((sessionId: SessionId) =>
     "Sessions.diff",
     { sessionId },
     { reactivityKeys: [keys.sessionDiff(sessionId)] },
-  ),
+  ).pipe(Atom.setIdleTTL(THREAD_IDLE_TTL)),
 )
 
 export const sessionCommitsAtom = Atom.family((sessionId: SessionId) =>
