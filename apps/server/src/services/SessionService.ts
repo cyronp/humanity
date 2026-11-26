@@ -24,7 +24,6 @@ import {
   DEFAULT_PROVIDER,
   type ChatMessage,
   ConfirmationId,
-  type ContextUsage,
   type GitBranchExists,
   type GitInvalidBranchName,
   type GitRefNotFound,
@@ -34,7 +33,6 @@ import {
   type UsageReport,
   type OpenedThread,
   type PendingConfirmation,
-  type PlanUsage,
   PlanUsageUnavailable,
   type Project,
   ProjectId,
@@ -121,11 +119,8 @@ import { TerminalService } from "../terminal/TerminalService.ts"
 import { normalizeSdkMessage } from "../agent/normalize.ts"
 import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
 import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
-import { ClaudeCode } from "../claude/ClaudeCode.ts"
-import { Codex } from "../codex/Codex.ts"
 import { placeEdit, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
-import { makeAccountsUsage, type UsageAccount } from "./accountsUsage.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
 import { isInsideDir } from "../paths.ts"
 import { ServerConfig } from "../ServerConfig.ts"
@@ -138,7 +133,8 @@ import { FileSearchService } from "./FileSearchService.ts"
 import { PreferencesService } from "./PreferencesService.ts"
 import { ProjectService } from "./ProjectService.ts"
 import { SessionEvents } from "./SessionEvents.ts"
-import { ProviderAccounts, type ProviderRegistry } from "./ProviderAccounts.ts"
+import { makeSessionUsage } from "./sessionUsage.ts"
+import { ProviderAccounts } from "./ProviderAccounts.ts"
 import {
   loadedSkill,
   matchModel,
@@ -389,13 +385,12 @@ export class SessionService extends Context.Service<
       const accounts = yield* ProviderAccounts
       const extensions = yield* ExtensionsService
       const mcp = yield* HumanityMcp
-      const claude = yield* ClaudeCode
-      const codex = yield* Codex
       const approvals = yield* ApprovalService
       const checkpoints = yield* CheckpointStore
       const checkpointRepo = yield* CheckpointRepo
       const usageRepo = yield* UsageRepo
       const serviceScope = yield* Effect.scope
+      const usage = yield* makeSessionUsage
 
       const active = new Map<string, ActiveRun>()
 
@@ -660,102 +655,31 @@ export class SessionService extends Context.Service<
           Effect.gen(function* () {
             const context = yield* state.run.contextUsage
             const plan = withPlan ? yield* state.run.planUsage : undefined
-            return { plan, usage: yield* storeUsage(sessionId, context, plan) }
+            return { plan, usage: yield* usage.store(sessionId, context, plan) }
           }),
         )
-
-      const storeUsage = (
-        sessionId: string,
-        context: ContextUsage | undefined,
-        plan: PlanUsage | undefined,
-      ) =>
-        Effect.gen(function* () {
-          const known = yield* repo.getUsage(sessionId)
-          if (context === undefined && plan === undefined) return known
-          const usage: SessionUsage = {
-            context: context ?? known.context,
-            plan: plan ?? known.plan,
-          }
-          yield* repo.setUsage(sessionId, usage)
-          if (plan !== undefined) {
-            const session = yield* repo.get(sessionId)
-            if (Option.isSome(session)) {
-              yield* usageRepo.recordPlan(
-                session.value.provider,
-                yield* repo.getAccountId(sessionId),
-                plan,
-                yield* now,
-              )
-            }
-          }
-          yield* events.publish(sessionId, { _tag: "UsageUpdated", usage })
-          return usage
-        })
 
       const refreshUsageNow = Effect.fn("SessionService.refreshUsage")(function* (
         sessionId: string,
       ) {
         const session = yield* get(sessionId)
-        const unavailable = (reason: string) => new PlanUsageUnavailable({ reason })
         const state = active.get(sessionId)
-        if (state !== undefined) {
-          const { plan, usage } = yield* refreshUsage(sessionId, state, true)
-          if (plan === undefined) {
-            return yield* unavailable("the agent did not report the plan's limits.")
-          }
-          return usage
-        }
-        if (session.provider === "kiro" || session.provider === "antigravity") {
-          return yield* unavailable(
-            `${PROVIDER_NAMES[session.provider]} does not report plan limits here.`,
-          )
-        }
-        const plan =
-          session.provider === "codex"
-            ? yield* codex
-                .planUsage(yield* accountDir(session))
-                .pipe(Effect.mapError((error) => unavailable(error.reason)))
-            : yield* claude
-                .planUsage(yield* accountDir(session))
-                .pipe(Effect.mapError((error) => unavailable(error.reason)))
+        if (state === undefined) return yield* usage.refreshIdle(session)
+        const { plan, usage: stored } = yield* refreshUsage(sessionId, state, true)
         if (plan === undefined) {
-          return yield* unavailable("this login has no plan limits to report.")
+          return yield* new PlanUsageUnavailable({
+            reason: "the agent did not report the plan's limits.",
+          })
         }
-        return yield* storeUsage(sessionId, undefined, plan)
+        return stored
       })
 
-      const signedIn = (registry: ProviderRegistry): Effect.Effect<ReadonlyArray<UsageAccount>> =>
-        Effect.map(registry.accounts({ refresh: false }), (listed) =>
-          listed.map((account) => ({
-            id: account.id,
-            name: account.name,
-            connected: account.status.connection._tag === "Connected",
-          })),
-        )
-      const readAccountsUsage = yield* makeAccountsUsage([
-        {
-          provider: "claude-code",
-          accounts: signedIn(accounts["claude-code"]),
-          plan: (accountId) =>
-            Effect.flatMap(accounts["claude-code"].configDirFor(accountId), (dir) =>
-              claude.planUsage(dir),
-            ),
-        },
-        {
-          provider: "codex",
-          accounts: signedIn(accounts.codex),
-          plan: (accountId) =>
-            Effect.flatMap(accounts.codex.configDirFor(accountId), (dir) => codex.planUsage(dir)),
-        },
-        { provider: "kiro", accounts: signedIn(accounts.kiro) },
-        { provider: "antigravity", accounts: signedIn(accounts.antigravity) },
-      ])
       const otherAccountsUsage = Effect.fn("SessionService.otherAccountsUsage")(function* (
         sessionId: string,
         refresh: boolean,
       ) {
         const session = yield* get(sessionId)
-        return yield* readAccountsUsage(session.provider, refresh)
+        return yield* usage.otherAccounts(session.provider, refresh)
       })
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
