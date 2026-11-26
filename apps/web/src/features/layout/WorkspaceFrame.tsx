@@ -11,6 +11,7 @@ import { PanelBottom, PanelRight } from "lucide-react"
 import {
   type CSSProperties,
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -252,6 +253,12 @@ export function WorkspaceFrame({
   }, [terminalsOpen, setTerminalsOpen])
 
   const [rowWidth, setRowWidth] = useState(0)
+  const attachChat = useCallback((node: HTMLDivElement | null) => {
+    setChat(node)
+    if (node === null) return
+    setChatWidth(node.offsetWidth)
+    setRowWidth(node.parentElement?.clientWidth ?? 0)
+  }, [])
   useEffect(() => {
     const row = chat?.parentElement
     if (chat === null || row === null || row === undefined) return
@@ -319,7 +326,7 @@ export function WorkspaceFrame({
       )}
       <div ref={shelfRow} className="flex min-h-0 flex-1">
         <div
-          ref={setChat}
+          ref={attachChat}
           className={cn("flex min-w-0 flex-1 flex-col", panelOpen && "hidden lg:flex")}
         >
           {children}

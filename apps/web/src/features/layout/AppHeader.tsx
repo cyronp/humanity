@@ -1,5 +1,5 @@
 import { cn } from "cn"
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react"
+import { createContext, type ReactNode, useContext, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
 
@@ -59,7 +59,7 @@ export function AppHeaderHost({ children }: { readonly children: ReactNode }) {
 
 export function useAppHeaderInsetEnd(pixels: number) {
   const setInsetEnd = useContext(HeaderInsetEnd)
-  useEffect(() => {
+  useLayoutEffect(() => {
     setInsetEnd(pixels)
     return () => setInsetEnd(0)
   }, [pixels, setInsetEnd])

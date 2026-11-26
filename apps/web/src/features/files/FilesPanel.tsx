@@ -37,6 +37,7 @@ import { anyUnsaved, workspaceFor } from "./workspace.ts"
 
 const POLL_MS = 2000
 const NO_FILES: ReadonlyArray<string> = []
+const lastListings = new Map<string, ReadonlyArray<string>>()
 const TREE_MIN_WIDTH = 160
 const TREE_DEFAULT_WIDTH = 240
 const EDITOR_MIN_WIDTH = 240
@@ -161,7 +162,24 @@ export default function FilesPanel({
     })
   }, [session.id, workspace])
 
-  const listed = AsyncResult.isSuccess(listing) ? listing.value.files : NO_FILES
+  const fetched = AsyncResult.isSuccess(listing) ? listing.value.files : undefined
+  useEffect(() => {
+    if (fetched !== undefined) lastListings.set(session.worktreePath, fetched)
+  }, [fetched, session.worktreePath])
+  const previous = lastListings.get(session.worktreePath)
+  const listed = fetched ?? previous ?? NO_FILES
+  const tree = (files: ReadonlyArray<string>) => (
+    <FileTree
+      onAction={readOnly ? undefined : setEntryAction}
+      files={files}
+      changes={changes}
+      active={snapshot.tabs.active}
+      expanded={snapshot.expanded}
+      onExpandedChange={(next) => workspace.setExpanded(next)}
+      onOpen={(path) => workspace.open(path)}
+      icons={preferences.fileIcons}
+    />
+  )
   const tracked = (path: string) =>
     listed.some((file) => isUnder(file, path) && changes.files.get(file) !== "create")
 
@@ -276,19 +294,12 @@ export default function FilesPanel({
                 }}
               />
             ) : (
-              <AsyncView result={listing} errorTitle="Could not list the files">
-                {(value) => (
-                  <FileTree
-                    onAction={readOnly ? undefined : setEntryAction}
-                    files={value.files}
-                    changes={changes}
-                    active={snapshot.tabs.active}
-                    expanded={snapshot.expanded}
-                    onExpandedChange={(next) => workspace.setExpanded(next)}
-                    onOpen={(path) => workspace.open(path)}
-                    icons={preferences.fileIcons}
-                  />
-                )}
+              <AsyncView
+                result={listing}
+                errorTitle="Could not list the files"
+                loading={previous === undefined ? undefined : tree(previous)}
+              >
+                {(value) => tree(value.files)}
               </AsyncView>
             )}
             <ResizeHandle

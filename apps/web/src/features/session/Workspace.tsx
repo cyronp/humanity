@@ -10,7 +10,7 @@ import {
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -161,6 +161,10 @@ export function Workspace({
   const [typing, setTyping] = useState(false)
   const keyHint = useKeyHintShown()
   const [dockHeight, setDockHeight] = useState(0)
+  const attachDock = useCallback((node: HTMLDivElement | null) => {
+    setDock(node)
+    if (node !== null) setDockHeight(node.offsetHeight)
+  }, [])
   useEffect(() => {
     if (dock === null) return
     const observer = new ResizeObserver(() => setDockHeight(dock.offsetHeight))
@@ -284,7 +288,7 @@ export function Workspace({
           />
         </div>
         <div
-          ref={setDock}
+          ref={attachDock}
           className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-[calc(100%-3.5rem)] flex-col"
         >
           {(cards.length > 0 || changes.length > 0) && (

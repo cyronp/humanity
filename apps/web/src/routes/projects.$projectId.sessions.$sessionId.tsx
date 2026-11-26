@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react"
 import { type Project, SessionId, type TerminalOwner } from "@humanity/contracts"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { AsyncResult } from "effect/reactivity"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -12,7 +12,8 @@ import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
 import { useProject } from "@/features/projects/useProject"
 import { sessionViewAtom } from "@/features/session/atoms"
-import { Workspace } from "@/features/session/Workspace"
+import type { SessionView } from "@/features/session/state"
+import { Workspace, type WorkspaceSearch } from "@/features/session/Workspace"
 import { describeCause } from "@/lib/errors"
 
 const WorkspaceSearch = Schema.Struct({
@@ -48,6 +49,11 @@ function SessionRoute() {
   )
 }
 
+const NO_SEARCH: WorkspaceSearch = {}
+
+const viewOf = (result: AsyncResult.AsyncResult<SessionView | undefined, unknown>) =>
+  AsyncResult.isSuccess(result) ? result.value : undefined
+
 function LiveSession({
   project,
   sessionId,
@@ -55,12 +61,28 @@ function LiveSession({
   readonly project: Project
   readonly sessionId: SessionId
 }) {
-  const result = useAtomValue(sessionViewAtom(sessionId))
+  const [shown, setShown] = useState({ project, sessionId })
+  const target = useAtomValue(sessionViewAtom(sessionId))
+  const held = useAtomValue(sessionViewAtom(shown.sessionId))
   const search = Route.useSearch()
-  const view = AsyncResult.isSuccess(result) ? result.value : undefined
   const terminalOwner = useMemo((): TerminalOwner => ({ _tag: "Session", sessionId }), [sessionId])
+  const switching = shown.sessionId !== sessionId
+  const settled = viewOf(target) !== undefined || AsyncResult.isFailure(target)
+  if (switching ? settled : shown.project !== project) setShown({ project, sessionId })
 
-  if (view !== undefined) return <Workspace project={project} view={view} search={search} />
+  const view = viewOf(held)
+  if (view !== undefined)
+    return (
+      <div className="contents" inert={switching} aria-busy={switching || undefined}>
+        <Workspace
+          key={view.session.id}
+          project={shown.project}
+          view={view}
+          search={switching ? NO_SEARCH : search}
+        />
+      </div>
+    )
+  const result = switching ? target : held
   const failed = AsyncResult.isFailure(result)
   return (
     <WorkspaceFrame
