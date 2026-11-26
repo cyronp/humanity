@@ -1,4 +1,5 @@
 import type { BranchPublication, WorkingTreeDiff } from "@humanity/contracts"
+import { readStored, writeStored, writeStoredJson } from "@/lib/storage"
 
 export const SHELF_TOOLS = ["files", "git", "browser"] as const
 export type ShelfTool = (typeof SHELF_TOOLS)[number]
@@ -48,36 +49,18 @@ export const parseShelf = (raw: string | null): ShelfState => {
 }
 
 export const readStoredShelf = (wide: boolean): ShelfState => {
-  try {
-    const stored = parseShelf(localStorage.getItem(STORAGE_KEY))
-    return wide ? stored : { ...stored, open: false }
-  } catch {
-    return DEFAULT_SHELF
-  }
+  const stored = parseShelf(readStored(STORAGE_KEY))
+  return wide ? stored : { ...stored, open: false }
 }
 
-export const storeShelf = (shelf: ShelfState) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(shelf))
-  } catch {}
-}
+export const storeShelf = (shelf: ShelfState) => writeStoredJson(STORAGE_KEY, shelf)
 
 export const parseGitView = (raw: string | null): GitView =>
   GIT_VIEWS.find((view) => view === raw) ?? "overview"
 
-export const readStoredGitView = (): GitView => {
-  try {
-    return parseGitView(localStorage.getItem(GIT_VIEW_KEY))
-  } catch {
-    return "overview"
-  }
-}
+export const readStoredGitView = (): GitView => parseGitView(readStored(GIT_VIEW_KEY))
 
-export const storeGitView = (view: GitView) => {
-  try {
-    localStorage.setItem(GIT_VIEW_KEY, view)
-  } catch {}
-}
+export const storeGitView = (view: GitView) => writeStored(GIT_VIEW_KEY, view)
 
 export const toggleTool = (shelf: ShelfState, tool: ShelfTool): ShelfState =>
   shelf.open && shelf.tool === tool ? { ...shelf, open: false } : { open: true, tool }

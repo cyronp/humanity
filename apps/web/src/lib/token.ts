@@ -1,4 +1,5 @@
 import { RPC_PATH, TOKEN_PARAM } from "@humanity/contracts"
+import { readStored, writeStored } from "./storage.ts"
 
 const STORAGE_KEY = "humanity.token"
 
@@ -11,19 +12,9 @@ export const captureTokenFromUrl = (): void => {
   window.history.replaceState(window.history.state, "", url)
 }
 
-export const readToken = (): string | undefined => {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) ?? undefined
-  } catch {
-    return undefined
-  }
-}
+export const readToken = (): string | undefined => readStored(STORAGE_KEY) ?? undefined
 
-export const storeToken = (token: string): void => {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, token.trim())
-  } catch {}
-}
+export const storeToken = (token: string): void => writeStored(STORAGE_KEY, token.trim())
 
 export const tokenFromInput = (input: string): string => {
   const trimmed = input.trim()

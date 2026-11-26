@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react"
 import { Atom } from "effect/reactivity"
 import { registry } from "@/lib/registry"
+import { readStored, writeStored } from "@/lib/storage"
 
 const STORAGE_KEY = "humanity.onboarding.completed"
 
@@ -24,19 +25,9 @@ export const stepIndex = (step: OnboardingStep): number => ONBOARDING_STEPS.inde
 export const neighbourStep = (step: OnboardingStep, delta: 1 | -1): OnboardingStep | undefined =>
   ONBOARDING_STEPS[stepIndex(step) + delta]
 
-export const hasCompletedOnboarding = (): boolean => {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) !== null
-  } catch {
-    return false
-  }
-}
+export const hasCompletedOnboarding = (): boolean => readStored(STORAGE_KEY) !== null
 
-export const completeOnboarding = (): void => {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, new Date().toISOString())
-  } catch {}
-}
+export const completeOnboarding = (): void => writeStored(STORAGE_KEY, new Date().toISOString())
 
 interface OnboardingState {
   readonly open: boolean
@@ -53,11 +44,7 @@ const debugParam = (): string | null => {
 
 const initialState = (): OnboardingState => {
   const debug = debugParam()
-  if (debug === "reset") {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY)
-    } catch {}
-  }
+  if (debug === "reset") writeStored(STORAGE_KEY, null)
   if (debug !== null) return { open: true, step: parseStep(debug) ?? "welcome" }
   return { open: !hasCompletedOnboarding(), step: "welcome" }
 }

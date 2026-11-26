@@ -15,6 +15,7 @@ import {
   type ToolCall,
 } from "@humanity/contracts"
 import { bashOutput } from "@/features/tools/inputs"
+import { readStored, writeStoredJson } from "@/lib/storage"
 
 export const refusedPorts = (location: Pick<Location, "port" | "protocol">, daemon: string) => {
   const ports = new Set<number>([DEFAULT_DAEMON_PORT, DEFAULT_DESKTOP_PORT])
@@ -132,19 +133,11 @@ export const parseMemory = (raw: string | null): BrowserMemory => {
   }
 }
 
-export const readMemory = (sessionId: string): BrowserMemory => {
-  try {
-    return parseMemory(localStorage.getItem(browserKey(sessionId)))
-  } catch {
-    return EMPTY_MEMORY
-  }
-}
+export const readMemory = (sessionId: string): BrowserMemory =>
+  parseMemory(readStored(browserKey(sessionId)))
 
-export const storeMemory = (sessionId: string, memory: BrowserMemory) => {
-  try {
-    localStorage.setItem(browserKey(sessionId), JSON.stringify(memory))
-  } catch {}
-}
+export const storeMemory = (sessionId: string, memory: BrowserMemory) =>
+  writeStoredJson(browserKey(sessionId), memory)
 
 export const activeTab = (memory: BrowserMemory): BrowserTab | undefined =>
   memory.tabs.find((tab) => tab.id === memory.active)

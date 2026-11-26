@@ -31,6 +31,7 @@ import {
 import { agentCliAtom, cliProblem } from "./cli.ts"
 import { type PickerAccount, useProviderAccounts, useProviderModels } from "./useProviderModels.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
+import { readStoredJson, writeStoredJson } from "@/lib/storage"
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
 const SHORTCUT_PREFIX = isMac ? "⌥" : "Alt+"
@@ -38,12 +39,10 @@ const SHORTCUT_PREFIX = isMac ? "⌥" : "Alt+"
 const FAVORITES_KEY = "humanity.favoriteModels"
 
 const readFavorites = (): ReadonlyArray<string> => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? "[]")
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : []
-  } catch {
-    return []
-  }
+  const parsed = readStoredJson(FAVORITES_KEY)
+  return Array.isArray(parsed)
+    ? parsed.filter((item): item is string => typeof item === "string")
+    : []
 }
 
 const useFavoriteModels = () => {
@@ -53,9 +52,7 @@ const useFavoriteModels = () => {
       const next = current.includes(value)
         ? current.filter((item) => item !== value)
         : [...current, value]
-      try {
-        localStorage.setItem(FAVORITES_KEY, JSON.stringify(next))
-      } catch {}
+      writeStoredJson(FAVORITES_KEY, next)
       return next
     })
   return [favorites, toggle] as const

@@ -3,6 +3,7 @@ import { toDiffLines } from "@humanity/diff"
 import { useAtomValue } from "@effect/atom-react"
 import { Atom } from "effect/reactivity"
 import { registry } from "@/lib/registry"
+import { readStoredJson, writeStored } from "@/lib/storage"
 
 export type CommentSide = "new" | "old"
 
@@ -36,20 +37,12 @@ const isComment = (value: unknown): value is ReviewComment => {
 }
 
 const read = (sessionId: string): ReadonlyArray<ReviewComment> => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey(sessionId)) ?? "[]")
-    return Array.isArray(parsed) ? parsed.filter(isComment) : []
-  } catch {
-    return []
-  }
+  const parsed = readStoredJson(storageKey(sessionId))
+  return Array.isArray(parsed) ? parsed.filter(isComment) : []
 }
 
-const write = (sessionId: string, comments: ReadonlyArray<ReviewComment>) => {
-  try {
-    if (comments.length === 0) localStorage.removeItem(storageKey(sessionId))
-    else localStorage.setItem(storageKey(sessionId), JSON.stringify(comments))
-  } catch {}
-}
+const write = (sessionId: string, comments: ReadonlyArray<ReviewComment>) =>
+  writeStored(storageKey(sessionId), comments.length === 0 ? null : JSON.stringify(comments))
 
 const commentsAtom = Atom.family((sessionId: string) =>
   Atom.writable(

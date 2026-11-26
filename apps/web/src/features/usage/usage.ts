@@ -8,6 +8,7 @@ import {
 import { useAtomValue } from "@effect/atom-react"
 import { Atom } from "effect/reactivity"
 import { registry } from "@/lib/registry"
+import { readStored, writeStored } from "@/lib/storage"
 
 export const USAGE_RANGES = [
   { id: "today", label: "Today", days: 1 },
@@ -49,19 +50,11 @@ export const rangeOf = (id: UsageRangeId, now: Date): UsageRange => {
 const RANGE_KEY = "humanity.usage.range"
 
 export const storedRange = (): UsageRangeId => {
-  try {
-    const value = window.localStorage.getItem(RANGE_KEY)
-    return USAGE_RANGES.find((each) => each.id === value)?.id ?? "week"
-  } catch {
-    return "week"
-  }
+  const value = readStored(RANGE_KEY)
+  return USAGE_RANGES.find((each) => each.id === value)?.id ?? "week"
 }
 
-export const storeRange = (id: UsageRangeId): void => {
-  try {
-    window.localStorage.setItem(RANGE_KEY, id)
-  } catch {}
-}
+export const storeRange = (id: UsageRangeId): void => writeStored(RANGE_KEY, id)
 
 export type BucketRow = { readonly bucket: string } & Partial<Record<AgentProvider, number>>
 

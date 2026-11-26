@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useSyncExternalStore } from "react"
+import { readStored, writeStoredJson } from "@/lib/storage"
 
 export type PaletteOutcome = { readonly error: string } | undefined
 
@@ -123,20 +124,6 @@ const parseUsage = (raw: string | null): Usage | undefined => {
   }
 }
 
-const readStored = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const writeStored = (key: string, usage: Usage) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(usage))
-  } catch {}
-}
-
 export const usageFromRecent = (recent: ReadonlyArray<string>, now: number): Usage =>
   Object.fromEntries(recent.map((id, index) => [id, { count: 1, last: now - index * 60_000 }]))
 
@@ -156,7 +143,7 @@ export const readUsage = (): Usage => {
   }
 }
 
-export const storeUsage = (usage: Usage) => writeStored(USAGE_KEY, usage)
+export const storeUsage = (usage: Usage) => writeStoredJson(USAGE_KEY, usage)
 
 export const frecency = (entry: UseEntry | undefined, now: number): number =>
   entry === undefined
@@ -206,7 +193,7 @@ export const frequentCommands = (
 export const readThreadVisits = (): Usage => parseUsage(readStored(THREAD_VISITS_KEY)) ?? {}
 
 export const recordThreadVisit = (sessionId: string) =>
-  writeStored(THREAD_VISITS_KEY, withUse(readThreadVisits(), sessionId, Date.now()))
+  writeStoredJson(THREAD_VISITS_KEY, withUse(readThreadVisits(), sessionId, Date.now()))
 
 export const flattenPages = (
   commands: ReadonlyArray<PaletteCommand>,
