@@ -116,9 +116,7 @@ import { UsageRepo } from "../db/UsageRepo.ts"
 import { HumanityMcp, OpenThreadFailed, type OpenThreadRequest } from "../mcp/HumanityMcp.ts"
 import { makeTerminalTools, type ToolText } from "../terminal/agentTools.ts"
 import { TerminalService } from "../terminal/TerminalService.ts"
-import { normalizeSdkMessage } from "../agent/normalize.ts"
-import { normalizeCodexEvent } from "../agent/normalizeCodex.ts"
-import { normalizeAcpEvent } from "../agent/normalizeAcp.ts"
+import { PROVIDER_TRAITS } from "../agent/providerTraits.ts"
 import { placeEdit, planChange, reviewTarget } from "../agent/review.ts"
 import { SessionRepo } from "../db/SessionRepo.ts"
 import { type PreparedAttachment, prepareAttachments, toAgentAttachment } from "./attachments.ts"
@@ -684,12 +682,7 @@ export class SessionService extends Context.Service<
 
       const handleRaw = (session: Session, state: ActiveRun) => (raw: unknown) =>
         Effect.gen(function* () {
-          const normalized =
-            session.provider === "codex"
-              ? normalizeCodexEvent(raw)
-              : session.provider === "kiro" || session.provider === "antigravity"
-                ? normalizeAcpEvent(raw)
-                : normalizeSdkMessage(raw)
+          const normalized = PROVIDER_TRAITS[session.provider].normalize(raw)
           if (normalized._tag === "Skip") return
           if (normalized._tag === "TextDelta") {
             yield* events.publish(session.id, { _tag: "TextDelta", text: normalized.text })
@@ -773,7 +766,7 @@ export class SessionService extends Context.Service<
             accountId: yield* repo.getAccountId(sessionId),
             model: current.model,
             usage: content.usage,
-            costUsd: current.provider === "claude-code" ? content.costUsd : null,
+            costUsd: PROVIDER_TRAITS[current.provider].reportsCost ? content.costUsd : null,
             durationMs: content.durationMs,
             endedAt: yield* now,
           })
@@ -968,12 +961,12 @@ export class SessionService extends Context.Service<
 
       const checkReadable = (provider: AgentProvider, files: ReadonlyArray<PreparedAttachment>) =>
         Effect.gen(function* () {
-          if (provider !== "codex") return
+          if (!PROVIDER_TRAITS[provider].refusesPdfs) return
           const pdf = files.find((file) => file.kind === "pdf")
           if (pdf !== undefined) {
             return yield* new AttachmentRejected({
               name: pdf.name,
-              reason: "Codex cannot read PDF files. Send it as text or an image instead.",
+              reason: `${PROVIDER_NAMES[provider]} cannot read PDF files. Send it as text or an image instead.`,
             })
           }
         })
@@ -2290,17 +2283,16 @@ export class SessionService extends Context.Service<
           plan: latestPlan(toolCalls),
           reason: "fork",
         })
-        const point =
-          source.provider === "codex"
-            ? forkPoint({
-                provider: source.provider,
-                sdkSessionId: source.sdkSessionId,
-                newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
-                switchedSince: messages
-                  .slice(at)
-                  .some((message) => message.content._tag === "provider_switch"),
-              })
-            : ({ _tag: "Handoff" } as const)
+        const point = PROVIDER_TRAITS[source.provider].forksOwnThread
+          ? forkPoint({
+              provider: source.provider,
+              sdkSessionId: source.sdkSessionId,
+              newestFirst: yield* repo.rawBefore(sessionId, messageId, FORK_SEARCH_LIMIT),
+              switchedSince: messages
+                .slice(at)
+                .some((message) => message.content._tag === "provider_switch"),
+            })
+          : ({ _tag: "Handoff" } as const)
         if (point._tag === "Native" && source.sdkSessionId !== null) {
           yield* repo.update(created.id, {
             sdkSessionId: source.sdkSessionId,

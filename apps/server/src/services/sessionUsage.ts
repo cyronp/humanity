@@ -1,4 +1,5 @@
 import {
+  type AgentProvider,
   type ContextUsage,
   type PlanUsage,
   PlanUsageUnavailable,
@@ -22,6 +23,17 @@ export const makeSessionUsage = Effect.gen(function* () {
   const accounts = yield* ProviderAccounts
   const claude = yield* ClaudeCode
   const codex = yield* Codex
+  const planReaders: Readonly<
+    Record<
+      AgentProvider,
+      ((dir: string | undefined) => Effect.Effect<PlanUsage | undefined, { reason: string }>) | null
+    >
+  > = {
+    "claude-code": claude.planUsage,
+    codex: codex.planUsage,
+    kiro: null,
+    antigravity: null,
+  }
 
   const store = (
     sessionId: string,
@@ -54,7 +66,8 @@ export const makeSessionUsage = Effect.gen(function* () {
   const refreshIdle = (session: Session) =>
     Effect.gen(function* () {
       const unavailable = (reason: string) => new PlanUsageUnavailable({ reason })
-      if (session.provider === "kiro" || session.provider === "antigravity") {
+      const readPlan = planReaders[session.provider]
+      if (readPlan === null) {
         return yield* unavailable(
           `${PROVIDER_NAMES[session.provider]} does not report plan limits here.`,
         )
@@ -62,10 +75,7 @@ export const makeSessionUsage = Effect.gen(function* () {
       const dir = yield* Effect.flatMap(repo.getAccountId(session.id), (accountId) =>
         accounts[session.provider].configDirFor(accountId),
       )
-      const plan =
-        session.provider === "codex"
-          ? yield* codex.planUsage(dir).pipe(Effect.mapError((error) => unavailable(error.reason)))
-          : yield* claude.planUsage(dir).pipe(Effect.mapError((error) => unavailable(error.reason)))
+      const plan = yield* readPlan(dir).pipe(Effect.mapError((error) => unavailable(error.reason)))
       if (plan === undefined) {
         return yield* unavailable("this login has no plan limits to report.")
       }
