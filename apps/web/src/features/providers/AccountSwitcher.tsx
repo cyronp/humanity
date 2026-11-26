@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { Check, CircleUserRound, Settings } from "lucide-react"
@@ -16,6 +17,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
+import { providerAccountsAtom } from "./accounts/atoms.ts"
+import { configuredProviders } from "./accounts/configured.ts"
 import { accountLine } from "./accounts/summary.ts"
 import { useAccounts } from "./accounts/useAccounts.ts"
 import { type ProviderId, PROVIDERS } from "./ProviderIcon.tsx"
@@ -69,8 +72,18 @@ function useHoverOpen() {
   }
 }
 
+function useConfiguredProviders() {
+  return configuredProviders([
+    ["claude-code", useAtomValue(providerAccountsAtom("claude-code"))],
+    ["codex", useAtomValue(providerAccountsAtom("codex"))],
+    ["kiro", useAtomValue(providerAccountsAtom("kiro"))],
+    ["antigravity", useAtomValue(providerAccountsAtom("antigravity"))],
+  ])
+}
+
 export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => void }) {
   const menu = useHoverOpen()
+  const { shown, reading } = useConfiguredProviders()
 
   return (
     <Popover open={menu.open} onOpenChange={menu.onOpenChange}>
@@ -96,8 +109,21 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
       >
         <ScrollArea viewportClassName="max-h-72 scroll-fade-y">
           <div className="flex flex-col gap-2 p-1.5">
-            <ProviderChoices provider="claude-code" />
-            <ProviderChoices provider="codex" />
+            {shown.map((provider) => (
+              <ProviderChoices key={provider} provider={provider} />
+            ))}
+            {shown.length === 0 && (
+              <p className="flex items-center gap-2 p-1.5 text-muted-foreground">
+                {reading ? (
+                  <>
+                    <Spinner />
+                    Reading the accounts…
+                  </>
+                ) : (
+                  "No provider is signed in yet."
+                )}
+              </p>
+            )}
           </div>
         </ScrollArea>
         <div className="border-t p-1.5">
