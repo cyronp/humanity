@@ -53,51 +53,43 @@ describe("GitService", () => {
     }),
   )
 
-  it.live("creates a branch without checking it out", () =>
+  it.live("refuses invalid branch names and option-like bases before adding a worktree", () =>
     Effect.gen(function* () {
       const repo = yield* tempRepo()
-
-      const branch = yield* withGit((service) => service.createBranch(repo, "topic", "main"))
-      assert.strictEqual(branch.name, "topic")
-      assert.isFalse(branch.isCurrent)
-      assert.strictEqual(yield* withGit((service) => service.currentBranch(repo)), "main")
-    }),
-  )
-
-  it.live("rejects duplicate, invalid and unknown refs with tagged errors", () =>
-    Effect.gen(function* () {
-      const repo = yield* tempRepo()
+      const home = yield* tempDir()
 
       yield* withGit((service) =>
         Effect.gen(function* () {
-          const duplicate = yield* Effect.flip(service.createBranch(repo, "main", "main"))
-          assert.strictEqual(duplicate._tag, "GitBranchExists")
-
           for (const name of ["", "has space", "--force", "-b", "a..b", "trailing.lock"]) {
-            const invalid = yield* Effect.flip(service.createBranch(repo, name, "main"))
+            const invalid = yield* Effect.flip(
+              service.worktreeAdd(repo, { path: join(home, "w"), branch: name, base: "main" }),
+            )
             assert.strictEqual(invalid._tag, "GitInvalidBranchName", `name: ${name}`)
           }
 
-          const unknown = yield* Effect.flip(service.createBranch(repo, "ok", "no-such-branch"))
-          assert.strictEqual(unknown._tag, "GitRefNotFound")
-
-          const optionLike = yield* Effect.flip(service.createBranch(repo, "ok", "--all"))
+          const optionLike = yield* Effect.flip(
+            service.worktreeAdd(repo, { path: join(home, "w"), branch: "ok", base: "--all" }),
+          )
           assert.strictEqual(optionLike._tag, "GitRefNotFound")
         }),
       )
       assert.strictEqual(git(repo, "branch", "--list").trim(), "* main")
+      assert.isFalse(existsSync(join(home, "w")))
     }),
   )
 
   it.live("passes arguments to git verbatim, never through a shell", () =>
     Effect.gen(function* () {
       const repo = yield* tempRepo()
+      const home = yield* tempDir()
       const marker = join(repo, "pwned")
       const name = `x;touch${"$"}{IFS}pwned&&touch${"$"}{IFS}pwned`
 
-      const branch = yield* withGit((service) => service.createBranch(repo, name, "main"))
+      yield* withGit((service) =>
+        service.worktreeAdd(repo, { path: join(home, "w"), branch: name, base: "main" }),
+      )
 
-      assert.strictEqual(branch.name, name)
+      assert.include(git(repo, "branch", "--list", "--format=%(refname:short)"), name)
       assert.isFalse(existsSync(marker))
     }),
   )

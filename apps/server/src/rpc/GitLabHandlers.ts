@@ -10,7 +10,6 @@ export const GitLabHandlers = GitLabRpcs.toLayer(
       "GitLab.setToken": ({ token, host }) => gitlab.saveToken(token, host.toLowerCase()),
       "GitLab.removeToken": () => gitlab.removeToken,
       "GitLab.listRepos": () => gitlab.listRepos,
-      "GitLab.listBranches": ({ fullPath }) => gitlab.listBranches(fullPath),
     })
   }),
 )

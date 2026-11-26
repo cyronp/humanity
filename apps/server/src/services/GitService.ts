@@ -54,11 +54,6 @@ export class GitService extends Context.Service<
     readonly defaultBranch: (cwd: string) => Effect.Effect<string, GitError>
     readonly originUrl: (cwd: string) => Effect.Effect<string | undefined, GitError>
     readonly listBranches: (cwd: string) => Effect.Effect<ReadonlyArray<Branch>, GitError>
-    readonly createBranch: (
-      cwd: string,
-      name: string,
-      from: string,
-    ) => Effect.Effect<Branch, GitError | GitBranchExists | GitInvalidBranchName | GitRefNotFound>
     readonly checkout: (
       cwd: string,
       branch: string,
@@ -228,26 +223,6 @@ export class GitService extends Context.Service<
           if (yield* branchExists(cwd, name)) return yield* new GitBranchExists({ name })
           yield* requireCommit(cwd, from)
         })
-
-      const createBranch = Effect.fn("GitService.createBranch")(function* (
-        cwd: string,
-        name: string,
-        from: string,
-      ) {
-        yield* requireNewBranch(cwd, name, from)
-        yield* exec(cwd, ["branch", "--", name, from])
-        const created = (yield* listBranches(cwd)).find(
-          (branch) => branch.name === name && !branch.isRemote,
-        )
-        if (created === undefined) {
-          return yield* new GitCommandFailed({
-            args: ["branch", "--", name, from],
-            exitCode: 0,
-            stderr: "The branch was not found after it was created.",
-          })
-        }
-        return created
-      })
 
       const checkout = Effect.fn("GitService.checkout")(function* (cwd: string, branch: string) {
         yield* validateBranchName(cwd, branch)
@@ -581,7 +556,6 @@ export class GitService extends Context.Service<
         defaultBranch,
         originUrl,
         listBranches,
-        createBranch,
         checkout,
         status,
         listFiles,

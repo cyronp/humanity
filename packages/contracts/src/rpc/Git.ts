@@ -1,16 +1,8 @@
 import { Schema } from "effect"
 import { Rpc, RpcGroup } from "effect/rpc"
-import { Branch, FileEntry, RepoStatus, WorkingTreeDiff } from "../domain/Git.ts"
+import { Branch, FileEntry } from "../domain/Git.ts"
 import { ProjectId } from "../domain/Project.ts"
-import {
-  GitBranchExists,
-  GitCommandFailed,
-  GitInvalidBranchName,
-  GitNotARepository,
-  GitNotInstalled,
-  GitRefNotFound,
-  ProjectNotFound,
-} from "../Errors.ts"
+import { GitCommandFailed, GitNotARepository, GitNotInstalled, ProjectNotFound } from "../Errors.ts"
 
 const GitFailure = [ProjectNotFound, GitNotARepository, GitNotInstalled, GitCommandFailed] as const
 
@@ -18,25 +10,6 @@ export const GitRpcs = RpcGroup.make(
   Rpc.make("Git.branches", {
     payload: { projectId: ProjectId },
     success: Schema.Array(Branch),
-    error: Schema.Union(GitFailure),
-  }),
-  Rpc.make("Git.createBranch", {
-    payload: {
-      projectId: ProjectId,
-      name: Schema.String,
-      from: Schema.optional(Schema.String),
-    },
-    success: Branch,
-    error: Schema.Union([...GitFailure, GitBranchExists, GitInvalidBranchName, GitRefNotFound]),
-  }),
-  Rpc.make("Git.status", {
-    payload: { projectId: ProjectId },
-    success: RepoStatus,
-    error: Schema.Union(GitFailure),
-  }),
-  Rpc.make("Git.diff", {
-    payload: { projectId: ProjectId },
-    success: WorkingTreeDiff,
     error: Schema.Union(GitFailure),
   }),
   Rpc.make("Git.searchFiles", {

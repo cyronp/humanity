@@ -3,28 +3,16 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import {
   Approval,
   ApprovalDecision,
-  ApprovalRecord,
   ChangeId,
   ConfirmationId,
   PendingConfirmation,
   ProposedChange,
 } from "../domain/Approval.ts"
-import { ProjectId } from "../domain/Project.ts"
 import { QuestionAnswers } from "../domain/Question.ts"
 import { SessionId } from "../domain/Session.ts"
-import {
-  ApprovalAlreadyDecided,
-  ApprovalNotFound,
-  ProjectNotFound,
-  SessionNotFound,
-} from "../Errors.ts"
+import { ApprovalAlreadyDecided, ApprovalNotFound, SessionNotFound } from "../Errors.ts"
 
 export const ApprovalsRpcs = RpcGroup.make(
-  Rpc.make("Approvals.history", {
-    payload: { projectId: ProjectId },
-    success: Schema.Array(ApprovalRecord),
-    error: ProjectNotFound,
-  }),
   Rpc.make("Approvals.listPending", {
     payload: { sessionId: SessionId },
     success: Schema.Array(Approval),

@@ -58,13 +58,6 @@ export const Approval = Schema.Union([
 ])
 export type Approval = typeof Approval.Type
 
-export const ApprovalRecord = Schema.Struct({
-  approval: Approval,
-  sessionTitle: Schema.String,
-  sessionBranch: Schema.String,
-})
-export type ApprovalRecord = typeof ApprovalRecord.Type
-
 export const ApprovalDecision = Schema.Literals(["allow", "deny"])
 export type ApprovalDecision = typeof ApprovalDecision.Type
 
