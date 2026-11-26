@@ -7,8 +7,10 @@ import {
   type PullRequestComment,
 } from "@humanity/contracts"
 import { Effect, Option } from "effect"
+import { credentialEnv } from "./gitCredentials.ts"
 import { type GitHubError, GitHubService } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
+import type { LoggedCommit } from "./gitParsers.ts"
 import type { PlacedComment } from "./reviewPlacement.ts"
 
 export type ForgeRepo =
@@ -25,8 +27,25 @@ export interface NewForgePull {
   readonly draft: boolean
 }
 
+export interface PictureRequest {
+  readonly upstream: string | null
+  readonly commits: ReadonlyArray<LoggedCommit>
+  readonly unpushed: ReadonlySet<string>
+  readonly known: (email: string) => boolean
+}
+
+export interface FoundPictures {
+  readonly bySha: ReadonlyArray<readonly [sha: string, url: string]>
+  readonly byEmail: ReadonlyArray<readonly [email: string, url: string | null]>
+}
+
 export interface ForgeClient extends ForgeTerms {
   readonly hasToken: Effect.Effect<boolean>
+  readonly gitEnv: Effect.Effect<Record<string, string>>
+  readonly mergeRefusal: (method: MergeMethod) => string | null
+  readonly pictureScope: string
+  readonly findPictures: (request: PictureRequest) => Effect.Effect<FoundPictures>
+  readonly fallbackPicture: (email: string) => string | null
   readonly find: (branch: string) => Effect.Effect<Option.Option<PullRequest>, ForgeError>
   readonly create: (pull: NewForgePull) => Effect.Effect<PullRequest, ForgeError>
   readonly comment: (pullRequest: PullRequest, body: string) => Effect.Effect<void, ForgeError>
@@ -55,6 +74,23 @@ export interface ForgeClient extends ForgeTerms {
   readonly commitPage: (hash: string) => string
 }
 
+const AVATAR_LOOKUPS = 10
+
+const NOREPLY = /^(?:(\d+)\+)?([^@]+)@users\.noreply\.github\.com$/i
+
+export const noreplyAvatar = (email: string): string | null => {
+  const match = NOREPLY.exec(email)
+  if (match === null) return null
+  const [, id, login] = match
+  return id !== undefined
+    ? `https://avatars.githubusercontent.com/u/${id}?v=4`
+    : `https://github.com/${encodeURIComponent(login ?? "")}.png`
+}
+
+export const sameHost = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+const NO_PICTURES: FoundPictures = { bySha: [], byEmail: [] }
+
 export const makeForgeClients = Effect.gen(function* () {
   const github = yield* GitHubService
   const gitlab = yield* GitLabService
@@ -62,6 +98,32 @@ export const makeForgeClients = Effect.gen(function* () {
   const onGitHub = (fullName: string): ForgeClient => ({
     ...forgeTerms("github"),
     hasToken: Effect.map(github.token, Option.isSome),
+    gitEnv: Effect.map(github.token, (token) =>
+      credentialEnv("https://github.com", "x-access-token", token),
+    ),
+    mergeRefusal: () => null,
+    pictureScope: "github",
+    findPictures: ({ upstream, commits, unpushed }) =>
+      Effect.gen(function* () {
+        const pushed = commits.filter((commit) => !unpushed.has(commit.hash)).length
+        const onOrigin = upstream?.startsWith("origin/") === true ? upstream.slice(7) : null
+        if (Option.isNone(yield* github.token) || onOrigin === null || pushed === 0) {
+          return NO_PICTURES
+        }
+        const authors = yield* github
+          .commitAuthors(fullName, onOrigin, pushed)
+          .pipe(Effect.catch(() => Effect.succeed([])))
+        const found = authors.flatMap((author) =>
+          author.avatarUrl === null ? [] : [{ ...author, avatarUrl: author.avatarUrl }],
+        )
+        return {
+          bySha: found.map((author) => [author.sha, author.avatarUrl] as const),
+          byEmail: found.flatMap((author) =>
+            author.email === null ? [] : [[author.email, author.avatarUrl] as const],
+          ),
+        }
+      }),
+    fallbackPicture: noreplyAvatar,
     find: (branch) => github.findPullRequest(fullName, branch),
     create: (pull) => github.createPullRequest(fullName, pull),
     comment: (pullRequest, body) => github.commentOnPullRequest(fullName, pullRequest.number, body),
@@ -83,6 +145,35 @@ export const makeForgeClients = Effect.gen(function* () {
   const onGitLab = (host: string, fullPath: string): ForgeClient => ({
     ...forgeTerms("gitlab"),
     hasToken: Effect.map(gitlab.credentials, ({ token }) => Option.isSome(token)),
+    gitEnv: Effect.map(gitlab.credentials, (connected) =>
+      sameHost(connected.host, host)
+        ? credentialEnv(`https://${connected.host}`, "oauth2", connected.token)
+        : {},
+    ),
+    mergeRefusal: (method) =>
+      method === "rebase"
+        ? "GitLab merges by the project's own merge method. Pick Merge or Squash and merge."
+        : null,
+    pictureScope: `gitlab:${host}`,
+    findPictures: ({ commits, known }) =>
+      Effect.gen(function* () {
+        const { token } = yield* gitlab.credentials
+        if (Option.isNone(token)) return NO_PICTURES
+        const unknown = [
+          ...new Set(commits.map((commit) => commit.authorEmail.toLowerCase())),
+        ].filter((email) => email !== "" && !known(email))
+        const looked = yield* Effect.forEach(
+          unknown.slice(0, AVATAR_LOOKUPS),
+          (email) =>
+            gitlab.avatar(email).pipe(
+              Effect.map((url) => [[email, url] as const]),
+              Effect.catch(() => Effect.succeed([])),
+            ),
+          { concurrency: 3 },
+        )
+        return { bySha: [], byEmail: looked.flat() }
+      }),
+    fallbackPicture: () => null,
     find: (branch) => gitlab.findMergeRequest(fullPath, branch),
     create: (pull) =>
       gitlab.createMergeRequest(fullPath, {

@@ -25,10 +25,9 @@ import {
   plural,
 } from "@humanity/contracts"
 import { Context, Effect, Layer, Option, Semaphore, Stream } from "effect"
-import { makeForgeClients } from "./forgeClient.ts"
+import { type ForgeRepo, makeForgeClients, sameHost } from "./forgeClient.ts"
 import { EMPTY_FEED, ForgeSync, type ForgeTarget } from "./ForgeSync.ts"
-import { credentialEnv } from "./gitCredentials.ts"
-import { type GitHubError, GitHubService } from "./GitHubService.ts"
+import type { GitHubError } from "./GitHubService.ts"
 import { type GitLabError, GitLabService } from "./GitLabService.ts"
 import { type GitError, GitService, parseGitHubFullName, parseGitLabRemote } from "./GitService.ts"
 import { ProjectService } from "./ProjectService.ts"
@@ -39,14 +38,7 @@ import { COMMIT_LIST_LIMIT, SessionService } from "./SessionService.ts"
 
 type Base = SessionNotFound | ProjectNotFound | GitError
 
-type Remote =
-  | { readonly forge: "github"; readonly fullName: string }
-  | {
-      readonly forge: "gitlab"
-      readonly fullPath: string
-      readonly host: string
-      readonly mismatch: string | null
-    }
+type Remote = ForgeRepo & { readonly problem: string | null }
 
 interface Tracking {
   readonly upstream: string | null
@@ -65,19 +57,6 @@ interface Fetched {
 }
 
 const commits = (count: number) => plural(count, "commit")
-
-const AVATAR_LOOKUPS = 10
-
-const NOREPLY = /^(?:(\d+)\+)?([^@]+)@users\.noreply\.github\.com$/i
-
-export const noreplyAvatar = (email: string): string | null => {
-  const match = NOREPLY.exec(email)
-  if (match === null) return null
-  const [, id, login] = match
-  return id !== undefined
-    ? `https://avatars.githubusercontent.com/u/${id}?v=4`
-    : `https://github.com/${encodeURIComponent(login ?? "")}.png`
-}
 
 const files = (count: number) => plural(count, "file")
 
@@ -102,13 +81,10 @@ const listPaths = (paths: ReadonlyArray<string>, limit: number) =>
     ? paths.join(", ")
     : `${paths.slice(0, limit).join(", ")} and ${paths.length - limit} more`
 
-const sameHost = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
-
 const targetOf = (remote: Remote | null, branch: string | null): ForgeTarget | null => {
-  if (remote === null || branch === null) return null
-  if (remote.forge === "github") return { forge: "github", fullName: remote.fullName, branch }
-  if (remote.mismatch !== null) return null
-  return { forge: "gitlab", host: remote.host, fullPath: remote.fullPath, branch }
+  if (remote === null || branch === null || remote.problem !== null) return null
+  const { problem: _problem, ...repo } = remote
+  return { ...repo, branch }
 }
 
 export class PullRequestService extends Context.Service<
@@ -158,7 +134,6 @@ export class PullRequestService extends Context.Service<
       const sessions = yield* SessionService
       const projects = yield* ProjectService
       const git = yield* GitService
-      const github = yield* GitHubService
       const gitlab = yield* GitLabService
       const sync = yield* ForgeSync
       const forgeOf = yield* makeForgeClients
@@ -170,14 +145,20 @@ export class PullRequestService extends Context.Service<
       const remoteOf = (project: Project) =>
         Effect.gen(function* () {
           if (project.githubFullName !== null) {
-            return { forge: "github", fullName: project.githubFullName } satisfies Remote
+            return {
+              forge: "github",
+              fullName: project.githubFullName,
+              problem: null,
+            } satisfies Remote
           }
           const { host } = yield* gitlab.credentials
           let onGitLab = project.gitlab
           if (onGitLab === null) {
             const origin = yield* git.originUrl(project.localPath)
             const fullName = parseGitHubFullName(origin)
-            if (fullName !== undefined) return { forge: "github", fullName } satisfies Remote
+            if (fullName !== undefined) {
+              return { forge: "github", fullName, problem: null } satisfies Remote
+            }
             onGitLab = parseGitLabRemote(origin, [host, GITLAB_DEFAULT_HOST]) ?? null
           }
           if (onGitLab === null) return null
@@ -185,7 +166,7 @@ export class PullRequestService extends Context.Service<
             forge: "gitlab",
             fullPath: onGitLab.fullPath,
             host: onGitLab.host,
-            mismatch: sameHost(host, onGitLab.host)
+            problem: sameHost(host, onGitLab.host)
               ? null
               : `GitLab is connected to ${host}, but this project is on ${onGitLab.host}. Connect ${onGitLab.host} in Settings → Repositories.`,
           } satisfies Remote
@@ -266,15 +247,7 @@ export class PullRequestService extends Context.Service<
       })
 
       const pushEnv = (remote: Remote | null) =>
-        Effect.gen(function* () {
-          if (remote === null) return {}
-          if (remote.forge === "github") {
-            return credentialEnv("https://github.com", "x-access-token", yield* github.token)
-          }
-          const { host, token } = yield* gitlab.credentials
-          if (!sameHost(host, remote.host)) return {}
-          return credentialEnv(`https://${host}`, "oauth2", token)
-        })
+        remote === null ? Effect.succeed({}) : forgeOf(remote).gitEnv
 
       const requireIdle = (session: Session) =>
         isBusy(session)
@@ -324,8 +297,8 @@ export class PullRequestService extends Context.Service<
               "This project's origin is not on GitHub or on a connected GitLab instance, so Humanity can't open a pull request for it.",
           })
         }
-        if (remote.forge === "gitlab" && remote.mismatch !== null) {
-          return yield* new PullRequestUnavailable({ reason: remote.mismatch })
+        if (remote.problem !== null) {
+          return yield* new PullRequestUnavailable({ reason: remote.problem })
         }
         const branch = yield* requireBranch(own)
         if (branch === input.base) {
@@ -363,8 +336,8 @@ export class PullRequestService extends Context.Service<
             }),
           )
         }
-        if (remote.forge === "gitlab" && remote.mismatch !== null) {
-          return Effect.fail(new PullRequestUnavailable({ reason: remote.mismatch }))
+        if (remote.problem !== null) {
+          return Effect.fail(new PullRequestUnavailable({ reason: remote.problem }))
         }
         return Effect.succeed(remote)
       }
@@ -416,14 +389,10 @@ export class PullRequestService extends Context.Service<
             reason: `This ${noun} has new commits since you looked at it, so nothing was merged. Look at them, then merge again.`,
           })
         }
-        if (remote.forge === "gitlab" && input.method === "rebase") {
-          return yield* new PullRequestUnavailable({
-            reason:
-              "GitLab merges by the project's own merge method. Pick Merge or Squash and merge.",
-          })
-        }
-        const comment = input.comment.trim()
         const forge = forgeOf(remote)
+        const refusal = forge.mergeRefusal(input.method)
+        if (refusal !== null) return yield* new PullRequestUnavailable({ reason: refusal })
+        const comment = input.comment.trim()
         if (comment !== "") yield* forge.comment(pullRequest, comment)
         const merged = yield* forge.merge(pullRequest, input.method)
         if (target !== null) yield* sync.updated(target, merged)
@@ -539,8 +508,7 @@ export class PullRequestService extends Context.Service<
             const { remote, branch } = yield* load(sessionId)
             const target = targetOf(remote, branch)
             if (target !== null) return sync.watch(target)
-            const problem = remote?.forge === "gitlab" ? remote.mismatch : null
-            const feed: PullRequestFeed = { ...EMPTY_FEED, problem }
+            const feed: PullRequestFeed = { ...EMPTY_FEED, problem: remote?.problem ?? null }
             return Stream.make(feed)
           }),
         )
@@ -781,47 +749,22 @@ export class PullRequestService extends Context.Service<
         Effect.gen(function* () {
           const bySha = new Map<string, string>()
           if (remote === null) return bySha
-          const scope = remote.forge === "github" ? "github" : `gitlab:${remote.host}`
-          const known = (email: string) => pictures.get(`${scope}\n${email.toLowerCase()}`)
-          const remember = (email: string, url: string | null) =>
-            pictures.set(`${scope}\n${email.toLowerCase()}`, url)
-
-          if (remote.forge === "github") {
-            const pushed = listed.filter((commit) => !unpushed.has(commit.hash)).length
-            const onOrigin = upstream?.startsWith("origin/") === true ? upstream.slice(7) : null
-            const token = yield* github.token
-            if (Option.isSome(token) && onOrigin !== null && pushed > 0) {
-              const authors = yield* github
-                .commitAuthors(remote.fullName, onOrigin, pushed)
-                .pipe(Effect.catch(() => Effect.succeed([])))
-              for (const author of authors) {
-                if (author.avatarUrl === null) continue
-                bySha.set(author.sha, author.avatarUrl)
-                if (author.email !== null) remember(author.email, author.avatarUrl)
-              }
-            }
-          } else if (remote.mismatch === null) {
-            const { token } = yield* gitlab.credentials
-            const unknown = [
-              ...new Set(listed.map((commit) => commit.authorEmail.toLowerCase())),
-            ].filter((email) => email !== "" && known(email) === undefined)
-            if (Option.isSome(token)) {
-              yield* Effect.forEach(
-                unknown.slice(0, AVATAR_LOOKUPS),
-                (email) =>
-                  gitlab.avatar(email).pipe(
-                    Effect.tap((url) => Effect.sync(() => remember(email, url))),
-                    Effect.catch(() => Effect.void),
-                  ),
-                { concurrency: 3, discard: true },
-              )
-            }
+          const forge = forgeOf(remote)
+          const key = (email: string) => `${forge.pictureScope}\n${email.toLowerCase()}`
+          if (remote.problem === null) {
+            const found = yield* forge.findPictures({
+              upstream,
+              commits: listed,
+              unpushed,
+              known: (email) => pictures.has(key(email)),
+            })
+            for (const [sha, url] of found.bySha) bySha.set(sha, url)
+            for (const [email, url] of found.byEmail) pictures.set(key(email), url)
           }
           for (const commit of listed) {
             if (bySha.has(commit.hash)) continue
             const url =
-              known(commit.authorEmail) ??
-              (remote.forge === "github" ? noreplyAvatar(commit.authorEmail) : null)
+              pictures.get(key(commit.authorEmail)) ?? forge.fallbackPicture(commit.authorEmail)
             if (url !== null && url !== undefined) bySha.set(commit.hash, url)
           }
           return bySha
