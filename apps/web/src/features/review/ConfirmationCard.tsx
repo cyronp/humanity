@@ -1,7 +1,5 @@
-import { useAtomSet } from "@effect/atom-react"
 import { type PendingConfirmation, parseMcpToolName } from "@humanity/contracts"
-import { Exit } from "effect"
-import { memo, useState } from "react"
+import { memo } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -12,9 +10,9 @@ import {
 } from "@/components/ui/code-block"
 import { decideConfirmationAtom } from "@/features/session/atoms"
 import { JsonBlock } from "@/features/tools/renderers/common"
-import { describeCause } from "@/lib/errors"
 import { DecisionActions, type Verdict } from "./DecisionActions.tsx"
 import { DecisionCard } from "./DecisionCard.tsx"
+import { useAction } from "@/lib/useAction"
 
 const asRecord = (input: unknown): Record<string, unknown> =>
   input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
@@ -64,17 +62,11 @@ export const ConfirmationCard = memo(function ConfirmationCard({
 }: {
   readonly confirmation: PendingConfirmation
 }) {
-  const decide = useAtomSet(decideConfirmationAtom, { mode: "promiseExit" })
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
+  const { run: decide, error, pending } = useAction(decideConfirmationAtom)
 
   const submit = async (verdict: Verdict) => {
     if (pending) return
-    setPending(true)
-    setError(undefined)
-    const exit = await decide({ payload: { confirmationId: confirmation.id, ...verdict } })
-    setPending(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
+    await decide({ payload: { confirmationId: confirmation.id, ...verdict } })
   }
 
   const input = asRecord(confirmation.input)

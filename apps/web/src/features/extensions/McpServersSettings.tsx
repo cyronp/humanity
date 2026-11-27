@@ -2,18 +2,12 @@ import { useAtomSet } from "@effect/atom-react"
 import type { McpServer } from "@humanity/contracts"
 import { Exit } from "effect"
 import { ClipboardPaste, Pencil, Plus, Server, X } from "lucide-react"
-import { type FormEvent, type ReactNode, useId, useState } from "react"
+import { type FormEvent, useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
-import {
-  FieldDescription,
-  FieldLabel,
-  FieldLegend,
-  Field as FieldRoot,
-  FieldSet,
-} from "@/components/ui/field"
+import { FieldLegend, FieldSet } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia } from "@/components/ui/item"
 import { Label } from "@/components/ui/label"
@@ -26,15 +20,15 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { ConfirmRemove } from "@/components/ConfirmRemove"
+import { LabeledField } from "@/components/LabeledField"
 import {
   importMcpServersAtom,
   removeMcpServerAtom,
   saveMcpServerAtom,
   setMcpServerEnabledAtom,
 } from "./atoms.ts"
-import { ConfirmRemove } from "./ConfirmRemove.tsx"
 import {
   blankEntry,
   buildMcpInput,
@@ -46,6 +40,8 @@ import {
 } from "./mcpForm.ts"
 import { describeTransport, mcpMention, TRANSPORT_LABELS } from "./prompt.ts"
 import { EMPTY_BOX, LIST_ROW, TAG } from "./styles.ts"
+import { useAction } from "@/lib/useAction"
+import { failureMessage } from "@/lib/errors"
 
 const reactivityKeys = [keys.extensions]
 
@@ -130,17 +126,14 @@ function ServerRow({
   readonly server: McpServer
   readonly onEdit: (() => void) | undefined
 }) {
-  const setEnabled = useAtomSet(setMcpServerEnabledAtom, { mode: "promiseExit" })
+  const { run: setEnabled, error } = useAction(setMcpServerEnabledAtom)
   const remove = useAtomSet(removeMcpServerAtom, { mode: "promiseExit" })
-  const [error, setError] = useState<string>()
   const switchId = useId()
   const secrets =
     server.transport._tag === "stdio" ? server.transport.env : server.transport.headers
 
   const toggle = async (enabled: boolean) => {
-    setError(undefined)
-    const exit = await setEnabled({ payload: { name: server.name, enabled }, reactivityKeys })
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
+    await setEnabled({ payload: { name: server.name, enabled }, reactivityKeys })
   }
 
   return (
@@ -193,7 +186,7 @@ function ServerRow({
               description="Its saved variables and headers are deleted too."
               onConfirm={async () => {
                 const exit = await remove({ payload: { name: server.name }, reactivityKeys })
-                return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+                return failureMessage(exit)
               }}
             />
           </ItemActions>
@@ -215,12 +208,10 @@ function ServerEditor({
   readonly server: McpServer | undefined
   readonly onDone: () => void
 }) {
-  const save = useAtomSet(saveMcpServerAtom, { mode: "promiseExit" })
+  const { run: save, error, setError, pending: saving } = useAction(saveMcpServerAtom)
   const [draft, setDraft] = useState<McpDraft>(() =>
     server === undefined ? EMPTY_DRAFT : draftFromServer(server),
   )
-  const [error, setError] = useState<string>()
-  const [saving, setSaving] = useState(false)
   const ids = useId()
   const update = (patch: Partial<McpDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
@@ -231,15 +222,11 @@ function ServerEditor({
       setError(built.error)
       return
     }
-    setSaving(true)
-    setError(undefined)
     const exit = await save({
       payload: { previousName: server?.name ?? null, ...built.ok },
       reactivityKeys,
     })
-    setSaving(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else onDone()
+    if (Exit.isSuccess(exit)) onDone()
   }
 
   return (
@@ -249,7 +236,7 @@ function ServerEditor({
       aria-label={server === undefined ? "New MCP server" : `Edit ${server.name}`}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" htmlFor={`${ids}-name`}>
+        <LabeledField label="Name" htmlFor={`${ids}-name`}>
           <Input
             id={`${ids}-name`}
             value={draft.name}
@@ -259,8 +246,8 @@ function ServerEditor({
             autoComplete="off"
             spellCheck={false}
           />
-        </Field>
-        <Field label="Connection" htmlFor={`${ids}-transport`}>
+        </LabeledField>
+        <LabeledField label="Connection" htmlFor={`${ids}-transport`}>
           <Select
             value={draft.transport}
             onValueChange={(value) => update({ transport: value as TransportKind })}
@@ -274,12 +261,12 @@ function ServerEditor({
               <SelectItem value="sse">Remote, server-sent events</SelectItem>
             </SelectContent>
           </Select>
-        </Field>
+        </LabeledField>
       </div>
 
       {draft.transport === "stdio" ? (
         <>
-          <Field label="Command" htmlFor={`${ids}-command`}>
+          <LabeledField label="Command" htmlFor={`${ids}-command`}>
             <Input
               id={`${ids}-command`}
               value={draft.command}
@@ -289,8 +276,8 @@ function ServerEditor({
               autoComplete="off"
               spellCheck={false}
             />
-          </Field>
-          <Field label="Arguments" htmlFor={`${ids}-args`} hint="One per line.">
+          </LabeledField>
+          <LabeledField label="Arguments" htmlFor={`${ids}-args`} hint="One per line.">
             <Textarea
               id={`${ids}-args`}
               value={draft.args}
@@ -299,7 +286,7 @@ function ServerEditor({
               className="min-h-20 font-mono text-xs md:text-xs"
               spellCheck={false}
             />
-          </Field>
+          </LabeledField>
           <Entries
             title="Environment variables"
             namePlaceholder="API_TOKEN"
@@ -309,7 +296,7 @@ function ServerEditor({
         </>
       ) : (
         <>
-          <Field label="URL" htmlFor={`${ids}-url`}>
+          <LabeledField label="URL" htmlFor={`${ids}-url`}>
             <Input
               id={`${ids}-url`}
               value={draft.url}
@@ -319,7 +306,7 @@ function ServerEditor({
               autoComplete="off"
               spellCheck={false}
             />
-          </Field>
+          </LabeledField>
           <Entries
             title="Headers"
             namePlaceholder="Authorization"
@@ -421,20 +408,14 @@ const IMPORT_EXAMPLE = `{
 }`
 
 function ImportServers({ onDone }: { readonly onDone: () => void }) {
-  const importServers = useAtomSet(importMcpServersAtom, { mode: "promiseExit" })
+  const { run: importServers, error, pending: saving } = useAction(importMcpServersAtom)
   const [json, setJson] = useState("")
-  const [error, setError] = useState<string>()
-  const [saving, setSaving] = useState(false)
   const id = useId()
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    setSaving(true)
-    setError(undefined)
     const exit = await importServers({ payload: { json }, reactivityKeys })
-    setSaving(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else onDone()
+    if (Exit.isSuccess(exit)) onDone()
   }
 
   return (
@@ -442,7 +423,7 @@ function ImportServers({ onDone }: { readonly onDone: () => void }) {
       onSubmit={(event) => void submit(event)}
       className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4"
     >
-      <Field
+      <LabeledField
         label="Configuration"
         htmlFor={id}
         hint={`The JSON from the server's docs, with "mcpServers" or without.`}
@@ -456,7 +437,7 @@ function ImportServers({ onDone }: { readonly onDone: () => void }) {
           spellCheck={false}
           autoFocus
         />
-      </Field>
+      </LabeledField>
       {error !== undefined && <ErrorNote title="Nothing was added" message={error} />}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onDone}>
@@ -467,25 +448,5 @@ function ImportServers({ onDone }: { readonly onDone: () => void }) {
         </Button>
       </div>
     </form>
-  )
-}
-
-export function Field({
-  label,
-  htmlFor,
-  hint,
-  children,
-}: {
-  readonly label: string
-  readonly htmlFor: string
-  readonly hint?: string
-  readonly children: ReactNode
-}) {
-  return (
-    <FieldRoot className="min-w-0 gap-1.5">
-      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
-      {children}
-      {hint !== undefined && <FieldDescription>{hint}</FieldDescription>}
-    </FieldRoot>
   )
 }

@@ -5,21 +5,9 @@ import {
   type MessageContent,
   type ToolCall,
 } from "@humanity/contracts"
-import {
-  Brain,
-  Check,
-  Copy,
-  GitFork,
-  Info,
-  Pencil,
-  Search,
-  SquareTerminal,
-  TriangleAlert,
-} from "lucide-react"
-import { memo, type ReactNode, useEffect, useMemo, useState } from "react"
-import { Button } from "@/components/ui/button"
+import { Brain, GitFork, Info, Pencil, Search, SquareTerminal, TriangleAlert } from "lucide-react"
+import { memo, type ReactNode, useMemo, useState } from "react"
 import { Spinner } from "@/components/ui/spinner"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Trace,
   TraceCollapsible,
@@ -33,6 +21,8 @@ import {
 import { ToolCallCard } from "@/features/tools/ToolCallCard"
 import { useNow } from "@/lib/elapsed"
 import { useUiPreferences } from "@/lib/uiPreferences"
+import { CopyButton } from "@/components/CopyButton"
+import { IconButton } from "@/components/IconButton"
 import { Markdown } from "./Markdown.tsx"
 import { type TurnEnd, useTranscriptActions } from "./transcriptActions.ts"
 import {
@@ -370,63 +360,19 @@ function TurnActions({ turn }: { readonly turn: TurnEnd | undefined }) {
   return (
     <div className="flex shrink-0 items-center gap-1">
       {turn.reply !== "" && (
-        <CopyText text={turn.reply} label="Copy response" className={REVEAL_TURN} />
+        <CopyButton text={turn.reply} label="Copy response" className={REVEAL_TURN} />
       )}
       {onFork !== undefined && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-xs"
-              className={REVEAL_TURN}
-              aria-label="Fork from here"
-              onClick={() => onFork(turn)}
-            >
-              <GitFork />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Fork from here</TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  )
-}
-
-export function CopyText({
-  text,
-  label,
-  className,
-}: {
-  readonly text: string
-  readonly label: string
-  readonly className?: string
-}) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [copied])
-  const copy = () => {
-    void navigator.clipboard?.writeText(text).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    )
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
+        <IconButton
           variant="muted"
           size="icon-xs"
-          className={className}
-          aria-label={copied ? "Copied" : label}
-          onClick={copy}
+          className={REVEAL_TURN}
+          label="Fork from here"
+          onClick={() => onFork(turn)}
         >
-          {copied ? <Check /> : <Copy />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{copied ? "Copied" : label}</TooltipContent>
-    </Tooltip>
+          <GitFork />
+        </IconButton>
+      )}
+    </div>
   )
 }

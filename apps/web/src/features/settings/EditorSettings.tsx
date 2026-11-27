@@ -9,8 +9,6 @@ import {
 } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { useId } from "react"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { editorPreferencesAtom, setEditorPreferencesAtom } from "@/features/files/atoms"
 import { keys } from "@/lib/rpc"
 import {
@@ -21,7 +19,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
-import { NumberSetting } from "./TerminalSettings.tsx"
+import { FontFamilySetting, NumberSetting, SwitchSetting } from "./SettingsFields.tsx"
 
 const AUTO_SAVE: ReadonlyArray<{ readonly value: EditorAutoSave; readonly label: string }> = [
   { value: "off", label: "Off" },
@@ -82,16 +80,15 @@ export function EditorSettings() {
       reactivityKeys: [keys.preferences],
     })
   const autoSaveId = useId()
-  const toggleIds = useId()
 
   const toggleRow = ({ key, label, detail }: { key: Toggle; label: string; detail: string }) => (
-    <SettingsRow key={key} label={label} labelId={`${toggleIds}-${key}`} detail={detail}>
-      <Switch
-        aria-labelledby={`${toggleIds}-${key}`}
-        checked={preferences[key]}
-        onCheckedChange={(on) => change({ [key]: on })}
-      />
-    </SettingsRow>
+    <SwitchSetting
+      key={key}
+      label={label}
+      detail={detail}
+      checked={preferences[key]}
+      onCheckedChange={(on) => change({ [key]: on })}
+    />
   )
 
   return (
@@ -130,6 +127,7 @@ export function EditorSettings() {
         <SettingsGroup title="Text">
           <SettingsRows>
             <FontFamilySetting
+              detail="A font installed on this machine. Empty uses the app's monospace font."
               value={preferences.fontFamily}
               onChange={(fontFamily) => change({ fontFamily })}
             />
@@ -160,37 +158,5 @@ export function EditorSettings() {
         </SettingsGroup>
       </SettingsPane>
     </SettingsFrame>
-  )
-}
-
-function FontFamilySetting({
-  value,
-  onChange,
-}: {
-  readonly value: string | null
-  readonly onChange: (fontFamily: string | null) => void
-}) {
-  const labelId = useId()
-  return (
-    <SettingsRow
-      label="Font"
-      labelId={labelId}
-      detail="A font installed on this machine. Empty uses the app's monospace font."
-    >
-      <Input
-        key={value ?? ""}
-        aria-labelledby={labelId}
-        className="w-56"
-        placeholder="JetBrains Mono"
-        defaultValue={value ?? ""}
-        onBlur={(event) => {
-          const next = event.currentTarget.value.trim()
-          if (next !== (value ?? "")) onChange(next === "" ? null : next)
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur()
-        }}
-      />
-    </SettingsRow>
   )
 }

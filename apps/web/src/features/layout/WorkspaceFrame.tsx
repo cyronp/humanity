@@ -20,8 +20,6 @@ import {
 } from "react"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { ResizeHandle } from "@/components/ResizeHandle"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
 import {
   browserDefaultsOf,
@@ -52,7 +50,8 @@ import {
   useStoredFlag,
 } from "@/features/terminal/dock"
 import { terminalsAtom } from "@/features/terminal/atoms"
-import { isMac, shortcutLabel, terminalCommand } from "@/features/terminal/keys"
+import { terminalCommand } from "@/features/terminal/keys"
+import { controlShortcut, isMac } from "@/lib/shortcuts"
 import {
   onShowTerminal,
   type ShowTerminalRequest,
@@ -60,6 +59,7 @@ import {
 } from "@/features/terminal/showTerminal"
 import { type DockCommands, TerminalDock } from "@/features/terminal/TerminalDock"
 import { useStoredWidth } from "@/lib/resize"
+import { IconButton } from "@/components/IconButton"
 
 const SHELF_KEYWORDS: Readonly<Record<ShelfTool, ReadonlyArray<string>>> = {
   files: ["editor", "tree", "explorer"],
@@ -480,40 +480,34 @@ function LayoutButtons({
 }) {
   return (
     <div className="flex items-center gap-0.5">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Terminal"
-            aria-pressed={terminalsOpen}
-            onClick={onToggleTerminals}
-            className={cn("relative", !terminalsOpen && "text-muted-foreground")}
-          >
-            <PanelBottom />
-            {terminalsOwner !== undefined && <BusyBadge owner={terminalsOwner} />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {`${terminalsOpen ? "Hide" : "Show"} the terminal (${shortcutLabel("Ctrl+`")})`}
-        </TooltipContent>
-      </Tooltip>
+      <IconButton
+        variant="ghost"
+        size="icon-sm"
+        label="Terminal"
+        aria-pressed={terminalsOpen}
+        onClick={onToggleTerminals}
+        className={cn("relative", !terminalsOpen && "text-muted-foreground")}
+        tooltip={
+          <>{`${terminalsOpen ? "Hide" : "Show"} the terminal (${controlShortcut("Ctrl+`")})`}</>
+        }
+        side="bottom"
+      >
+        <PanelBottom />
+        {terminalsOwner !== undefined && <BusyBadge owner={terminalsOwner} />}
+      </IconButton>
       {onToggleRail !== undefined && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Tools"
-              aria-pressed={railShown}
-              onClick={onToggleRail}
-              className={cn(!railShown && "text-muted-foreground")}
-            >
-              <PanelRight />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{`${railShown ? "Hide" : "Show"} the tools`}</TooltipContent>
-        </Tooltip>
+        <IconButton
+          variant="ghost"
+          size="icon-sm"
+          label="Tools"
+          aria-pressed={railShown}
+          onClick={onToggleRail}
+          className={cn(!railShown && "text-muted-foreground")}
+          tooltip={`${railShown ? "Hide" : "Show"} the tools`}
+          side="bottom"
+        >
+          <PanelRight />
+        </IconButton>
       )}
     </div>
   )

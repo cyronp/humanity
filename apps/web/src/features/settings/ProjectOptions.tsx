@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react"
 import {
   isBranchPrefix,
   MAX_PROJECT_NAME_LENGTH,
@@ -8,10 +7,8 @@ import {
   type ProjectSettings,
   type WorktreeOnEnd,
 } from "@humanity/contracts"
-import { Exit } from "effect"
 import { useId, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -19,13 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { renameProjectAtom, setProjectSettingsAtom } from "@/features/projects/atoms"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { CommitInput } from "@/components/CommitInput"
 import { ModelDefaultSelect } from "./ModelDefaultSelect.tsx"
 import { SettingsGroup, SettingsRow, SettingsRows } from "./SettingsLayout.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
+import { useAction } from "@/lib/useAction"
 
 const ASK = "ask"
 
@@ -42,31 +40,25 @@ const ON_END: ReadonlyArray<{ readonly value: WorktreeOnEnd; readonly label: str
 ]
 
 const useProjectSettings = (project: Project) => {
-  const save = useAtomSet(setProjectSettingsAtom, { mode: "promiseExit" })
-  const [error, setError] = useState<string>()
+  const { run: save, error } = useAction(setProjectSettingsAtom)
   const change = async (patch: Partial<ProjectSettings>) => {
-    setError(undefined)
-    const exit = await save({
+    await save({
       payload: { projectId: project.id, settings: { ...project.settings, ...patch } },
       reactivityKeys: [keys.projects],
     })
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
   return { change, error }
 }
 
 export function ProjectName({ project }: { readonly project: Project }) {
-  const rename = useAtomSet(renameProjectAtom, { mode: "promiseExit" })
-  const [error, setError] = useState<string>()
+  const { run: rename, error } = useAction(renameProjectAtom)
   const labelId = useId()
 
   const save = async (name: string) => {
-    setError(undefined)
-    const exit = await rename({
+    await rename({
       payload: { projectId: project.id, name },
       reactivityKeys: [keys.projects],
     })
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
   return (
@@ -76,23 +68,15 @@ export function ProjectName({ project }: { readonly project: Project }) {
           Name
         </dt>
         <dd>
-          <Input
-            key={project.name}
+          <CommitInput
             aria-labelledby={labelId}
             className="w-64"
             maxLength={MAX_PROJECT_NAME_LENGTH}
-            defaultValue={project.name}
-            onBlur={(event) => {
-              const next = event.currentTarget.value.trim()
-              if (next === "") event.currentTarget.value = project.name
-              else if (next !== project.name) void save(next)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur()
-              if (event.key === "Escape") {
-                event.currentTarget.value = project.name
-                event.currentTarget.blur()
-              }
+            value={project.name}
+            revertOnEscape
+            onCommit={(next) => {
+              if (next === "") return false
+              if (next !== project.name) void save(next)
             }}
           />
         </dd>
@@ -131,7 +115,6 @@ export function ProjectModel({ project }: { readonly project: Project }) {
 export function ProjectWorktrees({ project }: { readonly project: Project }) {
   const { change, error } = useProjectSettings(project)
   const { settings } = project
-  const autoId = useId()
   const prefixId = useId()
   const scriptId = useId()
   const checksId = useId()
@@ -141,17 +124,12 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
   return (
     <SettingsGroup title="Worktrees">
       <SettingsRows>
-        <SettingsRow
+        <SwitchSetting
           label="Start new threads in a worktree"
-          labelId={autoId}
           detail="Each new thread gets its own worktree and branch, leaving your checkout alone."
-        >
-          <Switch
-            aria-labelledby={autoId}
-            checked={settings.worktreeForNewThreads}
-            onCheckedChange={(worktreeForNewThreads) => void change({ worktreeForNewThreads })}
-          />
-        </SettingsRow>
+          checked={settings.worktreeForNewThreads}
+          onCheckedChange={(worktreeForNewThreads) => void change({ worktreeForNewThreads })}
+        />
         <SettingsRow
           label="Branch prefix"
           labelId={prefixId}
@@ -160,14 +138,12 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
             `A worktree's branch is named ${settings.branchPrefix}<id>-<title>. Empty leaves no prefix.`
           }
         >
-          <Input
-            key={settings.branchPrefix}
+          <CommitInput
             aria-labelledby={prefixId}
             aria-invalid={prefixError !== undefined}
             className="w-40 font-mono text-xs"
-            defaultValue={settings.branchPrefix}
-            onBlur={(event) => {
-              const next = event.currentTarget.value.trim()
+            value={settings.branchPrefix}
+            onCommit={(next) => {
               if (!isBranchPrefix(next)) {
                 setPrefixError(
                   "Use letters, numbers, dots, dashes and slashes, up to 40 characters, as in feat/.",
@@ -176,9 +152,6 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
               }
               setPrefixError(undefined)
               if (next !== settings.branchPrefix) void change({ branchPrefix: next })
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur()
             }}
           />
         </SettingsRow>
@@ -257,22 +230,16 @@ export function ProjectWorktrees({ project }: { readonly project: Project }) {
 
 export function ProjectTrust({ project }: { readonly project: Project }) {
   const { change, error } = useProjectSettings(project)
-  const trustId = useId()
 
   return (
     <SettingsGroup title="Repository settings">
       <SettingsRows>
-        <SettingsRow
+        <SwitchSetting
           label="Use this repository's Claude Code settings"
-          labelId={trustId}
           detail="Its .claude/settings.json can run programs of its own, such as hooks, MCP servers and plugins, before a thread's permissions decide anything. Until you turn this on, a Claude Code thread does not start in a repository whose settings would."
-        >
-          <Switch
-            aria-labelledby={trustId}
-            checked={project.settings.trustRepositorySettings}
-            onCheckedChange={(trustRepositorySettings) => void change({ trustRepositorySettings })}
-          />
-        </SettingsRow>
+          checked={project.settings.trustRepositorySettings}
+          onCheckedChange={(trustRepositorySettings) => void change({ trustRepositorySettings })}
+        />
       </SettingsRows>
       {error !== undefined && <ErrorNote title="The setting was not saved" message={error} />}
     </SettingsGroup>
@@ -283,7 +250,6 @@ export function ProjectPullRequests({ project }: { readonly project: Project }) 
   const { change, error } = useProjectSettings(project)
   const { settings } = project
   const methodId = useId()
-  const draftId = useId()
   const gitlab = project.gitlab !== null
 
   return (
@@ -321,17 +287,12 @@ export function ProjectPullRequests({ project }: { readonly project: Project }) 
             </SelectContent>
           </Select>
         </SettingsRow>
-        <SettingsRow
+        <SwitchSetting
           label="Open as a draft"
-          labelId={draftId}
           detail="Checks Draft when you open one. You can still change it each time."
-        >
-          <Switch
-            aria-labelledby={draftId}
-            checked={settings.draftPullRequests}
-            onCheckedChange={(draftPullRequests) => void change({ draftPullRequests })}
-          />
-        </SettingsRow>
+          checked={settings.draftPullRequests}
+          onCheckedChange={(draftPullRequests) => void change({ draftPullRequests })}
+        />
       </SettingsRows>
       {error !== undefined && <ErrorNote title="The setting was not saved" message={error} />}
     </SettingsGroup>

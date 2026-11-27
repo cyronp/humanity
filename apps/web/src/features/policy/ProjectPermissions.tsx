@@ -1,7 +1,4 @@
-import { useAtomSet } from "@effect/atom-react"
 import { type Autonomy, newThreadAutonomy, type Project } from "@humanity/contracts"
-import { Exit } from "effect"
-import { useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import {
   Select,
@@ -12,9 +9,9 @@ import {
 } from "@/components/ui/select"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 import { setDefaultAutonomyAtom } from "@/features/projects/atoms"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { AUTONOMY_OPTIONS } from "./AutonomyPicker.tsx"
+import { useAction } from "@/lib/useAction"
 
 const INHERIT = "inherit"
 
@@ -22,21 +19,15 @@ const labelOf = (autonomy: Autonomy) =>
   AUTONOMY_OPTIONS.find((option) => option.value === autonomy)?.label ?? autonomy
 
 export function ProjectPermissions({ project }: { readonly project: Project }) {
-  const save = useAtomSet(setDefaultAutonomyAtom, { mode: "promiseExit" })
+  const { run: save, error, pending } = useAction(setDefaultAutonomyAtom)
   const { pinned } = usePinnedDefaults()
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
 
   const change = async (value: string) => {
     const autonomy = AUTONOMY_OPTIONS.find((option) => option.value === value)?.value ?? null
-    setPending(true)
-    setError(undefined)
-    const exit = await save({
+    await save({
       payload: { projectId: project.id, autonomy },
       reactivityKeys: [keys.projects],
     })
-    setPending(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
   return (

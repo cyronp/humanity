@@ -24,9 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { browserPreferencesAtom, setBrowserPreferencesAtom } from "@/features/browser/atoms"
-import { ConfirmRemove } from "@/features/extensions/ConfirmRemove"
+import { ConfirmRemove } from "@/components/ConfirmRemove"
 import { desktopPreview } from "@/features/browser/desktop"
 import {
   clearRecordingsAtom,
@@ -34,8 +33,8 @@ import {
   openFolderAtom,
   recordingsAtom,
 } from "@/features/system/atoms"
-import { isMac } from "@/features/terminal/keys"
-import { describeCause } from "@/lib/errors"
+import { modKey } from "@/lib/shortcuts"
+import { describeCause, failureMessage } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import {
   SettingsChoice,
@@ -45,6 +44,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
 
 const APPEARANCES: ReadonlyArray<{ readonly value: BrowserAppearance; readonly label: string }> = [
   { value: "system", label: "Page's own" },
@@ -71,7 +71,6 @@ function BrowserView({ preferences }: { readonly preferences: BrowserPreferences
   const save = useAtomSet(setBrowserPreferencesAtom, { mode: "promiseExit" })
   const [error, setError] = useState<string>()
   const linkId = useId()
-  const offerId = useId()
   const deviceId = useId()
   const zoomId = useId()
   const appearanceId = useId()
@@ -93,7 +92,7 @@ function BrowserView({ preferences }: { readonly preferences: BrowserPreferences
           <SettingsRow
             label="Open local links in"
             labelId={linkId}
-            detail={`Where a local address clicked in a terminal or in a command's output opens. ${isMac() ? "⌘" : "Ctrl"}-click or a middle click always opens your browser.`}
+            detail={`Where a local address clicked in a terminal or in a command's output opens. ${modKey()}-click or a middle click always opens your browser.`}
           >
             <Select
               value={preferences.linkTarget}
@@ -110,17 +109,12 @@ function BrowserView({ preferences }: { readonly preferences: BrowserPreferences
               </SelectContent>
             </Select>
           </SettingsRow>
-          <SettingsRow
+          <SwitchSetting
             label="Point out local addresses"
-            labelId={offerId}
             detail="Badges the Browser's icon when a terminal or a command prints an address you haven't opened."
-          >
-            <Switch
-              aria-labelledby={offerId}
-              checked={preferences.offerLocalAddresses}
-              onCheckedChange={(offerLocalAddresses) => void change({ offerLocalAddresses })}
-            />
-          </SettingsRow>
+            checked={preferences.offerLocalAddresses}
+            onCheckedChange={(offerLocalAddresses) => void change({ offerLocalAddresses })}
+          />
         </SettingsRows>
       </SettingsGroup>
 
@@ -267,7 +261,7 @@ function BrowserData({ desktop }: { readonly desktop: boolean }) {
                     payload: undefined,
                     reactivityKeys: [keys.recordings],
                   })
-                  return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+                  return failureMessage(exit)
                 }}
               />
             )}

@@ -2,13 +2,9 @@ import { useAtomValue } from "@effect/atom-react"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { AsyncResult } from "effect/reactivity"
 import { useCallback, useEffect, useMemo, useRef } from "react"
-import {
-  insideTerminal,
-  type PaletteCommand,
-  usePaletteCommands,
-} from "@/features/palette/registry"
+import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { allSessionsAtom } from "@/features/session/atoms"
-import { isMac } from "@/features/terminal/keys"
+import { insideTerminal, isMac, modShortcut } from "@/lib/shortcuts"
 import { isNextThreadShortcut, nextThreadNeedingYou, threadsNeedingYou } from "./nextThread.ts"
 
 export function NextThreadShortcut() {
@@ -53,7 +49,7 @@ export function NextThreadShortcut() {
               title: "Go to the next thread that needs you",
               group: "General",
               detail: waiting === 1 ? "1 thread" : `${waiting} threads`,
-              shortcut: isMac() ? "⌘J" : "Ctrl+J",
+              shortcut: modShortcut("J"),
               keywords: ["waiting", "input", "error", "jump", "attention"],
               run: () => latest.current(),
             },

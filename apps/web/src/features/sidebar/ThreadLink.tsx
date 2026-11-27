@@ -1,26 +1,13 @@
 import type { MessageHit, Project, Session, SessionStatus } from "@humanity/contracts"
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
-import {
-  Archive,
-  CircleAlert,
-  CircleCheck,
-  CirclePause,
-  CircleStop,
-  Columns3,
-  GitBranch,
-  GitFork,
-  LoaderCircle,
-  type LucideIcon,
-  MessageCircleQuestionMark,
-  Network,
-  SquareTerminal,
-} from "lucide-react"
+import { CircleStop, Columns3, GitBranch, GitFork, Network, SquareTerminal } from "lucide-react"
 import { SearchSnippet } from "@/components/SearchSnippet"
 import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { ProviderIcon, sessionProvider } from "@/features/providers/ProviderIcon"
 import { STATUS_TONE, TONE_TEXT } from "@/features/session/statusTone"
 import { formatElapsed, useNow } from "@/lib/elapsed"
+import { THREAD_STATE, ThreadStatus } from "@/features/session/ThreadStatus"
 
 export function ThreadLink({
   session,
@@ -118,38 +105,6 @@ function ThreadBranch({ session }: { readonly session: Session }) {
   )
 }
 
-const STATE: Record<
-  SessionStatus,
-  {
-    readonly label: string
-    readonly word: string
-    readonly icon: LucideIcon
-    readonly spin?: true
-  }
-> = {
-  running: { label: "Working", word: "Working", icon: LoaderCircle, spin: true },
-  waiting_for_human: { label: "Needs input", word: "Input", icon: MessageCircleQuestionMark },
-  idle: { label: "Done", word: "Done", icon: CircleCheck },
-  interrupted: { label: "Interrupted", word: "Interrupted", icon: CirclePause },
-  error: { label: "Stopped with an error", word: "Error", icon: CircleAlert },
-  ended: { label: "Ended", word: "Ended", icon: Archive },
-}
-
-export function ThreadStatus({ status }: { readonly status: SessionStatus }) {
-  const state = STATE[status]
-  const tone = STATUS_TONE[status]
-  return (
-    <span
-      className={cn("flex shrink-0 items-center gap-1", tone !== undefined && TONE_TEXT[tone])}
-      title={state.label}
-    >
-      <state.icon className={cn("size-3 shrink-0", state.spin && "animate-spin")} aria-hidden />
-      <span aria-hidden>{state.word}</span>
-      <span className="sr-only">{state.label}</span>
-    </span>
-  )
-}
-
 const CHILD_ATTENTION: Partial<Record<SessionStatus, string>> = {
   waiting_for_human: "A thread started from it needs input",
   error: "A thread started from it stopped with an error",
@@ -157,9 +112,9 @@ const CHILD_ATTENTION: Partial<Record<SessionStatus, string>> = {
 }
 
 function ChildAttention({ status }: { readonly status: SessionStatus }) {
-  const label = CHILD_ATTENTION[status] ?? STATE[status].label
+  const label = CHILD_ATTENTION[status] ?? THREAD_STATE[status].label
   const tone = STATUS_TONE[status]
-  const Icon = STATE[status].icon
+  const Icon = THREAD_STATE[status].icon
   return (
     <span
       className={cn(
@@ -169,7 +124,10 @@ function ChildAttention({ status }: { readonly status: SessionStatus }) {
       title={label}
     >
       <Network className="size-3 shrink-0" aria-hidden />
-      <Icon className={cn("size-3 shrink-0", STATE[status].spin && "animate-spin")} aria-hidden />
+      <Icon
+        className={cn("size-3 shrink-0", THREAD_STATE[status].spin && "animate-spin")}
+        aria-hidden
+      />
       <span className="sr-only">{label}</span>
     </span>
   )

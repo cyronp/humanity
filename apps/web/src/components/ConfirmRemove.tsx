@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react"
-import { type ReactNode, useState } from "react"
+import { type ReactElement, type ReactNode, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import {
   AlertDialog,
@@ -19,11 +19,19 @@ export function ConfirmRemove({
   title,
   description,
   onConfirm,
+  confirmLabel = "Remove",
+  errorTitle = "Could not remove it",
+  trigger,
+  tooltip,
 }: {
   readonly label: string
-  readonly title: string
+  readonly title: ReactNode
   readonly description: ReactNode
   readonly onConfirm: () => Promise<string | undefined>
+  readonly confirmLabel?: string
+  readonly errorTitle?: string
+  readonly trigger?: ReactElement
+  readonly tooltip?: string
 }) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
@@ -33,9 +41,20 @@ export function ConfirmRemove({
     setRemoving(true)
     const failure = await onConfirm()
     setRemoving(false)
-    if (failure !== undefined) setError(failure)
-    else setOpen(false)
+    setError(failure)
+    if (failure === undefined) setOpen(false)
   }
+
+  const opener = (
+    <AlertDialogTrigger asChild>
+      {trigger ?? (
+        <Button variant="ghost" size="icon-sm" aria-label={label}>
+          <Trash2 />
+        </Button>
+      )}
+    </AlertDialogTrigger>
+  )
+  const hint = trigger === undefined ? label : tooltip
 
   return (
     <AlertDialog
@@ -45,26 +64,24 @@ export function ConfirmRemove({
         if (!next) setError(undefined)
       }}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={label}>
-              <Trash2 />
-            </Button>
-          </AlertDialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
+      {hint === undefined ? (
+        opener
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>{opener}</TooltipTrigger>
+          <TooltipContent>{hint}</TooltipContent>
+        </Tooltip>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        {error !== undefined && <ErrorNote title="Could not remove it" message={error} />}
+        {error !== undefined && <ErrorNote title={errorTitle} message={error} />}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
-            Remove
+            {confirmLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

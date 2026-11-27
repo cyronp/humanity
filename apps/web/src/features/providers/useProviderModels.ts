@@ -17,13 +17,26 @@ const perProvider = <A>(value: (provider: ProviderId) => A): Readonly<Record<Pro
     A
   >
 
+export const useProviderStatuses = (): Readonly<
+  Record<ProviderId, AsyncResult.AsyncResult<ProviderStatus, unknown>>
+> => ({
+  "claude-code": useAtomValue(providerStatusAtom("claude-code")),
+  codex: useAtomValue(providerStatusAtom("codex")),
+  kiro: useAtomValue(providerStatusAtom("kiro")),
+  antigravity: useAtomValue(providerStatusAtom("antigravity")),
+})
+
+export const useProviderAccountLists = (): Readonly<
+  Record<ProviderId, AsyncResult.AsyncResult<ReadonlyArray<ProviderAccount>, unknown>>
+> => ({
+  "claude-code": useAtomValue(providerAccountsAtom("claude-code")),
+  codex: useAtomValue(providerAccountsAtom("codex")),
+  kiro: useAtomValue(providerAccountsAtom("kiro")),
+  antigravity: useAtomValue(providerAccountsAtom("antigravity")),
+})
+
 export const useProviderModels = (): ProviderModels => {
-  const statuses: Readonly<Record<ProviderId, AsyncResult.AsyncResult<ProviderStatus, unknown>>> = {
-    "claude-code": useAtomValue(providerStatusAtom("claude-code")),
-    codex: useAtomValue(providerStatusAtom("codex")),
-    kiro: useAtomValue(providerStatusAtom("kiro")),
-    antigravity: useAtomValue(providerStatusAtom("antigravity")),
-  }
+  const statuses = useProviderStatuses()
   const status = (provider: ProviderId) => {
     const result = statuses[provider]
     return AsyncResult.isSuccess(result) ? result.value : undefined
@@ -46,14 +59,7 @@ export interface PickerAccount {
 export const useProviderAccounts = (): Readonly<
   Record<ProviderId, ReadonlyArray<PickerAccount>>
 > => {
-  const listed: Readonly<
-    Record<ProviderId, AsyncResult.AsyncResult<ReadonlyArray<ProviderAccount>, unknown>>
-  > = {
-    "claude-code": useAtomValue(providerAccountsAtom("claude-code")),
-    codex: useAtomValue(providerAccountsAtom("codex")),
-    kiro: useAtomValue(providerAccountsAtom("kiro")),
-    antigravity: useAtomValue(providerAccountsAtom("antigravity")),
-  }
+  const listed = useProviderAccountLists()
   return perProvider((provider) => {
     const result = listed[provider]
     return AsyncResult.isSuccess(result)

@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { useAtomValue } from "@effect/atom-react"
 import { countChanges } from "@humanity/diff"
 import {
   type BranchComparison,
@@ -29,15 +29,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { ChangeCount, FileDiffView } from "@/features/diff/FileDiffView"
 import { branchesAtom } from "@/features/git/atoms"
 import { useProject } from "@/features/projects/atoms"
-import { describeCause } from "@/lib/errors"
 import { useNow } from "@/lib/elapsed"
 import { keys } from "@/lib/rpc"
+import { PanelEmpty } from "@/components/PanelEmpty"
+import { IconButton } from "@/components/IconButton"
 import { comparisonAtom, comparisonKey, createPullRequestAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
 import { CommitRow } from "./CommitsTab.tsx"
 import { fileKey } from "./DiffTab.tsx"
 import { Hinted, WAIT_FOR_AGENT } from "./PrimaryAction.tsx"
 import { baseBranches } from "./publication.ts"
+import { useAction } from "@/lib/useAction"
 
 export function OpenPullRequestPage({
   session,
@@ -54,7 +56,7 @@ export function OpenPullRequestPage({
   readonly titlebarPadding: string
   readonly onBack: () => void
 }) {
-  const create = useAtomSet(createPullRequestAtom, { mode: "promiseExit" })
+  const { run: create, error, pending } = useAction(createPullRequestAtom)
   const branches = useAtomValue(branchesAtom(session.projectId))
   const terms = forgeTerms(forge)
   const [base, setBase] = useState(publication.defaultBranch)
@@ -63,8 +65,6 @@ export function OpenPullRequestPage({
   const [body, setBody] = useState("")
   const draftByDefault = useProject(session.projectId)?.settings.draftPullRequests ?? false
   const [draft, setDraft] = useState(draftByDefault)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
   const busy = isBusy(session.status)
 
   const known = AsyncResult.isSuccess(branches) ? branches.value : []
@@ -78,8 +78,6 @@ export function OpenPullRequestPage({
 
   const run = async () => {
     if (shownTitle.trim() === "" || pending || busy) return
-    setPending(true)
-    setError(undefined)
     const exit = await create({
       payload: {
         sessionId: session.id,
@@ -92,9 +90,7 @@ export function OpenPullRequestPage({
         keys.sync(session.id),
       ],
     })
-    setPending(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else onBack()
+    if (Exit.isSuccess(exit)) onBack()
   }
 
   const cut = branch.lastIndexOf("/") + 1
@@ -105,15 +101,9 @@ export function OpenPullRequestPage({
         className="titlebar flex h-12 shrink-0 items-center gap-1 border-b pl-1.5"
         style={{ paddingRight: titlebarPadding }}
       >
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onBack}
-          aria-label="Back to Source control"
-          title="Back to Source control"
-        >
+        <IconButton variant="ghost" size="icon-sm" onClick={onBack} label="Back to Source control">
           <ChevronLeft />
-        </Button>
+        </IconButton>
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">Open a {noun}</h2>
       </div>
       <ScrollArea className="min-h-0 flex-1">
@@ -213,9 +203,9 @@ function Carries({
   const total = countChanges(comparison.files.flatMap((file) => file.hunks))
   if (comparison.commits.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-muted-foreground">
+      <PanelEmpty className="py-4">
         Nothing to carry: this branch has no commits that <code>{comparison.base}</code> lacks.
-      </p>
+      </PanelEmpty>
     )
   }
   const toggle = (key: string, next: boolean) =>

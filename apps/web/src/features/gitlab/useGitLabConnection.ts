@@ -1,7 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { Exit } from "effect"
 import { useCallback, useState } from "react"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import {
   gitlabConnectionAtom,
@@ -9,6 +7,7 @@ import {
   removeGitLabTokenAtom,
   setGitLabTokenAtom,
 } from "./atoms.ts"
+import { failureMessage } from "@/lib/errors"
 
 const reactivityKeys = [keys.gitlab]
 
@@ -23,20 +22,20 @@ export function useGitLabConnection() {
     setRefreshing(true)
     const exit = await check({ payload: { refresh: true }, reactivityKeys })
     setRefreshing(false)
-    return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+    return failureMessage(exit)
   }, [check])
 
   const saveToken = useCallback(
     async (token: string, host: string) => {
       const exit = await setToken({ payload: { token, host }, reactivityKeys })
-      return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+      return failureMessage(exit)
     },
     [setToken],
   )
 
   const removeToken = useCallback(async () => {
     const exit = await dropToken({ payload: undefined, reactivityKeys })
-    return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+    return failureMessage(exit)
   }, [dropToken])
 
   return { result, refresh, refreshing, saveToken, removeToken }

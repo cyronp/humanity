@@ -6,7 +6,6 @@ import { useId, useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Spinner } from "@/components/ui/spinner"
 import {
   checkForUpdateAtom,
@@ -24,6 +23,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
 
 const TRACKS = [
   { value: "stable", label: "Stable" },
@@ -52,7 +52,6 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
   const check = useAtomSet(checkForUpdateAtom, { mode: "promiseExit" })
   const install = useAtomSet(installUpdateAtom, { mode: "promiseExit" })
   const [error, setError] = useState<{ readonly title: string; readonly message: string }>()
-  const autoCheckId = useId()
   const trackId = useId()
   const { preferences, state } = status
   const updating = isUpdating(state)
@@ -74,17 +73,12 @@ function UpdatesView({ status }: { readonly status: UpdateStatus }) {
   return (
     <div className="flex flex-col gap-4">
       <SettingsRows>
-        <SettingsRow
+        <SwitchSetting
           label="Check automatically"
-          labelId={autoCheckId}
           detail="Check for a new version when Humanity starts."
-        >
-          <Switch
-            aria-labelledby={autoCheckId}
-            checked={preferences.autoCheck}
-            onCheckedChange={(autoCheck) => void change({ ...preferences, autoCheck })}
-          />
-        </SettingsRow>
+          checked={preferences.autoCheck}
+          onCheckedChange={(autoCheck) => void change({ ...preferences, autoCheck })}
+        />
         <SettingsRow
           label="Update track"
           labelId={trackId}

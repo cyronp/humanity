@@ -1,17 +1,16 @@
 import type { Session } from "@humanity/contracts"
-import type { JumpKey } from "@/features/attention/nextThread"
+import { modPressed, type ShortcutKey } from "@/lib/shortcuts"
 import { selectThreads, type Thread, type ThreadFilter } from "./threadFilter.ts"
 import { threadTree } from "./threadTree.ts"
 
-export interface NumberKey extends JumpKey {
+export interface NumberKey extends ShortcutKey {
   readonly code: string
 }
 
 const LAST = 9
 
 export const threadNumberOf = (event: NumberKey, mac: boolean): number | undefined => {
-  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!mod || event.altKey || event.shiftKey) return undefined
+  if (!modPressed(event, mac) || event.altKey || event.shiftKey) return undefined
   const digit = /^(?:Digit|Numpad)([1-9])$/.exec(event.code)?.[1] ?? /^[1-9]$/.exec(event.key)?.[0]
   return digit === undefined ? undefined : Number(digit)
 }

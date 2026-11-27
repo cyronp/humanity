@@ -1,4 +1,3 @@
-import { useAtomValue } from "@effect/atom-react"
 import type {
   BranchPublication,
   CheckStatus,
@@ -16,9 +15,10 @@ import {
   LoaderCircle,
 } from "lucide-react"
 import { AsyncView } from "@/components/AsyncView"
-import { feedKey, pullRequestFeedAtom } from "../atoms.ts"
+import { PanelEmpty } from "@/components/PanelEmpty"
 import { ForgeLink } from "./ForgeLink.tsx"
 import { checksPhrase, summarizeChecks } from "./publication.ts"
+import { usePullRequestFeed } from "./usePullRequestFeed.ts"
 
 export const CHECK_ICON: Record<
   CheckStatus,
@@ -46,7 +46,7 @@ export function ChecksTab({
   readonly session: Session
   readonly publication: BranchPublication
 }) {
-  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  const feed = usePullRequestFeed(session.id, publication.branch)
   return (
     <AsyncView result={feed} errorTitle="Could not load the checks">
       {(value) => <Pipeline checks={value.checks} forge={publication.forge} />}
@@ -63,11 +63,7 @@ function Pipeline({
 }) {
   const summary = summarizeChecks(checks)
   if (summary.overall === "none") {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        No checks reported for the latest commit.
-      </p>
-    )
+    return <PanelEmpty>No checks reported for the latest commit.</PanelEmpty>
   }
   const overall = OVERALL[summary.overall]
   const { Icon, className } = CHECK_ICON[overall.status]

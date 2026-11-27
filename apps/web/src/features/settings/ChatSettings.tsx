@@ -8,11 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
 import { AUTONOMY_OPTIONS } from "@/features/policy/AutonomyPicker"
 import { EFFORT_OPTIONS } from "@/features/providers/effort"
-import { isMac } from "@/features/terminal/keys"
+import { modKey } from "@/lib/shortcuts"
 import { type SendKey, useUiPreferences } from "@/lib/uiPreferences"
 import { ModelDefaultSelect } from "./ModelDefaultSelect.tsx"
 import {
@@ -23,6 +22,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
 
 const LAST = "last"
 
@@ -128,7 +128,7 @@ function NewThreadDefaults() {
 function ComposerSettings() {
   const [preferences, change] = useUiPreferences()
   const sendId = useId()
-  const mod = isMac() ? "⌘" : "Ctrl"
+  const mod = modKey()
   const options: ReadonlyArray<{ readonly value: SendKey; readonly label: string }> = [
     { value: "enter", label: "Enter" },
     { value: "mod-enter", label: `${mod}+Enter` },
@@ -157,32 +157,20 @@ function ComposerSettings() {
 
 function DisplaySettings() {
   const [preferences, change] = useUiPreferences()
-  const thinkingId = useId()
-  const toolsId = useId()
   return (
     <SettingsRows>
-      <SettingsRow
+      <SwitchSetting
         label="Show thinking expanded"
-        labelId={thinkingId}
         detail="Open the agent's thoughts in the chat instead of folding them."
-      >
-        <Switch
-          aria-labelledby={thinkingId}
-          checked={preferences.expandThinking}
-          onCheckedChange={(expandThinking) => change({ expandThinking })}
-        />
-      </SettingsRow>
-      <SettingsRow
+        checked={preferences.expandThinking}
+        onCheckedChange={(expandThinking) => change({ expandThinking })}
+      />
+      <SwitchSetting
         label="Show tool calls expanded"
-        labelId={toolsId}
         detail="Open each tool call's details in the chat instead of its one-line summary."
-      >
-        <Switch
-          aria-labelledby={toolsId}
-          checked={preferences.expandToolCalls}
-          onCheckedChange={(expandToolCalls) => change({ expandToolCalls })}
-        />
-      </SettingsRow>
+        checked={preferences.expandToolCalls}
+        onCheckedChange={(expandToolCalls) => change({ expandToolCalls })}
+      />
     </SettingsRows>
   )
 }

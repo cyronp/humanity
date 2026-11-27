@@ -11,12 +11,13 @@ import { cn } from "cn"
 import { AtSign, MessageSquarePlus, Pencil, Trash2 } from "lucide-react"
 import { Fragment, type ReactNode, useMemo, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
-import { type CommentAnchor, type ReviewComment, sameAnchor } from "./reviewComments.ts"
-import { type CodeToken, languageForPath, useHighlightedLines } from "./highlighter.ts"
-import { VsCodeIcon } from "./VsCodeIcon.tsx"
+import { languageForPath, useHighlightedLines } from "@/lib/highlighter"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { vscodeUrl } from "@/lib/editor"
+import { CodeLine } from "@/components/CodeLine"
+import { type CommentAnchor, type ReviewComment, sameAnchor } from "./reviewComments.ts"
+import { VsCodeIcon } from "./VsCodeIcon.tsx"
 
 const GUTTER_BUTTON =
   "flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -389,20 +390,4 @@ function LineNumber({ value }: { readonly value: number | undefined }) {
       {value ?? ""}
     </td>
   )
-}
-
-export function CodeLine({
-  text,
-  tokens,
-}: {
-  readonly text: string
-  readonly tokens: ReadonlyArray<CodeToken> | undefined
-}) {
-  if (tokens === undefined) return text === "" ? "​" : text
-  if (tokens.length === 0) return "​"
-  return tokens.map((token, position) => (
-    <span key={position} className="shiki-token" style={token.style}>
-      {token.content}
-    </span>
-  ))
 }

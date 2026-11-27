@@ -16,8 +16,10 @@ import { FileDiffView } from "@/features/diff/FileDiffView"
 import type { LineComments } from "@/features/diff/HunkView"
 import { reviewComments, staleComments, useReviewComments } from "@/features/diff/reviewComments"
 import { describeCause } from "@/lib/errors"
+import { IconButton } from "@/components/IconButton"
 import { pullRequestFilesAtom, reviewPullRequestAtom } from "../atoms.ts"
 import { reviewCommentsKey, toReviewPayload } from "./pullRequestReview.ts"
+import { useAction } from "@/lib/useAction"
 
 export function PullRequestFiles({
   session,
@@ -26,7 +28,7 @@ export function PullRequestFiles({
   readonly session: Session
   readonly pullRequest: PullRequest
 }) {
-  const load = useAtomSet(pullRequestFilesAtom, { mode: "promiseExit" })
+  const { run: load, error, setError, pending: loading } = useAction(pullRequestFilesAtom)
   const post = useAtomSet(reviewPullRequestAtom, { mode: "promiseExit" })
   const terms = forgeTerms(pullRequest.forge)
   const key = reviewCommentsKey(session.id, pullRequest.number)
@@ -34,8 +36,6 @@ export function PullRequestFiles({
   const store = useMemo(() => reviewComments(key), [key])
   const [open, setOpen] = useState(false)
   const [loaded, setLoaded] = useState<Files>()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string>()
   const [summary, setSummary] = useState("")
   const [posting, setPosting] = useState(false)
   const [posted, setPosted] = useState<string>()
@@ -52,14 +52,8 @@ export function PullRequestFiles({
   )
 
   const reload = async () => {
-    setLoading(true)
-    setError(undefined)
     const exit = await load({ payload: { sessionId: session.id } })
-    setLoading(false)
-    if (Exit.isFailure(exit)) {
-      setError(describeCause(exit.cause))
-      return
-    }
+    if (Exit.isFailure(exit)) return
     setLoaded(exit.value)
   }
 
@@ -113,17 +107,16 @@ export function PullRequestFiles({
           )}
         </Button>
         {open && (
-          <Button
+          <IconButton
             variant="ghost"
             size="icon-xs"
             className="ml-auto"
-            aria-label="Reload the files"
-            title="Reload the files"
+            label="Reload the files"
             disabled={loading}
             onClick={() => void reload()}
           >
             {loading ? <Spinner /> : <RefreshCw />}
-          </Button>
+          </IconButton>
         )}
       </div>
       {posted !== undefined && <p className="text-xs text-success">{posted}</p>}

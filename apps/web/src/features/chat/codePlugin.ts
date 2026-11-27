@@ -1,6 +1,6 @@
 import type { BundledLanguage } from "shiki"
 import type { CodeHighlighterPlugin, HighlightResult } from "streamdown"
-import { highlight, shikiThemes } from "@/features/diff/highlighter"
+import { highlight, shikiThemes } from "@/lib/highlighter"
 import { uiPreferences } from "@/lib/uiPreferences"
 
 const MAX_CACHED = 200

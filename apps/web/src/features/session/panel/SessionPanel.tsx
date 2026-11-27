@@ -15,15 +15,14 @@ import { type PaletteCommand, usePaletteCommands } from "@/features/palette/regi
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { BrowserView } from "@/features/browser/BrowserView"
 import type { CaptureTarget } from "@/features/browser/BrowserView"
 import type { BrowserState } from "@/features/browser/useBrowser"
 import { useWidePanel } from "@/features/layout/panelWidth"
+import { copyToClipboard } from "@/lib/clipboard"
+import { IconButton } from "@/components/IconButton"
 import {
-  feedKey,
   publicationAtom,
-  pullRequestFeedAtom,
   refreshPullRequestAtom,
   sessionCommitsAtom,
   sessionDiffAtom,
@@ -52,6 +51,7 @@ import {
   shelfBadges,
   storeGitView,
 } from "./shelf.ts"
+import { usePullRequest, usePullRequestFeed } from "./usePullRequestFeed.ts"
 
 export const RAIL_WIDTH = 48
 
@@ -99,38 +99,38 @@ export function ToolRail({
         const badge = badges[tool]
         const dot = tool === "browser" && browserUnseen
         return (
-          <Tooltip key={tool}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={active ? "secondary" : "ghost"}
-                size="icon-sm"
-                aria-label={SHELF_LABELS[tool]}
-                aria-pressed={active}
-                onClick={() => onSelect(tool)}
-                className={cn("relative", !active && "text-muted-foreground")}
-              >
-                {ICONS[tool]}
-                {badge !== undefined && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border bg-background px-1 text-[10px] leading-none font-medium text-foreground tabular-nums">
-                    {badge.count > 99 ? "99+" : badge.count}
-                  </span>
-                )}
-                {dot && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
-                  />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              {dot
-                ? `${SHELF_LABELS[tool]} (a new address)`
-                : badge === undefined
-                  ? SHELF_LABELS[tool]
-                  : `${SHELF_LABELS[tool]} (${badge.label})`}
-            </TooltipContent>
-          </Tooltip>
+          <IconButton
+            key={tool}
+            variant={active ? "secondary" : "ghost"}
+            size="icon-sm"
+            label={SHELF_LABELS[tool]}
+            aria-pressed={active}
+            onClick={() => onSelect(tool)}
+            className={cn("relative", !active && "text-muted-foreground")}
+            tooltip={
+              <>
+                {dot
+                  ? `${SHELF_LABELS[tool]} (a new address)`
+                  : badge === undefined
+                    ? SHELF_LABELS[tool]
+                    : `${SHELF_LABELS[tool]} (${badge.label})`}
+              </>
+            }
+            side="left"
+          >
+            {ICONS[tool]}
+            {badge !== undefined && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border bg-background px-1 text-[10px] leading-none font-medium text-foreground tabular-nums">
+                {badge.count > 99 ? "99+" : badge.count}
+              </span>
+            )}
+            {dot && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
+              />
+            )}
+          </IconButton>
         )
       })}
     </RailFrame>
@@ -317,9 +317,7 @@ interface GitBodyProps {
 }
 
 function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPublication }) {
-  const feed = useAtomValue(
-    pullRequestFeedAtom(feedKey(props.session.id, props.publication.branch)),
-  )
+  const feed = usePullRequestFeed(props.session.id, props.publication.branch)
   return <GitBody {...props} feed={AsyncResult.isSuccess(feed) ? feed.value : undefined} />
 }
 
@@ -334,14 +332,9 @@ function FollowedMoreMenu({
   readonly onError: (error: PanelError | undefined) => void
   readonly onRefresh: () => void
 }) {
-  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  const pullRequest = usePullRequest(session.id, publication.branch)
   return (
-    <MoreMenu
-      session={session}
-      pullRequest={AsyncResult.isSuccess(feed) ? feed.value.pullRequest : null}
-      onError={onError}
-      onRefresh={onRefresh}
-    />
+    <MoreMenu session={session} pullRequest={pullRequest} onError={onError} onRefresh={onRefresh} />
   )
 }
 
@@ -385,7 +378,7 @@ function GitBody({
         title: `Copy the ${terms.noun}'s link`,
         group: "Source control",
         keywords: ["pr", "mr", "url", "clipboard"],
-        run: () => void navigator.clipboard?.writeText(pullRequest.url),
+        run: () => void copyToClipboard(pullRequest.url),
       },
     ]
   }, [pullRequest])
@@ -555,8 +548,7 @@ function PanelHeading({
   readonly session: Session
   readonly publication: BranchPublication
 }) {
-  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
-  const pullRequest = AsyncResult.isSuccess(feed) ? feed.value.pullRequest : null
+  const pullRequest = usePullRequest(session.id, publication.branch)
   return (
     <div className="flex min-w-0 items-center gap-2">
       <BranchName name={publication.branch} />

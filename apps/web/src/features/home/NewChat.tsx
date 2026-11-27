@@ -12,31 +12,19 @@ import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { COMPARE_RUNS } from "@humanity/contracts"
 import { FolderPlus } from "lucide-react"
-import { type FormEvent, type KeyboardEvent, useId, useMemo, useState } from "react"
+import { type FormEvent, useMemo, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "@/features/chat/attachments"
 import { AddMenu } from "@/features/chat/AddMenu"
-import {
-  ChatBox,
-  ChatBoxFooter,
-  KeyHint,
-  noteMessageSent,
-  SendButton,
-  sendKeyPressed,
-} from "@/features/chat/ChatBox"
-import { FileMentionMenu, fileMentionIds } from "@/features/chat/FileMentionMenu"
-import { MentionTextarea } from "@/features/chat/MentionTextarea"
-import { useFileMention } from "@/features/chat/useFileMention"
+import { KeyHint, SendButton } from "@/features/chat/ChatBox"
+import { PromptBox, usePromptDraft } from "@/features/chat/PromptBox"
 import { compareRuns, openCompare } from "@/features/compare/compare"
-import { providerStatusAtom } from "@/features/providers/accounts/atoms"
 import { branchesAtom, searchProjectFilesAtom } from "@/features/git/atoms"
 import { BranchPicker } from "@/features/git/BranchPicker"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
 import { WorkspaceFrame } from "@/features/layout/WorkspaceFrame"
-import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { openAddRepository } from "@/features/projects/addRepository"
 import { projectsAtom } from "@/features/projects/atoms"
@@ -45,6 +33,8 @@ import type { ModelChoice } from "@/features/providers/models"
 import { allSessionsAtom, createGroupAtom, createSessionAtom } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { PROVIDER_IDS } from "@/features/providers/ProviderIcon"
+import { useProviderStatuses } from "@/features/providers/useProviderModels"
 import { usePinnedDefaults } from "./pinnedDefaults.ts"
 import { type ThreadDefaults, threadDefaults } from "./threadDefaults.ts"
 
@@ -57,10 +47,7 @@ export function NewChat({
 }) {
   const projects = useAtomValue(projectsAtom)
   const sessions = useAtomValue(allSessionsAtom)
-  const claude = useAtomValue(providerStatusAtom("claude-code"))
-  const codex = useAtomValue(providerStatusAtom("codex"))
-  const kiro = useAtomValue(providerStatusAtom("kiro"))
-  const antigravity = useAtomValue(providerStatusAtom("antigravity"))
+  const statuses = useProviderStatuses()
   const list = AsyncResult.isSuccess(projects) ? projects.value : []
   const recent = AsyncResult.isSuccess(sessions) ? sessions.value : []
   const lastProjectId = lastPrompted(recent)
@@ -71,12 +58,12 @@ export function NewChat({
     list[0]
   const defaults = threadDefaults(
     recent,
-    {
-      ...(AsyncResult.isSuccess(claude) ? { "claude-code": claude.value.models } : {}),
-      ...(AsyncResult.isSuccess(codex) ? { codex: codex.value.models } : {}),
-      ...(AsyncResult.isSuccess(kiro) ? { kiro: kiro.value.models } : {}),
-      ...(AsyncResult.isSuccess(antigravity) ? { antigravity: antigravity.value.models } : {}),
-    },
+    Object.fromEntries(
+      PROVIDER_IDS.flatMap((provider) => {
+        const status = statuses[provider]
+        return AsyncResult.isSuccess(status) ? [[provider, status.value.models]] : []
+      }),
+    ),
     pinned,
     project,
   )
@@ -162,22 +149,16 @@ function NewChatForm({
   const effort = chosenEffort === undefined ? defaults.effort : chosenEffort
   const autonomy = chosenAutonomy ?? defaults.autonomy
   const [chosenBranch, setChosenBranch] = useState<{ projectId: ProjectId; name: string }>()
-  const [text, setText] = useState(initialPrompt ?? "")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const files = useAttachmentDraft()
-  const { textarea, insert } = usePromptInsert(text, setText)
   const searchFiles = useAtomSet(searchProjectFilesAtom, { mode: "promiseExit" })
-  const mentions = useFileMention({
-    text,
-    setText,
-    textarea,
+  const draft = usePromptDraft({
+    initialText: initialPrompt ?? "",
     search: (query, recent) => searchFiles({ payload: { projectId: project.id, query, recent } }),
     recentScope: project.id,
     disabled: pending,
   })
-  const idBase = useId()
-  const mentionIds = fileMentionIds(idBase)
+  const { text, files, insert } = draft
 
   const branches = useAtomValue(branchesAtom(project.id))
   const chosen = chosenBranch?.projectId === project.id ? chosenBranch.name : undefined
@@ -198,8 +179,7 @@ function NewChatForm({
           projectId: project.id,
           ...(chosen === undefined ? {} : { baseBranch: chosen }),
           prompt,
-          ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
-          ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
+          ...draft.extras,
           autonomy,
           runs: [...compareRuns({ provider, model }, extra, effort)],
         },
@@ -210,11 +190,8 @@ function NewChatForm({
         setError(describeCause(group.cause))
         return
       }
-      noteMessageSent()
-      setText("")
+      draft.sent()
       setExtra([])
-      mentions.sent()
-      files.clear()
       const [first] = group.value
       if (first !== undefined) {
         void navigate({
@@ -230,8 +207,7 @@ function NewChatForm({
         projectId: project.id,
         ...(chosen === undefined ? {} : { baseBranch: chosen }),
         prompt,
-        ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
-        ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
+        ...draft.extras,
         autonomy,
         provider,
         ...(model === null ? {} : { model }),
@@ -244,22 +220,11 @@ function NewChatForm({
       setError(describeCause(exit.cause))
       return
     }
-    noteMessageSent()
-    setText("")
-    mentions.sent()
-    files.clear()
+    draft.sent()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",
       params: { projectId: project.id, sessionId: exit.value.id },
     })
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentions.onKeyDown(event)) return
-    if (sendKeyPressed(event)) {
-      event.preventDefault()
-      void submit()
-    }
   }
 
   return (
@@ -267,77 +232,59 @@ function NewChatForm({
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
-      <ChatBox
-        className={dropTargetClass}
-        behind={
-          mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />
-        }
-        {...(pending ? {} : files.dropProps)}
-      >
-        <AttachmentTray draft={files} />
-        <MentionTextarea
-          ref={textarea}
-          value={text}
-          mentions={mentions.picked}
-          {...mentions.textareaProps}
-          aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
-          aria-activedescendant={
-            mentions.menu === undefined || mentions.menu.highlighted < 0
-              ? undefined
-              : mentionIds.option(mentions.menu.highlighted)
-          }
-          onKeyDown={onKeyDown}
-          onPaste={pending ? undefined : files.onPaste}
-          placeholder="Ask anything. @ files."
-          disabled={pending}
-          rows={3}
-          autoFocus
-          className="max-h-72 min-h-20"
-          aria-label="First message to the agent"
-        />
-        <ChatBoxFooter>
-          <AddMenu
-            projectId={project.id}
-            onFiles={(picked) => void files.add(picked)}
-            onInsert={insert}
-            disabled={pending}
-          />
-          <BranchPicker
-            project={project}
-            value={shownBranch}
-            onChange={(name) => setChosenBranch({ projectId: project.id, name })}
-            disabled={pending}
-          />
-          <AutonomyPicker
-            value={autonomy}
-            projectId={project.id}
-            onChange={setAutonomy}
-            disabled={pending}
-          />
-          <div className="ml-auto flex items-center gap-1">
-            <ModelPicker
-              provider={provider}
-              value={model}
-              onChange={setModel}
-              effort={effort}
-              onEffortChange={setEffort}
+      <PromptBox
+        draft={draft}
+        disabled={pending}
+        onSubmit={() => void submit()}
+        placeholder="Ask anything. @ files."
+        label="First message to the agent"
+        autoFocus
+        className="max-h-72 min-h-20"
+        footer={
+          <>
+            <AddMenu
+              projectId={project.id}
+              onFiles={(picked) => void files.add(picked)}
+              onInsert={insert}
               disabled={pending}
-              compare={{ others: extra, max: COMPARE_RUNS.max, onOthersChange: setExtra }}
             />
-            <SendButton
-              ready={text.trim() !== "" && !pending && !files.reading}
-              disabled={pending || files.reading || text.trim() === ""}
-              label={
-                pending
-                  ? "Creating the session"
-                  : extra.length > 0
-                    ? `Start ${extra.length + 1} runs to compare`
-                    : "Start the session"
-              }
+            <BranchPicker
+              project={project}
+              value={shownBranch}
+              onChange={(name) => setChosenBranch({ projectId: project.id, name })}
+              disabled={pending}
             />
-          </div>
-        </ChatBoxFooter>
-      </ChatBox>
+            <AutonomyPicker
+              value={autonomy}
+              projectId={project.id}
+              onChange={setAutonomy}
+              disabled={pending}
+            />
+            <div className="ml-auto flex items-center gap-1">
+              <ModelPicker
+                provider={provider}
+                value={model}
+                onChange={setModel}
+                effort={effort}
+                onEffortChange={setEffort}
+                disabled={pending}
+                compare={{ others: extra, max: COMPARE_RUNS.max, onOthersChange: setExtra }}
+              />
+              <SendButton
+                ready={text.trim() !== "" && !pending && !files.reading}
+                disabled={pending || files.reading || text.trim() === ""}
+                label={
+                  pending
+                    ? "Creating the session"
+                    : extra.length > 0
+                      ? `Start ${extra.length + 1} runs to compare`
+                      : "Start the session"
+                }
+              />
+            </div>
+          </>
+        }
+      />
       {!pending && <KeyHint typing={text.trim() !== ""} className="flex justify-center" />}
       {pending && (
         <p className="text-center text-xs text-muted-foreground" aria-live="polite">

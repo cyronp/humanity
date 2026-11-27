@@ -10,18 +10,15 @@ import {
 import { Exit } from "effect"
 import {
   type FormEvent,
-  type KeyboardEvent,
   memo,
   type Ref,
   useEffect,
-  useId,
   useImperativeHandle,
   useRef,
   useState,
 } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import type { PromptInsertion } from "@/features/extensions/prompt"
-import { usePromptInsert } from "@/features/extensions/usePromptInsert"
 import { AutonomyPicker } from "@/features/policy/AutonomyPicker"
 import { ModelPicker } from "@/features/providers/ModelPicker"
 import type { ModelChoice } from "@/features/providers/models"
@@ -35,19 +32,10 @@ import {
   switchProviderAtom,
 } from "@/features/session/atoms"
 import { describeCause } from "@/lib/errors"
-import { AttachmentTray, dropTargetClass, useAttachmentDraft } from "./attachments.tsx"
 import { AddMenu } from "./AddMenu.tsx"
-import {
-  ChatBox,
-  ChatBoxFooter,
-  noteMessageSent,
-  SendButton,
-  sendKeyPressed,
-  StopButton,
-} from "./ChatBox.tsx"
-import { FileMentionMenu, fileMentionIds } from "./FileMentionMenu.tsx"
-import { MentionTextarea } from "./MentionTextarea.tsx"
-import { useFileMention } from "./useFileMention.ts"
+import { SendButton, StopButton } from "./ChatBox.tsx"
+import { PromptBox, usePromptDraft } from "./PromptBox.tsx"
+import { useAction } from "@/lib/useAction"
 
 export interface ComposerHandle {
   readonly insert: (insertion: PromptInsertion) => void
@@ -84,22 +72,20 @@ export const Composer = memo(function Composer({
   readonly busy: boolean
   readonly onTypingChange?: ((typing: boolean) => void) | undefined
 }) {
-  const send = useAtomSet(sendMessageAtom, { mode: "promiseExit" })
-  const updateAutonomy = useAtomSet(setAutonomyAtom, { mode: "promiseExit" })
+  const { run: send, error, pending } = useAction(sendMessageAtom)
+  const { run: updateAutonomy, error: autonomyError } = useAction(setAutonomyAtom)
   const updateModel = useAtomSet(setModelAtom, { mode: "promiseExit" })
   const moveThread = useAtomSet(switchProviderAtom, { mode: "promiseExit" })
-  const updateEffort = useAtomSet(setEffortAtom, { mode: "promiseExit" })
-  const interrupt = useAtomSet(interruptAtom, { mode: "promiseExit" })
-  const [stopping, setStopping] = useState(false)
-  const [stopError, setStopError] = useState<string>()
-  const [text, setText] = useState("")
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
-  const [autonomyError, setAutonomyError] = useState<string>()
+  const { run: updateEffort, error: effortError } = useAction(setEffortAtom)
+  const { run: interrupt, error: stopError, pending: stopping } = useAction(interruptAtom)
   const [modelError, setModelError] = useState<string>()
-  const [effortError, setEffortError] = useState<string>()
-  const files = useAttachmentDraft()
-  const { textarea, insert } = usePromptInsert(text, setText)
+  const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
+  const draft = usePromptDraft({
+    search: (query, recent) => searchFiles({ payload: { sessionId, query, recent } }),
+    recentScope: projectId,
+    disabled,
+  })
+  const { text, setText, files, textarea, insert } = draft
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerQueue = useRef<Promise<void>>(Promise.resolve())
   const inOrder = (task: () => Promise<void>) => {
@@ -117,56 +103,30 @@ export const Composer = memo(function Composer({
     changeModel: (choice) => void changeModel(choice),
     changeEffort: (next) => void changeEffort(next),
   }))
-  const searchFiles = useAtomSet(searchSessionFilesAtom, { mode: "promiseExit" })
-  const mentions = useFileMention({
-    text,
-    setText,
-    textarea,
-    search: (query, recent) => searchFiles({ payload: { sessionId, query, recent } }),
-    recentScope: projectId,
-    disabled,
-  })
   const typing = !disabled && text.trim() !== ""
   useEffect(() => onTypingChange?.(typing), [typing, onTypingChange])
-  const idBase = useId()
-  const mentionIds = fileMentionIds(idBase)
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault()
     const trimmed = text.trim()
     if (trimmed === "" || pending || disabled || files.reading) return
-    setPending(true)
-    setError(undefined)
     const exit = await send({
       payload: {
         sessionId,
         text: trimmed,
-        ...(files.uploads.length === 0 ? {} : { attachments: files.uploads }),
-        ...(mentions.picked.length === 0 ? {} : { mentions: mentions.picked }),
+        ...draft.extras,
       },
     })
-    setPending(false)
-    if (Exit.isSuccess(exit)) {
-      noteMessageSent()
-      setText("")
-      mentions.sent()
-      files.clear()
-    } else setError(describeCause(exit.cause))
+    if (Exit.isSuccess(exit)) draft.sent()
   }
 
   const stop = async () => {
-    setStopping(true)
-    setStopError(undefined)
-    const exit = await interrupt({ payload: { sessionId } })
-    setStopping(false)
-    if (Exit.isFailure(exit)) setStopError(describeCause(exit.cause))
+    await interrupt({ payload: { sessionId } })
   }
   const canStop = busy && !disabled && text.trim() === ""
 
   const changeAutonomy = async (next: Autonomy) => {
-    setAutonomyError(undefined)
-    const exit = await updateAutonomy({ payload: { sessionId, autonomy: next } })
-    if (Exit.isFailure(exit)) setAutonomyError(describeCause(exit.cause))
+    await updateAutonomy({ payload: { sessionId, autonomy: next } })
   }
 
   const changeModel = async (choice: ModelChoice) => {
@@ -188,17 +148,7 @@ export const Composer = memo(function Composer({
   }
 
   const changeEffort = async (next: ReasoningEffort | null) => {
-    setEffortError(undefined)
-    const exit = await updateEffort({ payload: { sessionId, effort: next } })
-    if (Exit.isFailure(exit)) setEffortError(describeCause(exit.cause))
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentions.onKeyDown(event)) return
-    if (sendKeyPressed(event)) {
-      event.preventDefault()
-      void submit()
-    }
+    await updateEffort({ payload: { sessionId, effort: next } })
   }
 
   return (
@@ -219,72 +169,54 @@ export const Composer = memo(function Composer({
       {files.error !== undefined && (
         <ErrorNote title="Some files were not attached" message={files.error} />
       )}
-      <ChatBox
-        className={dropTargetClass}
-        behind={
-          mentions.menu !== undefined && <FileMentionMenu menu={mentions.menu} idBase={idBase} />
-        }
-        {...(disabled ? {} : files.dropProps)}
-      >
-        <AttachmentTray draft={files} />
-        <MentionTextarea
-          ref={textarea}
-          value={text}
-          mentions={mentions.picked}
-          {...mentions.textareaProps}
-          aria-controls={mentions.menu === undefined ? undefined : mentionIds.list}
-          aria-activedescendant={
-            mentions.menu === undefined || mentions.menu.highlighted < 0
-              ? undefined
-              : mentionIds.option(mentions.menu.highlighted)
-          }
-          onKeyDown={onKeyDown}
-          onPaste={disabled ? undefined : files.onPaste}
-          placeholder={disabled ? "This session has ended." : "Ask anything. @ files."}
-          disabled={disabled}
-          rows={3}
-          className="max-h-60 min-h-16"
-          aria-label="Message to the agent"
-        />
-        <ChatBoxFooter>
-          <AddMenu
-            projectId={projectId}
-            onFiles={(picked) => void files.add(picked)}
-            onInsert={insert}
-            disabled={disabled}
-          />
-          <AutonomyPicker
-            value={autonomy}
-            projectId={projectId}
-            onChange={changeAutonomy}
-            disabled={disabled}
-          />
-          <div className="ml-auto flex items-center gap-1">
-            <ModelPicker
-              provider={provider}
-              value={model}
-              onChange={(choice) => inOrder(() => changeModel(choice))}
-              effort={effort}
-              onEffortChange={(next) => inOrder(() => changeEffort(next))}
-              locked={busy}
-              movesThread
-              accountId={accountId ?? DEFAULT_ACCOUNT}
-              open={pickerOpen}
-              onOpenChange={setPickerOpen}
+      <PromptBox
+        draft={draft}
+        disabled={disabled}
+        onSubmit={() => void submit()}
+        placeholder={disabled ? "This session has ended." : "Ask anything. @ files."}
+        label="Message to the agent"
+        className="max-h-60 min-h-16"
+        footer={
+          <>
+            <AddMenu
+              projectId={projectId}
+              onFiles={(picked) => void files.add(picked)}
+              onInsert={insert}
               disabled={disabled}
             />
-            {canStop ? (
-              <StopButton onStop={() => void stop()} stopping={stopping} />
-            ) : (
-              <SendButton
-                ready={!disabled && !pending && !files.reading && text.trim() !== ""}
-                disabled={disabled || pending || files.reading || text.trim() === ""}
-                label="Send"
+            <AutonomyPicker
+              value={autonomy}
+              projectId={projectId}
+              onChange={changeAutonomy}
+              disabled={disabled}
+            />
+            <div className="ml-auto flex items-center gap-1">
+              <ModelPicker
+                provider={provider}
+                value={model}
+                onChange={(choice) => inOrder(() => changeModel(choice))}
+                effort={effort}
+                onEffortChange={(next) => inOrder(() => changeEffort(next))}
+                locked={busy}
+                movesThread
+                accountId={accountId ?? DEFAULT_ACCOUNT}
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                disabled={disabled}
               />
-            )}
-          </div>
-        </ChatBoxFooter>
-      </ChatBox>
+              {canStop ? (
+                <StopButton onStop={() => void stop()} stopping={stopping} />
+              ) : (
+                <SendButton
+                  ready={!disabled && !pending && !files.reading && text.trim() !== ""}
+                  disabled={disabled || pending || files.reading || text.trim() === ""}
+                  label="Send"
+                />
+              )}
+            </div>
+          </>
+        }
+      />
     </form>
   )
 })

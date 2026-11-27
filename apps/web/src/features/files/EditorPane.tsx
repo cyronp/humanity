@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { FileDiffView } from "@/features/diff/FileDiffView"
+import { modShortcut } from "@/lib/shortcuts"
 import { FileIcon } from "./FileIcon.tsx"
 import { nameOf } from "./tree.ts"
 import type { DocSnapshot, FileWorkspace, WorkspaceSnapshot } from "./workspace.ts"
@@ -371,7 +372,7 @@ function Placeholder({ doc }: { readonly doc: DocSnapshot | undefined }) {
     doc === undefined ? (
       <>
         <FileQuestion className="size-8 text-muted-foreground/60" />
-        <span>Pick a file in the tree, or press Ctrl+P to find one.</span>
+        <span>Pick a file in the tree, or press {modShortcut("P")} to find one.</span>
       </>
     ) : doc.view.kind === "loading" ? (
       <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label="Loading" />

@@ -1,4 +1,5 @@
 import type { Session, SessionStatus } from "@humanity/contracts"
+import { modPressed, type ShortcutKey } from "@/lib/shortcuts"
 
 const NEEDS_YOU: ReadonlyArray<SessionStatus> = ["waiting_for_human", "error"]
 
@@ -25,15 +26,8 @@ export const nextThreadNeedingYou = (
   return next?.id === currentId ? undefined : next
 }
 
-export interface JumpKey {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
-}
-
-export const isNextThreadShortcut = (event: JumpKey, mac: boolean): boolean => {
-  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  return mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "j"
+export const isNextThreadShortcut = (event: ShortcutKey, mac: boolean): boolean => {
+  return (
+    modPressed(event, mac) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "j"
+  )
 }

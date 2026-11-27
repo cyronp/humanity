@@ -8,7 +8,6 @@ import {
   QUESTION_TOOL,
   type TerminalOwner,
 } from "@humanity/contracts"
-import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { browserPreferencesAtom } from "@/features/browser/atoms"
@@ -41,8 +40,8 @@ import { openCompare } from "@/features/compare/compare"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { useThreadPalette } from "./useThreadPalette.tsx"
 import type { TranscriptActions } from "@/features/chat/transcriptActions"
-import { describeCause } from "@/lib/errors"
 import { useTranscript } from "./useTranscript.ts"
+import { failureMessage } from "@/lib/errors"
 
 export interface WorkspaceSearch {
   readonly file?: string | undefined
@@ -94,7 +93,7 @@ export function Workspace({
             onFork: (turn) => setForking({ turn }),
             onUndoRewind: async (messageId) => {
               const exit = await undoRewind({ payload: { sessionId: session.id, messageId } })
-              return Exit.isSuccess(exit) ? undefined : describeCause(exit.cause)
+              return failureMessage(exit)
             },
           }
         : undefined,

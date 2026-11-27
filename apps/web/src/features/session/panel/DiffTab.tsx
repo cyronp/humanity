@@ -14,6 +14,7 @@ import type { LineComments } from "@/features/diff/HunkView"
 import { AsyncView } from "@/components/AsyncView"
 import { OpenInBrowserButton } from "@/features/browser/OpenInBrowserButton"
 import { FileDiffView } from "@/features/diff/FileDiffView"
+import { PanelEmpty } from "@/components/PanelEmpty"
 import { publicationAtom, sessionDiffAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { checkoutMoved } from "./publication.ts"
@@ -83,9 +84,9 @@ export function DiffTab({
       <AsyncView result={diff} errorTitle="Could not read the worktree">
         {(value) =>
           value.files.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            <PanelEmpty className="px-4">
               No uncommitted changes on <code>{session.branch}</code>.
-            </p>
+            </PanelEmpty>
           ) : (
             value.files.map((file) => {
               const key = fileKey(file)

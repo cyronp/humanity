@@ -45,8 +45,3 @@ export const terminalCommand = (
   if (key === "f") return "find"
   return undefined
 }
-
-export const isMac = () => /mac/i.test(navigator.platform)
-
-export const shortcutLabel = (shortcut: string) =>
-  isMac() ? shortcut.replace("Ctrl+Shift+", "⌃⇧").replace("Ctrl+", "⌃") : shortcut

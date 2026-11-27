@@ -4,15 +4,15 @@ import { Badge } from "@/components/ui/badge"
 import { Markdown } from "@/features/chat/Markdown"
 import { describeInput, stringField } from "../inputs.ts"
 import type { ToolCallProps, ToolRenderer } from "../registry.ts"
-import { Field, JsonBlock, OutputText } from "./common.tsx"
+import { DetailSection, JsonBlock, OutputText } from "./common.tsx"
 
 function Output({ call }: ToolCallProps) {
   const output = call?.output
   if (output == null) return null
   return (
-    <Field label={output.isError ? "Error" : "Result"}>
+    <DetailSection label={output.isError ? "Error" : "Result"}>
       <OutputText text={output.content} error={output.isError} />
-    </Field>
+    </DetailSection>
   )
 }
 
@@ -55,9 +55,9 @@ export const skillRenderer: ToolRenderer = {
           </p>
         )}
         {args !== undefined && (
-          <Field label="Why / arguments">
+          <DetailSection label="Why / arguments">
             <p className="whitespace-pre-wrap">{args}</p>
-          </Field>
+          </DetailSection>
         )}
         <Output {...props} />
       </div>
@@ -82,18 +82,18 @@ export const subagentRenderer: ToolRenderer = {
     return (
       <div className="flex flex-col gap-2">
         {prompt !== undefined && (
-          <Field label="Task">
+          <DetailSection label="Task">
             <div className="rounded-md border bg-muted/40 p-2">
               <Markdown text={prompt} />
             </div>
-          </Field>
+          </DetailSection>
         )}
         {props.call?.output != null && (
-          <Field label="Report">
+          <DetailSection label="Report">
             <div className="rounded-md border p-2">
               <Markdown text={props.call.output.content} />
             </div>
-          </Field>
+          </DetailSection>
         )}
       </div>
     )
@@ -129,7 +129,7 @@ export const questionRenderer: ToolRenderer = {
     return (
       <div className="flex flex-col gap-2">
         {(parseQuestions(input) ?? []).map((question) => (
-          <Field key={question.question} label={question.question}>
+          <DetailSection key={question.question} label={question.question}>
             {confirmation?.answers?.[question.question] !== undefined ? (
               <p className="font-medium">{confirmation.answers[question.question]}</p>
             ) : (
@@ -139,7 +139,7 @@ export const questionRenderer: ToolRenderer = {
                 ))}
               </ul>
             )}
-          </Field>
+          </DetailSection>
         ))}
         {unanswered !== undefined && <p className="text-muted-foreground">{unanswered}</p>}
       </div>
@@ -165,9 +165,9 @@ export const mcpRenderer: ToolRenderer = {
   },
   Detail: (props) => (
     <div className="flex flex-col gap-2">
-      <Field label="Input">
+      <DetailSection label="Input">
         <JsonBlock value={props.input} />
-      </Field>
+      </DetailSection>
       <Output {...props} />
     </div>
   ),
@@ -186,13 +186,13 @@ export const genericRenderer: ToolRenderer = {
   ),
   Detail: (props) => (
     <div className="flex flex-col gap-2">
-      <Field label="Input">
+      <DetailSection label="Input">
         <JsonBlock value={props.input} />
-      </Field>
+      </DetailSection>
       {props.call?.structuredOutput !== undefined ? (
-        <Field label="Result">
+        <DetailSection label="Result">
           <JsonBlock value={props.call.structuredOutput} />
-        </Field>
+        </DetailSection>
       ) : (
         <Output {...props} />
       )}

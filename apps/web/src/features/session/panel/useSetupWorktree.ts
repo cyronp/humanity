@@ -1,11 +1,10 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
-import { Exit } from "effect"
 import { useState } from "react"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { setupWorktreeAtom } from "../atoms.ts"
 import { isBusy } from "../state.ts"
+import { failureMessage } from "@/lib/errors"
 
 export function useSetupWorktree(session: Session) {
   const setup = useAtomSet(setupWorktreeAtom, { mode: "promiseExit" })
@@ -27,7 +26,7 @@ export function useSetupWorktree(session: Session) {
       ],
     })
     setPending(false)
-    return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+    return failureMessage(exit)
   }
 
   return { available, busy, pending, run }

@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react"
 import { type ReactNode, useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +24,8 @@ import {
 import { GitHubIcon } from "@/features/github/GitHubIcon"
 import { GitLabIcon } from "@/features/gitlab/GitLabIcon"
 import { describeCause } from "@/lib/errors"
+import { copyToClipboard } from "@/lib/clipboard"
+import { IconButton } from "@/components/IconButton"
 import { setPullRequestDraftAtom, setPullRequestOpenAtom } from "../atoms.ts"
 import type { PanelError } from "./PrimaryAction.tsx"
 import { useSetupWorktree } from "./useSetupWorktree.ts"
@@ -85,10 +86,7 @@ export function MoreMenu({
           />
         </a>
       </DropdownMenuItem>,
-      <DropdownMenuItem
-        key="copy"
-        onSelect={() => void navigator.clipboard?.writeText(pullRequest.url)}
-      >
+      <DropdownMenuItem key="copy" onSelect={() => void copyToClipboard(pullRequest.url)}>
         <Copy />
         Copy link
       </DropdownMenuItem>,
@@ -212,9 +210,9 @@ export function MoreMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="More actions" title="More actions">
+        <IconButton variant="ghost" size="icon-sm" label="More actions">
           <Ellipsis />
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         {items}

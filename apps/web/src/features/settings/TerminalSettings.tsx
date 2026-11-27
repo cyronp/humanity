@@ -9,8 +9,6 @@ import {
 } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { useId } from "react"
-import { Input } from "@/components/ui/input"
-import { NumberInput } from "@/components/ui/number-input"
 import {
   Select,
   SelectContent,
@@ -18,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import {
   setTerminalPreferencesAtom,
   shellsAtom,
@@ -34,6 +31,7 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { FontFamilySetting, NumberSetting, SwitchSetting } from "./SettingsFields.tsx"
 
 const SYSTEM_DEFAULT = "system"
 
@@ -106,17 +104,15 @@ export function TerminalSettings() {
       reactivityKeys: [keys.preferences],
     })
   const cursorId = useId()
-  const blinkId = useId()
-  const toggleIds = useId()
 
   const toggleRow = ({ key, label, detail }: (typeof BEHAVIOR)[number]) => (
-    <SettingsRow key={key} label={label} labelId={`${toggleIds}-${key}`} detail={detail}>
-      <Switch
-        aria-labelledby={`${toggleIds}-${key}`}
-        checked={preferences[key]}
-        onCheckedChange={(on) => change({ [key]: on })}
-      />
-    </SettingsRow>
+    <SwitchSetting
+      key={key}
+      label={label}
+      detail={detail}
+      checked={preferences[key]}
+      onCheckedChange={(on) => change({ [key]: on })}
+    />
   )
 
   return (
@@ -142,6 +138,7 @@ export function TerminalSettings() {
         <SettingsGroup title="Text">
           <SettingsRows>
             <FontFamilySetting
+              detail="A font installed on this machine. Empty uses a Nerd Font when you have one, else your system's monospace font."
               value={preferences.fontFamily}
               onChange={(fontFamily) => change({ fontFamily })}
             />
@@ -168,13 +165,11 @@ export function TerminalSettings() {
                 onChange={(cursorStyle) => change({ cursorStyle })}
               />
             </SettingsRow>
-            <SettingsRow label="Blinking cursor" labelId={blinkId}>
-              <Switch
-                aria-labelledby={blinkId}
-                checked={preferences.cursorBlink}
-                onCheckedChange={(cursorBlink) => change({ cursorBlink })}
-              />
-            </SettingsRow>
+            <SwitchSetting
+              label="Blinking cursor"
+              checked={preferences.cursorBlink}
+              onCheckedChange={(cursorBlink) => change({ cursorBlink })}
+            />
           </SettingsRows>
         </SettingsGroup>
         <SettingsGroup title="Behavior">
@@ -229,69 +224,6 @@ function ShellSetting({
           )}
         </SelectContent>
       </Select>
-    </SettingsRow>
-  )
-}
-
-function FontFamilySetting({
-  value,
-  onChange,
-}: {
-  readonly value: string | null
-  readonly onChange: (fontFamily: string | null) => void
-}) {
-  const labelId = useId()
-  return (
-    <SettingsRow
-      label="Font"
-      labelId={labelId}
-      detail="A font installed on this machine. Empty uses a Nerd Font when you have one, else your system's monospace font."
-    >
-      <Input
-        key={value ?? ""}
-        aria-labelledby={labelId}
-        className="w-56"
-        placeholder="JetBrains Mono"
-        defaultValue={value ?? ""}
-        onBlur={(event) => {
-          const next = event.currentTarget.value.trim()
-          if (next !== (value ?? "")) onChange(next === "" ? null : next)
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur()
-        }}
-      />
-    </SettingsRow>
-  )
-}
-
-export function NumberSetting({
-  label,
-  detail,
-  value,
-  bounds,
-  step = 1,
-  onChange,
-}: {
-  readonly label: string
-  readonly detail: string
-  readonly value: number
-  readonly bounds: { readonly min: number; readonly max: number }
-  readonly step?: number
-  readonly onChange: (value: number) => void
-}) {
-  const labelId = useId()
-  return (
-    <SettingsRow label={label} labelId={labelId} detail={detail}>
-      <NumberInput
-        aria-labelledby={labelId}
-        className="w-36"
-        value={value}
-        min={bounds.min}
-        max={bounds.max}
-        step={step}
-        onChange={onChange}
-      />
     </SettingsRow>
   )
 }

@@ -39,13 +39,14 @@ import {
   SETTINGS_SECTIONS,
 } from "@/features/settings/settings"
 import { SETTINGS_INDEX } from "@/features/settings/settingsIndex"
-import { ThreadStatus } from "@/features/sidebar/ThreadLink"
-import { isMac } from "@/features/terminal/keys"
+import { ThreadStatus } from "@/features/session/ThreadStatus"
+import { insideTerminal, isMac } from "@/lib/shortcuts"
 import { openUsage } from "@/features/usage/usage"
 import { COLOR_THEMES } from "@/lib/colorThemes"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { useColorTheme, useThemeChoice } from "@/lib/theme"
+import { copyToClipboard } from "@/lib/clipboard"
 import {
   applySuggestion,
   asksForEnded,
@@ -59,7 +60,6 @@ import {
   flattenPages,
   frequentCommands,
   groupCommands,
-  insideTerminal,
   isPaletteShortcut,
   type PaletteCommand,
   type PaletteOutcome,
@@ -93,7 +93,7 @@ interface Thread {
   readonly project: Project
 }
 
-const copy = (text: string) => void navigator.clipboard?.writeText(text)
+const copy = (text: string) => void copyToClipboard(text)
 
 const caretAtEnd = (target: EventTarget): boolean =>
   !(target instanceof HTMLInputElement) ||

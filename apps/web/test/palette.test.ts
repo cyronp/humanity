@@ -12,7 +12,6 @@ import {
   frecency,
   frequentCommands,
   groupCommands,
-  insideTerminal,
   isPaletteShortcut,
   type PaletteCommand,
   parsePaletteQuery,
@@ -22,6 +21,7 @@ import {
   usageFromRecent,
   withUse,
 } from "@/features/palette/registry"
+import { insideTerminal } from "@/lib/shortcuts"
 
 const key = (
   name: string,

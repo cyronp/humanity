@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useSyncExternalStore } from "react"
 import { readStored, writeStoredJson } from "@/lib/storage"
+import { modPressed, type ShortcutKey } from "@/lib/shortcuts"
 
 export type PaletteOutcome = { readonly error: string } | undefined
 
@@ -72,25 +73,11 @@ export const splitPaletteInput = (input: string): PaletteInput => {
   return { mode: "all", prefix: "", body: input }
 }
 
-export interface ShortcutKey {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
-}
-
 export const isPaletteShortcut = (event: ShortcutKey, mac: boolean): boolean => {
-  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!mod || event.altKey) return false
+  if (!modPressed(event, mac) || event.altKey) return false
   const key = event.key.toLowerCase()
   return (key === "k" && !event.shiftKey) || (key === "p" && event.shiftKey)
 }
-
-export const insideTerminal = (target: EventTarget | null): boolean =>
-  typeof Element !== "undefined" &&
-  target instanceof Element &&
-  target.closest(".xterm, [data-terminal-dock]") !== null
 
 const RECENT_KEY = "humanity.palette.recent"
 const USAGE_KEY = "humanity.palette.usage"

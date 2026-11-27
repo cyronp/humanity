@@ -1,9 +1,7 @@
-import { useAtomSet } from "@effect/atom-react"
 import type { Session } from "@humanity/contracts"
 import { useNavigate } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { GitFork } from "lucide-react"
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,10 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import type { TurnEnd } from "@/features/chat/transcriptActions"
 import { forkAtom } from "./atoms.ts"
+import { useAction } from "@/lib/useAction"
 
 export interface ForkTarget {
   readonly turn?: TurnEnd | undefined
@@ -32,10 +30,8 @@ export function ForkDialog({
   readonly target: ForkTarget | undefined
   readonly onClose: () => void
 }) {
-  const fork = useAtomSet(forkAtom, { mode: "promiseExit" })
+  const { run: fork, error, setError, pending } = useAction(forkAtom)
   const navigate = useNavigate()
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
   const turn = target?.turn
   const message = turn?.nextMessage
   const busy = session.status === "running" || session.status === "waiting_for_human"
@@ -46,8 +42,6 @@ export function ForkDialog({
   }
 
   const run = async () => {
-    setPending(true)
-    setError(undefined)
     const exit = await fork({
       payload: {
         sessionId: session.id,
@@ -55,11 +49,7 @@ export function ForkDialog({
       },
       reactivityKeys: [keys.sessions(session.projectId)],
     })
-    setPending(false)
-    if (Exit.isFailure(exit)) {
-      setError(describeCause(exit.cause))
-      return
-    }
+    if (Exit.isFailure(exit)) return
     close()
     void navigate({
       to: "/projects/$projectId/sessions/$sessionId",

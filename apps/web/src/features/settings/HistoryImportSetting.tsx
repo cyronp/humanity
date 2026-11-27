@@ -1,16 +1,12 @@
-import { useId } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
-import { Switch } from "@/components/ui/switch"
 import { useHistoryImport } from "@/features/onboarding/historyImport"
-import { SettingsRow } from "./SettingsLayout.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
 
 export function HistoryImportSetting() {
   const { enabled, ready, setEnabled, error } = useHistoryImport()
-  const labelId = useId()
   return (
-    <SettingsRow
+    <SwitchSetting
       label="Import my Claude Code threads"
-      labelId={labelId}
       detail={
         <>
           Lists the conversations you had in Claude Code's own terminal as threads of each project,
@@ -22,13 +18,9 @@ export function HistoryImportSetting() {
           )}
         </>
       }
-    >
-      <Switch
-        aria-labelledby={labelId}
-        checked={enabled}
-        disabled={!ready}
-        onCheckedChange={(next) => void setEnabled(next)}
-      />
-    </SettingsRow>
+      checked={enabled}
+      disabled={!ready}
+      onCheckedChange={(next) => void setEnabled(next)}
+    />
   )
 }

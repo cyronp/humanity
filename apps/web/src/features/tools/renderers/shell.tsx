@@ -1,7 +1,7 @@
 import { TerminalOutput } from "../CodeBlock.tsx"
 import { bashOutput, stringField } from "../inputs.ts"
 import type { ToolRenderer } from "../registry.ts"
-import { Field } from "./common.tsx"
+import { DetailSection } from "./common.tsx"
 
 export const shellRenderer: ToolRenderer = {
   name: "Bash",
@@ -29,22 +29,22 @@ export const shellRenderer: ToolRenderer = {
     return (
       <div className="flex flex-col gap-2">
         {description !== undefined && <p>{description}</p>}
-        <Field label="Command">
+        <DetailSection label="Command">
           <pre className="rounded-md bg-muted p-2 font-mono whitespace-pre-wrap break-all">
             {stringField(input, "command") ?? ""}
           </pre>
-        </Field>
+        </DetailSection>
         {structured !== undefined ? (
           <>
             {structured.stdout !== "" && (
-              <Field label="Output">
+              <DetailSection label="Output">
                 <TerminalOutput text={structured.stdout} links />
-              </Field>
+              </DetailSection>
             )}
             {structured.stderr !== "" && (
-              <Field label="Errors">
+              <DetailSection label="Errors">
                 <TerminalOutput text={structured.stderr} className="border-destructive/40" links />
-              </Field>
+              </DetailSection>
             )}
             {structured.stdout === "" && structured.stderr === "" && (
               <p className="text-muted-foreground">No output.</p>
@@ -52,13 +52,13 @@ export const shellRenderer: ToolRenderer = {
             {structured.interrupted && <p className="text-warning">The command was interrupted.</p>}
           </>
         ) : output != null ? (
-          <Field label={output.isError ? "Error" : "Output"}>
+          <DetailSection label={output.isError ? "Error" : "Output"}>
             <TerminalOutput
               text={output.content}
               links
               {...(output.isError ? { className: "border-destructive/40" } : {})}
             />
-          </Field>
+          </DetailSection>
         ) : null}
       </div>
     )

@@ -10,9 +10,9 @@ import {
   CodeBlockLine,
 } from "@/components/ui/code-block"
 import { linkLocalUrls, requestPreview } from "@/features/browser/browser"
-import { CodeLine } from "@/features/diff/HunkView"
-import { isMac } from "@/features/terminal/keys"
-import { useHighlightedLines } from "@/features/diff/highlighter"
+import { CodeLine } from "@/components/CodeLine"
+import { isMac } from "@/lib/shortcuts"
+import { useHighlightedLines } from "@/lib/highlighter"
 import { type AnsiSegment, parseAnsi } from "./ansi.ts"
 
 export function CodeBlock({

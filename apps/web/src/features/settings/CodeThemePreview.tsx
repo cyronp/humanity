@@ -5,8 +5,8 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from "@/components/ui/code-block"
-import { CodeLine } from "@/features/diff/HunkView"
-import { useHighlightedLines } from "@/features/diff/highlighter"
+import { CodeLine } from "@/components/CodeLine"
+import { useHighlightedLines } from "@/lib/highlighter"
 
 export const CODE_THEME_SAMPLE: ReadonlyArray<string> = [
   'import { readFile } from "node:fs/promises"',

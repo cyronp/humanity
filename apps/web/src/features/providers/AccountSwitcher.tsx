@@ -1,4 +1,3 @@
-import { useAtomValue } from "@effect/atom-react"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { Check, CircleUserRound, Settings } from "lucide-react"
@@ -17,11 +16,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
-import { providerAccountsAtom } from "./accounts/atoms.ts"
 import { configuredProviders } from "./accounts/configured.ts"
 import { accountLine } from "./accounts/summary.ts"
 import { useAccounts } from "./accounts/useAccounts.ts"
-import { type ProviderId, PROVIDERS, ProviderIcon } from "./ProviderIcon.tsx"
+import { PROVIDER_IDS, type ProviderId, PROVIDERS, ProviderIcon } from "./ProviderIcon.tsx"
+import { useProviderAccountLists } from "./useProviderModels.ts"
 
 const OPEN_DELAY_MS = 150
 const CLOSE_DELAY_MS = 200
@@ -73,12 +72,8 @@ function useHoverOpen() {
 }
 
 function useConfiguredProviders() {
-  return configuredProviders([
-    ["claude-code", useAtomValue(providerAccountsAtom("claude-code"))],
-    ["codex", useAtomValue(providerAccountsAtom("codex"))],
-    ["kiro", useAtomValue(providerAccountsAtom("kiro"))],
-    ["antigravity", useAtomValue(providerAccountsAtom("antigravity"))],
-  ])
+  const listed = useProviderAccountLists()
+  return configuredProviders(PROVIDER_IDS.map((provider) => [provider, listed[provider]]))
 }
 
 export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => void }) {

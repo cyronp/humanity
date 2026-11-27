@@ -3,7 +3,7 @@ import { ArrowUp, Square } from "lucide-react"
 import { type ComponentProps, type KeyboardEvent, type ReactNode, useState } from "react"
 import { InputGroup, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group"
 import { Kbd } from "@/components/ui/kbd"
-import { isMac } from "@/features/terminal/keys"
+import { modKey } from "@/lib/shortcuts"
 import { type SendKey, uiPreferences, useUiPreferences } from "@/lib/uiPreferences"
 import { readStored, writeStored } from "@/lib/storage"
 
@@ -154,9 +154,9 @@ export function KeyHint({
         </>
       ) : (
         <>
-          <Kbd className={KEY}>{isMac() ? "⌘" : "Ctrl"}</Kbd>+<Kbd className={KEY}>Enter</Kbd> to
-          send <span className="text-muted-foreground/60">·</span> <Kbd className={KEY}>Enter</Kbd>{" "}
-          new line
+          <Kbd className={KEY}>{modKey()}</Kbd>+<Kbd className={KEY}>Enter</Kbd> to send{" "}
+          <span className="text-muted-foreground/60">·</span> <Kbd className={KEY}>Enter</Kbd> new
+          line
         </>
       )}
     </span>

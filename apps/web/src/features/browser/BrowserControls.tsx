@@ -12,7 +12,6 @@ import {
   ZoomOut,
 } from "lucide-react"
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -23,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { IconButton } from "@/components/IconButton"
 import { type BrowserTab, tabLabel } from "./browser.ts"
 
 const CATEGORIES = ["Phone", "Tablet", "Desktop"] as const
@@ -59,11 +59,11 @@ export function DeviceMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Page size"
-          title={
+          label="Page size"
+          tooltip={
             device === undefined
               ? viewport._tag === "fill"
                 ? "Page size: the panel's"
@@ -73,7 +73,7 @@ export function DeviceMenu({
           className={cn(viewport._tag !== "fill" && "text-primary")}
         >
           <Icon />
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-56 overflow-y-auto">
         <DropdownMenuRadioGroup value={viewportKey(viewport)} onValueChange={select}>
@@ -120,16 +120,15 @@ export function ZoomControl({
 }) {
   return (
     <div className="flex items-center">
-      <Button
+      <IconButton
         variant="ghost"
         size="icon-sm"
-        aria-label="Zoom out"
-        title="Zoom out"
+        label="Zoom out"
         disabled={stepZoom(zoom, -1) === zoom}
         onClick={() => onChange(stepZoom(zoom, -1))}
       >
         <ZoomOut />
-      </Button>
+      </IconButton>
       <button
         type="button"
         className="w-10 rounded-md text-center text-xs text-muted-foreground tabular-nums hover:text-foreground"
@@ -138,16 +137,15 @@ export function ZoomControl({
       >
         {Math.round(zoom * 100)}%
       </button>
-      <Button
+      <IconButton
         variant="ghost"
         size="icon-sm"
-        aria-label="Zoom in"
-        title="Zoom in"
+        label="Zoom in"
         disabled={stepZoom(zoom, 1) === zoom}
         onClick={() => onChange(stepZoom(zoom, 1))}
       >
         <ZoomIn />
-      </Button>
+      </IconButton>
     </div>
   )
 }
@@ -215,9 +213,9 @@ export function TabStrip({
           </div>
         )
       })}
-      <Button variant="ghost" size="icon-xs" aria-label="New tab" title="New tab" onClick={onNew}>
+      <IconButton variant="ghost" size="icon-xs" label="New tab" onClick={onNew}>
         <Plus />
-      </Button>
+      </IconButton>
     </div>
   )
 }

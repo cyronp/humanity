@@ -1,8 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { AgentProvider } from "@humanity/contracts"
-import { Exit } from "effect"
+import { type Exit } from "effect"
 import { useCallback, useMemo, useState } from "react"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import {
   addProviderAccountAtom,
@@ -11,9 +10,9 @@ import {
   removeProviderAccountAtom,
   setActiveProviderAccountAtom,
 } from "./atoms.ts"
+import { failureMessage } from "@/lib/errors"
 
-const failure = (exit: Exit.Exit<unknown, unknown>): string | undefined =>
-  Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+const failure = (exit: Exit.Exit<unknown, unknown>): string | undefined => failureMessage(exit)
 
 export function useAccounts(provider: AgentProvider) {
   const result = useAtomValue(providerAccountsAtom(provider))

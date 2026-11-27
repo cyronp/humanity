@@ -11,10 +11,10 @@ import { AsyncResult } from "effect/reactivity"
 import { Hourglass, MessageSquarePlus } from "lucide-react"
 import { Markdown } from "@/features/chat/Markdown"
 import { allSessionsAtom } from "@/features/session/atoms"
-import { ThreadStatus } from "@/features/sidebar/ThreadLink"
+import { ThreadStatus } from "@/features/session/ThreadStatus"
 import { stringField } from "../inputs.ts"
 import type { ToolRenderer } from "../registry.ts"
-import { Field, OutputText } from "./common.tsx"
+import { DetailSection, OutputText } from "./common.tsx"
 
 const providerName = (provider: string | undefined): string | undefined =>
   provider !== undefined && Object.hasOwn(PROVIDER_NAMES, provider)
@@ -50,28 +50,28 @@ export const threadRenderer: ToolRenderer = {
     return (
       <div className="flex flex-col gap-2">
         {runsOn !== "" && (
-          <Field label="Runs on">
+          <DetailSection label="Runs on">
             <p>{runsOn}</p>
-          </Field>
+          </DetailSection>
         )}
         {prompt !== undefined && (
-          <Field label="Prompt">
+          <DetailSection label="Prompt">
             <div className="rounded-md border bg-muted/40 p-2">
               <Markdown text={prompt} />
             </div>
-          </Field>
+          </DetailSection>
         )}
         {call?.output != null &&
           (call.output.isError ? (
-            <Field label="Error">
+            <DetailSection label="Error">
               <OutputText text={call.output.content} error />
-            </Field>
+            </DetailSection>
           ) : (
-            <Field label="Result">
+            <DetailSection label="Result">
               <div className="rounded-md border p-2">
                 <Markdown text={call.output.content} />
               </div>
-            </Field>
+            </DetailSection>
           ))}
       </div>
     )
@@ -99,7 +99,7 @@ export const threadResultRenderer: ToolRenderer = {
   },
   Detail: ({ call }) =>
     call?.output == null ? null : (
-      <Field label={call.output.isError ? "Error" : "Result"}>
+      <DetailSection label={call.output.isError ? "Error" : "Result"}>
         {call.output.isError ? (
           <OutputText text={call.output.content} error />
         ) : (
@@ -107,7 +107,7 @@ export const threadResultRenderer: ToolRenderer = {
             <Markdown text={call.output.content} />
           </div>
         )}
-      </Field>
+      </DetailSection>
     ),
 }
 

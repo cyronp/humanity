@@ -10,17 +10,18 @@ import {
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { ExternalLink } from "lucide-react"
-import type { ReactNode } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Markdown } from "@/features/chat/Markdown"
-import { feedKey, publicationAtom, pullRequestFeedAtom } from "../atoms.ts"
+import { PanelEmpty } from "@/components/PanelEmpty"
+import { publicationAtom } from "../atoms.ts"
 import { CheckoutMovedNote } from "./CheckoutMovedNote.tsx"
 import { FeedNote } from "./FeedNote.tsx"
 import { checkoutMoved, remoteStatus } from "./publication.ts"
 import { PullRequestFiles } from "./PullRequestFiles.tsx"
 import { PullRequestHeading } from "./PullRequestHeading.tsx"
+import { usePullRequestFeed } from "./usePullRequestFeed.ts"
 
 export function OverviewTab({ session }: { readonly session: Session }) {
   const publication = useAtomValue(publicationAtom(session.id))
@@ -30,23 +31,15 @@ export function OverviewTab({ session }: { readonly session: Session }) {
         checkoutMoved(value) ? (
           <CheckoutMovedNote session={session} publication={value} />
         ) : value.forge === null ? (
-          <Empty>
+          <PanelEmpty className="flex flex-col items-center gap-1 py-6">
             Pull requests need an origin on GitHub or a connected GitLab.
             <Standing publication={value} />
-          </Empty>
+          </PanelEmpty>
         ) : (
           <Followed session={session} publication={value} forge={value.forge} />
         )
       }
     </AsyncView>
-  )
-}
-
-function Empty({ children }: { readonly children: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-1 py-6 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
   )
 }
 
@@ -64,7 +57,7 @@ function Followed({
   readonly forge: Forge
 }) {
   const { branch } = publication
-  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, branch)))
+  const feed = usePullRequestFeed(session.id, branch)
   const terms = forgeTerms(forge)
   return (
     <AsyncView result={feed} errorTitle={`Could not load the ${terms.noun}`}>
@@ -76,7 +69,7 @@ function Followed({
           ) : (
             branch !== null &&
             value.fetchedAt !== null && (
-              <Empty>
+              <PanelEmpty className="flex flex-col items-center gap-1 py-6">
                 <p>
                   {branch === publication.defaultBranch ? (
                     <>
@@ -90,7 +83,7 @@ function Followed({
                   )}
                 </p>
                 <Standing publication={publication} />
-              </Empty>
+              </PanelEmpty>
             )
           )}
         </div>
