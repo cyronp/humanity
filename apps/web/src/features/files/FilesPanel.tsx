@@ -1,19 +1,13 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { DEFAULT_EDITOR_PREFERENCES, type Session } from "@humanity/contracts"
+import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import {
-  FilePlus,
-  FolderTree,
-  PanelLeft,
-  PanelRightClose,
-  RefreshCw,
-  Search,
-  TextSearch,
-} from "lucide-react"
+import { FilePlus, FolderTree, PanelLeft, RefreshCw, Search, TextSearch } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ResizeHandle } from "@/components/ResizeHandle"
 import { Button } from "@/components/ui/button"
+import { useWidePanel } from "@/features/layout/panelWidth"
 import { sessionDiffAtom } from "@/features/session/atoms"
 import { RAIL_WIDTH, titlebarPaddingEnd } from "@/features/session/panel/SessionPanel"
 import { useStoredFlag } from "@/features/terminal/dock"
@@ -55,12 +49,10 @@ const guardUnsaved = () => {
 export default function FilesPanel({
   session,
   activity,
-  onClose,
   onReference,
 }: {
   readonly session: Session
   readonly activity: number
-  readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
 }) {
   const workspace = workspaceFor(session.id)
@@ -135,6 +127,9 @@ export default function FilesPanel({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [setTreeShown])
 
+  const editing = snapshot.tabs.open.length > 0
+  const treeFills = treeShown && !editing
+  useWidePanel(editing)
   const [treeWidth, setTreeWidth] = useStoredWidth("humanity.files-tree-width")
   const body = useRef<HTMLDivElement>(null)
   const treeColumn = useRef<HTMLDivElement>(null)
@@ -243,16 +238,18 @@ export default function FilesPanel({
               <FilePlus />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setTreeShown(!treeShown)}
-            aria-label={treeShown ? "Hide the tree" : "Show the tree"}
-            aria-pressed={treeShown}
-            title={treeShown ? "Hide the tree" : "Show the tree"}
-          >
-            <PanelLeft />
-          </Button>
+          {editing && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTreeShown(!treeShown)}
+              aria-label={treeShown ? "Hide the tree" : "Show the tree"}
+              aria-pressed={treeShown}
+              title={treeShown ? "Hide the tree" : "Show the tree"}
+            >
+              <PanelLeft />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -266,23 +263,17 @@ export default function FilesPanel({
           >
             <RefreshCw />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            aria-label="Close the panel"
-            title="Close the panel"
-          >
-            <PanelRightClose />
-          </Button>
         </div>
       </div>
       <div ref={body} className="flex min-h-0 flex-1">
         {treeShown && (
           <div
             ref={treeColumn}
-            className="relative flex min-h-0 shrink-0 flex-col border-r"
-            style={{ width: treeWidth ?? TREE_DEFAULT_WIDTH }}
+            className={cn(
+              "relative flex min-h-0 flex-col",
+              treeFills ? "min-w-0 flex-1" : "shrink-0 border-r",
+            )}
+            style={treeFills ? undefined : { width: treeWidth ?? TREE_DEFAULT_WIDTH }}
           >
             {searching ? (
               <FileSearch
@@ -302,29 +293,33 @@ export default function FilesPanel({
                 {(value) => tree(value.files)}
               </AsyncView>
             )}
-            <ResizeHandle
-              edge="end"
-              label="Resize the tree"
-              value={treeWidth ?? undefined}
-              min={TREE_MIN_WIDTH}
-              max={() => (body.current?.offsetWidth ?? 0) - EDITOR_MIN_WIDTH}
-              measure={() => treeColumn.current?.offsetWidth ?? TREE_DEFAULT_WIDTH}
-              onResize={setTreeWidth}
-              onReset={() => setTreeWidth(null)}
-            />
+            {!treeFills && (
+              <ResizeHandle
+                edge="end"
+                label="Resize the tree"
+                value={treeWidth ?? undefined}
+                min={TREE_MIN_WIDTH}
+                max={() => (body.current?.offsetWidth ?? 0) - EDITOR_MIN_WIDTH}
+                measure={() => treeColumn.current?.offsetWidth ?? TREE_DEFAULT_WIDTH}
+                onResize={setTreeWidth}
+                onReset={() => setTreeWidth(null)}
+              />
+            )}
           </div>
         )}
-        <EditorPane
-          workspace={workspace}
-          snapshot={snapshot}
-          readOnly={readOnly}
-          icons={preferences.fileIcons}
-          onReference={
-            onReference === undefined
-              ? undefined
-              : (path) => onReference(workspace.referenceOf(path))
-          }
-        />
+        {!treeFills && (
+          <EditorPane
+            workspace={workspace}
+            snapshot={snapshot}
+            readOnly={readOnly}
+            icons={preferences.fileIcons}
+            onReference={
+              onReference === undefined
+                ? undefined
+                : (path) => onReference(workspace.referenceOf(path))
+            }
+          />
+        )}
       </div>
       <EntryDialog
         sessionId={session.id}

@@ -21,7 +21,7 @@ import { providerAccountsAtom } from "./accounts/atoms.ts"
 import { configuredProviders } from "./accounts/configured.ts"
 import { accountLine } from "./accounts/summary.ts"
 import { useAccounts } from "./accounts/useAccounts.ts"
-import { type ProviderId, PROVIDERS } from "./ProviderIcon.tsx"
+import { type ProviderId, PROVIDERS, ProviderIcon } from "./ProviderIcon.tsx"
 
 const OPEN_DELAY_MS = 150
 const CLOSE_DELAY_MS = 200
@@ -90,12 +90,24 @@ export function AccountSwitcher({ onNavigate }: { readonly onNavigate?: () => vo
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           aria-label="Accounts"
           onClick={menu.onClick}
+          className="gap-2 px-2 text-muted-foreground hover:text-foreground"
           {...menu.hover}
         >
-          <CircleUserRound />
+          {shown.length === 0 ? (
+            <CircleUserRound />
+          ) : (
+            <span className="flex items-center -space-x-1">
+              {shown.map((provider) => (
+                <span key={provider} className="rounded-full bg-sidebar p-0.5">
+                  <ProviderIcon provider={provider} className="size-3.5" />
+                </span>
+              ))}
+            </span>
+          )}
+          Accounts
         </Button>
       </PopoverTrigger>
       <PopoverContent

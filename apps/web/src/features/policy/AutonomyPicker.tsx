@@ -1,5 +1,7 @@
-import type { Autonomy } from "@humanity/contracts"
+import { useAtomValue } from "@effect/atom-react"
+import { type Autonomy, newThreadAutonomy } from "@humanity/contracts"
 import { cn } from "cn"
+import { AsyncResult } from "effect/reactivity"
 import { FilePen, Hand, type LucideIcon, Zap } from "lucide-react"
 import {
   DropdownMenu,
@@ -14,6 +16,7 @@ import { InputGroupButton } from "@/components/ui/input-group"
 import { InlineError } from "@/components/InlineError"
 import { PinDefaultButton } from "@/components/PinDefaultButton"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
+import { projectsAtom } from "@/features/projects/atoms"
 
 interface AutonomyOption {
   readonly value: Autonomy
@@ -52,14 +55,22 @@ const findOption = (value: string): AutonomyOption | undefined =>
 
 export function AutonomyPicker({
   value,
+  projectId,
   onChange,
   disabled = false,
 }: {
   readonly value: Autonomy
+  readonly projectId: string | undefined
   readonly onChange: (autonomy: Autonomy) => void
   readonly disabled?: boolean
 }) {
   const pins = usePinnedDefaults()
+  const projects = useAtomValue(projectsAtom)
+  const project = AsyncResult.isSuccess(projects)
+    ? projects.value.find((candidate) => candidate.id === projectId)
+    : undefined
+  const usual = newThreadAutonomy(project, pins.pinned)
+  const tone = pins.ready && value !== usual ? value : undefined
   const current = findOption(value) ?? AUTO
   const Icon = current.icon
   return (
@@ -69,11 +80,12 @@ export function AutonomyPicker({
           variant="muted"
           size="sm"
           className={cn(
-            value === "ask" && "text-sky-600 hover:text-sky-700 dark:text-sky-400",
-            value === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
-            value === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
+            tone === "ask" && "text-sky-600 hover:text-sky-700 dark:text-sky-400",
+            tone === "accept_edits" && "text-amber-600 hover:text-amber-700 dark:text-amber-400",
+            tone === "auto" && "text-purple-600 hover:text-purple-700 dark:text-purple-400",
           )}
           aria-label={`Autonomy: ${current.label}`}
+          title={tone === undefined ? undefined : "Not this project's usual permissions"}
         >
           <Icon />
           <span className="text-xs">{current.label}</span>

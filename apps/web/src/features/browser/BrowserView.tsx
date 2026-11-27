@@ -7,16 +7,7 @@ import {
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { Exit } from "effect"
-import {
-  Download,
-  ExternalLink,
-  Globe,
-  PanelRightClose,
-  RotateCw,
-  TriangleAlert,
-  Video,
-  X,
-} from "lucide-react"
+import { Download, ExternalLink, Globe, RotateCw, TriangleAlert, Video, X } from "lucide-react"
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -83,12 +74,10 @@ export interface CaptureTarget {
 
 export function BrowserView({
   browser,
-  onClose,
   titlebarPadding,
   onCapture,
 }: {
   readonly browser: BrowserState
-  readonly onClose: () => void
   readonly titlebarPadding: string
   readonly onCapture?: CaptureTarget | undefined
 }) {
@@ -304,15 +293,6 @@ export function BrowserView({
             })
           }
         />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close the panel"
-          title="Close the panel"
-        >
-          <PanelRightClose />
-        </Button>
       </div>
       <Toolbar
         key={`${tab?.id}:${tabUrl}`}

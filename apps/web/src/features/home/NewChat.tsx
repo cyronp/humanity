@@ -308,7 +308,12 @@ function NewChatForm({
             onChange={(name) => setChosenBranch({ projectId: project.id, name })}
             disabled={pending}
           />
-          <AutonomyPicker value={autonomy} onChange={setAutonomy} disabled={pending} />
+          <AutonomyPicker
+            value={autonomy}
+            projectId={project.id}
+            onChange={setAutonomy}
+            disabled={pending}
+          />
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker
               provider={provider}

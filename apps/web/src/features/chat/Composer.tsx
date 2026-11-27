@@ -253,7 +253,12 @@ export const Composer = memo(function Composer({
             onInsert={insert}
             disabled={disabled}
           />
-          <AutonomyPicker value={autonomy} onChange={changeAutonomy} disabled={disabled} />
+          <AutonomyPicker
+            value={autonomy}
+            projectId={projectId}
+            onChange={changeAutonomy}
+            disabled={disabled}
+          />
           <div className="ml-auto flex items-center gap-1">
             <ModelPicker
               provider={provider}

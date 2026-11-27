@@ -270,7 +270,7 @@ function PickerBody({
               )}
               <span className="truncate">{others.length === 0 ? currentName : "Multiple"}</span>
               {effort !== null && (
-                <span className={cn("shrink-0 text-xs text-muted-foreground", effortTone(effort))}>
+                <span className="shrink-0 text-xs text-muted-foreground">
                   {effortLabel(effort)}
                 </span>
               )}

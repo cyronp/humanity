@@ -192,13 +192,11 @@ export function CommitBar({
   publication,
   files,
   note,
-  more,
 }: {
   readonly session: Session
   readonly publication: BranchPublication
   readonly files: ReadonlyArray<FileDiff>
   readonly note: string
-  readonly more: ReactNode
 }) {
   const commit = useAtomSet(commitAtom, { mode: "promiseExit" })
   const push = useAtomSet(pushAtom, { mode: "promiseExit" })
@@ -306,7 +304,6 @@ export function CommitBar({
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           {everything ? note : `${picked.length} of ${files.length} files`}
         </span>
-        {more}
         <Hinted hint={busy ? WAIT_FOR_AGENT : null}>
           <div className="flex">
             <Button

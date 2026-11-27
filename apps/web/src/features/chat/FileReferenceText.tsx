@@ -17,7 +17,7 @@ export function FileReferenceText({
       <span
         key={index}
         title={segment.path}
-        className="font-medium text-[color-mix(in_oklab,var(--file-ref),var(--primary-foreground)_30%)] decoration-current/60 underline-offset-2 hover:underline"
+        className="font-medium text-file-ref decoration-current/60 underline-offset-2 hover:underline"
       >
         <FileTypeIcon
           path={segment.path}
