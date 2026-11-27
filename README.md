@@ -68,9 +68,14 @@ Pick a thread's mode next to the message box. You can change it while the agent 
 
 Reads never ask. Every other call reaches Humanity's own check, so a CLI's settings file can't pre-approve a tool behind your back. A request is answered with **Allow**, **Always allow in this thread** or **Deny**, with an optional comment for the agent.
 
-## Your data
+## Privacy
 
-Everything Humanity writes lives in `~/.humanity/` (or `HUMANITY_HOME`), plus the folder each thread works in. It never stores your Claude, OpenAI, GitHub or GitLab credentials in its database: each CLI keeps its own login. The app's daemon listens on `127.0.0.1` only and needs its token to connect.
+Humanity has no telemetry, no analytics and no account. It runs entirely on your machine, and there is no server of ours that your data could reach: we never see your code, your prompts or how you use the app, and have nothing to share or sell.
+
+- **Your data stays local.** Everything Humanity writes lives in `~/.humanity/` (or `HUMANITY_HOME`), plus the folder each thread works in. Nothing is deleted on a timer: ending a thread or removing a project is what removes its data.
+- **Your agent talks to its own provider.** Prompts and code go from the CLI you signed in to (Claude Code, Codex, Kiro or Antigravity) to its provider, under that provider's terms, exactly as they do in your terminal.
+- **GitHub and GitLab are contacted only for your repositories,** with your own login, to clone, sync and show pull requests. The desktop app also checks GitHub's releases page for updates, which you can turn off in Settings.
+- **Credentials stay with their tools.** Humanity never stores your Claude, OpenAI, GitHub or GitLab credentials in its database: each CLI keeps its own login. Its daemon listens on `127.0.0.1` only and needs its token to connect.
 
 ## Run from source
 
