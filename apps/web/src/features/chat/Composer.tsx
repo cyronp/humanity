@@ -190,7 +190,7 @@ export const Composer = memo(function Composer({
               onChange={changeAutonomy}
               disabled={disabled}
             />
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex min-w-0 items-center gap-1">
               <ModelPicker
                 provider={provider}
                 value={model}

@@ -3,7 +3,14 @@ import { cn } from "cn"
 import { DEFAULT_ACCOUNT, type ReasoningEffort } from "@humanity/contracts"
 import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronLeft, ChevronRight, Star, TriangleAlert } from "lucide-react"
-import { type KeyboardEvent, type ReactNode, useRef, useState } from "react"
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 import {
   Command,
   CommandEmpty,
@@ -152,6 +159,8 @@ function PickerBody({
   const [search, setSearch] = useState("")
   const [highlighted, setHighlighted] = useState("")
   const [favorites, toggleFavorite] = useFavoriteModels()
+  const [effortOpen, setEffortOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   const searching = search.trim() !== ""
   const inSection = section === "favorites" ? [] : modelsOf(section)
@@ -163,8 +172,6 @@ function PickerBody({
       : legacyOpen
         ? legacy
         : inSection.filter((model) => !model.legacy)
-
-  const focused = rows.find((model) => modelKey(model) === highlighted) ?? current
 
   const others = compare?.others ?? []
   const isOther = (model: PickerModel) => others.some((choice) => sameModel(choice, model))
@@ -199,12 +206,12 @@ function PickerBody({
     }
     onChange(choiceOf(model))
     if (others.length > 0) compare?.onOthersChange([])
-    setOpen(false)
+    if (!effortOpen) setOpen(false)
   }
 
-  const pickEffort = (model: PickerModel | undefined, next: ReasoningEffort | null) => {
-    if (model !== undefined && !isSelected(model) && !isOther(model)) choose(model)
+  const pickEffort = (next: ReasoningEffort | null) => {
     onEffortChange(next)
+    setEffortOpen(false)
     setOpen(false)
   }
 
@@ -229,6 +236,7 @@ function PickerBody({
     } else {
       setSearch("")
       setLegacyOpen(false)
+      setEffortOpen(false)
     }
   }
 
@@ -256,7 +264,7 @@ function PickerBody({
             <InputGroupButton
               variant="muted"
               size="sm"
-              className="max-w-64"
+              className="max-w-64 min-w-0"
               aria-label={`${
                 others.length === 0
                   ? `Model: ${current === undefined ? selected : current.displayName}`
@@ -288,33 +296,45 @@ function PickerBody({
         </TooltipContent>
       </Tooltip>
       <PopoverContent
+        ref={pickerRef}
         side="top"
         align="end"
         avoidCollisions={false}
-        className="w-[38rem] max-w-[calc(100vw-2rem)] flex-row gap-0 p-0"
+        collisionPadding={8}
+        className="w-120 max-w-[min(calc(100vw-1rem),var(--radix-popover-content-available-width))] gap-0 p-0"
       >
-        <nav
-          aria-label="Model providers"
-          className="flex shrink-0 flex-col items-center gap-1 border-r p-2"
+        <ProviderTabs
+          active={searching ? undefined : section}
+          label={
+            searching
+              ? undefined
+              : section === "favorites"
+                ? "Favorites"
+                : PROVIDERS[section].beta
+                  ? `${PROVIDERS[section].name} (Beta)`
+                  : PROVIDERS[section].name
+          }
         >
-          <RailButton
+          <ProviderTab
+            id="favorites"
             label="Favorites"
             active={section === "favorites" && !searching}
             onClick={() => showSection("favorites")}
           >
             <Star className="size-4" />
-          </RailButton>
+          </ProviderTab>
           {providers.map((id) => (
-            <RailButton
+            <ProviderTab
               key={id}
+              id={id}
               label={PROVIDERS[id].beta ? `${PROVIDERS[id].name} (Beta)` : PROVIDERS[id].name}
               active={section === id && !searching}
               onClick={() => showSection(id)}
             >
               <ProviderIcon provider={id} className="size-4" />
-            </RailButton>
+            </ProviderTab>
           ))}
-        </nav>
+        </ProviderTabs>
         <Command
           value={highlighted}
           onValueChange={setHighlighted}
@@ -323,15 +343,15 @@ function PickerBody({
           onPointerDownCapture={(event) => {
             additive.current = event.shiftKey
           }}
-          className="min-w-0 flex-1 rounded-none! bg-transparent"
+          className="min-w-0 rounded-none! bg-transparent"
         >
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search models…" />
           <CommandList
             className={cn(
               "max-h-none pt-2",
               compare === undefined
-                ? "h-[min(20rem,calc(var(--radix-popover-content-available-height)-3.5rem))]"
-                : "h-[min(20rem,calc(var(--radix-popover-content-available-height)-6rem))]",
+                ? "h-[min(16rem,calc(var(--radix-popover-content-available-height)-8.5rem))]"
+                : "h-[min(16rem,calc(var(--radix-popover-content-available-height)-11rem))]",
             )}
           >
             <CommandEmpty>No model matches.</CommandEmpty>
@@ -415,7 +435,14 @@ function PickerBody({
             </p>
           )}
         </Command>
-        <EffortPane model={focused} effort={effort} onPick={(next) => pickEffort(focused, next)} />
+        <ReasoningMenu
+          model={current}
+          effort={effort}
+          open={effortOpen}
+          onOpenChange={setEffortOpen}
+          onPick={pickEffort}
+          picker={pickerRef}
+        />
       </PopoverContent>
     </Popover>
   )
@@ -449,77 +476,143 @@ function ModelStack({ runs }: { readonly runs: ReadonlyArray<StackedModel> }) {
   )
 }
 
-function EffortPane({
+function ReasoningMenu({
   model,
   effort,
+  open,
+  onOpenChange,
   onPick,
+  picker,
 }: {
   readonly model: PickerModel | undefined
   readonly effort: ReasoningEffort | null
+  readonly open: boolean
+  readonly onOpenChange: (open: boolean) => void
   readonly onPick: (effort: ReasoningEffort | null) => void
+  readonly picker: RefObject<HTMLDivElement | null>
 }) {
   const pins = usePinnedDefaults()
   const options = effortOptionsFor(model?.efforts)
   const selected = effort ?? DEFAULT_EFFORT
   const offered = options.some((option) => option.value === selected)
+  const none = model?.efforts?.length === 0
+  const list = useRef<HTMLDivElement>(null)
+  const radios = () =>
+    Array.from(list.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])
+
+  const onMenuKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault()
+      onOpenChange(false)
+      return
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+    const all = radios()
+    const at = all.findIndex((radio) => radio === document.activeElement)
+    if (at === -1) return
+    event.preventDefault()
+    all[(at + (event.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus()
+  }
+
   return (
-    <section
-      aria-label="Reasoning effort"
-      className="flex w-48 shrink-0 flex-col overflow-y-auto border-l px-2 pb-2 text-xs"
-    >
-      <h3 className="flex h-9 shrink-0 items-center px-1.5 pt-1 text-sm font-medium">Reasoning</h3>
-      <div role="radiogroup" aria-label="Reasoning effort" className="flex flex-col gap-0.5 pt-2">
-        {options.map((option) => (
-          <div
-            key={option.value}
-            className="group/effort flex items-start gap-1 rounded-md hover:bg-muted"
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={option.value === selected}
-              onClick={() => onPick(option.value === DEFAULT_EFFORT ? null : option.value)}
-              className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-1.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <Check
-                className={cn("mt-0.5 size-3.5 shrink-0", option.value !== selected && "invisible")}
-              />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span
-                  className={cn(
-                    "text-sm",
-                    effortTone(option.value === DEFAULT_EFFORT ? null : option.value),
-                  )}
-                >
-                  {option.label}
-                </span>
-                {option.description !== undefined && option.value !== "max" && (
-                  <span className="text-muted-foreground">{option.description}</span>
-                )}
-              </span>
-            </button>
-            <PinDefaultButton
-              label={option.label}
-              pinned={pins.pinned.effort === option.value}
-              disabled={!pins.ready}
-              onToggle={() => void pins.toggle("effort", option.value)}
-              className="mt-1 opacity-0 group-hover/effort:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100"
-            />
-          </div>
-        ))}
-      </div>
-      {model?.efforts?.length === 0 && (
-        <p className="px-1.5 py-1 text-muted-foreground">This model takes no reasoning effort.</p>
-      )}
-      {!offered && (
-        <p className="px-1.5 py-1 text-muted-foreground">
-          {effortLabel(effort)} is not one of this model&apos;s levels.
+    <Popover open={open && !none} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild disabled={none}>
+        <button
+          type="button"
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowRight" || none) return
+            event.preventDefault()
+            onOpenChange(true)
+          }}
+          className="flex h-10 w-full shrink-0 items-center justify-between gap-3 border-t px-3 text-sm outline-none hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted disabled:cursor-default disabled:hover:bg-transparent"
+        >
+          <span>Reasoning</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {none ? (
+              "Not offered"
+            ) : (
+              <span className={effortTone(effort)}>{effortLabel(effort)}</span>
+            )}
+            <ChevronRight className="size-3.5" />
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="end"
+        sideOffset={6}
+        collisionPadding={8}
+        className="max-h-(--radix-popover-content-available-height) w-56 max-w-(--radix-popover-content-available-width) gap-0 overflow-y-auto p-1.5 text-xs"
+        onKeyDown={onMenuKeyDown}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          const all = radios()
+          ;(all.find((radio) => radio.getAttribute("aria-checked") === "true") ?? all[0])?.focus()
+        }}
+        onInteractOutside={(event) => {
+          if (event.target instanceof Node && picker.current?.contains(event.target)) {
+            event.preventDefault()
+          }
+        }}
+      >
+        <p className="px-2 pt-1 pb-1.5 text-muted-foreground">
+          {model === undefined ? "Reasoning" : `Reasoning for ${shortModelName(model)}`}
         </p>
-      )}
-      {pins.error !== undefined && (
-        <InlineError className="px-1.5 py-1">The default was not changed: {pins.error}</InlineError>
-      )}
-    </section>
+        <div
+          ref={list}
+          role="radiogroup"
+          aria-label="Reasoning effort"
+          className="flex flex-col gap-0.5"
+        >
+          {options.map((option) => (
+            <div
+              key={option.value}
+              className="group/effort flex items-center gap-1 rounded-md hover:bg-muted"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={option.value === selected}
+                onClick={() => onPick(option.value === DEFAULT_EFFORT ? null : option.value)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span
+                    className={cn(
+                      "text-sm",
+                      effortTone(option.value === DEFAULT_EFFORT ? null : option.value),
+                    )}
+                  >
+                    {option.label}
+                  </span>
+                  {option.description !== undefined && option.value !== "max" && (
+                    <span className="text-muted-foreground">{option.description}</span>
+                  )}
+                </span>
+                <Check
+                  className={cn("size-3.5 shrink-0", option.value !== selected && "invisible")}
+                />
+              </button>
+              <PinDefaultButton
+                label={option.label}
+                pinned={pins.pinned.effort === option.value}
+                disabled={!pins.ready}
+                onToggle={() => void pins.toggle("effort", option.value)}
+                className="opacity-0 group-hover/effort:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100 pointer-coarse:opacity-100"
+              />
+            </div>
+          ))}
+        </div>
+        {!offered && (
+          <p className="px-2 py-1 text-muted-foreground">
+            {effortLabel(effort)} is not one of this model&apos;s levels.
+          </p>
+        )}
+        {pins.error !== undefined && (
+          <InlineError className="px-2 py-1">The default was not changed: {pins.error}</InlineError>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -563,12 +656,73 @@ function AccountChooser({
   )
 }
 
-function RailButton({
+const TAB_INSET = 8
+
+function ProviderTabs({
+  active,
+  label,
+  children,
+}: {
+  readonly active: Section | undefined
+  readonly label: string | undefined
+  readonly children: ReactNode
+}) {
+  const nav = useRef<HTMLElement>(null)
+  const line = useRef<HTMLSpanElement>(null)
+
+  useLayoutEffect(() => {
+    const root = nav.current
+    const bar = line.current
+    if (root === null || bar === null) return
+    const tab =
+      active === undefined ? null : root.querySelector<HTMLElement>(`[data-tab="${active}"]`)
+    if (tab === null) {
+      bar.style.opacity = "0"
+      return
+    }
+    bar.style.transform = `translateX(${tab.offsetLeft + TAB_INSET}px)`
+    bar.style.width = `${tab.offsetWidth - TAB_INSET * 2}px`
+    bar.style.opacity = "1"
+    if (bar.dataset.placed === undefined) {
+      requestAnimationFrame(() => {
+        bar.dataset.placed = ""
+      })
+    }
+  }, [active])
+
+  return (
+    <nav
+      ref={nav}
+      aria-label="Model providers"
+      className="relative flex shrink-0 items-center gap-0.5 border-b px-1.5"
+    >
+      {children}
+      {label !== undefined && (
+        <span
+          key={label}
+          aria-hidden
+          className="ml-auto min-w-0 truncate pr-1.5 pl-3 text-xs text-muted-foreground duration-200 animate-in fade-in-0 motion-reduce:animate-none"
+        >
+          {label}
+        </span>
+      )}
+      <span
+        ref={line}
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-0 rounded-full bg-foreground opacity-0 duration-200 ease-out motion-reduce:transition-none data-placed:transition-[transform,opacity]"
+      />
+    </nav>
+  )
+}
+
+function ProviderTab({
+  id,
   label,
   active,
   onClick,
   children,
 }: {
+  readonly id: Section
   readonly label: string
   readonly active: boolean
   readonly onClick: () => void
@@ -579,19 +733,19 @@ function RailButton({
       <TooltipTrigger asChild>
         <button
           type="button"
+          data-tab={id}
           onClick={onClick}
           aria-label={label}
           aria-pressed={active}
           className={cn(
-            "relative flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
-            active &&
-              "text-foreground after:absolute after:top-1.5 after:-right-2 after:bottom-1.5 after:w-0.5 after:rounded-full after:bg-foreground",
+            "flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none",
+            active && "text-foreground",
           )}
         >
           {children}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   )
 }
@@ -628,7 +782,7 @@ function ModelRow({
         </span>
       </span>
       {selected && <Check className="text-foreground" aria-label="Selected" />}
-      {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
+      {shortcut !== undefined && <Kbd className="pointer-coarse:hidden">{shortcut}</Kbd>}
       <RowToggle
         label={favorite ? `Unstar ${model.displayName}` : `Star ${model.displayName}`}
         pressed={favorite}
