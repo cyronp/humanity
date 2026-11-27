@@ -11,13 +11,14 @@ import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item"
 import { Textarea } from "@/components/ui/textarea"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { ConfirmRemove } from "@/components/ConfirmRemove"
+import { LabeledField } from "@/components/LabeledField"
 import { removeSkillAtom, saveSkillAtom } from "./atoms.ts"
-import { ConfirmRemove } from "./ConfirmRemove.tsx"
-import { Field } from "./McpServersSettings.tsx"
 import { checkSkill, skillSlug } from "./mcpForm.ts"
 import { EMPTY_BOX, LIST_ROW, TAG } from "./styles.ts"
+import { useAction } from "@/lib/useAction"
+import { failureMessage } from "@/lib/errors"
 
 const reactivityKeys = [keys.extensions]
 
@@ -207,7 +208,7 @@ function SkillRow({
               description="Its files are deleted."
               onConfirm={async () => {
                 const exit = await remove({ payload: { name: skill.name }, reactivityKeys })
-                return Exit.isFailure(exit) ? describeCause(exit.cause) : undefined
+                return failureMessage(exit)
               }}
             />
           </ItemActions>
@@ -224,12 +225,10 @@ function SkillEditor({
   readonly skill: Skill | undefined
   readonly onDone: () => void
 }) {
-  const save = useAtomSet(saveSkillAtom, { mode: "promiseExit" })
+  const { run: save, error, setError, pending: saving } = useAction(saveSkillAtom)
   const [name, setName] = useState(skill?.name ?? "")
   const [description, setDescription] = useState(skill?.description ?? "")
   const [instructions, setInstructions] = useState(skill?.instructions ?? "")
-  const [error, setError] = useState<string>()
-  const [saving, setSaving] = useState(false)
   const ids = useId()
 
   const submit = async (event: FormEvent) => {
@@ -239,15 +238,11 @@ function SkillEditor({
       setError(checked.error)
       return
     }
-    setSaving(true)
-    setError(undefined)
     const exit = await save({
       payload: { previousName: skill?.name ?? null, skill: checked.ok },
       reactivityKeys,
     })
-    setSaving(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else onDone()
+    if (Exit.isSuccess(exit)) onDone()
   }
 
   return (
@@ -256,7 +251,7 @@ function SkillEditor({
       className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
       aria-label={skill === undefined ? "New skill" : `Edit ${skill.name}`}
     >
-      <Field
+      <LabeledField
         label="Name"
         htmlFor={`${ids}-name`}
         hint={`Start a message with /humanity:${skillSlug(name) || "<name>"} to use it.`}
@@ -272,8 +267,8 @@ function SkillEditor({
           spellCheck={false}
           className="font-mono"
         />
-      </Field>
-      <Field
+      </LabeledField>
+      <LabeledField
         label="Description"
         htmlFor={`${ids}-description`}
         hint="What it does and when to use it."
@@ -285,8 +280,8 @@ function SkillEditor({
           placeholder="Reviews SQL queries for missing indexes. Use when a change touches SQL."
           autoComplete="off"
         />
-      </Field>
-      <Field label="Instructions" htmlFor={`${ids}-instructions`} hint="Markdown.">
+      </LabeledField>
+      <LabeledField label="Instructions" htmlFor={`${ids}-instructions`} hint="Markdown.">
         <Textarea
           id={`${ids}-instructions`}
           value={instructions}
@@ -294,7 +289,7 @@ function SkillEditor({
           placeholder={INSTRUCTIONS_PLACEHOLDER}
           className="max-h-96 min-h-48 font-mono text-xs md:text-xs"
         />
-      </Field>
+      </LabeledField>
       {error !== undefined && <ErrorNote title="The skill was not saved" message={error} />}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onDone}>

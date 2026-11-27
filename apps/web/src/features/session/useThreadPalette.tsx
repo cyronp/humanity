@@ -26,13 +26,14 @@ import { EFFORT_OPTIONS } from "@/features/providers/effort"
 import { useProviderAccounts, useProviderModels } from "@/features/providers/useProviderModels"
 import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
+import { copyToClipboard } from "@/lib/clipboard"
 import { pushAtom, syncAtom } from "./atoms.ts"
 import { useCheckScript, useRunChecks } from "./ChecksButton.tsx"
 
 const outcomeOf = (exit: Exit.Exit<unknown, unknown>): PaletteOutcome =>
   Exit.isSuccess(exit) ? undefined : { error: describeCause(exit.cause) }
 
-const copy = (text: string) => void navigator.clipboard?.writeText(text)
+const copy = (text: string) => void copyToClipboard(text)
 
 export function useThreadPalette(
   session: Session,

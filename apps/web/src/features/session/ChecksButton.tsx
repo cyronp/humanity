@@ -4,11 +4,10 @@ import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { ListChecks, LoaderCircle } from "lucide-react"
 import { useCallback } from "react"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProject } from "@/features/projects/useProject"
 import { openSettings } from "@/features/settings/settings"
 import { describeCause } from "@/lib/errors"
+import { IconButton } from "@/components/IconButton"
 import { runChecksAtom } from "./atoms.ts"
 import { checksRunning, setChecksState, useChecksState } from "./checks.ts"
 
@@ -45,35 +44,33 @@ export function ChecksButton({ session }: { readonly session: Session }) {
         : "Run checks"
   if (session.status === "ended") return null
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          disabled={running}
-          onClick={() =>
-            script === null ? openSettings("projects", session.projectId) : void runChecks()
-          }
-        >
-          {running ? <LoaderCircle className="animate-spin" /> : <ListChecks />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {script === null ? (
-          <>
-            Run your lint, typecheck and tests in one click: set them up in Settings, under
-            Projects.
-          </>
-        ) : (
-          <>
-            {label}
-            <span className="block font-mono text-xs opacity-80">
-              {script.trim().split(/\r?\n/).join(" && ")}
-            </span>
-          </>
-        )}
-      </TooltipContent>
-    </Tooltip>
+    <IconButton
+      variant="ghost"
+      size="icon-sm"
+      label={label}
+      disabled={running}
+      onClick={() =>
+        script === null ? openSettings("projects", session.projectId) : void runChecks()
+      }
+      tooltip={
+        <>
+          {script === null ? (
+            <>
+              Run your lint, typecheck and tests in one click: set them up in Settings, under
+              Projects.
+            </>
+          ) : (
+            <>
+              {label}
+              <span className="block font-mono text-xs opacity-80">
+                {script.trim().split(/\r?\n/).join(" && ")}
+              </span>
+            </>
+          )}
+        </>
+      }
+    >
+      {running ? <LoaderCircle className="animate-spin" /> : <ListChecks />}
+    </IconButton>
   )
 }

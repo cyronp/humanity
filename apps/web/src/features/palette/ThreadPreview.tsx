@@ -6,7 +6,7 @@ import { ProjectIcon } from "@/features/projects/ProjectIcon"
 import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { useProviderModels } from "@/features/providers/useProviderModels"
-import { ThreadStatus } from "@/features/sidebar/ThreadLink"
+import { ThreadStatus } from "@/features/session/ThreadStatus"
 import { formatElapsed } from "@/lib/elapsed"
 
 export function ThreadPreview({

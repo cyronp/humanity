@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react"
 import {
   answerFor,
   collectAnswers,
@@ -12,7 +11,6 @@ import {
 } from "@humanity/contracts"
 import { Questionnaire as QuestionnairePrimitive } from "@shadcn/react/questionnaire"
 import { cn } from "cn"
-import { Exit } from "effect"
 import { ArrowDown, ArrowUp, Check } from "lucide-react"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -29,7 +27,7 @@ import {
   QuestionnaireSubmit,
 } from "@/components/ui/questionnaire"
 import { decideConfirmationAtom } from "@/features/session/atoms"
-import { describeCause } from "@/lib/errors"
+import { useAction } from "@/lib/useAction"
 
 function RowMark({
   index,
@@ -67,14 +65,12 @@ export function QuestionPanel({
   readonly confirmation: PendingConfirmation
   readonly questions: ReadonlyArray<Question>
 }) {
-  const decide = useAtomSet(decideConfirmationAtom, { mode: "promiseExit" })
+  const { run: decide, error, pending } = useAction(decideConfirmationAtom)
   const [step, setStep] = useState(0)
   const [drafts, setDrafts] = useState<ReadonlyArray<QuestionDraft>>(() =>
     questions.map(() => EMPTY_QUESTION_DRAFT),
   )
   const [active, setActive] = useState(0)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
   const form = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
@@ -89,11 +85,7 @@ export function QuestionPanel({
       | { readonly decision: "deny" },
   ) => {
     if (pending) return
-    setPending(true)
-    setError(undefined)
-    const exit = await decide({ payload: { confirmationId: confirmation.id, ...payload } })
-    setPending(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
+    await decide({ payload: { confirmationId: confirmation.id, ...payload } })
   }
 
   const setDraft = (index: number, next: QuestionDraft) =>

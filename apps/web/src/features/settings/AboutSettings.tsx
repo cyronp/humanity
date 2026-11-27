@@ -1,17 +1,15 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { useAtomValue } from "@effect/atom-react"
 import type { AgentCli } from "@humanity/contracts"
-import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Check, CircleHelp, Copy, ExternalLink, FolderOpen } from "lucide-react"
-import { useState } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { openOnboarding } from "@/features/onboarding/onboarding"
 import { agentCliAtom } from "@/features/providers/cli"
 import { diagnosticsText } from "@/features/system/diagnostics"
 import { openFolderAtom, systemInfoAtom } from "@/features/system/atoms"
-import { describeCause } from "@/lib/errors"
 import { APP_VERSION, DOCS_URL, NEW_ISSUE_URL } from "@/lib/version"
+import { useCopy } from "@/lib/clipboard"
 import { closeSettings } from "./settings.ts"
 import {
   SettingsFrame,
@@ -20,21 +18,21 @@ import {
   SettingsRow,
   SettingsRows,
 } from "./SettingsLayout.tsx"
+import { useAction } from "@/lib/useAction"
 
 const valueOf = <A,>(result: AsyncResult.AsyncResult<A, unknown>): A | undefined =>
   AsyncResult.isSuccess(result) ? result.value : undefined
 
 export function AboutSettings() {
   const info = valueOf(useAtomValue(systemInfoAtom))
-  const openFolder = useAtomSet(openFolderAtom, { mode: "promiseExit" })
+  const { run: openFolder, error, setError } = useAction(openFolderAtom)
   const clis = [
     valueOf(useAtomValue(agentCliAtom("claude-code"))),
     valueOf(useAtomValue(agentCliAtom("codex"))),
     valueOf(useAtomValue(agentCliAtom("kiro"))),
     valueOf(useAtomValue(agentCliAtom("antigravity"))),
   ].filter((cli): cli is AgentCli => cli !== undefined)
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState<string>()
+  const { copied, copy } = useCopy()
 
   const showOnboarding = () => {
     closeSettings()
@@ -42,22 +40,15 @@ export function AboutSettings() {
   }
 
   const openData = async () => {
-    setError(undefined)
-    const exit = await openFolder({ payload: { folder: "data" } })
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
+    await openFolder({ payload: { folder: "data" } })
   }
 
   const copyDiagnostics = async () => {
-    setError(undefined)
-    try {
-      await navigator.clipboard.writeText(
+    setError(
+      await copy(
         diagnosticsText({ appVersion: APP_VERSION, info, clis, userAgent: navigator.userAgent }),
-      )
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
+      ),
+    )
   }
 
   return (

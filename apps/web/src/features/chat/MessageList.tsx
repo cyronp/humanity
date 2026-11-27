@@ -12,7 +12,6 @@ import { cn } from "cn"
 import { type CSSProperties, memo, type ReactNode, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent as MessageBody } from "@/components/ui/message"
@@ -29,7 +28,9 @@ import { Trace, TraceLine, TraceTitle } from "@/components/ui/trace"
 import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { useProviderModels } from "@/features/providers/useProviderModels"
-import { AgentTurn, CopyText } from "./AgentTurn.tsx"
+import { CopyButton } from "@/components/CopyButton"
+import { IconButton } from "@/components/IconButton"
+import { AgentTurn } from "./AgentTurn.tsx"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { HandoffDialog } from "./HandoffDialog.tsx"
@@ -275,22 +276,17 @@ function UserMessage({
           <MessageAttachments sessionId={sessionId} attachments={attachments} />
         )}
         <div className="flex items-start justify-end gap-1">
-          <CopyText text={text} label="Copy message" className={cn("mt-1.5", REVEAL_USER)} />
+          <CopyButton text={text} label="Copy message" className={cn("mt-1.5", REVEAL_USER)} />
           {onRewind !== undefined && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-xs"
-                  className={cn("mt-1.5", REVEAL_USER)}
-                  aria-label="Rewind to before this message"
-                  onClick={() => onRewind(message)}
-                >
-                  <History />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Rewind to before this message</TooltipContent>
-            </Tooltip>
+            <IconButton
+              variant="muted"
+              size="icon-xs"
+              className={cn("mt-1.5", REVEAL_USER)}
+              label="Rewind to before this message"
+              onClick={() => onRewind(message)}
+            >
+              <History />
+            </IconButton>
           )}
           <Bubble variant="muted" align="end" className="max-w-[85%]">
             <BubbleContent className="whitespace-pre-wrap">

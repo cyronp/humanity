@@ -1,7 +1,6 @@
 import { useAtomSet } from "@effect/atom-react"
 import type { FileEntry, SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
-import { File } from "lucide-react"
 import { useEffect, useState } from "react"
 import {
   Command,
@@ -12,8 +11,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { searchSessionFilesAtom } from "@/features/session/atoms"
-import { FileIcon } from "./FileIcon.tsx"
-import { nameOf } from "./tree.ts"
+import { FileEntryLabel } from "./FileEntryLabel.tsx"
 
 export function QuickOpen({
   sessionId,
@@ -74,11 +72,7 @@ export function QuickOpen({
                 onOpenChange(false)
               }}
             >
-              {icons ? <FileIcon path={entry.path} /> : <File className="text-muted-foreground" />}
-              <span className="truncate">{nameOf(entry.path)}</span>
-              <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
-                {entry.path}
-              </span>
+              <FileEntryLabel path={entry.path} icons={icons} />
             </CommandItem>
           ))}
         </CommandList>

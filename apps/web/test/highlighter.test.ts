@@ -1,10 +1,6 @@
 import type { BundledLanguage } from "shiki"
 import { describe, expect, it } from "vitest"
-import {
-  CodeTooLongToHighlight,
-  highlight,
-  MAX_HIGHLIGHT_LENGTH,
-} from "@/features/diff/highlighter"
+import { CodeTooLongToHighlight, highlight, MAX_HIGHLIGHT_LENGTH } from "@/lib/highlighter"
 
 describe("highlight", () => {
   it("colours a grammar's tokens for both themes", async () => {

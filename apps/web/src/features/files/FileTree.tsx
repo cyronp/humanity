@@ -24,10 +24,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { FILE_STATUS, fileNameClass } from "@/features/diff/FileStatus"
+import { PanelEmpty } from "@/components/PanelEmpty"
 import { type EntryAction, parentOf } from "./entries.ts"
 import { FileIcon } from "./FileIcon.tsx"
 import { useEffect, useMemo, useRef } from "react"
-import { FILE_STATUS, fileNameClass } from "@/features/diff/FileStatus"
 import { buildFileTree, type FileNode, nameOf, ROOT_ID, type TreeChanges } from "./tree.ts"
 
 const ROW_HEIGHT = 24
@@ -100,7 +101,7 @@ export function FileTree({
   }
 
   if (files.length === 0) {
-    return <p className="px-4 py-8 text-center text-sm text-muted-foreground">No files yet.</p>
+    return <PanelEmpty className="px-4">No files yet.</PanelEmpty>
   }
 
   return (

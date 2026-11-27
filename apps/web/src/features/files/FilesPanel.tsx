@@ -12,6 +12,7 @@ import { sessionDiffAtom } from "@/features/session/atoms"
 import { RAIL_WIDTH, titlebarPaddingEnd } from "@/features/session/panel/SessionPanel"
 import { useStoredFlag } from "@/features/terminal/dock"
 import { useStoredWidth } from "@/lib/resize"
+import { modShortcut } from "@/lib/shortcuts"
 import {
   editorPreferencesAtom,
   fileListAtom,
@@ -210,7 +211,7 @@ export default function FilesPanel({
             size="icon-sm"
             onClick={() => setFinding(true)}
             aria-label="Go to a file"
-            title="Go to a file (Ctrl+P)"
+            title={`Go to a file (${modShortcut("P")})`}
           >
             <Search />
           </Button>
@@ -223,7 +224,7 @@ export default function FilesPanel({
             }}
             aria-label={searching ? "Show the tree" : "Search in files"}
             aria-pressed={searching}
-            title="Search in files (Ctrl+Shift+F)"
+            title={`Search in files (${modShortcut("Shift+F")})`}
           >
             <TextSearch />
           </Button>

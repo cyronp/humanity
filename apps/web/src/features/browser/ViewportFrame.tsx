@@ -8,7 +8,7 @@ import {
 import { cn } from "cn"
 import { RotateCcwSquare } from "lucide-react"
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/IconButton"
 
 const PADDING = 16
 const READOUT = 28
@@ -101,15 +101,14 @@ export function ViewportFrame({
               ` · shown at ${Math.round((frame.scale / zoom) * 100)} %`}
           </span>
           {viewport._tag === "device" && (
-            <Button
+            <IconButton
               variant="ghost"
               size="icon-xs"
-              aria-label="Rotate"
-              title="Rotate"
+              label="Rotate"
               onClick={() => onViewportChange({ ...viewport, landscape: !viewport.landscape })}
             >
               <RotateCcwSquare />
-            </Button>
+            </IconButton>
           )}
         </div>
       )}

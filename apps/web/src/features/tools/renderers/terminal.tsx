@@ -6,7 +6,7 @@ import { showTerminal } from "@/features/terminal/showTerminal"
 import { TerminalOutput } from "../CodeBlock.tsx"
 import { stringField } from "../inputs.ts"
 import type { ToolCallProps, ToolRenderer } from "../registry.ts"
-import { Field } from "./common.tsx"
+import { DetailSection } from "./common.tsx"
 
 const toolOf = (toolName: string) => {
   const parsed = parseMcpToolName(toolName)
@@ -108,34 +108,34 @@ function Detail(props: ToolCallProps) {
   return (
     <div className="flex flex-col gap-2">
       {sent !== "" && (
-        <Field label="Typed">
+        <DetailSection label="Typed">
           <pre className="rounded-md bg-muted p-2 font-mono whitespace-pre-wrap break-all">
             {sent}
             {stringField(input, "text") !== undefined &&
               (input as Record<string, unknown>)["enter"] !== false &&
               " ⏎"}
           </pre>
-        </Field>
+        </DetailSection>
       )}
       {command !== undefined && (
-        <Field label="Command">
+        <DetailSection label="Command">
           <pre className="rounded-md bg-muted p-2 font-mono whitespace-pre-wrap break-all">
             {command}
           </pre>
-        </Field>
+        </DetailSection>
       )}
       {tool === "terminal_wait" && stringField(input, "pattern") !== undefined && (
-        <Field label="Pattern">
+        <DetailSection label="Pattern">
           <code className="font-mono">{stringField(input, "pattern")}</code>
-        </Field>
+        </DetailSection>
       )}
       {output != null && (
-        <Field label={output.isError ? "Error" : "Result"}>
+        <DetailSection label={output.isError ? "Error" : "Result"}>
           <TerminalOutput
             text={output.content}
             {...(output.isError ? { className: "border-destructive/40" } : {})}
           />
-        </Field>
+        </DetailSection>
       )}
       {terminal !== undefined && tool !== "terminal_close" && (
         <div>

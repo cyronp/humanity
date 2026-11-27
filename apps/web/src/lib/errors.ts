@@ -1,4 +1,4 @@
-import { Cause, Predicate } from "effect"
+import { Cause, Exit, Predicate } from "effect"
 
 export const describeError = (error: unknown): string => {
   if (Predicate.isTagged(error, "RpcClientError")) {
@@ -14,3 +14,6 @@ export const describeError = (error: unknown): string => {
 
 export const describeCause = (cause: Cause.Cause<unknown>): string =>
   describeError(Cause.squash(cause))
+
+export const failureMessage = (exit: Exit.Exit<unknown, unknown>): string | undefined =>
+  Exit.isFailure(exit) ? describeCause(exit.cause) : undefined

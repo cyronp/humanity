@@ -1,12 +1,10 @@
-import { useAtomSet } from "@effect/atom-react"
 import { isPreviewFile, type SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
 import { Globe } from "lucide-react"
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { describeCause } from "@/lib/errors"
 import { fileUrlAtom } from "./atoms.ts"
 import { requestPreview } from "./browser.ts"
+import { useAction } from "@/lib/useAction"
 
 export function OpenInBrowserButton({
   sessionId,
@@ -17,17 +15,12 @@ export function OpenInBrowserButton({
   readonly path: string
   readonly labeled?: boolean
 }) {
-  const fileUrl = useAtomSet(fileUrlAtom, { mode: "promiseExit" })
-  const [error, setError] = useState<string>()
+  const { run: fileUrl, error } = useAction(fileUrlAtom)
   if (!isPreviewFile(path)) return null
 
   const open = async () => {
-    setError(undefined)
     const exit = await fileUrl({ payload: { sessionId, path } })
-    if (Exit.isFailure(exit)) {
-      setError(describeCause(exit.cause))
-      return
-    }
+    if (Exit.isFailure(exit)) return
     if (!requestPreview(exit.value, { explicit: true }))
       window.open(exit.value, "_blank", "noopener,noreferrer")
   }

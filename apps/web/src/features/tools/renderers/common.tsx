@@ -1,7 +1,7 @@
 import { cn } from "cn"
 import { type ReactNode, useMemo } from "react"
-import { CodeBlock } from "../CodeBlock.tsx"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { CodeBlock } from "../CodeBlock.tsx"
 
 export function Path({ path }: { readonly path: string }) {
   return (
@@ -11,7 +11,7 @@ export function Path({ path }: { readonly path: string }) {
   )
 }
 
-export function Field({
+export function DetailSection({
   label,
   children,
 }: {

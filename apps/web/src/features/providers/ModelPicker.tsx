@@ -19,6 +19,8 @@ import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { usePinnedDefaults } from "@/features/home/pinnedDefaults"
+import { isMac } from "@/lib/shortcuts"
+import { readStoredJson, writeStoredJson } from "@/lib/storage"
 import { DEFAULT_EFFORT, effortLabel, effortOptionsFor, effortTone } from "./effort.ts"
 import {
   DEFAULT_MODEL,
@@ -31,10 +33,8 @@ import {
 import { agentCliAtom, cliProblem } from "./cli.ts"
 import { type PickerAccount, useProviderAccounts, useProviderModels } from "./useProviderModels.ts"
 import { PROVIDERS, type ProviderId, ProviderIcon } from "./ProviderIcon.tsx"
-import { readStoredJson, writeStoredJson } from "@/lib/storage"
 
-const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
-const SHORTCUT_PREFIX = isMac ? "⌥" : "Alt+"
+const SHORTCUT_PREFIX = isMac() ? "⌥" : "Alt+"
 
 const FAVORITES_KEY = "humanity.favoriteModels"
 

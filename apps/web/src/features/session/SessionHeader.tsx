@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
-import { ThreadStatus } from "@/features/sidebar/ThreadLink"
+import { ThreadStatus } from "@/features/session/ThreadStatus"
 
 export function SessionHeader({
   project,

@@ -39,8 +39,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ZoomControl } from "./BrowserControls.tsx"
 import { Input } from "@/components/ui/input"
+import { IconButton } from "@/components/IconButton"
+import { ZoomControl } from "./BrowserControls.tsx"
 import type { TabController, TabLive } from "./WebviewTab.tsx"
 
 export function NavigationButtons({
@@ -52,50 +53,47 @@ export function NavigationButtons({
 }) {
   return (
     <>
-      <Button
+      <IconButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="Back"
-        title="Back"
+        label="Back"
         disabled={!live.canGoBack}
         onClick={() => control()?.back()}
       >
         <ArrowLeft />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="Forward"
-        title="Forward"
+        label="Forward"
         disabled={!live.canGoForward}
         onClick={() => control()?.forward()}
       >
         <ArrowRight />
-      </Button>
+      </IconButton>
       {live.loading ? (
-        <Button
+        <IconButton
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Stop"
-          title="Stop"
+          label="Stop"
           onClick={() => control()?.stop()}
         >
           <X />
-        </Button>
+        </IconButton>
       ) : (
-        <Button
+        <IconButton
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Reload"
-          title="Reload (Shift: ignore the cache)"
+          label="Reload"
+          tooltip="Reload (Shift: ignore the cache)"
           onClick={(event) => control()?.reload(event.shiftKey)}
         >
           <RotateCw />
-        </Button>
+        </IconButton>
       )}
     </>
   )
@@ -127,12 +125,12 @@ export function PageTools({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
+        <IconButton
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="More"
-          title="Zoom, find, appearance, DevTools and more"
+          label="More"
+          tooltip="Zoom, find, appearance, DevTools and more"
           className="relative"
         >
           <Ellipsis />
@@ -142,7 +140,7 @@ export function PageTools({
               className="absolute top-1 right-1 size-1.5 rounded-full bg-primary"
             />
           )}
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <div className="flex items-center gap-1 px-2 py-1 text-sm">
@@ -303,39 +301,39 @@ export function CaptureTools({
   if (!canAttach) return record
   return (
     <>
-      <Button
+      <IconButton
         type="button"
         variant={picking ? "secondary" : "ghost"}
         size="icon-sm"
-        aria-label={picking ? "Stop picking" : "Pick an element"}
+        label={picking ? "Stop picking" : "Pick an element"}
         aria-pressed={picking}
-        title={picking ? "Stop picking (Esc in the page)" : "Pick an element for your message"}
+        tooltip={picking ? "Stop picking (Esc in the page)" : "Pick an element for your message"}
         onClick={onPick}
       >
         <Crosshair />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="Screenshot"
-        title="Add a screenshot to your message"
+        label="Screenshot"
+        tooltip="Add a screenshot to your message"
         disabled={busy}
         onClick={onScreenshot}
       >
         <Camera />
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="Annotate a screenshot"
-        title="Draw on a screenshot, then add it to your message"
+        label="Annotate a screenshot"
+        tooltip="Draw on a screenshot, then add it to your message"
         disabled={busy}
         onClick={onAnnotate}
       >
         <PenLine />
-      </Button>
+      </IconButton>
       {record}
     </>
   )

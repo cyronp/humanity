@@ -1,8 +1,8 @@
 import { cn } from "cn"
 import { Check, Copy } from "lucide-react"
-import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useCopy } from "@/lib/clipboard"
 
 export function CopyCommand({
   command,
@@ -11,20 +11,7 @@ export function CopyCommand({
   readonly command: string
   readonly className?: string
 }) {
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [copied])
-
-  const copy = () => {
-    void navigator.clipboard?.writeText(command).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    )
-  }
+  const { copied, copy } = useCopy()
 
   return (
     <div
@@ -43,7 +30,7 @@ export function CopyCommand({
         type="button"
         variant="ghost"
         size="icon-sm"
-        onClick={copy}
+        onClick={() => void copy(command)}
         aria-label={copied ? "Copied" : `Copy "${command}"`}
       >
         {copied ? <Check /> : <Copy />}

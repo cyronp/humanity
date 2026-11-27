@@ -1,20 +1,19 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { useAtomValue } from "@effect/atom-react"
 import {
   type AgentProvider,
   CLI_COMMANDS,
   DEFAULT_CLI_PATH_PREFERENCES,
   PROVIDER_NAMES,
 } from "@humanity/contracts"
-import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { type ReactNode, useId, useState } from "react"
+import { type ReactNode, useId } from "react"
 import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { SettingsGroup, SettingsRow, SettingsRows } from "@/features/settings/SettingsLayout"
-import { describeCause } from "@/lib/errors"
 import { HumanityClient, keys } from "@/lib/rpc"
+import { CommitInput } from "@/components/CommitInput"
 import { agentCliAtom } from "./cli.ts"
+import { useAction } from "@/lib/useAction"
 
 const cliPathsAtom = HumanityClient.query("Preferences.getCliPaths", undefined, {
   reactivityKeys: [keys.preferences],
@@ -42,8 +41,7 @@ export function ProviderOptions({
 function CliPathSetting({ provider }: { readonly provider: AgentProvider }) {
   const result = useAtomValue(cliPathsAtom)
   const cli = useAtomValue(agentCliAtom(provider))
-  const save = useAtomSet(setCliPathsAtom, { mode: "promiseExit" })
-  const [error, setError] = useState<string>()
+  const { run: save, error } = useAction(setCliPathsAtom)
   const labelId = useId()
   const paths = AsyncResult.isSuccess(result) ? result.value : DEFAULT_CLI_PATH_PREFERENCES
   const saved = paths[provider]
@@ -51,12 +49,10 @@ function CliPathSetting({ provider }: { readonly provider: AgentProvider }) {
   const command = CLI_COMMANDS[provider]
 
   const change = async (next: string | null) => {
-    setError(undefined)
-    const exit = await save({
+    await save({
       payload: { paths: { ...paths, [provider]: next } },
       reactivityKeys: [keys.preferences, keys.agentCli(provider), keys.provider(provider)],
     })
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
   }
 
   return (
@@ -74,19 +70,14 @@ function CliPathSetting({ provider }: { readonly provider: AgentProvider }) {
     >
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <Input
-            key={saved ?? ""}
+          <CommitInput
             aria-labelledby={labelId}
             className="min-w-0 flex-1 font-mono text-xs"
             placeholder={found ?? command}
-            defaultValue={saved ?? ""}
+            value={saved ?? ""}
             disabled={!AsyncResult.isSuccess(result)}
-            onBlur={(event) => {
-              const next = event.currentTarget.value.trim()
+            onCommit={(next) => {
               if (next !== (saved ?? "")) void change(next === "" ? null : next)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur()
             }}
           />
           {saved !== null && (

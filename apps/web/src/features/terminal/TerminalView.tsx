@@ -25,6 +25,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { isMac } from "@/lib/shortcuts"
 import {
   ackTerminalAtom,
   attachAtom,
@@ -33,7 +34,7 @@ import {
   setTerminalColorsAtom,
   writeTerminalAtom,
 } from "./atoms.ts"
-import { isMac, type TerminalCommand, terminalCommand } from "./keys.ts"
+import { type TerminalCommand, terminalCommand } from "./keys.ts"
 import {
   TERMINAL_FONT_FAMILY,
   terminalColors,

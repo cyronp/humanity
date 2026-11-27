@@ -29,7 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { controlShortcut } from "@/lib/shortcuts"
+import { IconButton } from "@/components/IconButton"
 import {
   closeTerminalAtom,
   openTerminalAtom,
@@ -41,7 +42,7 @@ import {
 } from "./atoms.ts"
 import { cycleTerminal, lastActiveTerminal, pickActive, rememberActiveTerminal } from "./dock.ts"
 import { findTerminal, type ShowTerminalRequest } from "./showTerminal.ts"
-import { shortcutLabel, type TerminalCommand } from "./keys.ts"
+import type { TerminalCommand } from "./keys.ts"
 import { ShellIcon } from "./ShellIcon.tsx"
 import { TerminalFind } from "./TerminalFind.tsx"
 import { TerminalView, type TerminalViewHandle } from "./TerminalView.tsx"
@@ -350,23 +351,18 @@ function DockAction({
   readonly children: ReactNode
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-          className="text-muted-foreground"
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        {shortcut === undefined ? label : `${label} (${shortcutLabel(shortcut)})`}{" "}
-      </TooltipContent>
-    </Tooltip>
+    <IconButton
+      variant="ghost"
+      size="icon-xs"
+      label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="text-muted-foreground"
+      tooltip={<>{shortcut === undefined ? label : `${label} (${controlShortcut(shortcut)})`} </>}
+      side="top"
+    >
+      {children}
+    </IconButton>
   )
 }
 
@@ -475,21 +471,18 @@ function NewTerminalButtons({
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div className="flex shrink-0 items-center">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="New terminal"
-            disabled={disabled}
-            onClick={() => onOpen(null)}
-            className="text-muted-foreground"
-          >
-            <Plus />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top">{`New terminal (${shortcutLabel("Ctrl+Shift+`")})`}</TooltipContent>
-      </Tooltip>
+      <IconButton
+        variant="ghost"
+        size="icon-xs"
+        label="New terminal"
+        disabled={disabled}
+        onClick={() => onOpen(null)}
+        className="text-muted-foreground"
+        tooltip={<>{`New terminal (${controlShortcut("Ctrl+Shift+`")})`}</>}
+        side="top"
+      >
+        <Plus />
+      </IconButton>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button

@@ -8,11 +8,11 @@ import { ErrorNote } from "@/components/ErrorNote"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { describeCause } from "@/lib/errors"
 import { keys } from "@/lib/rpc"
 import { useUiPreferences } from "@/lib/uiPreferences"
 import { fetchOriginAtom, syncAtom, syncStatusAtom } from "./atoms.ts"
 import { isBusy } from "./state.ts"
+import { useAction } from "@/lib/useAction"
 
 const commits = (count: number) => plural(count, "commit")
 
@@ -42,9 +42,7 @@ const describeSync = (status: SyncStatus, busy: boolean): string => {
 export function SyncButton({ session }: { readonly session: Session }) {
   const result = useAtomValue(syncStatusAtom(session.id))
   const fetchOrigin = useAtomSet(fetchOriginAtom, { mode: "promiseExit" })
-  const sync = useAtomSet(syncAtom, { mode: "promiseExit" })
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string>()
+  const { run: sync, error, setError, pending } = useAction(syncAtom)
   const [settled, setSettled] = useState(false)
   const busy = isBusy(session.status)
   const [{ fetchMinutes }] = useUiPreferences()
@@ -85,8 +83,6 @@ export function SyncButton({ session }: { readonly session: Session }) {
   const counted = !pending && !settled && (status.behind > 0 || outgoing > 0)
 
   const onSync = async () => {
-    setPending(true)
-    setError(undefined)
     setSettled(false)
     const exit = await sync({
       payload: { sessionId: session.id },
@@ -98,9 +94,7 @@ export function SyncButton({ session }: { readonly session: Session }) {
         keys.git(session.projectId),
       ],
     })
-    setPending(false)
-    if (Exit.isFailure(exit)) setError(describeCause(exit.cause))
-    else if (exit.value.pulled === 0 && exit.value.pushed === 0) setSettled(true)
+    if (Exit.isSuccess(exit) && exit.value.pulled === 0 && exit.value.pushed === 0) setSettled(true)
   }
 
   return (

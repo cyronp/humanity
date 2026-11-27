@@ -4,19 +4,9 @@ import { useNavigate, useParams } from "@tanstack/react-router"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Plus } from "lucide-react"
-import { type ReactNode, useState } from "react"
+import type { ReactNode } from "react"
 import { AsyncView } from "@/components/AsyncView"
-import { ErrorNote } from "@/components/ErrorNote"
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { ConfirmRemove } from "@/components/ConfirmRemove"
 import { Button } from "@/components/ui/button"
 import { ProjectPermissions } from "@/features/policy/ProjectPermissions"
 import { openAddRepository } from "@/features/projects/addRepository"
@@ -169,54 +159,35 @@ function RemoveProject({ project }: { readonly project: Project }) {
   const remove = useAtomSet(removeProjectAtom, { mode: "promiseExit" })
   const navigate = useNavigate()
   const { projectId: openProjectId } = useParams({ strict: false })
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<string>()
-  const [removing, setRemoving] = useState(false)
 
   const confirm = async () => {
-    setRemoving(true)
     const exit = await remove({
       payload: { projectId: project.id },
       reactivityKeys: [keys.projects],
     })
-    setRemoving(false)
-    if (Exit.isFailure(exit)) {
-      setError(describeCause(exit.cause))
-      return
-    }
-    setOpen(false)
+    if (Exit.isFailure(exit)) return describeCause(exit.cause)
     if (openProjectId === project.id) void navigate({ to: "/" })
+    return undefined
   }
 
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setError(undefined)
-      }}
-    >
-      <AlertDialogTrigger asChild>
+    <ConfirmRemove
+      label="Remove project"
+      trigger={
         <Button variant="destructive" size="sm">
           Remove project
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Remove “{project.name}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Its threads and the worktrees Humanity made for them are deleted. The repository at{" "}
-            <code className="break-all">{project.localPath}</code> is not touched.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {error !== undefined && <ErrorNote title="Could not remove the project" message={error} />}
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button variant="destructive" onClick={() => void confirm()} disabled={removing}>
-            Remove project
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      }
+      title={`Remove “${project.name}”?`}
+      description={
+        <>
+          Its threads and the worktrees Humanity made for them are deleted. The repository at{" "}
+          <code className="break-all">{project.localPath}</code> is not touched.
+        </>
+      }
+      errorTitle="Could not remove the project"
+      confirmLabel="Remove project"
+      onConfirm={confirm}
+    />
   )
 }

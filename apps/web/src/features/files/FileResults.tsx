@@ -2,16 +2,14 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { DEFAULT_EDITOR_PREFERENCES, type FileEntry, type SessionId } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { File } from "lucide-react"
 import { useEffect, useState } from "react"
 import { CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command"
 import { Spinner } from "@/components/ui/spinner"
 import type { PaletteResultsProps } from "@/features/palette/registry"
 import { searchSessionFilesAtom } from "@/features/session/atoms"
 import { editorPreferencesAtom } from "./atoms.ts"
-import { FileIcon } from "./FileIcon.tsx"
 import { requestOpenFile } from "./openRequest.ts"
-import { nameOf } from "./tree.ts"
+import { FileEntryLabel } from "./FileEntryLabel.tsx"
 
 const SEARCH_DELAY_MS = 120
 const SHOWN = 50
@@ -71,11 +69,7 @@ export function FileResults({
                 requestOpenFile(sessionId, entry.path)
               }}
             >
-              {icons ? <FileIcon path={entry.path} /> : <File className="text-muted-foreground" />}
-              <span className="shrink-0 truncate">{nameOf(entry.path)}</span>
-              <span className="min-w-0 flex-1 truncate text-right font-mono text-xs text-muted-foreground">
-                {entry.path}
-              </span>
+              <FileEntryLabel path={entry.path} icons={icons} />
             </CommandItem>
           ))}
         </CommandGroup>

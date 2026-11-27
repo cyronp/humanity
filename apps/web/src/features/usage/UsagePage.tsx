@@ -14,7 +14,6 @@ import { AsyncResult } from "effect/reactivity"
 import { RefreshCw } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { Button } from "@/components/ui/button"
 import {
   type ChartConfig,
   ChartContainer,
@@ -30,6 +29,7 @@ import { useProviderAccounts } from "@/features/providers/useProviderModels"
 import { allSessionsAtom, usageReportAtom } from "@/features/session/atoms"
 import { accountLabel, type UsageLevel, usageLevel } from "@/features/session/usage"
 import { describeCause } from "@/lib/errors"
+import { IconButton } from "@/components/IconButton"
 import {
   cacheHitRate,
   closeUsage,
@@ -151,16 +151,15 @@ export default function UsagePage() {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <Button
+        <IconButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Refresh usage"
-          title="Refresh usage"
+          label="Refresh usage"
           disabled={loading}
           onClick={() => setReloads((count) => count + 1)}
         >
           <RefreshCw className={cn(loading && "animate-spin")} />
-        </Button>
+        </IconButton>
       </div>
       {loaded === undefined ? (
         <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">

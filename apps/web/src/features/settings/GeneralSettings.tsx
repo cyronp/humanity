@@ -1,6 +1,5 @@
 import { Volume2 } from "lucide-react"
 import { useId, useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -8,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import {
   notificationPermission,
   playChime,
@@ -23,6 +21,7 @@ import {
   type UiPreferences,
   useUiPreferences,
 } from "@/lib/uiPreferences"
+import { IconButton } from "@/components/IconButton"
 import {
   SettingsChoice,
   SettingsFrame,
@@ -33,6 +32,7 @@ import {
 } from "./SettingsLayout.tsx"
 import { CodeThemePreview } from "./CodeThemePreview.tsx"
 import { ColorThemePicker, ThemePicker } from "./ThemePicker.tsx"
+import { SwitchSetting } from "./SettingsFields.tsx"
 
 export function GeneralSettings() {
   return (
@@ -148,8 +148,6 @@ const describePermission = (permission: ReturnType<typeof notificationPermission
 function NotificationSettings() {
   const [preferences, change] = useUiPreferences()
   const [permission, setPermission] = useState(notificationPermission)
-  const soundId = useId()
-  const ids = useId()
 
   const toggle = async (key: NotifyKey, on: boolean) => {
     change({ [key]: on })
@@ -164,36 +162,25 @@ function NotificationSettings() {
       </p>
       <SettingsRows>
         {NOTIFY_ROWS.map(({ key, label, detail }) => (
-          <SettingsRow key={key} label={label} labelId={`${ids}-${key}`} detail={detail}>
-            <Switch
-              aria-labelledby={`${ids}-${key}`}
-              checked={preferences[key]}
-              onCheckedChange={(on) => void toggle(key, on)}
-            />
-          </SettingsRow>
+          <SwitchSetting
+            key={key}
+            label={label}
+            detail={detail}
+            checked={preferences[key]}
+            onCheckedChange={(on) => void toggle(key, on)}
+          />
         ))}
-        <SettingsRow
+        <SwitchSetting
           label="Play a sound"
-          labelId={soundId}
           detail="A short chime with each notification."
-        >
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={playChime}
-              aria-label="Play the sound"
-              title="Play the sound"
-            >
+          checked={preferences.notifySound}
+          onCheckedChange={(notifySound) => change({ notifySound })}
+          before={
+            <IconButton variant="ghost" size="icon-sm" onClick={playChime} label="Play the sound">
               <Volume2 />
-            </Button>
-            <Switch
-              aria-labelledby={soundId}
-              checked={preferences.notifySound}
-              onCheckedChange={(notifySound) => change({ notifySound })}
-            />
-          </div>
-        </SettingsRow>
+            </IconButton>
+          }
+        />
       </SettingsRows>
       {note !== undefined && <p className="text-xs text-warning">{note}</p>}
     </div>

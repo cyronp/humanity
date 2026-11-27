@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ChangeCount } from "@/features/diff/FileDiffView"
 import { formatTimeAgo, useNow } from "@/lib/elapsed"
+import { PanelEmpty } from "@/components/PanelEmpty"
 import { sessionCommitsAtom } from "../atoms.ts"
 import { ForgeLink } from "./ForgeLink.tsx"
 
@@ -41,7 +42,7 @@ function CommitList({
   const now = useNow(60_000)
   if (value.commits.length === 0) {
     return (
-      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+      <PanelEmpty className="px-4">
         {value.base === null ? (
           "No commits yet."
         ) : (
@@ -49,7 +50,7 @@ function CommitList({
             No commits on <code>{value.branch}</code> that <code>{value.base}</code> lacks yet.
           </>
         )}
-      </p>
+      </PanelEmpty>
     )
   }
   return (
