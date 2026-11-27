@@ -10,6 +10,7 @@ import {
   GitPullRequest,
   GitPullRequestDraft,
   MessageSquarePlus,
+  RefreshCw,
   X,
 } from "lucide-react"
 import { type ReactNode, useState } from "react"
@@ -48,10 +49,12 @@ export function MoreMenu({
   session,
   pullRequest,
   onError,
+  onRefresh,
 }: {
   readonly session: Session
   readonly pullRequest: PullRequest | null
   readonly onError: (error: PanelError | undefined) => void
+  readonly onRefresh: () => void
 }) {
   const navigate = useNavigate()
   const setOpen = useAtomSet(setPullRequestOpenAtom, { mode: "promiseExit" })
@@ -199,7 +202,13 @@ export function MoreMenu({
     )
   }
 
-  if (items.length === 0) return null
+  if (items.length > 0) items.push(<DropdownMenuSeparator key="refresh-separator" />)
+  items.push(
+    <DropdownMenuItem key="refresh" onSelect={onRefresh}>
+      <RefreshCw />
+      Refresh
+    </DropdownMenuItem>,
+  )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

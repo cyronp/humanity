@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AppHeader } from "@/features/layout/AppHeader"
 import { ProjectBreadcrumb } from "@/features/layout/ProjectBreadcrumb"
+import { ThreadStatus } from "@/features/sidebar/ThreadLink"
 
 export function SessionHeader({
   project,
@@ -51,7 +52,15 @@ export function SessionHeader({
         </>
       }
     >
-      <ProjectBreadcrumb project={project} page={session.title} />
+      <ProjectBreadcrumb
+        project={project}
+        page={session.title}
+        status={
+          <span className="text-xs text-muted-foreground">
+            <ThreadStatus status={session.status} />
+          </span>
+        }
+      />
     </AppHeader>
   )
 }

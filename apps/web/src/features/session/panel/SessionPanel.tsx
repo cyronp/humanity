@@ -9,15 +9,7 @@ import {
 } from "@humanity/contracts"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
-import {
-  FolderTree,
-  GitBranch,
-  GitPullRequestArrow,
-  Globe,
-  PanelRightClose,
-  RefreshCw,
-  X,
-} from "lucide-react"
+import { FolderTree, GitBranch, GitPullRequestArrow, Globe, X } from "lucide-react"
 import { lazy, type ReactNode, Suspense, useEffect, useId, useMemo, useState } from "react"
 import { type PaletteCommand, usePaletteCommands } from "@/features/palette/registry"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -27,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { BrowserView } from "@/features/browser/BrowserView"
 import type { CaptureTarget } from "@/features/browser/BrowserView"
 import type { BrowserState } from "@/features/browser/useBrowser"
+import { useWidePanel } from "@/features/layout/panelWidth"
 import {
   feedKey,
   publicationAtom,
@@ -118,7 +111,7 @@ export function ToolRail({
               >
                 {ICONS[tool]}
                 {badge !== undefined && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-medium text-primary-foreground tabular-nums">
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border bg-background px-1 text-[10px] leading-none font-medium text-foreground tabular-nums">
                     {badge.count > 99 ? "99+" : badge.count}
                   </span>
                 )}
@@ -144,31 +137,6 @@ export function ToolRail({
   )
 }
 
-export function IdleToolRail() {
-  return (
-    <RailFrame>
-      {SHELF_TOOLS.map((tool) => (
-        <Tooltip key={tool}>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="rounded-md">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={SHELF_LABELS[tool]}
-                disabled
-                className="text-muted-foreground"
-              >
-                {ICONS[tool]}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="left">{`${SHELF_LABELS[tool]}: start a thread to use it`}</TooltipContent>
-        </Tooltip>
-      ))}
-    </RailFrame>
-  )
-}
-
 function RailFrame({ children }: { readonly children: ReactNode }) {
   return (
     <nav
@@ -187,7 +155,6 @@ export function ToolPanel({
   activity,
   tool,
   browser,
-  onClose,
   onReference,
   onCapture,
 }: {
@@ -195,10 +162,10 @@ export function ToolPanel({
   readonly activity: number
   readonly tool: ShelfTool
   readonly browser: BrowserState
-  readonly onClose: () => void
   readonly onReference?: ((reference: string) => void) | undefined
   readonly onCapture?: CaptureTarget | undefined
 }) {
+  useWidePanel(tool === "browser")
   const [openFiles, setOpenFiles] = useState<ReadonlySet<string>>(new Set())
   const setFileOpen = (key: string, open: boolean) =>
     setOpenFiles((current) => {
@@ -211,19 +178,13 @@ export function ToolPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       {tool === "files" && (
         <Suspense fallback={null}>
-          <FilesPanel
-            session={session}
-            activity={activity}
-            onClose={onClose}
-            onReference={onReference}
-          />
+          <FilesPanel session={session} activity={activity} onReference={onReference} />
         </Suspense>
       )}
       {tool === "git" && (
         <GitPanel
           session={session}
           activity={activity}
-          onClose={onClose}
           onReference={onReference}
           onInsert={onCapture?.block}
           openFiles={openFiles}
@@ -233,7 +194,6 @@ export function ToolPanel({
       {tool === "browser" && (
         <BrowserView
           browser={browser}
-          onClose={onClose}
           titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
           onCapture={onCapture}
         />
@@ -245,7 +205,6 @@ export function ToolPanel({
 function GitPanel({
   session,
   activity,
-  onClose,
   onReference,
   onInsert,
   openFiles,
@@ -253,7 +212,6 @@ function GitPanel({
 }: {
   readonly session: Session
   readonly activity: number
-  readonly onClose: () => void
   readonly onInsert?: ((text: string) => void) | undefined
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
@@ -280,8 +238,15 @@ function GitPanel({
 
   const branch = AsyncResult.isSuccess(publication) ? publication.value : undefined
   const [opening, setOpening] = useState(false)
+  const [error, setError] = useState<PanelError>()
+  const [view, setView] = useState<GitView>(readStoredGitView)
+  useWidePanel(opening || view === "changes")
   const body = {
     session,
+    error,
+    onError: setError,
+    stored: view,
+    onStoredChange: setView,
     onReference,
     onInsert,
     openFiles,
@@ -298,7 +263,6 @@ function GitPanel({
         branch={branch.branch}
         titlebarPadding={titlebarPaddingEnd(RAIL_WIDTH)}
         onBack={() => setOpening(false)}
-        onClose={onClose}
       />
     )
   }
@@ -317,24 +281,16 @@ function GitPanel({
         <div className="flex shrink-0 items-center gap-1">
           <ChecksButton session={session} />
           <SyncButton session={session} />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={refresh}
-            aria-label="Refresh"
-            title="Refresh"
-          >
-            <RefreshCw />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            aria-label="Close the panel"
-            title="Close the panel"
-          >
-            <PanelRightClose />
-          </Button>
+          {branch === undefined ? (
+            <MoreMenu session={session} pullRequest={null} onError={setError} onRefresh={refresh} />
+          ) : (
+            <FollowedMoreMenu
+              session={session}
+              publication={branch}
+              onError={setError}
+              onRefresh={refresh}
+            />
+          )}
         </div>
       </div>
       <ChecksBar sessionId={session.id} onInsert={onInsert} />
@@ -349,6 +305,10 @@ function GitPanel({
 
 interface GitBodyProps {
   readonly session: Session
+  readonly error: PanelError | undefined
+  readonly onError: (error: PanelError | undefined) => void
+  readonly stored: GitView
+  readonly onStoredChange: (view: GitView) => void
   readonly onInsert?: ((text: string) => void) | undefined
   readonly onReference?: ((reference: string) => void) | undefined
   readonly openFiles: ReadonlySet<string>
@@ -363,8 +323,34 @@ function FollowedGitBody(props: GitBodyProps & { readonly publication: BranchPub
   return <GitBody {...props} feed={AsyncResult.isSuccess(feed) ? feed.value : undefined} />
 }
 
+function FollowedMoreMenu({
+  session,
+  publication,
+  onError,
+  onRefresh,
+}: {
+  readonly session: Session
+  readonly publication: BranchPublication
+  readonly onError: (error: PanelError | undefined) => void
+  readonly onRefresh: () => void
+}) {
+  const feed = useAtomValue(pullRequestFeedAtom(feedKey(session.id, publication.branch)))
+  return (
+    <MoreMenu
+      session={session}
+      pullRequest={AsyncResult.isSuccess(feed) ? feed.value.pullRequest : null}
+      onError={onError}
+      onRefresh={onRefresh}
+    />
+  )
+}
+
 function GitBody({
   session,
+  error,
+  onError: setError,
+  stored,
+  onStoredChange,
   onReference,
   onInsert,
   openFiles,
@@ -378,8 +364,6 @@ function GitBody({
 }) {
   const diff = useAtomValue(sessionDiffAtom(session.id))
   const commits = useAtomValue(sessionCommitsAtom(session.id))
-  const [stored, setStored] = useState<GitView>(readStoredGitView)
-  const [error, setError] = useState<PanelError>()
   const tabsId = useId()
 
   const files = AsyncResult.isSuccess(diff) ? diff.value.files : []
@@ -409,7 +393,7 @@ function GitBody({
   const views = GIT_VIEWS.filter((each) => each !== "checks" || pullRequest !== null)
   const view = views.includes(stored) ? stored : "overview"
   const setView = (next: GitView) => {
-    setStored(next)
+    onStoredChange(next)
     storeGitView(next)
   }
 
@@ -427,7 +411,6 @@ function GitBody({
     publication === undefined
       ? null
       : footerNote({ action, publication, changed: files.length, feed })
-  const more = <MoreMenu session={session} pullRequest={pullRequest} onError={setError} />
 
   return (
     <>
@@ -500,7 +483,7 @@ function GitBody({
           )}
         </div>
       </ScrollArea>
-      {publication !== undefined && (
+      {publication !== undefined && (action !== null || (note?.text ?? "") !== "") && (
         <div className="flex shrink-0 flex-col gap-2 border-t p-3">
           {action?.kind === "commit" ? (
             <CommitBar
@@ -508,7 +491,6 @@ function GitBody({
               publication={publication}
               files={files}
               note={note?.text ?? ""}
-              more={more}
             />
           ) : (
             <div className="flex items-center gap-2">
@@ -521,7 +503,6 @@ function GitBody({
               >
                 {note?.text}
               </span>
-              {more}
               {action !== null && (
                 <PrimaryAction
                   action={action}

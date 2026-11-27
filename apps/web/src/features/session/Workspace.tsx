@@ -205,14 +205,13 @@ export function Workspace({
           onSelect={onSelect}
         />
       )}
-      panel={({ tool, onClose }) => (
+      panel={({ tool }) => (
         <ToolPanel
           key={session.id}
           session={session}
           activity={activity}
           tool={tool}
           browser={browser}
-          onClose={onClose}
           onCapture={
             canReference
               ? {

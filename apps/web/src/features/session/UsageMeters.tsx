@@ -49,6 +49,8 @@ const LEVEL_CLASS: Record<UsageLevel, string> = {
 
 const FLOATING = "rounded-full bg-background/60 px-2 py-0.5 text-xs tabular-nums backdrop-blur-sm"
 
+const CONTEXT_SHOWN_AT_LEFT = 30
+
 export const UsageMeters = memo(function UsageMeters({
   sessionId,
   provider,
@@ -63,7 +65,11 @@ export const UsageMeters = memo(function UsageMeters({
   readonly hint?: ReactNode
 }) {
   const rows = planRows(usage.plan, new Date())
-  if (usage.context === null && usage.plan === null && hint === undefined) return null
+  const context =
+    usage.context !== null && 100 - contextPercentUsed(usage.context) <= CONTEXT_SHOWN_AT_LEFT
+      ? usage.context
+      : null
+  if (context === null && usage.plan === null && hint === undefined) return null
   return (
     <div className="-mb-1 flex items-center gap-3 px-1">
       <div className="flex min-w-0 items-center gap-2">
@@ -77,9 +83,9 @@ export const UsageMeters = memo(function UsageMeters({
         )}
         {hint}
       </div>
-      {usage.context !== null && (
+      {context !== null && (
         <span className="ml-auto shrink-0">
-          <ContextMeter context={usage.context} />
+          <ContextMeter context={context} />
         </span>
       )}
     </div>

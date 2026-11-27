@@ -292,7 +292,7 @@ function UserMessage({
               <TooltipContent>Rewind to before this message</TooltipContent>
             </Tooltip>
           )}
-          <Bubble align="end" className="max-w-[85%]">
+          <Bubble variant="muted" align="end" className="max-w-[85%]">
             <BubbleContent className="whitespace-pre-wrap">
               <FileReferenceText text={text} mentions={mentions} />
             </BubbleContent>

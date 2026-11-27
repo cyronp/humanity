@@ -9,7 +9,7 @@ import {
 } from "@humanity/contracts"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { ChevronLeft, GitPullRequest, PanelRightClose } from "lucide-react"
+import { ChevronLeft, GitPullRequest } from "lucide-react"
 import { useState } from "react"
 import { AsyncView } from "@/components/AsyncView"
 import { ErrorNote } from "@/components/ErrorNote"
@@ -46,7 +46,6 @@ export function OpenPullRequestPage({
   branch,
   titlebarPadding,
   onBack,
-  onClose,
 }: {
   readonly session: Session
   readonly publication: BranchPublication
@@ -54,7 +53,6 @@ export function OpenPullRequestPage({
   readonly branch: string
   readonly titlebarPadding: string
   readonly onBack: () => void
-  readonly onClose: () => void
 }) {
   const create = useAtomSet(createPullRequestAtom, { mode: "promiseExit" })
   const branches = useAtomValue(branchesAtom(session.projectId))
@@ -117,15 +115,6 @@ export function OpenPullRequestPage({
           <ChevronLeft />
         </Button>
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">Open a {noun}</h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close the panel"
-          title="Close the panel"
-        >
-          <PanelRightClose />
-        </Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-4 p-4">

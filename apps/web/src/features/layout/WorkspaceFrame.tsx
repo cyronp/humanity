@@ -32,7 +32,8 @@ import {
 import { onOpenFileRequest } from "@/features/files/openRequest"
 import { ServerResults } from "@/features/browser/ServerResults"
 import { useAppHeaderInsetEnd } from "@/features/layout/AppHeader"
-import { IdleToolRail, RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
+import { WidePanel } from "@/features/layout/panelWidth"
+import { RAIL_WIDTH } from "@/features/session/panel/SessionPanel"
 import {
   readStoredShelf,
   SHELF_LABELS,
@@ -67,14 +68,14 @@ const SHELF_KEYWORDS: Readonly<Record<ShelfTool, ReadonlyArray<string>>> = {
 }
 
 const PANEL_MIN_WIDTH = 320
-const CHAT_MIN_WIDTH = 360
+const CHAT_MIN_WIDTH = 560
+const CHAT_MIN_WIDTH_BESIDE_WIDE = 440
 const SHELF_SLIDE_MS = 120
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
 export interface PanelProps {
   readonly tool: ShelfTool
-  readonly onClose: () => void
 }
 
 export function WorkspaceFrame({
@@ -99,7 +100,9 @@ export function WorkspaceFrame({
     setShelfState(next)
     storeShelf(next)
   }
-  const [railShown, setRailShown] = useStoredFlag(RAIL_SHOWN_KEY, true)
+  const [storedRailShown, setRailShown] = useStoredFlag(RAIL_SHOWN_KEY, true)
+  const railShown = storedRailShown && rail !== undefined
+  const [widePanel, setWidePanel] = useState(false)
   const [chat, setChat] = useState<HTMLDivElement | null>(null)
   const [chatWidth, setChatWidth] = useState<number | null>(null)
   const [shelfWasShown, setShelfWasShown] = useState(railShown)
@@ -175,13 +178,17 @@ export function WorkspaceFrame({
             },
           ]
         : []),
-      {
-        id: "shelf.toggle",
-        title: railShown ? "Hide the tool shelf" : "Show the tool shelf",
-        group: "View",
-        keywords: ["rail", "panel", "sidebar"],
-        run: () => setRailShown(!railShown),
-      },
+      ...(hasRail
+        ? [
+            {
+              id: "shelf.toggle",
+              title: railShown ? "Hide the tool shelf" : "Show the tool shelf",
+              group: "View",
+              keywords: ["rail", "panel", "sidebar"],
+              run: () => setRailShown(!railShown),
+            },
+          ]
+        : []),
       ...(hasRail && hasPanel
         ? SHELF_TOOLS.map((tool): PaletteCommand => ({
             id: `shelf.${tool}`,
@@ -321,7 +328,7 @@ export function WorkspaceFrame({
           terminalsOpen={terminalsOpen}
           railShown={railShown}
           onToggleTerminals={() => setTerminalsOpen(!terminalsOpen)}
-          onToggleRail={() => setRailShown(!railShown)}
+          onToggleRail={hasRail ? () => setRailShown(!railShown) : undefined}
         />,
       )}
       <div ref={shelfRow} className="flex min-h-0 flex-1">
@@ -364,9 +371,12 @@ export function WorkspaceFrame({
             inert={!railShown}
             className={cn(
               "relative flex min-h-0 min-w-0 flex-1 flex-col border-l lg:min-w-80 lg:flex-none",
+              widePanel ? "lg:max-w-[calc(100%-30.5rem)]" : "lg:max-w-[calc(100%-38rem)]",
               panelWidth === null
-                ? "lg:w-[55%] lg:max-w-4xl"
-                : "lg:w-(--panel-width) lg:max-w-[calc(100%-25.5rem)]",
+                ? widePanel
+                  ? "lg:w-[55%]"
+                  : "lg:w-[clamp(20rem,36%,28rem)]"
+                : "lg:w-(--panel-width)",
               !chatShown && "pt-12",
             )}
             style={
@@ -381,25 +391,22 @@ export function WorkspaceFrame({
                 label="Resize the panel"
                 value={panelWidth ?? undefined}
                 min={PANEL_MIN_WIDTH}
-                max={() => rowWidth - RAIL_WIDTH - CHAT_MIN_WIDTH}
+                max={() =>
+                  rowWidth - RAIL_WIDTH - (widePanel ? CHAT_MIN_WIDTH_BESIDE_WIDE : CHAT_MIN_WIDTH)
+                }
                 measure={() => panelElement.current?.offsetWidth ?? PANEL_MIN_WIDTH}
                 onResize={setPanelWidth}
                 onReset={() => setPanelWidth(null)}
               />
             )}
-            {panel({
-              tool: shelf.tool,
-              onClose: () => setShelf({ ...shelf, open: false }),
-            })}
+            <WidePanel.Provider value={setWidePanel}>
+              {panel({ tool: shelf.tool })}
+            </WidePanel.Provider>
           </aside>
         )}
         {shelfMounted && (
           <div ref={shelfEnd} className="flex min-h-0 shrink-0" inert={!railShown}>
-            {rail === undefined ? (
-              <IdleToolRail />
-            ) : (
-              rail(shelf, (tool) => setShelf(toggleTool(shelf, tool)))
-            )}
+            {rail?.(shelf, (tool) => setShelf(toggleTool(shelf, tool)))}
           </div>
         )}
       </div>
@@ -469,7 +476,7 @@ function LayoutButtons({
   readonly terminalsOpen: boolean
   readonly railShown: boolean
   readonly onToggleTerminals: () => void
-  readonly onToggleRail: () => void
+  readonly onToggleRail: (() => void) | undefined
 }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -491,21 +498,23 @@ function LayoutButtons({
           {`${terminalsOpen ? "Hide" : "Show"} the terminal (${shortcutLabel("Ctrl+`")})`}
         </TooltipContent>
       </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Tools"
-            aria-pressed={railShown}
-            onClick={onToggleRail}
-            className={cn(!railShown && "text-muted-foreground")}
-          >
-            <PanelRight />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{`${railShown ? "Hide" : "Show"} the tools`}</TooltipContent>
-      </Tooltip>
+      {onToggleRail !== undefined && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Tools"
+              aria-pressed={railShown}
+              onClick={onToggleRail}
+              className={cn(!railShown && "text-muted-foreground")}
+            >
+              <PanelRight />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{`${railShown ? "Hide" : "Show"} the tools`}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }

@@ -1,6 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { type Session, type SyncStatus, plural } from "@humanity/contracts"
-import { cn } from "cn"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { ArrowDown, ArrowDownUp, ArrowUp, Check, LoaderCircle } from "lucide-react"
@@ -116,19 +115,23 @@ export function SyncButton({ session }: { readonly session: Session }) {
           <TooltipTrigger asChild>
             <span className="inline-flex">
               <Button
-                variant="ghost"
-                size={counted ? "sm" : "icon-sm"}
+                variant="outline"
+                size="sm"
                 onClick={onSync}
                 disabled={busy || pending || unavailable}
                 aria-label={pending ? "Syncing with origin" : "Sync with origin"}
-                className={cn(counted && "gap-1.5 px-2 tabular-nums")}
+                className="gap-1.5 px-2 tabular-nums"
               >
                 {pending ? (
                   <LoaderCircle className="animate-spin" />
                 ) : settled ? (
                   <Check />
-                ) : counted ? (
-                  <>
+                ) : (
+                  <ArrowDownUp />
+                )}
+                Sync
+                {counted && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <span className="flex items-center">
                       {status.behind}
                       <ArrowDown className="size-3" />
@@ -137,9 +140,7 @@ export function SyncButton({ session }: { readonly session: Session }) {
                       {outgoing}
                       <ArrowUp className="size-3" />
                     </span>
-                  </>
-                ) : (
-                  <ArrowDownUp />
+                  </span>
                 )}
               </Button>
             </span>

@@ -23,10 +23,10 @@ export const SECTION_GROUPS: ReadonlyArray<{
   readonly label?: string
   readonly sections: ReadonlyArray<SettingsSection>
 }> = [
-  { sections: ["general", "chat", "editor", "terminal", "browser"] },
+  { label: "App", sections: ["general", "chat", "editor", "terminal", "browser"] },
   { label: "Agent", sections: ["providers", "tools", "mcp", "skills"] },
-  { label: "Source Control", sections: ["projects", "repositories"] },
-  { sections: ["updates", "about"] },
+  { label: "Workspace", sections: ["projects", "repositories"] },
+  { label: "Humanity", sections: ["updates", "about"] },
 ]
 
 export const SECTION_INFO: Record<
