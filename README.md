@@ -3,9 +3,9 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/cyronp/humanity/releases/tag/nightly"><img src="https://img.shields.io/badge/download-nightly-2563EB?style=flat" alt="Download the nightly build" /></a>
-  <img src="https://img.shields.io/badge/platform-Windows-2563EB?style=flat" alt="Platform: Windows" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB?style=flat" alt="License: MIT" /></a>
+  <a href="https://github.com/cyronp/humanity/releases/tag/nightly"><img src="docs/assets/badge-download.svg" alt="Download the nightly build" /></a>
+  <img src="docs/assets/badge-platform.svg" alt="Platform: Windows" />
+  <a href="LICENSE"><img src="docs/assets/badge-license.svg" alt="License: MIT" /></a>
 </p>
 
 <h3 align="center">Run coding agents in threads, and decide how much each one does on its own.</h3>
