@@ -30,6 +30,7 @@ import { modelDisplayName } from "@/features/providers/models"
 import { ProviderIcon } from "@/features/providers/ProviderIcon"
 import { useProviderModels } from "@/features/providers/useProviderModels"
 import { AgentTurn, CopyText } from "./AgentTurn.tsx"
+import { CollapsibleText } from "./CollapsibleText.tsx"
 import { MessageAttachments } from "./attachments.tsx"
 import { FileReferenceText } from "./FileReferenceText.tsx"
 import { HandoffDialog } from "./HandoffDialog.tsx"
@@ -166,6 +167,7 @@ export function MessageList({
                       message={item.message}
                       delivered={delivered.has(item.id)}
                       undoable={undoable.has(item.id)}
+                      focused={item.id === focusedItem}
                     />
                   )}
                 </MessageScrollerItem>
@@ -222,10 +224,12 @@ const TranscriptEntry = memo(function TranscriptEntry({
   message,
   delivered,
   undoable,
+  focused,
 }: {
   readonly message: ChatMessage
   readonly delivered: boolean
   readonly undoable: boolean
+  readonly focused: boolean
 }) {
   const content = message.content
   switch (content._tag) {
@@ -237,6 +241,7 @@ const TranscriptEntry = memo(function TranscriptEntry({
           text={content.text}
           attachments={content.attachments ?? []}
           mentions={content.mentions ?? NO_MENTIONS}
+          focused={focused}
         />
       )
     case "notice":
@@ -260,12 +265,14 @@ function UserMessage({
   text,
   attachments,
   mentions,
+  focused,
 }: {
   readonly message: ChatMessage
   readonly sessionId: SessionId
   readonly text: string
   readonly attachments: ReadonlyArray<Attachment>
   readonly mentions: ReadonlyArray<string>
+  readonly focused: boolean
 }) {
   const { onRewind } = useTranscriptActions()
   return (
@@ -294,7 +301,9 @@ function UserMessage({
           )}
           <Bubble variant="muted" align="end" className="max-w-[85%]">
             <BubbleContent className="whitespace-pre-wrap">
-              <FileReferenceText text={text} mentions={mentions} />
+              <CollapsibleText reveal={focused}>
+                <FileReferenceText text={text} mentions={mentions} />
+              </CollapsibleText>
             </BubbleContent>
           </Bubble>
         </div>
