@@ -1,144 +1,123 @@
-# Humanity
+<h1 align="center">
+  <img src="apps/desktop/build/icon.png" alt="" width="56" valign="middle" /> Humanity
+</h1>
 
-An app for running coding agents in threads, with you in charge of how much each one does on its own.
+<p align="center">
+  <a href="https://github.com/cyronp/humanity/releases/tag/nightly"><img src="https://img.shields.io/badge/download-nightly-2563EB?style=flat" alt="Download the nightly build" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows-2563EB?style=flat" alt="Platform: Windows" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB?style=flat" alt="License: MIT" /></a>
+</p>
 
-The agent (Claude, through the Claude Agent SDK, or OpenAI's Codex, through its CLI) works on its own by default: it reads, edits files and runs commands without stopping, and every call it makes is shown as it happens. Any thread can instead ask first, so that file changes and commands wait for you to allow or deny them. A thread starts in your checkout and can be moved into its own git worktree and branch.
+<h3 align="center">Run coding agents in threads, and decide how much each one does on its own.</h3>
 
-## Requirements
+<p align="center">
+  Bring the agents you already use: Claude Code, Codex, Kiro or Antigravity, signed in with your own plan.
+  Each thread runs on its own, or asks you before every file change and command.
+</p>
 
-- **Node.js 22.13 or newer** (24 LTS recommended). The database uses Node's built-in `node:sqlite`; Node prints an "experimental" warning for it, which is harmless.
-- **git** on your `PATH`.
-- **Claude Code, installed and signed in.** Humanity ships no agent: it runs the `claude` on your computer ([install guide](https://code.claude.com/docs/en/setup)). Run `claude auth login` once with your Claude Pro, Max, Team or Enterprise account. An `ANTHROPIC_API_KEY` in the environment also works, but Claude Code then bills that key instead of your plan.
-- Optional, for threads on Codex: **the Codex CLI, installed and signed in** ([install guide](https://github.com/openai/codex#installing-and-running-codex-cli)). Run `codex login` once with your ChatGPT account. The model you pick for a new thread decides whether it runs on Claude Code or on Codex. Settings, under Providers, shows each CLI's version, warns when one is older than Humanity is tested with, and has an Update button that runs the CLI's own updater.
-- Optional, for GitHub: the [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`), a token saved in Humanity (Settings, under Repositories, or the first-run guide), or a `GITHUB_TOKEN`. A [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with read access to _Contents_ and _Metadata_ of the repositories you want is enough. Public repositories can be cloned without any token.
-- Optional, for GitLab (gitlab.com or a self-hosted instance): the [GitLab CLI](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`), a token saved in Humanity together with the instance's host (Settings, under Repositories), or a `GITLAB_TOKEN` (with `GITLAB_HOST` for an instance of your own). A personal access token with the `read_api` and `read_repository` scopes is enough. The token is only ever sent to its own instance, over https.
+<h3 align="center"><a href="https://github.com/cyronp/humanity/releases/tag/nightly"><ins>Download for Windows</ins></a></h3>
 
-## Getting started
+<p align="center">
+  <img src="docs/assets/readme-hero.jpg" alt="Humanity with a thread that added rate limiting to an API: the agent's work folded into phases, the diff in Source control and the tests passing in the terminal" width="960" />
+</p>
+
+## Features
+
+- **Threads, side by side.** Run as many agents as you like, across projects and providers. The sidebar shows which are working, which need you and which stopped on an error.
+- **Autonomy per thread.** _Auto mode_ runs everything, _Accept edits_ asks before commands and tools, and _Ask me_ shows every file change as a diff and every command before it runs.
+- **Every call is visible.** A turn folds into phases (explored, edited, ran) that open into each tool call.
+- **Worktrees in one click.** A thread starts in your checkout and moves into its own branch and worktree whenever you want.
+- **Source control.** Changes, commits, sync, pull requests and their checks on GitHub or GitLab, and review comments that go back to the agent.
+- **Terminals shared with the agent.** Tabs in a dock under the chat. You type in them freely, and the agent can use them too, under the thread's permissions.
+- **Files and a browser.** An editor for the thread's folder, and a browser for your local dev server, with element picking and screenshots into the chat.
+- **Checkpoints, rewind and fork.** Go back to before any message, or fork a thread into a new worktree to try another approach.
+- **Switch models mid-thread.** Move a thread to another provider and keep the conversation, for example when you run out of quota.
+- **Compare models.** Send one prompt to up to four models at once and keep the run you like best.
+- **Command palette, search and usage.** <kbd>Ctrl</kbd>+<kbd>K</kbd> for everything, a search across every thread, and where your tokens and plan limits go.
+
+## Supported agents
+
+Humanity ships no agent of its own. It runs the CLI you installed and signed in to, the same one you use in a terminal:
+
+<p>
+  <kbd>Claude Code</kbd> <kbd>Codex</kbd> <kbd>Kiro (Beta)</kbd> <kbd>Antigravity (Beta)</kbd>
+</p>
+
+Settings, under Providers, shows each CLI's version, links to its install guide when it's missing, and has an Update button.
+
+## Install
+
+1. Download the installer from the [releases page](https://github.com/cyronp/humanity/releases/tag/nightly) and run it. It isn't code-signed yet, so Windows SmartScreen asks first: choose **More info**, then **Run anyway**.
+2. Install and sign in to at least one agent CLI, for example [Claude Code](https://code.claude.com/docs/en/setup) (`claude auth login`) or [Codex](https://github.com/openai/codex#installing-and-running-codex-cli) (`codex login`). Make sure **git** is on your `PATH`.
+3. Open Humanity. A short setup guide connects your accounts and adds your first repository.
+
+To list and clone your GitHub or GitLab repositories, sign in with `gh auth login` or `glab auth login`, or save a token in Settings, under Repositories. Public repositories need no token.
+
+> [!NOTE]
+> The nightly build is rebuilt from `main` every night it changes, and may upgrade the database. Back up `~/.humanity/humanity.db` before installing an older build over it.
+
+## Permissions
+
+Pick a thread's mode next to the message box. You can change it while the agent works.
+
+| Mode             | What waits for you                                                   |
+| ---------------- | -------------------------------------------------------------------- |
+| **Auto mode**    | Nothing, except questions from the agent. The default                |
+| **Accept edits** | Commands, web and MCP tools. File changes in the thread's folder run |
+| **Ask me**       | Every file change, command, web and MCP tool                         |
+
+Reads never ask. Every other call reaches Humanity's own check, so a CLI's settings file can't pre-approve a tool behind your back. A request is answered with **Allow**, **Always allow in this thread** or **Deny**, with an optional comment for the agent.
+
+## Your data
+
+Everything Humanity writes lives in `~/.humanity/` (or `HUMANITY_HOME`), plus the folder each thread works in. It never stores your Claude, OpenAI, GitHub or GitLab credentials in its database: each CLI keeps its own login. The app's daemon listens on `127.0.0.1` only and needs its token to connect.
+
+## Run from source
+
+Requires **Node.js 22.13 or newer** (24 LTS recommended).
 
 ```sh
 npm install
-claude auth login   # once, if you are not signed in to Claude Code yet
-npm run dev
+npm run dev              # daemon and web app; open the link it prints
+npm run dev:desktop      # the same, in the desktop app's window
+npm run package:desktop  # build the installer for this machine
 ```
 
-`npm run dev` starts the daemon and the web app. The daemon prints a link like:
-
-```
-  Open Humanity:  http://127.0.0.1:5173/?token=…
-```
-
-Open it. The token is kept by the browser; without it the daemon refuses connections. It is also stored in `~/.humanity/auth-token` if you need to paste it again.
-
-The daemon also prints which Claude account the agent will run as. The first visit opens a short setup guide at `/welcome` that shows the same connection live.
-
-Then:
-
-1. **Add a repository** from the project menu in the header. Your GitHub and GitLab repositories are listed once those accounts are connected; pick one and Humanity clones it. Typing a public `owner/repo`, a GitHub or GitLab URL or the path of a local git repository adds that instead.
-2. **Start a thread** from the home page. Pick the branch your checkout should be on (local or `origin/…`), the permissions, and write a first message. The thread works in your checkout; **Set up worktree** in its Source Control panel moves it into a branch `humanity/<id>-<title>` and a worktree of its own.
-3. **Work with the agent.** It runs on its own unless the thread is set to ask. In a thread that asks, a file change opens the review panel and a command shows a card above the message box; the session status turns to **waiting for you** until you decide.
-4. **Commit** the work from the **Changes** tab.
-
-### Permissions
-
-Each thread has one of three modes, chosen next to the message box and changeable while the agent works:
-
-| Mode             | What waits for you                                                               |
-| ---------------- | -------------------------------------------------------------------------------- |
-| **Auto mode**    | Nothing, except a question the agent asks you. The default for new threads       |
-| **Accept edits** | Commands, web and MCP tools. File changes inside the thread's folder are applied |
-| **Ask me**       | File changes and commands, web and MCP tools                                     |
-
-Reads (`Read`, `Glob`, `Grep`), the agent's own bookkeeping (`TodoWrite`, `Skill`) and opening a new thread never ask, in any mode.
-
-A new thread starts in its project's mode (Settings, under Projects), else the mode you pinned in the message box's permissions menu, else Auto mode. Threads that already exist keep theirs.
-
-### Answering a request
-
-A file change is shown as a diff in the review panel; a command or tool call as a card above the message box. Both take the same answer:
-
-| Answer                          | What happens                                                                       |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| **Allow**                       | The agent's tool runs                                                              |
-| **Always allow in this thread** | The tool runs, and that tool stops asking in this thread until the daemon restarts |
-| **Deny**                        | Nothing runs or is written; the agent is told, with your comment if you wrote one  |
-
-Keyboard shortcuts in the review panel: `a` allow, `d` deny, `c` comment (`Esc` to leave it). A link of the form `…/sessions/<id>?file=src/app.ts` opens the change to that file.
-
-The agent loads your Claude Code user settings and the repository's own `CLAUDE.md`, skills and `.claude/settings.json`, but a settings file can never pre-approve a tool on Humanity's behalf: the thread's mode decides.
-
-A thread on Codex follows the same modes. Codex asks Humanity before each file change and each command it does not know to be a harmless read, whatever approval policy or sandbox your own Codex settings name, and the thread's mode answers. A file change by Codex is one patch, shown with the diff of every file it touches and allowed or denied as a whole. Codex loads your `~/.codex/config.toml` and the repository's `AGENTS.md`; command rules you wrote for Codex yourself (`~/.codex/rules`) still let the commands they name run without asking.
-
-## Running it for real
+<details>
+<summary>More commands, environment variables and the repository layout</summary>
 
 ```sh
-npm run build
-npm start          # serves the web app and the API on http://127.0.0.1:7420
-```
-
-| Variable                | Default       | Purpose                                               |
-| ----------------------- | ------------- | ----------------------------------------------------- |
-| `ANTHROPIC_API_KEY`     | (none)        | Optional. Overrides your Claude login                 |
-| `HUMANITY_HOME`         | `~/.humanity` | Data directory                                        |
-| `HUMANITY_PORT`         | `7420`        | Daemon port. It always binds to `127.0.0.1`           |
-| `HUMANITY_DESKTOP_PORT` | `7421`        | Port of the desktop app's daemon                      |
-| `GITHUB_TOKEN`          | (none)        | Used when no token is saved and `gh` is not logged in |
-| `GITLAB_TOKEN`          | (none)        | The same for GitLab and `glab`                        |
-| `GITLAB_HOST`           | `gitlab.com`  | The GitLab instance `GITLAB_TOKEN` is for             |
-
-### Desktop app
-
-The same daemon and web app also run as a desktop app (Electron), with nothing duplicated: the app starts the daemon as a child process and shows the web app it serves in a window.
-
-```sh
-npm run package:desktop   # builds apps/desktop/release/Humanity-Setup-<version>.exe
-```
-
-Ready-made installers are on the [releases page](https://github.com/cyronp/humanity/releases): one **Nightly** pre-release, rebuilt from `main` every night it changes, and **stable** releases (`v0.1.0`, …) once there are any. A nightly installs over the stable app, and may upgrade the database so that an older stable release cannot read it: back up `~/.humanity/humanity.db` before trying one.
-
-The installer is built for the machine it is built on (Windows for now) and is not code-signed, so Windows SmartScreen warns before it runs. The app's daemon listens on `127.0.0.1:7421` (`HUMANITY_DESKTOP_PORT`), apart from the `7420` of `npm start`, and shares the data directory below. Closing the app stops its daemon.
-
-Everything Humanity writes lives in the data directory:
-
-```
-~/.humanity/
-├─ humanity.db                       projects, sessions, messages, tool calls, decisions
-├─ auth-token                        the daemon's access token
-├─ github-token                      a GitHub token saved from the UI, only while one is saved
-├─ gitlab-token, gitlab-host         the same for GitLab, with the instance the token is for
-├─ worktrees/<project>/<session>/    one git worktree per session
-├─ desktop/                          the desktop app's browser profile
-└─ repos/<owner>/<repo>/             clones made from GitHub
-   repos/<host>/<group>/<repo>/      clones made from GitLab
-```
-
-Claude Code itself keeps its login and its session transcripts (used to resume sessions) in its own config directory, `~/.claude` or `CLAUDE_CONFIG_DIR`, as it does for your terminal sessions. Codex does the same in `~/.codex` or `CODEX_HOME`. Humanity never reads or stores your Claude or OpenAI credentials.
-
-API keys and tokens are never stored in the database. The GitHub or GitLab token is passed to `git clone` only as a header for that one process, so it never ends up in a clone's configuration.
-
-## Development
-
-```sh
-npm run dev         # daemon (tsx watch) + Vite dev server
-npm run dev:desktop # the same, in the desktop app's window
 npm run lint        # ESLint
 npm run typecheck   # TypeScript
 npm run test        # Vitest; never calls the Anthropic or GitHub APIs
 npm run build       # production build
-npm run format      # Prettier
+npm start           # serve the built app on http://127.0.0.1:7420
 ```
 
-| Path                 | What it is                                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------------- |
-| `apps/server`        | The Effect 4 daemon: RPC over WebSocket, the Agent SDK bridge, approvals, git, GitHub, SQLite |
-| `apps/desktop`       | The Electron shell: starts the daemon, opens the web app in a window, builds the installer    |
-| `apps/web`           | Vite + React 19 + TanStack Router + shadcn/ui, data through Effect Atom (`AtomRpc`)           |
-| `packages/contracts` | Schemas and RPC groups shared by both                                                         |
-| `packages/diff`      | Pure hunk logic on top of jsdiff: splitting, parsing, tool simulation                         |
-| `docs/spec.md`       | The MVP specification                                                                         |
+| Variable                | Default       | Purpose                                                   |
+| ----------------------- | ------------- | --------------------------------------------------------- |
+| `HUMANITY_HOME`         | `~/.humanity` | Data directory                                            |
+| `HUMANITY_PORT`         | `7420`        | Port of `npm start`. It always binds to `127.0.0.1`       |
+| `HUMANITY_DESKTOP_PORT` | `7421`        | Port of the desktop app's daemon                          |
+| `ANTHROPIC_API_KEY`     | (none)        | Optional. Claude Code bills this key instead of your plan |
+| `GITHUB_TOKEN`          | (none)        | Used when no token is saved and `gh` is not signed in     |
+| `GITLAB_TOKEN`          | (none)        | The same for GitLab and `glab`                            |
+| `GITLAB_HOST`           | `gitlab.com`  | The GitLab instance `GITLAB_TOKEN` is for                 |
+
+| Path                 | What it is                                                              |
+| -------------------- | ----------------------------------------------------------------------- |
+| `apps/server`        | The Effect 4 daemon: RPC, agent bridges, git, GitHub, GitLab, SQLite    |
+| `apps/desktop`       | The Electron shell: starts the daemon and shows the web app in a window |
+| `apps/web`           | Vite + React 19 + TanStack Router + shadcn/ui                           |
+| `packages/contracts` | Schemas and RPC groups shared by the daemon and the web app             |
+| `packages/diff`      | Pure diff logic on top of jsdiff                                        |
+| `docs/spec.md`       | The specification                                                       |
+
+</details>
 
 ## Security
 
-The daemon binds to `127.0.0.1` only and needs its token to connect. Threads in Auto mode run commands without asking, so use **Ask me** for anything you do not trust. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+Threads in Auto mode run commands without asking, so use **Ask me** for anything you don't trust. See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Contributing
 
